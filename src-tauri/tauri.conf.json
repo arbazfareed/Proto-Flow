@@ -24,6 +24,12 @@
       "csp": null
     }
   },
+  "plugins": {
+    "updater": {
+      "endpoints": [],
+      "pubkey": ""
+    }
+  },
   "bundle": {
     "active": true,
     "targets": ["msi", "deb", "appimage"],
