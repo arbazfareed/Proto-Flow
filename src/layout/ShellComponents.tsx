@@ -248,7 +248,7 @@ export function RightInspector({ onToggle, onUpdates, onRename }: RightInspector
         </div>
         <button className="button button-quiet update-check" onClick={onUpdates}>Check for updates <ArrowRight size={14} /></button>
         <div className="inspector-rule" />
-        <div className="recovery-note"><span>Recovery checkpoints are stored on this device every 30 seconds while you have unsaved changes.</span></div>
+        <div className="recovery-note"><span>Unsaved projects are autosaved on this device every 30 seconds.</span></div>
       </div>
       <div className="inspector-footer"><span>Project schema</span><span className="schema-version">{project.schemaVersion}</span></div>
     </aside>

@@ -5,7 +5,6 @@ import {
   ArrowDownToLine,
   Bell,
   Check,
-  Clock3,
   FilePlus2,
   FileText,
   FolderOpen,
@@ -15,16 +14,11 @@ import {
   Sparkles,
   Undo2,
   X,
-  ArrowRight,
 } from "lucide-react";
-import {
-  clearRecoverySnapshot,
-  readRecoverySnapshot,
-  writeRecoverySnapshot,
-  type RecoverySnapshot,
-} from "./project/recovery";
+import { clearAutosave } from "./project/autosave";
 import { openProjectFile, saveProjectFile } from "./project/files";
 import { useStore } from "./store";
+import { RestoreModal } from "./layout/RestoreModal";
 import {
   CanvasArea,
   LeftSidebar,
@@ -47,13 +41,11 @@ function AppShell() {
   const toggleLeftPanel = useStore((state) => state.toggleLeftPanel);
   const toggleRightPanel = useStore((state) => state.toggleRightPanel);
   const loadProject = useStore((state) => state.loadProject);
-  const restoreProject = useStore((state) => state.restoreProject);
   const renameProject = useStore((state) => state.renameProject);
   const undo = useStore((state) => state.undo);
   const redo = useStore((state) => state.redo);
   const [notice, setNotice] = useState("");
   const [paletteQuery, setPaletteQuery] = useState("");
-  const [recovery, setRecovery] = useState<RecoverySnapshot | null>(null);
   const [updateNotice, setUpdateNotice] = useState(false);
   const paletteInput = useRef<HTMLInputElement>(null);
 
@@ -74,9 +66,9 @@ function AppShell() {
       useStore.getState().markSaved(path);
       useStore.getState().markClean();
       try {
-        clearRecoverySnapshot();
+        clearAutosave();
       } catch (error) {
-        console.error("Could not clear the saved recovery snapshot.", error);
+        console.error("Could not clear the saved autosave snapshot.", error);
       }
       notify("Project saved");
     } catch (error) {
@@ -96,9 +88,9 @@ function AppShell() {
       if (!result) return;
       loadProject(result.project, result.path);
       try {
-        clearRecoverySnapshot();
+        clearAutosave();
       } catch (error) {
-        console.error("Could not clear the previous recovery snapshot.", error);
+        console.error("Could not clear the previous autosave snapshot.", error);
       }
       notify("Project opened");
     } catch (error) {
@@ -109,6 +101,11 @@ function AppShell() {
   const createNewProject = useCallback(() => {
     if (!confirmDiscard()) return;
     useStore.getState().newProject();
+    try {
+      clearAutosave();
+    } catch (error) {
+      console.error("Could not clear the previous autosave snapshot.", error);
+    }
     notify("New project created");
   }, [confirmDiscard, notify]);
 
@@ -128,41 +125,6 @@ function AppShell() {
     ],
     [createNewProject, openFile, redo, save, undo],
   );
-
-  useEffect(() => {
-    try {
-      setRecovery(readRecoverySnapshot());
-    } catch (error) {
-      notify(error instanceof Error ? error.message : "Could not check crash recovery data.");
-    }
-  }, [notify]);
-
-  useEffect(() => {
-    const saveRecovery = () => {
-      const current = useStore.getState();
-      if (!current.isDirty) return;
-      try {
-        writeRecoverySnapshot(current.project, current.filePath);
-      } catch (error) {
-        console.error("Could not write Proto Flow recovery data.", error);
-      }
-    };
-    const interval = window.setInterval(() => {
-      const current = useStore.getState();
-      if (!current.isDirty) return;
-      try {
-        writeRecoverySnapshot(current.project, current.filePath);
-        notify("Recovery checkpoint saved");
-      } catch (error) {
-        notify(error instanceof Error ? error.message : "Could not save recovery checkpoint.");
-      }
-    }, 30_000);
-    window.addEventListener("pagehide", saveRecovery);
-    return () => {
-      window.clearInterval(interval);
-      window.removeEventListener("pagehide", saveRecovery);
-    };
-  }, [notify]);
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
@@ -211,22 +173,6 @@ function AppShell() {
   const filteredCommands = commands.filter((command) =>
     command.label.toLowerCase().includes(paletteQuery.toLowerCase()),
   );
-
-  const restore = () => {
-    if (!recovery) return;
-    restoreProject(recovery.project, recovery.filePath);
-    setRecovery(null);
-    notify("Recovered project restored");
-  };
-
-  const discardRecovery = () => {
-    try {
-      clearRecoverySnapshot();
-      setRecovery(null);
-    } catch (error) {
-      notify(error instanceof Error ? error.message : "Could not discard recovery data.");
-    }
-  };
 
   const runCommand = (command: CommandItem) => {
     setPaletteOpen(false);
@@ -281,6 +227,7 @@ function AppShell() {
         />
       </div>
       <StatusBar />
+      <RestoreModal />
 
       {notice && <div className="toast" role="status"><Check size={15} /><span>{notice}</span></div>}
 
@@ -299,19 +246,6 @@ function AppShell() {
               )) : <div className="palette-empty">No matching actions</div>}
             </div>
             <div className="palette-footer"><span><Keyboard size={13} /> Navigate with your keyboard</span><span>PROTO FLOW <b>·</b> PHASE 1</span></div>
-          </section>
-        </div>
-      )}
-
-      {recovery && (
-        <div className="overlay">
-          <section className="dialog-card" role="dialog" aria-modal="true" aria-labelledby="recovery-title">
-            <div className="dialog-icon recovery-dialog-icon"><Clock3 size={19} /></div>
-            <button className="icon-button dialog-close" aria-label="Discard recovery prompt" onClick={discardRecovery}><X size={17} /></button>
-            <span className="eyebrow">CRASH RECOVERY</span>
-            <h2 id="recovery-title">Pick up where you left off?</h2>
-            <p>Proto Flow found unsaved changes from {new Date(recovery.recoveredAt).toLocaleString()}. Restore the recovered copy of <strong>{recovery.project.name}</strong>?</p>
-            <div className="dialog-actions"><button className="button button-quiet" onClick={discardRecovery}>Discard</button><button className="button button-primary" onClick={restore}>Restore project <ArrowRight size={15} /></button></div>
           </section>
         </div>
       )}

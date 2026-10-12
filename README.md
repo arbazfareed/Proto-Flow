@@ -29,7 +29,7 @@ npm test
 
 ## Phase 1 status
 
-The desktop shell, local project schema, native file I/O, recovery checkpoint, keyboard shortcuts, and command palette are being built in this phase. The canvas renderer is intentionally reserved for Phase 2. The updater plugin is initialized, but automatic updates are not active until a signed release feed and public key are configured.
+The desktop shell, local project schema, native file I/O, local autosave and crash recovery, keyboard shortcuts, and command palette are being built in this phase. The canvas renderer is intentionally reserved for Phase 2. The updater plugin is initialized, but automatic updates are not active until a signed release feed and public key are configured.
 
 ### `.pflow` project schema
 
@@ -42,6 +42,10 @@ Project files are opened and saved through Rust Tauri commands. Saves stage data
 ### State management
 
 The Zustand store is composed from independent document, canvas, history, and UI slices in `src/store/`. Components subscribe to only the fields they use; the history keeps at most 50 snapshots and the store is exposed through Redux DevTools in development.
+
+### Local autosave and recovery
+
+Unsaved projects are snapshotted to browser local storage every 30 seconds. Clean projects and snapshots whose project data has not changed are skipped. On startup, a valid snapshot no older than seven days can be restored or discarded; previous recovery snapshots are migrated when possible.
 
 ### Desktop layout
 
