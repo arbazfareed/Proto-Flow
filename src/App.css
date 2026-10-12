@@ -131,6 +131,12 @@
 .app-statusbar .status-spacer { flex:1; }
 .toast { position:fixed; z-index:10; right:22px; bottom:21px; display:flex; align-items:center; gap:8px; padding:10px 13px; border:1px solid #34363b; border-radius:7px; color:#e5e5ea; background:#202125; box-shadow:0 8px 25px #0006; font-size:11px; animation:toast-in .18s ease-out; }
 .toast svg { color:var(--success); }
+.update-toast { position:fixed; z-index:11; right:22px; bottom:72px; display:grid; width:min(320px,calc(100vw - 32px)); gap:8px; padding:15px; border:1px solid #45404f; border-radius:8px; color:#e5e5ea; background:#202125; box-shadow:0 8px 25px #0008; font-size:11px; animation:toast-in .18s ease-out; }
+.update-toast>strong { padding-right:20px; color:#f0edf7; font-size:12px; font-weight:600; }
+.update-toast>span { color:#aaa8b2; line-height:1.5; }
+.update-toast-dismiss { position:absolute; top:9px; right:9px; }
+.update-toast-install { justify-content:center; margin-top:3px; }
+.update-toast-error { color:#f0a2a2 !important; }
 @keyframes toast-in { from { opacity:0; transform:translateY(5px); } to { opacity:1; transform:translateY(0); } }
 .overlay { position:fixed; z-index:20; inset:0; display:grid; place-items:center; padding:20px; background:#08090bb3; backdrop-filter:blur(4px); }
 .palette-overlay { align-items:start; padding-top:min(21vh,180px); }

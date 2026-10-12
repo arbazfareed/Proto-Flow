@@ -244,7 +244,7 @@ export function RightInspector({ onToggle, onUpdates, onRename }: RightInspector
         <div className="section-label update-label"><span>UPDATES</span><Sparkles size={14} /></div>
         <div className="update-card">
           <div className="update-card-icon"><Bell size={15} /></div>
-          <div><strong>Stay up to date</strong><p>Update checks become available when a signed release feed is configured.</p></div>
+          <div><strong>Stay up to date</strong><p>Proto Flow checks for signed releases when the app starts.</p></div>
         </div>
         <button className="button button-quiet update-check" onClick={onUpdates}>Check for updates <ArrowRight size={14} /></button>
         <div className="inspector-rule" />
