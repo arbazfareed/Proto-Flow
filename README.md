@@ -51,6 +51,12 @@ Unsaved projects are snapshotted to browser local storage every 30 seconds. Clea
 
 The desktop layout is composed in `src/AppShell.tsx` from the top bar, screens/layers sidebar, canvas placeholder, inspector, and status bar. Sidebar visibility, canvas zoom, grid, and selection are driven by the Zustand UI and canvas slices.
 
+### Command palette and shortcuts
+
+Use `Ctrl/Cmd+K` to open the keyboard-navigable command palette. Type to filter actions, use the arrow keys and Enter to run one, click outside or press Escape to close. Core commands (new/open/save, undo/redo, grid/snap toggles, and update checks) are registered centrally in `src/commands/registry.tsx`; future features should contribute commands through this registry rather than modifying the palette UI.
+
+Global shortcuts include `Ctrl/Cmd+S` to save, `Ctrl/Cmd+Z` to undo, `Ctrl/Cmd+Shift+Z` or `Ctrl/Cmd+Y` to redo, `Ctrl/Cmd+N` for a new project, `Ctrl/Cmd+O` to open, and `Ctrl/Cmd+'` to toggle the canvas grid. Text-editing shortcuts are left to the focused input for undo/redo and grid toggling.
+
 ### Auto-updates and release signing
 
 Installed production desktop builds check the configured Tauri updater endpoint on launch and when the user requests a check. A detected version is offered in a toast; installation downloads the signed update and relaunches the app. Development builds and browser previews never call the updater. Tauri verifies the update signature before installation.
