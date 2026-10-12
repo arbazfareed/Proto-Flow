@@ -1,0 +1,54 @@
+import type { Project } from "../project/schema";
+
+export interface DocumentSlice {
+  project: Project;
+  filePath: string | null;
+  isDirty: boolean;
+  lastSavedAt: number | null;
+  setProject: (project: Project) => void;
+  newProject: (name?: string) => void;
+  renameProject: (name: string) => void;
+  loadProject: (project: Project, filePath: string) => void;
+  restoreProject: (project: Project, filePath: string | null) => void;
+  markClean: () => void;
+  markSaved: (filePath: string) => void;
+}
+
+export interface CanvasSlice {
+  zoom: number;
+  pan: { x: number; y: number };
+  gridSize: 5 | 10 | 20;
+  gridVisible: boolean;
+  snapEnabled: boolean;
+  selectedIds: string[];
+  setZoom: (zoom: number) => void;
+  setPan: (x: number, y: number) => void;
+  setGridSize: (size: 5 | 10 | 20) => void;
+  toggleGrid: () => void;
+  toggleSnap: () => void;
+  select: (ids: string[]) => void;
+  clearSelection: () => void;
+}
+
+export interface HistorySlice {
+  past: Project[];
+  future: Project[];
+  pushHistory: (snapshot: Project) => void;
+  clearHistory: () => void;
+  undo: () => Project | undefined;
+  redo: () => Project | undefined;
+  canUndo: () => boolean;
+  canRedo: () => boolean;
+}
+
+export interface UISlice {
+  paletteOpen: boolean;
+  leftPanelOpen: boolean;
+  rightPanelOpen: boolean;
+  setPaletteOpen: (open: boolean) => void;
+  togglePalette: () => void;
+  toggleLeftPanel: () => void;
+  toggleRightPanel: () => void;
+}
+
+export type StoreState = DocumentSlice & CanvasSlice & HistorySlice & UISlice;
