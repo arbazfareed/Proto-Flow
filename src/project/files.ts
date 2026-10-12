@@ -1,8 +1,5 @@
 import { invoke, isTauri } from "@tauri-apps/api/core";
-import { open, save } from "@tauri-apps/plugin-dialog";
 import { parseProject, serializeProject, type Project } from "./schema";
-
-const projectFilter = [{ name: "Proto Flow project", extensions: ["pflow"] }];
 
 function requireDesktopRuntime(): void {
   if (!isTauri()) {
@@ -12,30 +9,26 @@ function requireDesktopRuntime(): void {
 
 export async function openProjectFile(): Promise<{ project: Project; path: string } | null> {
   requireDesktopRuntime();
-  const selected = await open({ filters: projectFilter, multiple: false, directory: false });
-  if (!selected || Array.isArray(selected)) return null;
-
-  const serialized = await invoke<string>("read_project_file", { path: selected });
-  return { project: parseProject(serialized), path: selected };
+  const opened = await invoke<{ path: string; content: string } | null>("open_project");
+  if (!opened) return null;
+  return { project: parseProject(opened.content), path: opened.path };
 }
 
 export async function saveProjectFile(
   project: Project,
   currentPath: string | null,
+  saveAs = false,
 ): Promise<string | null> {
   requireDesktopRuntime();
-  const selected =
-    currentPath ??
-    (await save({
-      defaultPath: `${project.name.replace(/[<>:"/\\|?*\u0000-\u001f]/g, "-")}.pflow`,
-      filters: projectFilter,
-    }));
-  if (!selected) return null;
-
-  const path = selected.toLowerCase().endsWith(".pflow") ? selected : `${selected}.pflow`;
-  await invoke("write_project_file", {
-    path,
-    contents: serializeProject(project),
+  const content = serializeProject(project);
+  if (saveAs) {
+    return invoke<string | null>("save_project_as", {
+      defaultFilename: project.name,
+      content,
+    });
+  }
+  return invoke<string | null>("save_project", {
+    path: currentPath,
+    content,
   });
-  return path;
 }

@@ -72,6 +72,7 @@ function App() {
       const path = await saveProjectFile(
         current.project,
         saveAs ? null : current.filePath,
+        saveAs,
       );
       if (!path) return;
       useProjectStore.getState().markSaved(path);
