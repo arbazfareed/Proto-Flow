@@ -42,3 +42,7 @@ Project files are opened and saved through Rust Tauri commands. Saves stage data
 ### State management
 
 The Zustand store is composed from independent document, canvas, history, and UI slices in `src/store/`. Components subscribe to only the fields they use; the history keeps at most 50 snapshots and the store is exposed through Redux DevTools in development.
+
+### Desktop layout
+
+The desktop layout is composed in `src/AppShell.tsx` from the top bar, screens/layers sidebar, canvas placeholder, inspector, and status bar. Sidebar visibility, canvas zoom, grid, and selection are driven by the Zustand UI and canvas slices.
