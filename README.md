@@ -29,7 +29,19 @@ npm test
 
 ## Phase 1 status
 
-The desktop shell, local project schema, native file I/O, local autosave and crash recovery, keyboard shortcuts, command palette, and signed updater integration are being built in this phase. The canvas renderer is intentionally reserved for Phase 2.
+Phase 1 is complete: the desktop shell, local project schema, native file I/O, local autosave and crash recovery, keyboard shortcuts, command palette, and updater integration are implemented. The canvas renderer is intentionally reserved for Phase 2.
+
+### Phase 1 implementation reference
+
+The current canvas is a placeholder; the project format and state needed to build a renderer already exist. Phase 2 should extend these foundations rather than introduce a parallel project model:
+
+- `src/project/schema.ts` defines the versioned project, screen, and widget types and validates imported project data. Widgets already persist geometry, rotation, opacity, visibility, locking, z-order, style, and `props`.
+- `src/store/documentSlice.ts` owns the active project, file path, dirty state, and document actions. `src/store/canvasSlice.ts` owns zoom, pan, grid and snap settings, and selected IDs. `src/store/historySlice.ts` owns bounded undo/redo snapshots. The slices are composed in `src/store/index.ts`.
+- `src/layout/ShellComponents.tsx` contains the existing canvas-area placeholder and surrounding shell. Replace or extend the placeholder with the renderer while preserving the shell, panel toggles, status bar, and selective Zustand subscriptions.
+- `src/project/files.ts` and the Rust commands in `src-tauri/src/commands/file_io.rs` provide validated local project open/save. Keep rendered edits in the project model so the existing save and autosave flows continue to persist them.
+- `src/commands/registry.tsx` is the extension point for new user commands; global shortcuts are handled in `src/commands/shortcuts.ts`.
+
+Canvas rendering, pointer interactions, widget editing, and screen/layer editing are not implemented in Phase 1.
 
 ### `.pflow` project schema
 
