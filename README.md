@@ -29,7 +29,7 @@ npm test
 
 ## Phase 1 status
 
-The desktop shell, local project schema, native file I/O, local autosave and crash recovery, keyboard shortcuts, and command palette are being built in this phase. The canvas renderer is intentionally reserved for Phase 2. The updater plugin is initialized, but automatic updates are not active until a signed release feed and public key are configured.
+The desktop shell, local project schema, native file I/O, local autosave and crash recovery, keyboard shortcuts, command palette, and signed updater integration are being built in this phase. The canvas renderer is intentionally reserved for Phase 2.
 
 ### `.pflow` project schema
 
@@ -50,3 +50,9 @@ Unsaved projects are snapshotted to browser local storage every 30 seconds. Clea
 ### Desktop layout
 
 The desktop layout is composed in `src/AppShell.tsx` from the top bar, screens/layers sidebar, canvas placeholder, inspector, and status bar. Sidebar visibility, canvas zoom, grid, and selection are driven by the Zustand UI and canvas slices.
+
+### Auto-updates and release signing
+
+Installed production desktop builds check the configured Tauri updater endpoint on launch and when the user requests a check. A detected version is offered in a toast; installation downloads the signed update and relaunches the app. Development builds and browser previews never call the updater. Tauri verifies the update signature before installation.
+
+The updater signing public key is configured in `src-tauri/tauri.conf.json`. Keep the matching private key out of the repository and store it as the GitHub Actions secret `TAURI_SIGNING_PRIVATE_KEY`; configure `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` if the key is password-protected. CI builds updater artifacts with `bundle.createUpdaterArtifacts`, signs them using the private key, and publishes each platform's update archive and `.sig` file to the release CDN. Serve a platform manifest at `https://releases.protoflow.app/{{target}}/{{arch}}/{{current_version}}` with the new version, notes, publication date, and target archive URL and signature. The endpoint and CDN must be deployed before users can receive updates.

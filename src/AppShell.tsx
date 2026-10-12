@@ -11,14 +11,13 @@ import {
   Keyboard,
   Redo2,
   Search,
-  Sparkles,
   Undo2,
-  X,
 } from "lucide-react";
 import { clearAutosave } from "./project/autosave";
 import { openProjectFile, saveProjectFile } from "./project/files";
 import { useStore } from "./store";
 import { RestoreModal } from "./layout/RestoreModal";
+import { UpdateToast } from "./layout/UpdateToast";
 import {
   CanvasArea,
   LeftSidebar,
@@ -46,13 +45,21 @@ function AppShell() {
   const redo = useStore((state) => state.redo);
   const [notice, setNotice] = useState("");
   const [paletteQuery, setPaletteQuery] = useState("");
-  const [updateNotice, setUpdateNotice] = useState(false);
+  const [updateCheckRequest, setUpdateCheckRequest] = useState(0);
   const paletteInput = useRef<HTMLInputElement>(null);
 
   const notify = useCallback((message: string) => {
     setNotice(message);
     window.setTimeout(() => setNotice(""), 4000);
   }, []);
+
+  const requestUpdateCheck = useCallback(() => {
+    if (import.meta.env.DEV || !isTauri()) {
+      notify("Update checks are available in installed desktop builds.");
+      return;
+    }
+    setUpdateCheckRequest((requestId) => requestId + 1);
+  }, [notify]);
 
   const save = useCallback(async (saveAs = false) => {
     const current = useStore.getState();
@@ -120,10 +127,10 @@ function AppShell() {
       {
         label: "Check for updates",
         icon: <Bell />,
-        run: () => setUpdateNotice(true),
+        run: requestUpdateCheck,
       },
     ],
-    [createNewProject, openFile, redo, save, undo],
+    [createNewProject, openFile, redo, requestUpdateCheck, save, undo],
   );
 
   useEffect(() => {
@@ -211,7 +218,7 @@ function AppShell() {
           onOpen={() => void openFile()}
           onToggle={toggleLeftPanel}
           onOpenPalette={() => setPaletteOpen(true)}
-          onUpdates={() => setUpdateNotice(true)}
+          onUpdates={requestUpdateCheck}
         />
         <CanvasArea
           onToggleLeft={toggleLeftPanel}
@@ -222,12 +229,13 @@ function AppShell() {
         />
         <RightInspector
           onToggle={toggleRightPanel}
-          onUpdates={() => setUpdateNotice(true)}
+          onUpdates={requestUpdateCheck}
           onRename={renameProject}
         />
       </div>
       <StatusBar />
       <RestoreModal />
+      <UpdateToast requestId={updateCheckRequest} />
 
       {notice && <div className="toast" role="status"><Check size={15} /><span>{notice}</span></div>}
 
@@ -250,18 +258,6 @@ function AppShell() {
         </div>
       )}
 
-      {updateNotice && (
-        <div className="overlay">
-          <section className="dialog-card update-dialog" role="dialog" aria-modal="true" aria-labelledby="update-title">
-            <button className="icon-button dialog-close" aria-label="Close update information" onClick={() => setUpdateNotice(false)}><X size={17} /></button>
-            <div className="dialog-icon"><Sparkles size={19} /></div>
-            <span className="eyebrow">PROTO FLOW UPDATES</span>
-            <h2 id="update-title">Updates aren't connected yet.</h2>
-            <p>Automatic update checks need a signed release feed and its public verification key. No update check was made. Configure these when setting up your release channel.</p>
-            <div className="dialog-actions"><button className="button button-primary" onClick={() => setUpdateNotice(false)}>Got it</button></div>
-          </section>
-        </div>
-      )}
     </div>
   );
 }
