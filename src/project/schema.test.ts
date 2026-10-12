@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   createEmptyProject,
   parseProject,
+  formatProjectValidationError,
   SchemaValidationError,
   serializeProject,
   type Project,
@@ -102,6 +103,9 @@ describe("ProtoFlow project schema", () => {
       expect(error).toBeInstanceOf(SchemaValidationError);
       expect((error as SchemaValidationError).issues.length).toBeGreaterThan(0);
       expect((error as SchemaValidationError).issues[0].path).toContain("schemaVersion");
+      expect(formatProjectValidationError(error as SchemaValidationError)).toBe(
+        "Incompatible schema version (2.0.0). Please update Proto Flow.",
+      );
     }
   });
 
@@ -123,6 +127,7 @@ describe("ProtoFlow project schema", () => {
   it("wraps malformed JSON in SchemaValidationError", () => {
     expect(() => parseProject("{")).toThrow(SchemaValidationError);
     expect(() => parseProject("{")).toThrow("Invalid JSON");
+    expect(() => parseProject('{"name":"bad\u0000json"}')).toThrow(SchemaValidationError);
   });
 
   it("rejects a start screen id that does not reference an existing screen", () => {
@@ -161,6 +166,20 @@ describe("ProtoFlow project schema", () => {
         ],
       }),
     ).toThrow(/Expected a hex color/);
+
+    for (const fill of ["#ZZFFFF", "#12", "<script>alert(1)</script>"]) {
+      expect(() =>
+        parseProject({
+          ...project,
+          screens: [
+            {
+              ...screen,
+              widgets: [{ ...widget, style: { ...widget.style, fill } }],
+            },
+          ],
+        }),
+      ).toThrow(/Expected a hex color/);
+    }
   });
 
   it("rejects invalid widget geometry and interaction events", () => {
@@ -188,6 +207,54 @@ describe("ProtoFlow project schema", () => {
           {
             ...screen,
             interactionRules: [{ ...rule, event: "onDoubleClick" }],
+          },
+        ],
+      }),
+    ).toThrow(SchemaValidationError);
+  });
+
+  it("bounds widget coordinates and enforces dimensions of at least one unit", () => {
+    const project = createCompleteProject();
+    const [screen] = project.screens;
+    const [widget] = screen.widgets;
+
+    for (const geometry of [
+      { x: Infinity },
+      { x: 100_001 },
+      { y: -100_001 },
+      { width: -99_999 },
+      { width: 0.5 },
+      { height: 0 },
+      { opacity: 450 },
+    ]) {
+      expect(() =>
+        parseProject({
+          ...project,
+          screens: [
+            {
+              ...screen,
+              widgets: [{ ...widget, ...geometry }],
+            },
+          ],
+        }),
+      ).toThrow(SchemaValidationError);
+    }
+  });
+
+  it("rejects unsupported recursive widget hierarchies instead of traversing them", () => {
+    const project = createCompleteProject();
+    const [screen] = project.screens;
+    const [widget] = screen.widgets;
+    const recursiveWidget: Record<string, unknown> = { ...widget };
+    recursiveWidget.children = [recursiveWidget];
+
+    expect(() =>
+      parseProject({
+        ...project,
+        screens: [
+          {
+            ...screen,
+            widgets: [recursiveWidget],
           },
         ],
       }),

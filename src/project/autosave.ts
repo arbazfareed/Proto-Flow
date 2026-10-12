@@ -22,6 +22,21 @@ const LegacyRecoverySchema = z.object({
 export type AutosaveSnapshot = z.infer<typeof AutosaveSchema>;
 
 let clearedProjectPayload: string | null = null;
+const autosaveErrorListeners = new Set<(message: string) => void>();
+
+export function subscribeAutosaveErrors(
+  listener: (message: string) => void,
+): () => void {
+  autosaveErrorListeners.add(listener);
+  return () => autosaveErrorListeners.delete(listener);
+}
+
+function reportAutosaveWriteError(error: unknown): void {
+  console.error("Could not write Proto Flow autosave data.", error);
+  autosaveErrorListeners.forEach((listener) => {
+    listener("Autosave failed. Save your project to disk and check available storage.");
+  });
+}
 
 function removeStoredSnapshot(key: string): void {
   try {
@@ -124,7 +139,7 @@ export function startAutosave(): () => void {
     try {
       localStorage.setItem(AUTOSAVE_KEY, JSON.stringify(snapshot));
     } catch (error) {
-      console.error("Could not write Proto Flow autosave data.", error);
+      reportAutosaveWriteError(error);
     }
   }, AUTOSAVE_INTERVAL_MS);
 

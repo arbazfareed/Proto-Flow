@@ -1,6 +1,10 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { invoke, isTauri } from "@tauri-apps/api/core";
-import { createEmptyProject, serializeProject } from "./schema";
+import {
+  createEmptyProject,
+  SchemaValidationError,
+  serializeProject,
+} from "./schema";
 import { openProjectFile, saveProjectFile } from "./files";
 
 vi.mock("@tauri-apps/api/core", () => ({
@@ -32,6 +36,27 @@ describe("native project file commands", () => {
     invokeMock.mockResolvedValue(null);
 
     await expect(openProjectFile()).resolves.toBeNull();
+  });
+
+  it("rejects an incompatible project version without loading it", async () => {
+    invokeMock.mockResolvedValue({
+      path: "future-format.pflow",
+      content: '{"schemaVersion":"2.5.0"}',
+    });
+
+    await expect(openProjectFile()).rejects.toMatchObject({
+      name: "SchemaValidationError",
+      message: "Project validation failed: schemaVersion: Incompatible schema version (2.5.0). Please update Proto Flow.",
+    });
+  });
+
+  it("rejects malformed project JSON without crashing the file service", async () => {
+    invokeMock.mockResolvedValue({
+      path: "truncated.pflow",
+      content: '{"schemaVersion":"1.0.0"',
+    });
+
+    await expect(openProjectFile()).rejects.toBeInstanceOf(SchemaValidationError);
   });
 
   it("saves to the current path using the atomic Rust save command", async () => {

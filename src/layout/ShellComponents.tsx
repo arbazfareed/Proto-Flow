@@ -31,6 +31,7 @@ interface TopBarProps {
   onUndo: () => void;
   onRedo: () => void;
   onOpenPalette: () => void;
+  onStartDragging: () => void;
   onWindowAction: (action: "minimize" | "maximize" | "close") => void;
 }
 
@@ -42,6 +43,7 @@ export function TopBar({
   onUndo,
   onRedo,
   onOpenPalette,
+  onStartDragging,
   onWindowAction,
 }: TopBarProps) {
   const projectName = useStore((state) => state.project.name);
@@ -50,7 +52,19 @@ export function TopBar({
   const canRedo = useStore((state) => state.future.length > 0);
 
   return (
-    <header className="topbar" data-tauri-drag-region>
+    <header
+      className="topbar"
+      data-tauri-drag-region
+      onMouseDown={(event) => {
+        if (
+          event.button === 0 &&
+          !(event.target instanceof HTMLElement &&
+            event.target.closest("button, input, a, [role='button']"))
+        ) {
+          onStartDragging();
+        }
+      }}
+    >
       <div className="brand-lockup" data-tauri-drag-region>
         <div className="brand-mark">P<span>F</span></div>
         <span className="brand-name">proto<span>flow</span></span>
@@ -125,19 +139,19 @@ export function LeftSidebar({ onNew, onOpen, onToggle, onOpenPalette, onUpdates 
       <div className="workspace-card">
         <div className="workspace-card-icon"><Layers2 size={16} /></div>
         <div className="workspace-card-copy"><strong>My workspace</strong><span>Local projects</span></div>
-        <button className="icon-button small-icon" title="Workspace options" aria-label="Workspace options"><MoreHorizontal size={16} /></button>
+        <button className="icon-button small-icon" title="Workspace options are coming later" aria-label="Workspace options" disabled><MoreHorizontal size={16} /></button>
       </div>
       <div className="sidebar-section">
         <div className="section-label"><span>PROJECT</span><button className="icon-button small-icon" aria-label="New project" onClick={onNew}><Plus size={15} /></button></div>
-        <button className="nav-item active"><FileText size={16} /><span>{project.name}</span><span className="nav-unsaved">{isDirty ? "•" : ""}</span></button>
+        <div className="nav-item active" aria-current="page"><FileText size={16} /><span>{project.name}</span><span className="nav-unsaved">{isDirty ? "•" : ""}</span></div>
         <button className="nav-item" onClick={onOpen}><FolderOpen size={16} /><span>Open project…</span><kbd>Ctrl O</kbd></button>
       </div>
       <div className="sidebar-section pages-section">
-        <div className="section-label"><span>SCREENS</span><button className="icon-button small-icon" aria-label="Add screen" title="Screen editing is coming with canvas editing"><Plus size={15} /></button></div>
+        <div className="section-label"><span>SCREENS</span><button className="icon-button small-icon" aria-label="Add screen" title="Screen editing is coming with canvas editing" disabled><Plus size={15} /></button></div>
         {project.screens.length ? project.screens.map((screen) => (
-          <button className="page-item selected" key={screen.id}>
+          <div className="page-item selected" key={screen.id} aria-current={screen.id === project.startScreenId ? "page" : undefined}>
             <span className="page-thumb"><span /></span><span>{screen.name}</span><span className="page-count">{screen.widgets.length}</span>
-          </button>
+          </div>
         )) : <p className="sidebar-empty">Screens will appear here.</p>}
       </div>
       <div className="sidebar-section layers-section">
@@ -186,7 +200,7 @@ export function CanvasArea({
         <div className="canvas-toolbar-actions">
           <span className="canvas-mode"><span className="mode-dot" /> Canvas</span>
           {!rightPanelOpen && <button className="icon-button small-icon" aria-label="Show inspector panel" onClick={onToggleRight}><PanelRightClose size={15} /></button>}
-          <button className="icon-button small-icon" title="More canvas actions" aria-label="More canvas actions"><MoreHorizontal size={17} /></button>
+          <button className="icon-button small-icon" title="More canvas actions are coming later" aria-label="More canvas actions" disabled><MoreHorizontal size={17} /></button>
         </div>
       </div>
       <div className="canvas-stage">

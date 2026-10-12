@@ -13,9 +13,19 @@ export function CommandPalette() {
     commandRegistry.getSnapshot,
   );
   const inputRef = useRef<HTMLInputElement>(null);
+  const previousFocusRef = useRef<HTMLElement | null>(null);
 
   useEffect(() => {
-    if (paletteOpen) inputRef.current?.focus();
+    if (!paletteOpen) return;
+
+    previousFocusRef.current =
+      document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    inputRef.current?.focus();
+
+    return () => {
+      if (previousFocusRef.current?.isConnected) previousFocusRef.current.focus();
+      previousFocusRef.current = null;
+    };
   }, [paletteOpen]);
 
   if (!paletteOpen) return null;
@@ -32,6 +42,28 @@ export function CommandPalette() {
         role="dialog"
         aria-modal="true"
         aria-label="Command palette"
+        onKeyDown={(event) => {
+          if (event.key !== "Tab") return;
+
+          const focusable = Array.from(
+            event.currentTarget.querySelectorAll<HTMLElement>(
+              'input:not([disabled]), button:not([disabled]), [tabindex]:not([tabindex="-1"])',
+            ),
+          ).filter((element) => element.getClientRects().length > 0);
+          const first = focusable[0];
+          const last = focusable[focusable.length - 1];
+
+          if (!first || !last) {
+            event.preventDefault();
+          } else if (
+            !event.currentTarget.contains(document.activeElement) ||
+            (event.shiftKey && document.activeElement === first) ||
+            (!event.shiftKey && document.activeElement === last)
+          ) {
+            event.preventDefault();
+            (event.shiftKey ? last : first).focus();
+          }
+        }}
       >
         <Command label="Command palette" loop>
           <div className="palette-search">
