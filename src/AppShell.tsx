@@ -1,23 +1,15 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { isTauri } from "@tauri-apps/api/core";
 import { getCurrentWindow } from "@tauri-apps/api/window";
-import {
-  ArrowDownToLine,
-  Bell,
-  Check,
-  FilePlus2,
-  FileText,
-  FolderOpen,
-  Keyboard,
-  Redo2,
-  Search,
-  Undo2,
-} from "lucide-react";
+import { Check } from "lucide-react";
 import { clearAutosave } from "./project/autosave";
 import { openProjectFile, saveProjectFile } from "./project/files";
 import { useStore } from "./store";
 import { RestoreModal } from "./layout/RestoreModal";
 import { UpdateToast } from "./layout/UpdateToast";
+import { CommandPalette } from "./layout/CommandPalette";
+import { commandRegistry, createCoreCommands } from "./commands/registry";
+import { handleGlobalShortcut } from "./commands/shortcuts";
 import {
   CanvasArea,
   LeftSidebar,
@@ -26,27 +18,20 @@ import {
   TopBar,
 } from "./layout/ShellComponents";
 
-type CommandItem = {
-  label: string;
-  shortcut?: string;
-  icon: ReactNode;
-  run: () => void | Promise<void>;
-};
-
 function AppShell() {
   const paletteOpen = useStore((state) => state.paletteOpen);
   const setPaletteOpen = useStore((state) => state.setPaletteOpen);
   const togglePalette = useStore((state) => state.togglePalette);
   const toggleLeftPanel = useStore((state) => state.toggleLeftPanel);
   const toggleRightPanel = useStore((state) => state.toggleRightPanel);
+  const toggleGrid = useStore((state) => state.toggleGrid);
+  const toggleSnap = useStore((state) => state.toggleSnap);
   const loadProject = useStore((state) => state.loadProject);
   const renameProject = useStore((state) => state.renameProject);
   const undo = useStore((state) => state.undo);
   const redo = useStore((state) => state.redo);
   const [notice, setNotice] = useState("");
-  const [paletteQuery, setPaletteQuery] = useState("");
   const [updateCheckRequest, setUpdateCheckRequest] = useState(0);
-  const paletteInput = useRef<HTMLInputElement>(null);
 
   const notify = useCallback((message: string) => {
     setNotice(message);
@@ -116,75 +101,54 @@ function AppShell() {
     notify("New project created");
   }, [confirmDiscard, notify]);
 
-  const commands = useMemo<CommandItem[]>(
-    () => [
-      { label: "New project", shortcut: "Ctrl N", icon: <FilePlus2 />, run: createNewProject },
-      { label: "Open project", shortcut: "Ctrl O", icon: <FolderOpen />, run: openFile },
-      { label: "Save project", shortcut: "Ctrl S", icon: <ArrowDownToLine />, run: () => save() },
-      { label: "Save project as…", shortcut: "Ctrl Shift S", icon: <FileText />, run: () => save(true) },
-      { label: "Undo", shortcut: "Ctrl Z", icon: <Undo2 />, run: undo },
-      { label: "Redo", shortcut: "Ctrl Shift Z", icon: <Redo2 />, run: redo },
-      {
-        label: "Check for updates",
-        icon: <Bell />,
-        run: requestUpdateCheck,
-      },
-    ],
-    [createNewProject, openFile, redo, requestUpdateCheck, save, undo],
+  const coreCommands = useMemo(
+    () => createCoreCommands({
+      newProject: createNewProject,
+      openProject: openFile,
+      saveProject: (saveAs) => void save(saveAs),
+      undo,
+      redo,
+      toggleGrid,
+      toggleSnap,
+      checkForUpdates: requestUpdateCheck,
+    }),
+    [createNewProject, openFile, redo, requestUpdateCheck, save, toggleGrid, toggleSnap, undo],
   );
+
+  useEffect(() => {
+    const unregister = coreCommands.map((command) =>
+      commandRegistry.register(command),
+    );
+    return () => unregister.reverse().forEach((remove) => remove());
+  }, [coreCommands]);
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
-      const modifier = event.metaKey || event.ctrlKey;
-      const key = event.key.toLowerCase();
-      const target = event.target;
-      const editing = target instanceof HTMLElement &&
-        (target.isContentEditable || ["INPUT", "TEXTAREA", "SELECT"].includes(target.tagName));
-
-      if (modifier && key === "k") {
-        event.preventDefault();
-        setPaletteQuery("");
-        togglePalette();
-        return;
-      }
-      if (event.key === "Escape") {
-        setPaletteOpen(false);
-        return;
-      }
-      if (!modifier) return;
-      if (key === "s") {
-        event.preventDefault();
-        void save(event.shiftKey);
-      } else if (!editing && key === "z") {
-        event.preventDefault();
-        event.shiftKey ? redo() : undo();
-      } else if (!editing && key === "y") {
-        event.preventDefault();
-        redo();
-      } else if (key === "n") {
-        event.preventDefault();
-        createNewProject();
-      } else if (key === "o") {
-        event.preventDefault();
-        void openFile();
-      }
+      handleGlobalShortcut(event, {
+        paletteOpen,
+        togglePalette,
+        closePalette: () => setPaletteOpen(false),
+        saveProject: (saveAs) => void save(saveAs),
+        undo,
+        redo,
+        newProject: createNewProject,
+        openProject: () => void openFile(),
+        toggleGrid,
+      });
     };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [createNewProject, openFile, redo, save, setPaletteOpen, togglePalette, undo]);
-
-  useEffect(() => {
-    if (paletteOpen) paletteInput.current?.focus();
-  }, [paletteOpen]);
-
-  const filteredCommands = commands.filter((command) =>
-    command.label.toLowerCase().includes(paletteQuery.toLowerCase()),
-  );
-
-  const runCommand = (command: CommandItem) => {
-    setPaletteOpen(false);
-    void command.run();
-  };
+  }, [
+    createNewProject,
+    openFile,
+    paletteOpen,
+    redo,
+    save,
+    setPaletteOpen,
+    toggleGrid,
+    togglePalette,
+    undo,
+  ]);
 
   const runWindowAction = (action: "minimize" | "maximize" | "close") => {
     if (!isTauri()) return;
@@ -236,27 +200,9 @@ function AppShell() {
       <StatusBar />
       <RestoreModal />
       <UpdateToast requestId={updateCheckRequest} />
+      <CommandPalette />
 
       {notice && <div className="toast" role="status"><Check size={15} /><span>{notice}</span></div>}
-
-      {paletteOpen && (
-        <div className="overlay palette-overlay" onMouseDown={(event) => {
-          if (event.target === event.currentTarget) setPaletteOpen(false);
-        }}>
-          <section className="command-palette" aria-label="Command palette">
-            <div className="palette-search"><Search size={17} /><input ref={paletteInput} value={paletteQuery} onChange={(event) => setPaletteQuery(event.currentTarget.value)} placeholder="What would you like to do?" /><kbd>ESC</kbd></div>
-            <div className="palette-list">
-              <span className="palette-label">ACTIONS</span>
-              {filteredCommands.length ? filteredCommands.map((command) => (
-                <button className="palette-item" key={command.label} onClick={() => runCommand(command)}>
-                  <span className="palette-item-icon">{command.icon}</span><span>{command.label}</span>{command.shortcut && <kbd>{command.shortcut}</kbd>}
-                </button>
-              )) : <div className="palette-empty">No matching actions</div>}
-            </div>
-            <div className="palette-footer"><span><Keyboard size={13} /> Navigate with your keyboard</span><span>PROTO FLOW <b>·</b> PHASE 1</span></div>
-          </section>
-        </div>
-      )}
 
     </div>
   );

@@ -145,10 +145,11 @@
 .palette-search>input { min-width:0; flex:1; border:0; outline:0; color:#e9e9ec; background:transparent; font-size:12px; }
 .palette-search>input::placeholder { color:#797982; }
 .palette-search kbd { color:#9797a0; background:#26272b; }
-.palette-list { padding:10px 8px; }
+.palette-list { max-height:min(420px,55vh); overflow-y:auto; padding:10px 8px; }
 .palette-label { display:block; padding:3px 8px 7px; color:#777780; font-size:8px; font-weight:700; letter-spacing:.12em; }
+.palette-group [cmdk-group-heading] { display:block; padding:3px 8px 7px; color:#777780; font-size:8px; font-weight:700; letter-spacing:.12em; }
 .palette-item { width:100%; height:37px; gap:10px; padding:0 8px; border:0; border-radius:5px; color:#ceced4; background:transparent; text-align:left; cursor:pointer; font-size:10px; }
-.palette-item:hover { color:#f1eff7; background:#2a2731; }
+.palette-item:hover,.palette-item[data-selected="true"] { color:#f1eff7; background:#2a2731; outline:0; }
 .palette-item-icon { width:21px; height:21px; color:#aaa0c1; }
 .palette-item-icon svg { width:15px; height:15px; }
 .palette-item>span:nth-child(2) { flex:1; }
