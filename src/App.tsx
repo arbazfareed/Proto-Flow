@@ -30,7 +30,7 @@ import {
 } from "lucide-react";
 import { clearRecoverySnapshot, readRecoverySnapshot, writeRecoverySnapshot, type RecoverySnapshot } from "./project/recovery";
 import { openProjectFile, saveProjectFile } from "./project/files";
-import { useProjectStore } from "./project/store";
+import { useStore } from "./store";
 import "./App.css";
 
 type CommandItem = {
@@ -41,24 +41,28 @@ type CommandItem = {
 };
 
 function App() {
-  const project = useProjectStore((state) => state.project);
-  const filePath = useProjectStore((state) => state.filePath);
-  const isDirty = useProjectStore((state) => state.isDirty);
-  const past = useProjectStore((state) => state.past);
-  const future = useProjectStore((state) => state.future);
-  const newProject = useProjectStore((state) => state.newProject);
-  const loadProject = useProjectStore((state) => state.loadProject);
-  const restoreProject = useProjectStore((state) => state.restoreProject);
-  const renameProject = useProjectStore((state) => state.renameProject);
-  const undo = useProjectStore((state) => state.undo);
-  const redo = useProjectStore((state) => state.redo);
+  const project = useStore((state) => state.project);
+  const filePath = useStore((state) => state.filePath);
+  const isDirty = useStore((state) => state.isDirty);
+  const past = useStore((state) => state.past);
+  const future = useStore((state) => state.future);
+  const newProject = useStore((state) => state.newProject);
+  const loadProject = useStore((state) => state.loadProject);
+  const restoreProject = useStore((state) => state.restoreProject);
+  const renameProject = useStore((state) => state.renameProject);
+  const undo = useStore((state) => state.undo);
+  const redo = useStore((state) => state.redo);
+  const paletteOpen = useStore((state) => state.paletteOpen);
+  const leftPanelOpen = useStore((state) => state.leftPanelOpen);
+  const rightPanelOpen = useStore((state) => state.rightPanelOpen);
+  const setPaletteOpen = useStore((state) => state.setPaletteOpen);
+  const togglePalette = useStore((state) => state.togglePalette);
+  const toggleLeftPanel = useStore((state) => state.toggleLeftPanel);
+  const toggleRightPanel = useStore((state) => state.toggleRightPanel);
   const [notice, setNotice] = useState("");
-  const [paletteOpen, setPaletteOpen] = useState(false);
   const [paletteQuery, setPaletteQuery] = useState("");
   const [recovery, setRecovery] = useState<RecoverySnapshot | null>(null);
   const [updateNotice, setUpdateNotice] = useState(false);
-  const [leftPanelOpen, setLeftPanelOpen] = useState(true);
-  const [rightPanelOpen, setRightPanelOpen] = useState(true);
   const paletteInput = useRef<HTMLInputElement>(null);
 
   const notify = useCallback((message: string) => {
@@ -67,7 +71,7 @@ function App() {
   }, []);
 
   const save = useCallback(async (saveAs = false) => {
-    const current = useProjectStore.getState();
+    const current = useStore.getState();
     try {
       const path = await saveProjectFile(
         current.project,
@@ -75,7 +79,8 @@ function App() {
         saveAs,
       );
       if (!path) return;
-      useProjectStore.getState().markSaved(path);
+      useStore.getState().markSaved(path);
+      useStore.getState().markClean();
       try {
         clearRecoverySnapshot();
       } catch (error) {
@@ -88,7 +93,7 @@ function App() {
   }, [notify]);
 
   const confirmDiscard = useCallback(() => {
-    const current = useProjectStore.getState();
+    const current = useStore.getState();
     return !current.isDirty || window.confirm("You have unsaved changes. Continue without saving them?");
   }, []);
 
@@ -142,7 +147,7 @@ function App() {
 
   useEffect(() => {
     const saveRecovery = () => {
-      const current = useProjectStore.getState();
+      const current = useStore.getState();
       if (!current.isDirty) return;
       try {
         writeRecoverySnapshot(current.project, current.filePath);
@@ -151,7 +156,7 @@ function App() {
       }
     };
     const interval = window.setInterval(() => {
-      const current = useProjectStore.getState();
+      const current = useStore.getState();
       if (!current.isDirty) return;
       try {
         writeRecoverySnapshot(current.project, current.filePath);
@@ -178,7 +183,7 @@ function App() {
       if (modifier && key === "k") {
         event.preventDefault();
         setPaletteQuery("");
-        setPaletteOpen((open) => !open);
+        togglePalette();
         return;
       }
       if (event.key === "Escape") {
@@ -205,7 +210,7 @@ function App() {
     };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [createNewProject, openFile, redo, save, undo]);
+  }, [createNewProject, openFile, redo, save, setPaletteOpen, togglePalette, undo]);
 
   useEffect(() => {
     if (paletteOpen) paletteInput.current?.focus();
@@ -300,7 +305,7 @@ function App() {
           <aside className="sidebar left-sidebar">
             <div className="sidebar-heading">
               <span>WORKSPACE</span>
-              <button className="icon-button small-icon" aria-label="Close workspace panel" onClick={() => setLeftPanelOpen(false)}>
+              <button className="icon-button small-icon" aria-label="Close workspace panel" onClick={toggleLeftPanel}>
                 <PanelLeftClose size={15} />
               </button>
             </div>
@@ -329,12 +334,12 @@ function App() {
         <main className="canvas-area">
           <div className="canvas-toolbar">
             <div className="breadcrumb">
-              {!leftPanelOpen && <button className="icon-button small-icon" aria-label="Show workspace panel" onClick={() => setLeftPanelOpen(true)}><PanelLeftClose size={15} /></button>}
+              {!leftPanelOpen && <button className="icon-button small-icon" aria-label="Show workspace panel" onClick={toggleLeftPanel}><PanelLeftClose size={15} /></button>}
               <span className="breadcrumb-muted">Workspace</span><ArrowRight size={13} /><span>{project.name}</span>
             </div>
             <div className="canvas-toolbar-actions">
               <span className="canvas-mode"><span className="mode-dot" /> Canvas</span>
-              {!rightPanelOpen && <button className="icon-button small-icon" aria-label="Show inspector panel" onClick={() => setRightPanelOpen(true)}><PanelRightClose size={15} /></button>}
+              {!rightPanelOpen && <button className="icon-button small-icon" aria-label="Show inspector panel" onClick={toggleRightPanel}><PanelRightClose size={15} /></button>}
               <button className="icon-button small-icon" title="More canvas actions"><MoreHorizontal size={17} /></button>
             </div>
           </div>
@@ -365,7 +370,7 @@ function App() {
           <aside className="sidebar inspector">
             <div className="inspector-top">
               <div><span className="inspector-overline">PROPERTIES</span><h2>Project details</h2></div>
-              <button className="icon-button small-icon" aria-label="Close inspector" onClick={() => setRightPanelOpen(false)}><PanelRightClose size={15} /></button>
+              <button className="icon-button small-icon" aria-label="Close inspector" onClick={toggleRightPanel}><PanelRightClose size={15} /></button>
             </div>
             <div className="inspector-body">
               <label className="field-label" htmlFor="project-name">Project name</label>
