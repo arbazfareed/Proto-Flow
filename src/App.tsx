@@ -315,7 +315,7 @@ function App() {
             </div>
             <div className="sidebar-section pages-section">
               <div className="section-label"><span>PAGES</span><button className="icon-button small-icon" aria-label="Add page" title="Pages are coming with canvas editing"><Plus size={15} /></button></div>
-              <button className="page-item selected"><span className="page-thumb"><span /></span><span>{project.pages[0]?.name ?? "Page 1"}</span><span className="page-count">1</span></button>
+              <button className="page-item selected"><span className="page-thumb"><span /></span><span>{project.screens[0]?.name ?? "Screen 1"}</span><span className="page-count">1</span></button>
             </div>
             <div className="sidebar-footer">
               <button className="nav-item" onClick={() => setPaletteOpen(true)}><Keyboard size={16} /><span>Keyboard shortcuts</span></button>
@@ -354,7 +354,7 @@ function App() {
           </div>
           <div className="canvas-statusbar">
             <span><span className="status-indicator" /> Local project</span>
-            <span>{project.pages.length} page</span>
+            <span>{project.screens.length} screen</span>
             <span className="status-spacer" />
             <span>Autosave every 30 sec</span>
           </div>
@@ -374,8 +374,8 @@ function App() {
               <div className="inspector-rule" />
               <div className="detail-row"><span>File</span><span className={`file-value ${filePath ? "" : "muted-value"}`} title={filePath ?? "Not saved yet"}>{displayPath}</span></div>
               <div className="detail-row"><span>Format</span><span className="format-chip">.pflow <span>v1</span></span></div>
-              <div className="detail-row"><span>Pages</span><span>{project.pages.length}</span></div>
-              <div className="detail-row"><span>Canvas objects</span><span>{project.pages.reduce((total, page) => total + page.nodes.length, 0)}</span></div>
+              <div className="detail-row"><span>Screens</span><span>{project.screens.length}</span></div>
+              <div className="detail-row"><span>Widgets</span><span>{project.screens.reduce((total, screen) => total + screen.widgets.length, 0)}</span></div>
 
               <div className="inspector-rule" />
               <div className="section-label update-label"><span>UPDATES</span><Sparkles size={14} /></div>

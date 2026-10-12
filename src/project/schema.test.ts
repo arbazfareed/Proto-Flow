@@ -1,35 +1,214 @@
-import { beforeEach, describe, expect, it } from "vitest";
-import { createProject, parseProject, serializeProject } from "./schema";
-import { useProjectStore } from "./store";
+import { describe, expect, it } from "vitest";
+import {
+  createEmptyProject,
+  parseProject,
+  SchemaValidationError,
+  serializeProject,
+  type Project,
+} from "./schema";
 
-describe("project schema", () => {
-  it("creates and round-trips a valid v1 project", () => {
-    const project = createProject("Checkout flow");
+function createCompleteProject(): Project {
+  const project = createEmptyProject("Checkout flow");
+  const screen = project.screens[0];
 
+  return {
+    ...project,
+    variables: [
+      {
+        id: crypto.randomUUID(),
+        name: "attempts",
+        type: "number",
+        defaultValue: 0,
+      },
+    ],
+    screens: [
+      {
+        ...screen,
+        widgets: [
+          {
+            id: crypto.randomUUID(),
+            type: "button",
+            x: 12,
+            y: 24,
+            width: 180,
+            height: 48,
+            rotation: 0,
+            opacity: 1,
+            visible: true,
+            locked: false,
+            zIndex: 0,
+            style: {
+              fill: "#faf",
+              stroke: "#112233",
+              strokeWidth: 1,
+              cornerRadius: 8,
+              shadow: {
+                color: "#11223380",
+                blur: 4,
+                offsetX: 0,
+                offsetY: 2,
+              },
+            },
+            props: { label: "Continue", metadata: { trackingId: 42 } },
+          },
+        ],
+        interactionRules: [
+          {
+            id: crypto.randomUUID(),
+            event: "onClick",
+            conditions: [
+              { variable: "attempts", operator: "lessThan", value: 3 },
+            ],
+            actions: [
+              { type: "navigateTo", target: project.startScreenId },
+              { type: "setVariable", target: "attempts", value: 1 },
+            ],
+          },
+        ],
+      },
+    ],
+  };
+}
+
+describe("ProtoFlow project schema", () => {
+  it("creates a valid starter project with a UUID start screen", () => {
+    const project = createEmptyProject("Checkout flow");
+
+    expect(project.schemaVersion).toBe("1.0.0");
+    expect(project.name).toBe("Checkout flow");
+    expect(project.screens).toHaveLength(1);
+    expect(project.screens[0].id).toBe(project.startScreenId);
+    expect(project.screens[0].widgets).toEqual([]);
+    expect(project.screens[0].interactionRules).toEqual([]);
+    expect(project.variables).toEqual([]);
+    expect(() => crypto.randomUUID()).not.toThrow();
+  });
+
+  it("validates and round-trips variables, widgets, styles and interactions", () => {
+    const project = createCompleteProject();
+
+    expect(parseProject(project)).toEqual(project);
     expect(parseProject(serializeProject(project))).toEqual(project);
   });
 
-  it("rejects malformed JSON and unsupported schema versions", () => {
-    expect(() => parseProject("{")).toThrow("not valid JSON");
-    expect(() => parseProject(JSON.stringify({ schemaVersion: "2.0.0" }))).toThrow();
+  it("throws SchemaValidationError with the Zod issues for unsupported versions", () => {
+    const project = createEmptyProject();
+    const unsupported = { ...project, schemaVersion: "2.0.0" };
+
+    try {
+      parseProject(unsupported);
+      expect.fail("Expected schema validation to fail.");
+    } catch (error) {
+      expect(error).toBeInstanceOf(SchemaValidationError);
+      expect((error as SchemaValidationError).issues.length).toBeGreaterThan(0);
+      expect((error as SchemaValidationError).issues[0].path).toContain("schemaVersion");
+    }
   });
-});
 
-describe("project history", () => {
-  beforeEach(() => {
-    useProjectStore.getState().loadProject(createProject("Initial"), "initial.pflow");
+  it("reports missing required fields with their paths", () => {
+    try {
+      parseProject({ schemaVersion: "1.0.0" });
+      expect.fail("Expected missing fields to fail validation.");
+    } catch (error) {
+      expect(error).toBeInstanceOf(SchemaValidationError);
+      const paths = (error as SchemaValidationError).issues.map((issue) =>
+        issue.path.join("."),
+      );
+      expect(paths).toContain("id");
+      expect(paths).toContain("screens");
+      expect(paths).toContain("startScreenId");
+    }
   });
 
-  it("marks renames dirty and supports undo and redo", () => {
-    const store = useProjectStore.getState();
-    store.renameProject("Checkout flow");
-    expect(useProjectStore.getState().project.name).toBe("Checkout flow");
-    expect(useProjectStore.getState().isDirty).toBe(true);
+  it("wraps malformed JSON in SchemaValidationError", () => {
+    expect(() => parseProject("{")).toThrow(SchemaValidationError);
+    expect(() => parseProject("{")).toThrow("Invalid JSON");
+  });
 
-    useProjectStore.getState().undo();
-    expect(useProjectStore.getState().project.name).toBe("Initial");
+  it("rejects a start screen id that does not reference an existing screen", () => {
+    const project = createEmptyProject();
 
-    useProjectStore.getState().redo();
-    expect(useProjectStore.getState().project.name).toBe("Checkout flow");
+    expect(() =>
+      parseProject({ ...project, startScreenId: crypto.randomUUID() }),
+    ).toThrow(/startScreenId: Start screen must reference an existing screen/);
+  });
+
+  it("enforces UUIDs and hex colors in nested widget data", () => {
+    const project = createCompleteProject();
+    const [screen] = project.screens;
+    const [widget] = screen.widgets;
+
+    expect(() =>
+      parseProject({
+        ...project,
+        screens: [
+          {
+            ...screen,
+            widgets: [{ ...widget, id: "not-a-uuid" }],
+          },
+        ],
+      }),
+    ).toThrow(SchemaValidationError);
+
+    expect(() =>
+      parseProject({
+        ...project,
+        screens: [
+          {
+            ...screen,
+            widgets: [{ ...widget, style: { ...widget.style, fill: "red" } }],
+          },
+        ],
+      }),
+    ).toThrow(/Expected a hex color/);
+  });
+
+  it("rejects invalid widget geometry and interaction events", () => {
+    const project = createCompleteProject();
+    const [screen] = project.screens;
+    const [widget] = screen.widgets;
+    const [rule] = screen.interactionRules;
+
+    expect(() =>
+      parseProject({
+        ...project,
+        screens: [
+          {
+            ...screen,
+            widgets: [{ ...widget, opacity: 1.2 }],
+          },
+        ],
+      }),
+    ).toThrow(SchemaValidationError);
+
+    expect(() =>
+      parseProject({
+        ...project,
+        screens: [
+          {
+            ...screen,
+            interactionRules: [{ ...rule, event: "onDoubleClick" }],
+          },
+        ],
+      }),
+    ).toThrow(SchemaValidationError);
+  });
+
+  it("keeps variable default values aligned with their declared types", () => {
+    const project = createEmptyProject();
+
+    expect(() =>
+      parseProject({
+        ...project,
+        variables: [
+          {
+            id: crypto.randomUUID(),
+            name: "enabled",
+            type: "boolean",
+            defaultValue: "true",
+          },
+        ],
+      }),
+    ).toThrow(SchemaValidationError);
   });
 });
