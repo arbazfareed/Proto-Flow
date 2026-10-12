@@ -33,7 +33,7 @@ The desktop shell, local project schema, native file I/O, local autosave and cra
 
 ### `.pflow` project schema
 
-Version `1.0.0` projects contain UUID-backed project, screen, widget, variable, and interaction-rule entities. A project has at least one screen and a `startScreenId` that refers to one of them. Widget geometry, visibility, z-order, style, and freeform `props` are validated before a project is loaded or saved.
+Version `1.0.0` projects contain UUID-backed project, screen, widget, variable, and interaction-rule entities. A project has at least one screen and a `startScreenId` that refers to one of them. Widget coordinates are bounded to ±100,000 units, dimensions must be at least one unit, and opacity must be between zero and one. Geometry, visibility, z-order, style, and freeform `props` are validated before a project is loaded or saved.
 
 Use `createEmptyProject(name)` to create a starter project and `parseProject(raw)` to validate either a JSON string or an in-memory value. Invalid data throws `SchemaValidationError`, whose `issues` property contains the Zod issue list.
 
@@ -45,7 +45,7 @@ The Zustand store is composed from independent document, canvas, history, and UI
 
 ### Local autosave and recovery
 
-Unsaved projects are snapshotted to browser local storage every 30 seconds. Clean projects and snapshots whose project data has not changed are skipped. On startup, a valid snapshot no older than seven days can be restored or discarded; previous recovery snapshots are migrated when possible.
+Unsaved projects are snapshotted to browser local storage every 30 seconds. Clean projects and snapshots whose project data has not changed are skipped. On startup, a valid snapshot no older than seven days can be restored or discarded; previous recovery snapshots are migrated when possible. If browser storage refuses an autosave (for example, when quota is exhausted), the app shows an error asking the user to save to disk and check available storage.
 
 ### Desktop layout
 
@@ -53,7 +53,7 @@ The desktop layout is composed in `src/AppShell.tsx` from the top bar, screens/l
 
 ### Command palette and shortcuts
 
-Use `Ctrl/Cmd+K` to open the keyboard-navigable command palette. Type to filter actions, use the arrow keys and Enter to run one, click outside or press Escape to close. Core commands (new/open/save, undo/redo, grid/snap toggles, and update checks) are registered centrally in `src/commands/registry.tsx`; future features should contribute commands through this registry rather than modifying the palette UI.
+Use `Ctrl/Cmd+K` to open the keyboard-navigable command palette. Type to filter actions, use the arrow keys and Enter to run one, click outside or press Escape to close. Focus is contained in the palette while it is open and returns to the previous control when closed. Core commands (new/open/save, undo/redo, grid/snap toggles, and update checks) are registered centrally in `src/commands/registry.tsx`; future features should contribute commands through this registry rather than modifying the palette UI.
 
 Global shortcuts include `Ctrl/Cmd+S` to save, `Ctrl/Cmd+Z` to undo, `Ctrl/Cmd+Shift+Z` or `Ctrl/Cmd+Y` to redo, `Ctrl/Cmd+N` for a new project, `Ctrl/Cmd+O` to open, and `Ctrl/Cmd+'` to toggle the canvas grid. Text-editing shortcuts are left to the focused input for undo/redo and grid toggling.
 

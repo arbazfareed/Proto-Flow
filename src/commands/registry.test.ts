@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { CommandRegistry } from "./registry";
+import { CommandRegistry, createCoreCommands } from "./registry";
 
 describe("command registry", () => {
   it("notifies subscribers as commands register and unregister", () => {
@@ -31,5 +31,44 @@ describe("command registry", () => {
     expect(() =>
       registry.register({ id: "duplicate", label: "Two", icon: null, run: vi.fn() }),
     ).toThrow('A command with id "duplicate" is already registered.');
+  });
+
+  it("routes each core command to its matching application action", async () => {
+    const actions = {
+      newProject: vi.fn(),
+      openProject: vi.fn(),
+      saveProject: vi.fn(),
+      undo: vi.fn(),
+      redo: vi.fn(),
+      toggleGrid: vi.fn(),
+      toggleSnap: vi.fn(),
+      checkForUpdates: vi.fn(),
+    };
+    const commands = new Map(
+      createCoreCommands(actions).map((command) => [command.id, command]),
+    );
+
+    for (const id of [
+      "project.new",
+      "project.open",
+      "project.save",
+      "project.save-as",
+      "edit.undo",
+      "edit.redo",
+      "canvas.toggle-grid",
+      "canvas.toggle-snap",
+      "app.check-updates",
+    ]) {
+      await commands.get(id)?.run();
+    }
+
+    expect(actions.newProject).toHaveBeenCalledOnce();
+    expect(actions.openProject).toHaveBeenCalledOnce();
+    expect(actions.saveProject.mock.calls).toEqual([[], [true]]);
+    expect(actions.undo).toHaveBeenCalledOnce();
+    expect(actions.redo).toHaveBeenCalledOnce();
+    expect(actions.toggleGrid).toHaveBeenCalledOnce();
+    expect(actions.toggleSnap).toHaveBeenCalledOnce();
+    expect(actions.checkForUpdates).toHaveBeenCalledOnce();
   });
 });

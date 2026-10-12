@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { isTauri } from "@tauri-apps/api/core";
 import { getCurrentWindow } from "@tauri-apps/api/window";
-import { Check } from "lucide-react";
-import { clearAutosave } from "./project/autosave";
+import { Check, CircleAlert } from "lucide-react";
+import { clearAutosave, subscribeAutosaveErrors } from "./project/autosave";
 import { openProjectFile, saveProjectFile } from "./project/files";
 import { useStore } from "./store";
 import { RestoreModal } from "./layout/RestoreModal";
@@ -10,6 +10,7 @@ import { UpdateToast } from "./layout/UpdateToast";
 import { CommandPalette } from "./layout/CommandPalette";
 import { commandRegistry, createCoreCommands } from "./commands/registry";
 import { handleGlobalShortcut } from "./commands/shortcuts";
+import { formatProjectValidationError, SchemaValidationError } from "./project/schema";
 import {
   CanvasArea,
   LeftSidebar,
@@ -31,12 +32,19 @@ function AppShell() {
   const undo = useStore((state) => state.undo);
   const redo = useStore((state) => state.redo);
   const [notice, setNotice] = useState("");
+  const [noticeIsError, setNoticeIsError] = useState(false);
   const [updateCheckRequest, setUpdateCheckRequest] = useState(0);
 
-  const notify = useCallback((message: string) => {
+  const notify = useCallback((message: string, isError = false) => {
     setNotice(message);
+    setNoticeIsError(isError);
     window.setTimeout(() => setNotice(""), 4000);
   }, []);
+
+  useEffect(
+    () => subscribeAutosaveErrors((message) => notify(message, true)),
+    [notify],
+  );
 
   const requestUpdateCheck = useCallback(() => {
     if (import.meta.env.DEV || !isTauri()) {
@@ -64,7 +72,10 @@ function AppShell() {
       }
       notify("Project saved");
     } catch (error) {
-      notify(error instanceof Error ? error.message : "Could not save project.");
+      notify(
+        error instanceof Error ? error.message : "Could not save project.",
+        true,
+      );
     }
   }, [notify]);
 
@@ -86,7 +97,14 @@ function AppShell() {
       }
       notify("Project opened");
     } catch (error) {
-      notify(error instanceof Error ? error.message : "Could not open project.");
+      notify(
+        error instanceof SchemaValidationError
+          ? formatProjectValidationError(error)
+          : error instanceof Error
+            ? error.message
+            : "Could not open project.",
+        true,
+      );
     }
   }, [confirmDiscard, loadProject, notify]);
 
@@ -164,6 +182,13 @@ function AppShell() {
     });
   };
 
+  const startWindowDragging = useCallback(() => {
+    if (!isTauri()) return;
+    void getCurrentWindow().startDragging().catch((error: unknown) => {
+      notify(error instanceof Error ? error.message : "Could not move the app window.");
+    });
+  }, [notify]);
+
   return (
     <div className="app-shell">
       <TopBar
@@ -174,6 +199,7 @@ function AppShell() {
         onUndo={undo}
         onRedo={redo}
         onOpenPalette={() => setPaletteOpen(true)}
+        onStartDragging={startWindowDragging}
         onWindowAction={runWindowAction}
       />
       <div className="workspace">
@@ -202,7 +228,12 @@ function AppShell() {
       <UpdateToast requestId={updateCheckRequest} />
       <CommandPalette />
 
-      {notice && <div className="toast" role="status"><Check size={15} /><span>{notice}</span></div>}
+      {notice && (
+        <div className={`toast${noticeIsError ? " toast-error" : ""}`} role={noticeIsError ? "alert" : "status"}>
+          {noticeIsError ? <CircleAlert size={15} /> : <Check size={15} />}
+          <span>{notice}</span>
+        </div>
+      )}
 
     </div>
   );

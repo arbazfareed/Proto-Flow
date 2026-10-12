@@ -1,6 +1,7 @@
 import { z } from "zod";
 
 export const PROJECT_SCHEMA_VERSION = "1.0.0";
+const COORDINATE_LIMIT = 100_000;
 const HexColorSchema = z
   .string()
   .regex(/^#(?:[\da-f]{3}|[\da-f]{4}|[\da-f]{6}|[\da-f]{8})$/i, "Expected a hex color.");
@@ -81,10 +82,10 @@ export const ProtoWidgetSchema = z
   .object({
     id: z.string().uuid(),
     type: z.string().trim().min(1),
-    x: z.number().finite(),
-    y: z.number().finite(),
-    width: z.number().finite().positive(),
-    height: z.number().finite().positive(),
+    x: z.number().finite().min(-COORDINATE_LIMIT).max(COORDINATE_LIMIT),
+    y: z.number().finite().min(-COORDINATE_LIMIT).max(COORDINATE_LIMIT),
+    width: z.number().finite().min(1),
+    height: z.number().finite().min(1),
     rotation: z.number().finite(),
     opacity: z.number().finite().min(0).max(1),
     visible: z.boolean(),
@@ -157,6 +158,16 @@ export class SchemaValidationError extends Error {
   }
 }
 
+export function formatProjectValidationError(error: SchemaValidationError): string {
+  const versionIssue = error.issues.find(
+    (issue) => issue.path.length === 1 && issue.path[0] === "schemaVersion",
+  );
+  if (versionIssue) {
+    return versionIssue.message;
+  }
+  return error.message;
+}
+
 export function parseProject(raw: unknown): Project {
   let value = raw;
   if (typeof raw === "string") {
@@ -168,6 +179,23 @@ export function parseProject(raw: unknown): Project {
         { code: "custom", message: `Invalid JSON: ${message}`, path: [], input: raw },
       ]);
     }
+  }
+
+  if (
+    typeof value === "object" &&
+    value !== null &&
+    "schemaVersion" in value &&
+    typeof value.schemaVersion === "string" &&
+    value.schemaVersion !== PROJECT_SCHEMA_VERSION
+  ) {
+    throw new SchemaValidationError([
+      {
+        code: "custom",
+        path: ["schemaVersion"],
+        message: `Incompatible schema version (${value.schemaVersion}). Please update Proto Flow.`,
+        input: value.schemaVersion,
+      },
+    ]);
   }
 
   const result = ProtoFlowProjectSchema.safeParse(value);

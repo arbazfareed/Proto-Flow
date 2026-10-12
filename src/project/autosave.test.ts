@@ -6,6 +6,7 @@ import {
   clearAutosave,
   readAutosave,
   startAutosave,
+  subscribeAutosaveErrors,
 } from "./autosave";
 import { createEmptyProject } from "./schema";
 import { useStore } from "../store";
@@ -106,6 +107,29 @@ describe("local project autosave", () => {
 
     expect(setItem).toHaveBeenCalledTimes(1);
     stopAutosave();
+  });
+
+  it("reports storage quota failures so the app can prompt the user to save", () => {
+    const listener = vi.fn();
+    const unsubscribe = subscribeAutosaveErrors(listener);
+    const consoleError = vi.spyOn(console, "error").mockImplementation(() => {});
+    const setItem = vi.spyOn(storage, "setItem").mockImplementation(() => {
+      throw new DOMException("Quota exceeded", "QuotaExceededError");
+    });
+    const stopAutosave = startAutosave();
+    useStore.getState().renameProject("Large prototype");
+
+    vi.advanceTimersByTime(AUTOSAVE_INTERVAL_MS);
+
+    expect(listener).toHaveBeenCalledWith(
+      "Autosave failed. Save your project to disk and check available storage.",
+    );
+    expect(consoleError).toHaveBeenCalledOnce();
+
+    stopAutosave();
+    unsubscribe();
+    setItem.mockRestore();
+    consoleError.mockRestore();
   });
 
   it("does not recreate a cleared snapshot until the project changes", () => {

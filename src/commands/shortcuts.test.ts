@@ -82,6 +82,18 @@ describe("global keyboard shortcuts", () => {
     expect(event.preventDefault).not.toHaveBeenCalled();
   });
 
+  it("saves without triggering the browser default while a text input is focused", () => {
+    const actions = createActions();
+    const target = Object.assign(new EventTarget(), { tagName: "INPUT" });
+    const event = createEvent("s", { target });
+
+    handleGlobalShortcut(event, actions);
+
+    expect(actions.saveProject).toHaveBeenCalledWith(false);
+    expect(event.preventDefault).toHaveBeenCalledOnce();
+    expect(event.target).toBe(target);
+  });
+
   it("closes an open palette on Escape", () => {
     const actions = { ...createActions(), paletteOpen: true };
 
