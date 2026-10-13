@@ -1,4 +1,7 @@
 import { z } from "zod";
+import { DEFAULT_DEVICE_PRESET, toScreenDevice } from "../devices/catalog";
+import { ScreenDeviceSchema } from "../devices/schema";
+import type { ScreenDevice } from "../devices/types";
 
 export const PROJECT_SCHEMA_VERSION = "1.0.0";
 const COORDINATE_LIMIT = 100_000;
@@ -127,6 +130,7 @@ export const ProtoScreenSchema = z
   .object({
     id: z.string().uuid(),
     name: z.string().trim().min(1).max(120),
+    device: ScreenDeviceSchema.optional(),
     widgets: z.array(ProtoWidgetSchema),
     interactionRules: z.array(InteractionRuleSchema),
   })
@@ -163,6 +167,7 @@ export type InteractionRule = z.infer<typeof InteractionRuleSchema>;
 export type WidgetShadow = z.infer<typeof WidgetShadowSchema>;
 export type WidgetStyle = z.infer<typeof WidgetStyleSchema>;
 export type Widget = z.infer<typeof ProtoWidgetSchema>;
+export type { ScreenDevice };
 export type Screen = z.infer<typeof ProtoScreenSchema>;
 export type ProtoWidget = Widget;
 export type ProtoScreen = Screen;
@@ -246,6 +251,7 @@ export function createEmptyProject(name = "Untitled project"): Project {
       {
         id: screenId,
         name: "Screen 1",
+        device: toScreenDevice(DEFAULT_DEVICE_PRESET),
         widgets: [],
         interactionRules: [],
       },

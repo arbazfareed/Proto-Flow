@@ -1,0 +1,215 @@
+{
+  "version": 1,
+  "devices": [
+    {
+      "id": "iphone-15-pro",
+      "name": "iPhone 15 Pro",
+      "category": "phone",
+      "viewport": { "width": 393, "height": 852 },
+      "dpr": 3,
+      "insets": { "top": 59, "bottom": 34, "left": 0, "right": 0 },
+      "orientation": "portrait",
+      "frameChrome": { "bezel": 12, "cornerRadius": 48, "notch": "dynamic-island" }
+    },
+    {
+      "id": "iphone-15",
+      "name": "iPhone 15",
+      "category": "phone",
+      "viewport": { "width": 393, "height": 852 },
+      "dpr": 3,
+      "insets": { "top": 59, "bottom": 34, "left": 0, "right": 0 },
+      "orientation": "portrait",
+      "frameChrome": { "bezel": 11, "cornerRadius": 46, "notch": "dynamic-island" }
+    },
+    {
+      "id": "iphone-se",
+      "name": "iPhone SE",
+      "category": "phone",
+      "viewport": { "width": 375, "height": 667 },
+      "dpr": 2,
+      "insets": { "top": 20, "bottom": 0, "left": 0, "right": 0 },
+      "orientation": "portrait",
+      "frameChrome": { "bezel": 14, "cornerRadius": 28, "notch": "none" }
+    },
+    {
+      "id": "pixel-8",
+      "name": "Pixel 8",
+      "category": "phone",
+      "viewport": { "width": 412, "height": 915 },
+      "dpr": 2.625,
+      "insets": { "top": 32, "bottom": 24, "left": 0, "right": 0 },
+      "orientation": "portrait",
+      "frameChrome": { "bezel": 10, "cornerRadius": 38, "notch": "punch-hole" }
+    },
+    {
+      "id": "pixel-8-pro",
+      "name": "Pixel 8 Pro",
+      "category": "phone",
+      "viewport": { "width": 448, "height": 998 },
+      "dpr": 3,
+      "insets": { "top": 32, "bottom": 24, "left": 0, "right": 0 },
+      "orientation": "portrait",
+      "frameChrome": { "bezel": 10, "cornerRadius": 40, "notch": "punch-hole" }
+    },
+    {
+      "id": "galaxy-s24",
+      "name": "Samsung Galaxy S24",
+      "category": "phone",
+      "viewport": { "width": 384, "height": 854 },
+      "dpr": 3,
+      "insets": { "top": 32, "bottom": 24, "left": 0, "right": 0 },
+      "orientation": "portrait",
+      "frameChrome": { "bezel": 9, "cornerRadius": 38, "notch": "punch-hole" }
+    },
+    {
+      "id": "galaxy-a54",
+      "name": "Samsung Galaxy A54",
+      "category": "phone",
+      "viewport": { "width": 412, "height": 915 },
+      "dpr": 2.625,
+      "insets": { "top": 32, "bottom": 24, "left": 0, "right": 0 },
+      "orientation": "portrait",
+      "frameChrome": { "bezel": 11, "cornerRadius": 34, "notch": "punch-hole" }
+    },
+    {
+      "id": "ipad-pro-12-9",
+      "name": "iPad Pro 12.9″",
+      "category": "tablet",
+      "viewport": { "width": 1024, "height": 1366 },
+      "dpr": 2,
+      "insets": { "top": 24, "bottom": 20, "left": 0, "right": 0 },
+      "orientation": "portrait",
+      "frameChrome": { "bezel": 14, "cornerRadius": 22, "notch": "none" }
+    },
+    {
+      "id": "ipad-air",
+      "name": "iPad Air",
+      "category": "tablet",
+      "viewport": { "width": 820, "height": 1180 },
+      "dpr": 2,
+      "insets": { "top": 24, "bottom": 20, "left": 0, "right": 0 },
+      "orientation": "portrait",
+      "frameChrome": { "bezel": 13, "cornerRadius": 20, "notch": "none" }
+    },
+    {
+      "id": "ipad-mini",
+      "name": "iPad Mini",
+      "category": "tablet",
+      "viewport": { "width": 744, "height": 1133 },
+      "dpr": 2,
+      "insets": { "top": 24, "bottom": 20, "left": 0, "right": 0 },
+      "orientation": "portrait",
+      "frameChrome": { "bezel": 13, "cornerRadius": 20, "notch": "none" }
+    },
+    {
+      "id": "galaxy-tab-s9",
+      "name": "Galaxy Tab S9",
+      "category": "tablet",
+      "viewport": { "width": 800, "height": 1280 },
+      "dpr": 2,
+      "insets": { "top": 24, "bottom": 20, "left": 0, "right": 0 },
+      "orientation": "portrait",
+      "frameChrome": { "bezel": 12, "cornerRadius": 18, "notch": "none" }
+    },
+    {
+      "id": "macbook-pro-14",
+      "name": "MacBook Pro 14″",
+      "category": "laptop",
+      "viewport": { "width": 1512, "height": 982 },
+      "dpr": 2,
+      "insets": { "top": 0, "bottom": 0, "left": 0, "right": 0 },
+      "orientation": "landscape",
+      "frameChrome": { "bezel": 12, "cornerRadius": 14, "notch": "notch" }
+    },
+    {
+      "id": "macbook-air-13",
+      "name": "MacBook Air 13″",
+      "category": "laptop",
+      "viewport": { "width": 1470, "height": 956 },
+      "dpr": 2,
+      "insets": { "top": 0, "bottom": 0, "left": 0, "right": 0 },
+      "orientation": "landscape",
+      "frameChrome": { "bezel": 11, "cornerRadius": 13, "notch": "notch" }
+    },
+    {
+      "id": "dell-xps-13",
+      "name": "Dell XPS 13",
+      "category": "laptop",
+      "viewport": { "width": 1920, "height": 1200 },
+      "dpr": 1.5,
+      "insets": { "top": 0, "bottom": 0, "left": 0, "right": 0 },
+      "orientation": "landscape",
+      "frameChrome": { "bezel": 9, "cornerRadius": 10, "notch": "punch-hole" }
+    },
+    {
+      "id": "desktop-1440-900",
+      "name": "Desktop 1440 × 900",
+      "category": "desktop",
+      "viewport": { "width": 1440, "height": 900 },
+      "dpr": 1,
+      "insets": { "top": 0, "bottom": 0, "left": 0, "right": 0 },
+      "orientation": "landscape",
+      "frameChrome": { "bezel": 0, "cornerRadius": 0, "notch": "browser" }
+    },
+    {
+      "id": "desktop-1920-1080",
+      "name": "Desktop 1920 × 1080",
+      "category": "desktop",
+      "viewport": { "width": 1920, "height": 1080 },
+      "dpr": 1,
+      "insets": { "top": 0, "bottom": 0, "left": 0, "right": 0 },
+      "orientation": "landscape",
+      "frameChrome": { "bezel": 0, "cornerRadius": 0, "notch": "browser" }
+    },
+    {
+      "id": "desktop-2560-1440",
+      "name": "Desktop 2560 × 1440",
+      "category": "desktop",
+      "viewport": { "width": 2560, "height": 1440 },
+      "dpr": 1,
+      "insets": { "top": 0, "bottom": 0, "left": 0, "right": 0 },
+      "orientation": "landscape",
+      "frameChrome": { "bezel": 0, "cornerRadius": 0, "notch": "browser" }
+    },
+    {
+      "id": "desktop-4k",
+      "name": "Desktop 4K 3840 × 2160",
+      "category": "desktop",
+      "viewport": { "width": 3840, "height": 2160 },
+      "dpr": 1,
+      "insets": { "top": 0, "bottom": 0, "left": 0, "right": 0 },
+      "orientation": "landscape",
+      "frameChrome": { "bezel": 0, "cornerRadius": 0, "notch": "browser" }
+    },
+    {
+      "id": "desktop-1366-768",
+      "name": "Desktop 1366 × 768",
+      "category": "desktop",
+      "viewport": { "width": 1366, "height": 768 },
+      "dpr": 1,
+      "insets": { "top": 0, "bottom": 0, "left": 0, "right": 0 },
+      "orientation": "landscape",
+      "frameChrome": { "bezel": 0, "cornerRadius": 0, "notch": "browser" }
+    },
+    {
+      "id": "apple-watch-series-9",
+      "name": "Apple Watch Series 9",
+      "category": "watch",
+      "viewport": { "width": 396, "height": 484 },
+      "dpr": 2,
+      "insets": { "top": 48, "bottom": 42, "left": 24, "right": 24 },
+      "orientation": "portrait",
+      "frameChrome": { "bezel": 18, "cornerRadius": 88, "notch": "watch" }
+    },
+    {
+      "id": "wear-os-round",
+      "name": "Wear OS Round",
+      "category": "watch",
+      "viewport": { "width": 384, "height": 384 },
+      "dpr": 2,
+      "insets": { "top": 38, "bottom": 38, "left": 38, "right": 38 },
+      "orientation": "portrait",
+      "frameChrome": { "bezel": 18, "cornerRadius": 192, "notch": "watch" }
+    }
+  ]
+}

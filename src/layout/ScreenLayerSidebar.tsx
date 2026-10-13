@@ -9,6 +9,7 @@ import {
   Folder,
   Layers2,
   Lock,
+  Monitor,
   MoreHorizontal,
   PanelTop,
   Plus,
@@ -16,6 +17,9 @@ import {
   X,
 } from "lucide-react";
 import { getShapeToolDefinition } from "../canvas/shapeTools";
+import { DEFAULT_DEVICE_PRESET, findDevicePreset, toScreenDevice } from "../devices/catalog";
+import { DevicePicker } from "../devices/DevicePicker";
+import type { ScreenDevice } from "../devices/types";
 import { reorderScreens, reorderWidgets } from "../project/layers";
 import type { Project, Screen, Widget } from "../project/schema";
 import { useStore } from "../store";
@@ -118,7 +122,7 @@ export function ScreenLayerSidebar() {
   const [renamingWidgetId, setRenamingWidgetId] = useState<string | null>(null);
   const [renameDraft, setRenameDraft] = useState("");
   const [screenPickerOpen, setScreenPickerOpen] = useState(false);
-  const [newScreenName, setNewScreenName] = useState("");
+  const [deviceTargetScreenId, setDeviceTargetScreenId] = useState<string | null>(null);
   const [draggedScreenId, setDraggedScreenId] = useState<string | null>(null);
   const [draggedLayerId, setDraggedLayerId] = useState<string | null>(null);
   const [dropIndicator, setDropIndicator] = useState<DropIndicator>(null);
@@ -227,18 +231,51 @@ export function ScreenLayerSidebar() {
     return { groups: groupOrder, ungrouped };
   }, [activeScreen]);
 
-  const addScreen = () => {
-    const name = newScreenName.trim().slice(0, 120) || `Screen ${project.screens.length + 1}`;
+  const addScreen = (device: ScreenDevice) => {
+    const name = device.presetId === "custom"
+      ? `Custom ${device.width} × ${device.height}`
+      : findDevicePreset(device.presetId)?.name ?? `Screen ${project.screens.length + 1}`;
     const screen: Screen = {
       id: crypto.randomUUID(),
       name,
+      device,
       widgets: [],
       interactionRules: [],
     };
     editProject((current) => ({ ...current, screens: [...current.screens, screen] }));
     useStore.getState().setActiveScreen(screen.id);
     setScreenPickerOpen(false);
-    setNewScreenName("");
+  };
+
+  const changeScreenDevice = (device: ScreenDevice, scaleWidgets: boolean) => {
+    if (!deviceTargetScreenId) return;
+    const target = project.screens.find((screen) => screen.id === deviceTargetScreenId);
+    if (!target) return;
+    const previous = target.device ?? toScreenDevice(DEFAULT_DEVICE_PRESET);
+    const scaleX = device.width / previous.width;
+    const scaleY = device.height / previous.height;
+    editProject((current) => ({
+      ...current,
+      screens: current.screens.map((screen) =>
+        screen.id !== deviceTargetScreenId
+          ? screen
+          : {
+              ...screen,
+              device,
+              widgets: scaleWidgets
+                ? screen.widgets.map((widget) => ({
+                    ...widget,
+                    x: Math.max(-100_000, Math.min(100_000, widget.x * scaleX)),
+                    y: Math.max(-100_000, Math.min(100_000, widget.y * scaleY)),
+                    width: Math.max(1, widget.width * scaleX),
+                    height: Math.max(1, widget.height * scaleY),
+                  }))
+                : screen.widgets,
+            },
+      ),
+    }));
+    setScreenPickerOpen(false);
+    setDeviceTargetScreenId(null);
   };
 
   const deleteScreen = (screenId: string) => {
@@ -589,6 +626,14 @@ export function ScreenLayerSidebar() {
             ) : (
               <span>{screen.name}</span>
             )}
+            {screen.device && (
+              <span
+                className="page-device-size"
+                title={`${findDevicePreset(screen.device.presetId)?.name ?? "Custom"} · ${screen.device.width} × ${screen.device.height} · ${screen.device.dpr}×`}
+              >
+                {screen.device.width} × {screen.device.height}
+              </span>
+            )}
             {screen.id === project.startScreenId && (
               <span className="start-screen-badge" title="Start screen">Start</span>
             )}
@@ -668,6 +713,13 @@ export function ScreenLayerSidebar() {
           {menu.kind === "screen" && (
             <>
               <button role="menuitem" onClick={() => {
+                setDeviceTargetScreenId(menu.id);
+                setScreenPickerOpen(true);
+                setMenu(null);
+              }}>
+                <Monitor size={14} /> Change device…
+              </button>
+              <button role="menuitem" onClick={() => {
                 const screen = project.screens.find((item) => item.id === menu.id);
                 if (!screen) return;
                 const copy = duplicateScreen(screen);
@@ -740,42 +792,21 @@ export function ScreenLayerSidebar() {
         </div>
       )}
 
-      {screenPickerOpen && (
-        <div className="screen-picker-backdrop" role="presentation" onMouseDown={(event) => {
-          if (event.target === event.currentTarget) setScreenPickerOpen(false);
-        }}>
-          <section className="screen-picker" role="dialog" aria-modal="true" aria-labelledby="screen-picker-title">
-            <div className="screen-picker-heading">
-              <div>
-                <span className="inspector-overline">NEW SCREEN</span>
-                <h2 id="screen-picker-title">Choose a screen</h2>
-              </div>
-              <button className="icon-button small-icon" aria-label="Close device picker" onClick={() => setScreenPickerOpen(false)}>
-                <X size={15} />
-              </button>
-            </div>
-            <p>Device-size presets are added in PF-T211. Create a blank screen for now.</p>
-            <label className="screen-picker-name">
-              Screen name
-              <input
-                value={newScreenName}
-                maxLength={120}
-                placeholder={`Screen ${project.screens.length + 1}`}
-                onChange={(event) => setNewScreenName(event.target.value)}
-                onKeyDown={(event) => {
-                  if (event.key === "Enter") addScreen();
-                  if (event.key === "Escape") setScreenPickerOpen(false);
-                }}
-              />
-            </label>
-            <button className="screen-picker-option" onClick={addScreen}>
-              <span className="screen-picker-icon"><PanelTop size={17} /></span>
-              <span><strong>Blank screen</strong><small>Start with an empty layer tree</small></span>
-              <Plus size={15} />
-            </button>
-          </section>
-        </div>
-      )}
+      <DevicePicker
+        mode={deviceTargetScreenId ? "change" : "create"}
+        open={screenPickerOpen}
+        currentDevice={
+          deviceTargetScreenId
+            ? project.screens.find((screen) => screen.id === deviceTargetScreenId)?.device
+            : undefined
+        }
+        onClose={() => {
+          setScreenPickerOpen(false);
+          setDeviceTargetScreenId(null);
+        }}
+        onCreate={addScreen}
+        onChange={changeScreenDevice}
+      />
     </>
   );
 }
