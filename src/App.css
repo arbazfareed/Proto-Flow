@@ -125,6 +125,50 @@
 .screen-picker-option strong { font-size:10px; font-weight:600; }
 .screen-picker-option small { color:#878791; font-size:9px; }
 .screen-picker-icon { display:grid; width:30px; height:30px; place-items:center; border:1px solid #45404f; border-radius:5px; color:#c8b4ff; background:#2b2734; }
+.device-picker { width:min(760px,100%); max-height:calc(100dvh - 32px); display:flex; flex-direction:column; }
+.device-picker-search { display:flex; align-items:center; gap:8px; margin-top:13px; padding:0 9px; border:1px solid #383840; border-radius:5px; color:#85858f; background:#141518; }
+.device-picker-search input { width:100%; height:34px; border:0; outline:0; color:#e9e9ec; background:transparent; font-size:10px; }
+.device-picker-search input:focus-visible { outline:0; }
+.device-category-tabs { display:flex; gap:5px; margin:10px 0 4px; overflow-x:auto; }
+.device-category-tabs button { flex:0 0 auto; padding:5px 8px; border:1px solid #383840; border-radius:14px; color:#a2a2aa; background:#202125; cursor:pointer; font-size:9px; }
+.device-category-tabs button:hover,.device-category-tabs button.is-selected { border-color:#6d5b9e; color:#e5dcff; background:#302a3c; }
+.device-picker-list { min-height:90px; flex:1; overflow-y:auto; overscroll-behavior:contain; scrollbar-color:#383940 transparent; scrollbar-width:thin; }
+.device-picker-group { margin-top:11px; }
+.device-picker-group h3 { margin:0 0 6px; color:#a7a5af; font-size:9px; font-weight:650; }
+.device-picker-grid { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:5px; }
+.device-card { display:flex; min-width:0; align-items:center; gap:8px; padding:7px; border:1px solid #303137; border-radius:6px; color:#d3d2d9; background:#202125; text-align:left; cursor:pointer; }
+.device-card:hover,.device-card.is-current { border-color:#806bd0; background:#292531; }
+.device-card[aria-pressed="true"] { box-shadow:inset 0 0 0 1px #a78bfa; }
+.device-thumbnail { position:relative; display:grid; width:32px; height:32px; flex:0 0 32px; place-items:center; border:1px solid #48454f; border-radius:7px; color:#b6a1ef; background:#17181b; }
+.device-thumbnail.is-portrait.device-phone { width:22px; height:32px; flex-basis:22px; border-radius:6px; }
+.device-thumbnail.is-portrait.device-tablet { width:24px; height:32px; flex-basis:24px; border-radius:5px; }
+.device-thumbnail.device-watch { border-radius:50%; }
+.device-thumbnail.device-desktop,.device-thumbnail.device-laptop { width:36px; flex-basis:36px; height:26px; border-radius:4px; }
+.device-thumbnail-notch { position:absolute; top:2px; left:50%; width:8px; height:2px; transform:translateX(-50%); border-radius:0 0 3px 3px; background:#8e7bbd; }
+.device-thumbnail-notch.notch-watch { display:none; }
+.device-card-copy { display:flex; min-width:0; flex:1; flex-direction:column; gap:3px; }
+.device-card-copy strong { overflow:hidden; color:#d4d2dc; font-size:9px; font-weight:560; text-overflow:ellipsis; white-space:nowrap; }
+.device-card-copy small { color:#85858f; font-size:8px; }
+.device-picker-empty { padding:16px; color:#9999a3; text-align:center; font-size:10px; }
+.custom-device-form { flex:0 0 auto; margin-top:10px; border-top:1px solid #303137; }
+.custom-device-toggle { display:flex; width:100%; justify-content:space-between; padding:10px 2px 5px; border:0; color:#d5d3dc; background:transparent; cursor:pointer; text-align:left; font-size:10px; }
+.custom-device-toggle>span:last-child { color:#b9a7ed; font-size:14px; }
+.custom-device-fields { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:7px; padding:7px 0; }
+.custom-device-fields label { display:flex; min-width:0; flex-direction:column; gap:4px; color:#9999a3; font-size:8px; }
+.custom-device-fields input { min-width:0; width:100%; height:27px; padding:0 6px; border:1px solid #383840; border-radius:4px; color:#e9e9ec; background:#141518; font-size:9px; }
+.device-validation-error { color:var(--danger); font-size:9px; }
+.custom-device-submit { width:100%; margin-bottom:2px; }
+.device-change-backdrop { z-index:50; }
+.device-change-warning { width:min(430px,100%); }
+.device-change-warning>p { color:#aaaab3; font-size:10px; line-height:1.5; }
+.device-change-warning>p strong { color:#e9e1ff; }
+.device-change-warning .screen-picker-option { margin-top:7px; }
+.device-change-warning .keep-absolute-option { background:#1a1b1f; }
+.page-device-size { flex:0 0 auto; color:#777780; font-size:7px; }
+@media (max-width:620px) {
+  .device-picker-grid { grid-template-columns:repeat(2,minmax(0,1fr)); }
+  .custom-device-fields { grid-template-columns:repeat(2,minmax(0,1fr)); }
+}
 .canvas-area { min-width:0; min-height:0; flex:1; display:flex; flex-direction:column; background:var(--surface-canvas); }
 .canvas-toolbar { height:43px; justify-content:space-between; padding:0 14px; border-bottom:1px solid #232429; }
 .breadcrumb { gap:8px; color:#bdbdc5; font-size:10px; }
