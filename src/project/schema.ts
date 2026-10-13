@@ -107,6 +107,8 @@ export const ProtoWidgetSchema = z
   .object({
     id: z.string().uuid(),
     type: z.string().trim().min(1),
+    name: z.string().trim().min(1).max(120).optional(),
+    groupId: z.string().uuid().optional(),
     x: z.number().finite().min(-COORDINATE_LIMIT).max(COORDINATE_LIMIT),
     y: z.number().finite().min(-COORDINATE_LIMIT).max(COORDINATE_LIMIT),
     width: z.number().finite().min(1),

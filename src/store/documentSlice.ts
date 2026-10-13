@@ -15,6 +15,8 @@ export const createDocumentSlice: StateCreator<StoreState, [], [], DocumentSlice
   newProject: (name) =>
     set({
       project: createEmptyProject(name),
+      activeScreenId: null,
+      selectedIds: [],
       filePath: null,
       isDirty: false,
       lastSavedAt: null,
@@ -35,6 +37,8 @@ export const createDocumentSlice: StateCreator<StoreState, [], [], DocumentSlice
   loadProject: (project, filePath) =>
     set({
       project,
+      activeScreenId: null,
+      selectedIds: [],
       filePath,
       isDirty: false,
       lastSavedAt: Date.now(),
@@ -42,6 +46,8 @@ export const createDocumentSlice: StateCreator<StoreState, [], [], DocumentSlice
   restoreProject: (project, filePath) =>
     set({
       project,
+      activeScreenId: null,
+      selectedIds: [],
       filePath,
       isDirty: true,
       lastSavedAt: null,

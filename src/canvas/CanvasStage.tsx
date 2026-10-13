@@ -86,7 +86,7 @@ function commitWidgetGeometry(
   if (updates.length === 0) return;
   const updateById = new Map(updates.map((update) => [update.id, update]));
   const current = useStore.getState();
-  const screenId = current.project.startScreenId;
+  const screenId = current.getActiveScreenId();
   const project: Project = {
     ...current.project,
     updatedAt: new Date().toISOString(),
@@ -350,7 +350,7 @@ function updateWidgetProps(
   patch: Record<string, unknown>,
 ): void {
   const current = useStore.getState();
-  const screenId = current.project.startScreenId;
+  const screenId = current.getActiveScreenId();
   const project: Project = {
     ...current.project,
     updatedAt: new Date().toISOString(),
@@ -425,7 +425,7 @@ export function CanvasStage({
   const gridVisible = useStore((state) => state.gridVisible);
   const snapEnabled = useStore((state) => state.snapEnabled);
   const activeScreen = useStore((state) =>
-    state.project.screens.find((screen) => screen.id === state.project.startScreenId),
+    state.project.screens.find((screen) => screen.id === state.getActiveScreenId()),
   );
   const selectedIds = useStore((state) => state.selectedIds);
   useEffect(() => {
@@ -500,7 +500,7 @@ export function CanvasStage({
     ): string | null => {
       const current = useStore.getState();
       const screen = current.project.screens.find(
-        (item) => item.id === current.project.startScreenId,
+        (item) => item.id === current.getActiveScreenId(),
       );
       if (!screen) return null;
 
@@ -922,7 +922,7 @@ export function CanvasStage({
   const applySelectionOperation = useCallback((operation: SelectionOperation) => {
     const current = useStore.getState();
     const selected = current.project.screens
-      .find((screen) => screen.id === current.project.startScreenId)
+      .find((screen) => screen.id === current.getActiveScreenId())
       ?.widgets.filter((widget) => current.selectedIds.includes(widget.id) && !widget.locked) ?? [];
     const updates = getSelectionUpdates(selected, operation);
     commitWidgetGeometry(updates);
@@ -957,7 +957,7 @@ export function CanvasStage({
         if (current.selectedIds.length === 0) return;
         const selected = new Set(
           current.project.screens
-            .find((screen) => screen.id === current.project.startScreenId)
+            .find((screen) => screen.id === current.getActiveScreenId())
             ?.widgets.filter((widget) => current.selectedIds.includes(widget.id) && !widget.locked)
             .map((widget) => widget.id),
         );
@@ -968,7 +968,7 @@ export function CanvasStage({
           ...current.project,
           updatedAt: new Date().toISOString(),
           screens: current.project.screens.map((screen) =>
-            screen.id === current.project.startScreenId
+            screen.id === current.getActiveScreenId()
               ? {
                   ...screen,
                   widgets: screen.widgets.filter((widget) => !selected.has(widget.id)),
@@ -986,7 +986,7 @@ export function CanvasStage({
       ) {
         const current = useStore.getState();
         const selected = current.project.screens
-          .find((screen) => screen.id === current.project.startScreenId)
+          .find((screen) => screen.id === current.getActiveScreenId())
           ?.widgets.filter((widget) => current.selectedIds.includes(widget.id) && !widget.locked) ?? [];
         if (selected.length === 0) return;
         const distance = event.shiftKey ? 10 : 1;
@@ -1128,7 +1128,7 @@ export function CanvasStage({
 
       const store = useStore.getState();
       const screen = store.project.screens.find(
-        (item) => item.id === store.project.startScreenId,
+        (item) => item.id === store.getActiveScreenId(),
       );
       const widgets = screen?.widgets ?? [];
       const bounds =
@@ -1373,7 +1373,7 @@ export function CanvasStage({
                     }
                     const movableIds = current.selectedIds.filter((id) =>
                       current.project.screens
-                        .find((screen) => screen.id === current.project.startScreenId)
+                        .find((screen) => screen.id === current.getActiveScreenId())
                         ?.widgets.some((item) => item.id === id && !item.locked),
                     );
                     if (!movableIds.includes(widget.id)) return;
@@ -1483,7 +1483,7 @@ export function CanvasStage({
                 const current = useStore.getState();
                 const widgets =
                   current.project.screens
-                    .find((screen) => screen.id === current.project.startScreenId)
+                    .find((screen) => screen.id === current.getActiveScreenId())
                     ?.widgets.filter(
                       (item) =>
                         current.selectedIds.includes(item.id) &&
@@ -1511,7 +1511,7 @@ export function CanvasStage({
                 const snapshot = transformHistorySnapshotRef.current ?? undefined;
                 const current = useStore.getState();
                 const selected = current.project.screens
-                  .find((screen) => screen.id === current.project.startScreenId)
+                  .find((screen) => screen.id === current.getActiveScreenId())
                   ?.widgets.filter(
                     (item) => current.selectedIds.includes(item.id) && !item.locked && item.visible,
                   ) ?? [];

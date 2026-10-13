@@ -1,7 +1,8 @@
 import type { StateCreator } from "zustand";
 import type { CanvasSlice, StoreState } from "./types";
 
-export const createCanvasSlice: StateCreator<StoreState, [], [], CanvasSlice> = (set) => ({
+export const createCanvasSlice: StateCreator<StoreState, [], [], CanvasSlice> = (set, get) => ({
+  activeScreenId: null,
   zoom: 1,
   pan: { x: 0, y: 0 },
   gridSize: 10,
@@ -22,6 +23,18 @@ export const createCanvasSlice: StateCreator<StoreState, [], [], CanvasSlice> = 
   select: (selectedIds) =>
     set({ selectedIds: [...new Set(selectedIds)], geometryPreview: null }),
   clearSelection: () => set({ selectedIds: [], geometryPreview: null }),
+  setActiveScreen: (screenId) => {
+    if (!get().project.screens.some((screen) => screen.id === screenId)) return;
+    set({ activeScreenId: screenId, selectedIds: [], geometryPreview: null });
+  },
+  getActiveScreenId: () => {
+    const state = get();
+    const activeScreenId = state.activeScreenId;
+    return activeScreenId &&
+      state.project.screens.some((screen) => screen.id === activeScreenId)
+      ? activeScreenId
+      : state.project.startScreenId;
+  },
   setGeometryPreview: (geometryPreview) => set({ geometryPreview }),
   clearGeometryPreview: () => set({ geometryPreview: null }),
 });

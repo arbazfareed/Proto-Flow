@@ -9,6 +9,7 @@ function resetStore(): void {
     filePath: null,
     isDirty: false,
     lastSavedAt: null,
+    activeScreenId: null,
     past: [],
     future: [],
     zoom: 1,
@@ -110,6 +111,41 @@ describe("composed Zustand store", () => {
     store.setGeometryPreview({ "widget-a": { x: 12 } });
     store.select(["widget-b"]);
     expect(useStore.getState().geometryPreview).toBeNull();
+  });
+
+  it("switches active screens independently of the configured start screen", () => {
+    const project = createEmptyProject();
+    const secondScreen = {
+      ...project.screens[0],
+      id: crypto.randomUUID(),
+      name: "Checkout",
+    };
+    useStore.getState().setProject({
+      ...project,
+      screens: [...project.screens, secondScreen],
+    });
+    useStore.getState().select(["widget-on-first-screen"]);
+
+    useStore.getState().setActiveScreen(secondScreen.id);
+
+    expect(useStore.getState().getActiveScreenId()).toBe(secondScreen.id);
+    expect(useStore.getState().project.startScreenId).toBe(project.startScreenId);
+    expect(useStore.getState().selectedIds).toEqual([]);
+  });
+
+  it("falls back to the start screen if the active screen was removed", () => {
+    const project = createEmptyProject();
+    const secondScreen = { ...project.screens[0], id: crypto.randomUUID() };
+    useStore.getState().setProject({
+      ...project,
+      screens: [...project.screens, secondScreen],
+    });
+    useStore.getState().setActiveScreen(secondScreen.id);
+    useStore.setState({
+      project: { ...useStore.getState().project, screens: project.screens },
+    });
+
+    expect(useStore.getState().getActiveScreenId()).toBe(project.startScreenId);
   });
 
   it("toggles UI slice state independently", () => {
