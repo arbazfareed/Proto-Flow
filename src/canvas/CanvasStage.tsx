@@ -1,7 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Group, Layer, Line, Shape, Stage, Text } from "react-konva";
+import { Group, Layer, Line, Rect, Shape, Stage, Text, Transformer } from "react-konva";
+import type Konva from "konva";
 import { ArrowDownToLine, FolderOpen, Minus, Plus } from "lucide-react";
 import type { Stage as KonvaStage } from "konva/lib/Stage";
+import type { Layer as KonvaLayer } from "konva/lib/Layer";
 import { invoke, isTauri } from "@tauri-apps/api/core";
 import { getCurrentWebview } from "@tauri-apps/api/webview";
 import { useStore } from "../store";
@@ -21,6 +23,12 @@ import {
   renderWidgetShape,
   type ShapeTool,
 } from "./shapes";
+import {
+  getSelectionBounds,
+  getSelectionUpdates,
+  getWidgetsInsideBounds,
+  type SelectionOperation,
+} from "./selection";
 import {
   IMAGE_ASSET_THRESHOLD,
   readImageFile,
@@ -52,6 +60,64 @@ interface ShapeDraft {
   current: CanvasPoint;
   altKey: boolean;
   preview: Widget;
+}
+
+interface SelectionDraft {
+  start: CanvasPoint;
+  current: CanvasPoint;
+}
+
+type WidgetGeometryUpdate = Partial<
+  Pick<Widget, "x" | "y" | "width" | "height" | "rotation">
+> & { id: string };
+
+function commitWidgetGeometry(
+  updates: readonly WidgetGeometryUpdate[],
+  historySnapshot?: Project,
+): void {
+  if (updates.length === 0) return;
+  const updateById = new Map(updates.map((update) => [update.id, update]));
+  const current = useStore.getState();
+  const screenId = current.project.startScreenId;
+  const project: Project = {
+    ...current.project,
+    updatedAt: new Date().toISOString(),
+    screens: current.project.screens.map((screen) =>
+      screen.id !== screenId
+        ? screen
+        : {
+            ...screen,
+            widgets: screen.widgets.map((widget) => {
+              const update = updateById.get(widget.id);
+              if (!update) return widget;
+              const next = { ...widget, ...update };
+              if (
+                next.x === widget.x &&
+                next.y === widget.y &&
+                next.width === widget.width &&
+                next.height === widget.height &&
+                next.rotation === widget.rotation
+              ) {
+                return widget;
+              }
+              return next;
+            }),
+          },
+    ),
+  };
+  if (project.screens.some((screen, index) =>
+    screen.widgets.some((widget, widgetIndex) =>
+      widget !== current.project.screens[index]?.widgets[widgetIndex],
+    ),
+  )) {
+    if (historySnapshot) useStore.setState({ project, isDirty: true });
+    else current.setProject(project);
+  } else if (
+    historySnapshot &&
+    current.past.at(-1) === historySnapshot
+  ) {
+    useStore.setState({ past: current.past.slice(0, -1) });
+  }
 }
 
 function isEditingTarget(target: EventTarget | null): boolean {
@@ -179,9 +245,13 @@ function GuideLayer({
 function WidgetNode({
   widget,
   selected,
+  hovered,
+  zoom,
   activeTool,
   position,
   onSelect,
+  onHover,
+  onDragStart,
   onDragMove,
   onDragEnd,
   onDragBound,
@@ -189,9 +259,13 @@ function WidgetNode({
 }: {
   widget: Widget;
   selected: boolean;
+  hovered: boolean;
+  zoom: number;
   activeTool: ShapeTool | null;
   position: CanvasPoint;
   onSelect: (event: { evt: MouseEvent | TouchEvent }) => void;
+  onHover: (hovered: boolean) => void;
+  onDragStart: () => void;
   onDragMove: (position: CanvasPoint, altKey: boolean) => void;
   onDragEnd: (position: CanvasPoint) => void;
   onDragBound: (position: CanvasPoint) => CanvasPoint;
@@ -204,14 +278,18 @@ function WidgetNode({
       y={position.y}
       rotation={widget.rotation}
       visible={widget.visible}
+      listening={!widget.locked}
       draggable={!widget.locked && activeTool === null}
       dragBoundFunc={onDragBound}
       onClick={(event) => onSelect(event)}
       onTap={(event) => onSelect(event)}
+      onMouseEnter={() => onHover(true)}
+      onMouseLeave={() => onHover(false)}
       onDblClick={(event) => {
         event.cancelBubble = true;
         onEdit();
       }}
+      onDragStart={onDragStart}
       onDragMove={(event) =>
         onDragMove(
           { x: event.target.x(), y: event.target.y() },
@@ -223,6 +301,20 @@ function WidgetNode({
       }
     >
       {renderWidgetShape(widget, selected)}
+      {(selected || hovered) && (
+        <Rect
+          x={-2 / zoom}
+          y={-2 / zoom}
+          width={widget.width + 4 / zoom}
+          height={widget.height + 4 / zoom}
+          fillEnabled={false}
+          stroke={selected ? "#bba5ff" : "#68a7ff"}
+          strokeWidth={1 / zoom}
+          dash={selected ? undefined : [4 / zoom, 3 / zoom]}
+          listening={false}
+          perfectDrawEnabled={false}
+        />
+      )}
     </Group>
   );
 }
@@ -282,6 +374,8 @@ export function CanvasStage({
 }: CanvasStageProps) {
   const surfaceRef = useRef<HTMLDivElement>(null);
   const stageRef = useRef<KonvaStage>(null);
+  const contentLayerRef = useRef<KonvaLayer>(null);
+  const transformerRef = useRef<Konva.Transformer>(null);
   const imageInputRef = useRef<HTMLInputElement>(null);
   const imageTargetRef = useRef<string | null>(null);
   const cancelEditRef = useRef(false);
@@ -301,6 +395,8 @@ export function CanvasStage({
   const [previewPositions, setPreviewPositions] = useState<Record<string, CanvasPoint>>({});
   const [guides, setGuides] = useState<CanvasGuide[]>([]);
   const [shapeDraft, setShapeDraft] = useState<ShapeDraft | null>(null);
+  const [selectionDraft, setSelectionDraft] = useState<SelectionDraft | null>(null);
+  const [hoveredWidgetId, setHoveredWidgetId] = useState<string | null>(null);
   const [editing, setEditing] = useState<{
     widgetId: string;
     key: EditableWidgetText["key"];
@@ -309,6 +405,10 @@ export function CanvasStage({
   const [editValue, setEditValue] = useState("");
   const altHeldRef = useRef(false);
   const pendingGuidesRef = useRef<CanvasGuide[]>([]);
+  const dragStartPositionsRef = useRef<Map<string, CanvasPoint> | null>(null);
+  const dragPrimaryIdRef = useRef<string | null>(null);
+  const dragHistorySnapshotRef = useRef<Project | null>(null);
+  const transformHistorySnapshotRef = useRef<Project | null>(null);
   const guideTimerRef = useRef<number | null>(null);
   const activeToolRef = useRef<ShapeTool | null>(activeTool);
   const lastPointerWorldRef = useRef<CanvasPoint>({ x: 0, y: 0 });
@@ -328,6 +428,23 @@ export function CanvasStage({
   const screenWidgets = activeScreen
     ? [...activeScreen.widgets].sort((first, second) => first.zIndex - second.zIndex)
     : [];
+  const selectedWidgets = screenWidgets.filter((widget) =>
+    selectedIds.includes(widget.id),
+  );
+  const selectionBounds = getSelectionBounds(selectedWidgets);
+
+  useEffect(() => {
+    const transformer = transformerRef.current;
+    const stage = stageRef.current;
+    if (!transformer || !stage) return;
+    transformer.nodes(
+      selectedWidgets
+        .filter((widget) => !widget.locked && widget.visible)
+        .map((widget) => stage.findOne(`#${widget.id}`))
+        .filter((node): node is Konva.Node => node !== undefined),
+    );
+    contentLayerRef.current?.batchDraw();
+  }, [selectedIds, activeScreen?.widgets]);
 
   const commitViewOnFrame = useCallback((view: PendingView) => {
     pendingViewRef.current = view;
@@ -699,7 +816,10 @@ export function CanvasStage({
       lastPointerWorldRef.current = position;
       const tool = activeToolRef.current;
       if (!tool) {
-        if (event.target === stage) useStore.getState().clearSelection();
+        if (event.target === stage) {
+          useStore.getState().clearSelection();
+          setSelectionDraft({ start: position, current: position });
+        }
         return;
       }
       if (event.evt instanceof MouseEvent && event.evt.button !== 0) return;
@@ -722,6 +842,7 @@ export function CanvasStage({
     const position = getPointerWorldPosition();
     if (!position) return;
     lastPointerWorldRef.current = position;
+    setSelectionDraft((draft) => draft ? { ...draft, current: position } : draft);
     setShapeDraft((draft) => {
       if (!draft) return draft;
       const deltaX = position.x - draft.start.x;
@@ -754,9 +875,34 @@ export function CanvasStage({
   const handleShapePointerUp = useCallback(() => {
     const draft = shapeDraft;
     const position = getPointerWorldPosition();
-    if (!draft || !position) return;
-    finishDrawing(draft, position);
-  }, [finishDrawing, getPointerWorldPosition, shapeDraft]);
+    if (draft && position) {
+      finishDrawing(draft, position);
+      return;
+    }
+    if (!selectionDraft || !position) return;
+    const dx = position.x - selectionDraft.start.x;
+    const dy = position.y - selectionDraft.start.y;
+    if (Math.max(Math.abs(dx), Math.abs(dy)) >= 3) {
+      useStore.getState().select(
+        getWidgetsInsideBounds(screenWidgets, {
+          x: selectionDraft.start.x,
+          y: selectionDraft.start.y,
+          width: dx,
+          height: dy,
+        }),
+      );
+    }
+    setSelectionDraft(null);
+  }, [finishDrawing, getPointerWorldPosition, screenWidgets, selectionDraft, shapeDraft]);
+
+  const applySelectionOperation = useCallback((operation: SelectionOperation) => {
+    const current = useStore.getState();
+    const selected = current.project.screens
+      .find((screen) => screen.id === current.project.startScreenId)
+      ?.widgets.filter((widget) => current.selectedIds.includes(widget.id) && !widget.locked) ?? [];
+    const updates = getSelectionUpdates(selected, operation);
+    commitWidgetGeometry(updates);
+  }, []);
 
   useEffect(() => {
     const shortcuts: Record<string, ShapeTool> = {
@@ -785,7 +931,13 @@ export function CanvasStage({
       ) {
         const current = useStore.getState();
         if (current.selectedIds.length === 0) return;
-        const selected = new Set(current.selectedIds);
+        const selected = new Set(
+          current.project.screens
+            .find((screen) => screen.id === current.project.startScreenId)
+            ?.widgets.filter((widget) => current.selectedIds.includes(widget.id) && !widget.locked)
+            .map((widget) => widget.id),
+        );
+        if (selected.size === 0) return;
         current.setProject({
           ...current.project,
           updatedAt: new Date().toISOString(),
@@ -799,6 +951,30 @@ export function CanvasStage({
           ),
         });
         current.clearSelection();
+        event.preventDefault();
+        return;
+      }
+      if (
+        !activeToolRef.current &&
+        ["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown"].includes(event.key)
+      ) {
+        const current = useStore.getState();
+        const selected = current.project.screens
+          .find((screen) => screen.id === current.project.startScreenId)
+          ?.widgets.filter((widget) => current.selectedIds.includes(widget.id) && !widget.locked) ?? [];
+        if (selected.length === 0) return;
+        const distance = event.shiftKey ? 10 : 1;
+        const delta = {
+          x: event.key === "ArrowLeft" ? -distance : event.key === "ArrowRight" ? distance : 0,
+          y: event.key === "ArrowUp" ? -distance : event.key === "ArrowDown" ? distance : 0,
+        };
+        commitWidgetGeometry(
+          selected.map((widget) => ({
+            id: widget.id,
+            x: widget.x + delta.x,
+            y: widget.y + delta.y,
+          })),
+        );
         event.preventDefault();
         return;
       }
@@ -1113,15 +1289,8 @@ export function CanvasStage({
             gridStyle={gridStyle}
             visible={gridVisible}
           />
-          <Layer perfectDrawEnabled={false}>
+          <Layer ref={contentLayerRef} perfectDrawEnabled={false}>
             {screenWidgets.map((widget) => {
-              const siblings = screenWidgets.map((sibling) => ({
-                id: sibling.id,
-                x: sibling.x,
-                y: sibling.y,
-                width: sibling.width,
-                height: sibling.height,
-              }));
               const snapPosition = (position: CanvasPoint, altKey = altHeldRef.current) =>
                 snapWidgetPosition(
                   {
@@ -1131,7 +1300,15 @@ export function CanvasStage({
                     width: widget.width,
                     height: widget.height,
                   },
-                  siblings,
+                  screenWidgets
+                    .filter((sibling) => !useStore.getState().selectedIds.includes(sibling.id))
+                    .map((sibling) => ({
+                      id: sibling.id,
+                      x: sibling.x,
+                      y: sibling.y,
+                      width: sibling.width,
+                      height: sibling.height,
+                    })),
                   gridSize,
                   snapEnabled,
                   altKey,
@@ -1141,12 +1318,18 @@ export function CanvasStage({
                   key={widget.id}
                   widget={widget}
                   selected={selectedIds.includes(widget.id)}
+                  hovered={hoveredWidgetId === widget.id}
+                  zoom={zoom}
                   activeTool={activeTool}
                   position={
                     previewPositions[widget.id] ?? { x: widget.x, y: widget.y }
                   }
                   onEdit={() => beginWidgetTextEdit(widget)}
+                  onHover={(hovered) =>
+                    setHoveredWidgetId(hovered ? widget.id : null)
+                  }
                   onSelect={(event) => {
+                    if (widget.locked) return;
                     const selected = useStore.getState().selectedIds;
                     if (event.evt.shiftKey) {
                       useStore.getState().select(
@@ -1157,6 +1340,30 @@ export function CanvasStage({
                     } else {
                       useStore.getState().select([widget.id]);
                     }
+                  }}
+                  onDragStart={() => {
+                    let current = useStore.getState();
+                    if (!current.selectedIds.includes(widget.id)) {
+                      current.select([widget.id]);
+                      current = useStore.getState();
+                    }
+                    const movableIds = current.selectedIds.filter((id) =>
+                      current.project.screens
+                        .find((screen) => screen.id === current.project.startScreenId)
+                        ?.widgets.some((item) => item.id === id && !item.locked),
+                    );
+                    if (!movableIds.includes(widget.id)) return;
+                    const positions = new Map<string, CanvasPoint>();
+                    for (const id of movableIds) {
+                      const node = stageRef.current?.findOne(`#${id}`);
+                      const item = screenWidgets.find((candidate) => candidate.id === id);
+                      if (!item) continue;
+                      positions.set(id, node ? { x: node.x(), y: node.y() } : { x: item.x, y: item.y });
+                    }
+                    dragStartPositionsRef.current = positions;
+                    dragPrimaryIdRef.current = widget.id;
+                    dragHistorySnapshotRef.current = current.project;
+                    current.pushHistory(current.project);
                   }}
                   onDragBound={(position) => {
                     const stageTransform = stageRef.current?.getAbsoluteTransform();
@@ -1170,51 +1377,129 @@ export function CanvasStage({
                     return stageTransform.point(result.position);
                   }}
                   onDragMove={(position, altKey) => {
-                    setPreviewPositions((current) => ({
-                      ...current,
-                      [widget.id]: position,
-                    }));
+                    const starts = dragStartPositionsRef.current;
+                    const primaryStart = starts?.get(widget.id);
+                    if (starts && primaryStart && dragPrimaryIdRef.current === widget.id) {
+                      const delta = {
+                        x: position.x - primaryStart.x,
+                        y: position.y - primaryStart.y,
+                      };
+                      const nextPositions: Record<string, CanvasPoint> = {};
+                      for (const [id, start] of starts) {
+                        const next = { x: start.x + delta.x, y: start.y + delta.y };
+                        nextPositions[id] = next;
+                        if (id === widget.id) continue;
+                        stageRef.current?.findOne(`#${id}`)?.position(next);
+                      }
+                      setPreviewPositions(nextPositions);
+                    } else {
+                      setPreviewPositions((current) => ({
+                        ...current,
+                        [widget.id]: position,
+                      }));
+                    }
                     setGuides(altKey ? [] : pendingGuidesRef.current);
                   }}
-                  onDragEnd={(position) => {
-                    const result = snapPosition(position);
-                    const current = useStore.getState();
-                    if (
-                      result.position.x !== widget.x ||
-                      result.position.y !== widget.y
-                    ) {
-                      current.setProject({
-                        ...current.project,
-                        updatedAt: new Date().toISOString(),
-                        screens: current.project.screens.map((screen) =>
-                          screen.id !== activeScreen?.id
-                            ? screen
-                            : {
-                                ...screen,
-                                widgets: screen.widgets.map((item) =>
-                                  item.id === widget.id
-                                    ? {
-                                        ...item,
-                                        x: result.position.x,
-                                        y: result.position.y,
-                                      }
-                                    : item,
-                                ),
-                              },
-                        ),
-                      });
+                  onDragEnd={() => {
+                    const starts = dragStartPositionsRef.current;
+                    const snapshot = dragHistorySnapshotRef.current ?? undefined;
+                    const updates: WidgetGeometryUpdate[] = [];
+                    if (starts) {
+                      for (const id of starts.keys()) {
+                        const node = stageRef.current?.findOne(`#${id}`);
+                        if (node) updates.push({ id, x: node.x(), y: node.y() });
+                      }
                     }
-                    setPreviewPositions((currentPositions) => {
-                      const next = { ...currentPositions };
-                      delete next[widget.id];
-                      return next;
-                    });
+                    commitWidgetGeometry(updates, snapshot);
+                    dragStartPositionsRef.current = null;
+                    dragPrimaryIdRef.current = null;
+                    dragHistorySnapshotRef.current = null;
+                    setPreviewPositions({});
                     setGuides([]);
                   }}
                 />
               );
             })}
+            <Transformer
+              ref={transformerRef}
+              enabledAnchors={[
+                "top-left",
+                "top-center",
+                "top-right",
+                "middle-left",
+                "middle-right",
+                "bottom-left",
+                "bottom-center",
+                "bottom-right",
+              ]}
+              rotateEnabled
+              rotateAnchorOffset={30}
+              rotationSnapTolerance={5}
+              keepRatio={false}
+              shiftBehavior="default"
+              anchorSize={7}
+              anchorCornerRadius={2}
+              anchorFill="#ffffff"
+              anchorStroke="#9a7cf4"
+              anchorStrokeWidth={1}
+              borderStroke="#9a7cf4"
+              borderStrokeWidth={1}
+              boundBoxFunc={(oldBox, newBox) =>
+                Math.abs(newBox.width) < 4 || Math.abs(newBox.height) < 4
+                  ? oldBox
+                  : newBox
+              }
+              onTransformStart={() => {
+                const current = useStore.getState();
+                transformHistorySnapshotRef.current = current.project;
+                current.pushHistory(current.project);
+              }}
+              onTransformEnd={() => {
+                const snapshot = transformHistorySnapshotRef.current ?? undefined;
+                const current = useStore.getState();
+                const selected = current.project.screens
+                  .find((screen) => screen.id === current.project.startScreenId)
+                  ?.widgets.filter(
+                    (item) => current.selectedIds.includes(item.id) && !item.locked && item.visible,
+                  ) ?? [];
+                const updates: WidgetGeometryUpdate[] = [];
+                for (const item of selected) {
+                  const node = stageRef.current?.findOne(`#${item.id}`);
+                  if (!node) continue;
+                  const scaleX = node.scaleX();
+                  const scaleY = node.scaleY();
+                  updates.push({
+                    id: item.id,
+                    x: node.x(),
+                    y: node.y(),
+                    width: Math.max(4, item.width * Math.abs(scaleX)),
+                    height: Math.max(4, item.height * Math.abs(scaleY)),
+                    rotation: node.rotation(),
+                  });
+                  node.scale({ x: 1, y: 1 });
+                }
+                commitWidgetGeometry(updates, snapshot);
+                transformHistorySnapshotRef.current = null;
+              }}
+              perfectDrawEnabled={false}
+            />
           </Layer>
+          {selectionDraft && (
+            <Layer listening={false} perfectDrawEnabled={false}>
+              <Rect
+                x={Math.min(selectionDraft.start.x, selectionDraft.current.x)}
+                y={Math.min(selectionDraft.start.y, selectionDraft.current.y)}
+                width={Math.abs(selectionDraft.current.x - selectionDraft.start.x)}
+                height={Math.abs(selectionDraft.current.y - selectionDraft.start.y)}
+                fill="#9a7cf4"
+                opacity={0.12}
+                stroke="#a98df5"
+                strokeWidth={1 / zoom}
+                listening={false}
+                perfectDrawEnabled={false}
+              />
+            </Layer>
+          )}
           {shapeDraft && (
             <Layer listening={false} perfectDrawEnabled={false}>
               <Group
@@ -1229,6 +1514,46 @@ export function CanvasStage({
           )}
           <GuideLayer guides={guides} size={size} zoom={zoom} pan={pan} />
         </Stage>
+      )}
+      {selectionBounds && selectedWidgets.length > 1 && (
+        <div
+          className="selection-actions"
+          role="toolbar"
+          aria-label="Selection alignment tools"
+          style={{
+            left: Math.max(12, Math.min(size.width - 12, pan.x + (selectionBounds.x + selectionBounds.width / 2) * zoom)),
+            top: Math.max(8, pan.y + selectionBounds.y * zoom - 46),
+          }}
+        >
+          {([
+            ["align-left", "Align left", "L"],
+            ["align-center", "Align horizontal centers", "C"],
+            ["align-right", "Align right", "R"],
+            ["align-top", "Align top", "T"],
+            ["align-middle", "Align vertical centers", "M"],
+            ["align-bottom", "Align bottom", "B"],
+            ["distribute-horizontal", "Distribute horizontally", "↔"],
+            ["distribute-vertical", "Distribute vertically", "↕"],
+            ["match-width", "Match width", "W"],
+            ["match-height", "Match height", "H"],
+          ] as const).map(([operation, title, label]) => (
+            <button
+              key={operation}
+              className="selection-action"
+              type="button"
+              aria-label={title}
+              title={title}
+              disabled={
+                selectedWidgets.filter((widget) => !widget.locked).length < 2 ||
+                (operation.startsWith("distribute-") &&
+                  selectedWidgets.filter((widget) => !widget.locked).length < 3)
+              }
+              onClick={() => applySelectionOperation(operation)}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
       )}
       {screenWidgets.length === 0 && (
         <div className="canvas-empty-state">
