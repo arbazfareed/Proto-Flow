@@ -3,6 +3,7 @@ import type { DragEvent, KeyboardEvent as ReactKeyboardEvent } from "react";
 import {
   ChevronDown,
   ChevronRight,
+  Check,
   CircleX,
   Eye,
   EyeOff,
@@ -53,6 +54,7 @@ import {
 import type { LayerTreePreferences } from "./layerTreePreferences";
 import { WidgetThumbnail } from "./WidgetThumbnail";
 import { WidgetIcon } from "./widgetIcons";
+import { ScreenThumbnail } from "./ScreenThumbnail";
 
 type MenuState =
   | { kind: "screen" | "layer" | "group"; id: string; x: number; y: number }
@@ -64,6 +66,7 @@ type LayerTreeEntry =
   | { kind: "group"; id: string; members: Widget[]; collapsed: boolean }
   | { kind: "widget"; widget: Widget; nested: boolean };
 const LAYER_ROW_HEIGHT = 30;
+const SCREEN_ROW_HEIGHT = 152;
 
 function collapsedStorageKey(projectId: string): string {
   return `protoflow:collapsed-layer-groups:${projectId}`;
@@ -205,19 +208,20 @@ function beginScreenDrag(event: DragEvent<HTMLElement>, screen: Screen): void {
     opacity: "0.6",
     pointerEvents: "none",
   });
-  const preview = document.createElement("span");
-  Object.assign(preview.style, {
-    display: "grid",
-    width: "64px",
-    height: "64px",
-    placeItems: "center",
-    border: "1px solid #625486",
-    borderRadius: "4px",
-    background: "#302a3c",
-    fontSize: "24px",
-  });
-  preview.textContent = "FRAME";
-  ghost.append(preview, document.createTextNode(screen.name));
+  const sourceThumbnail =
+    event.currentTarget.querySelector<HTMLImageElement>(".screen-thumbnail img");
+  if (sourceThumbnail) {
+    const preview = sourceThumbnail.cloneNode() as HTMLImageElement;
+    Object.assign(preview.style, {
+      width: "64px",
+      height: "40px",
+      objectFit: "contain",
+      border: "1px solid #625486",
+      borderRadius: "4px",
+    });
+    ghost.append(preview);
+  }
+  ghost.append(document.createTextNode(screen.name));
   document.body.append(ghost);
   event.dataTransfer.setDragImage(ghost, 34, 34);
   window.setTimeout(() => ghost.remove(), 1200);
@@ -279,6 +283,7 @@ function duplicateScreen(screen: Screen): Screen {
 export function ScreenLayerSidebar() {
   const project = useStore((state) => state.project);
   const activeScreenId = useStore((state) => state.getActiveScreenId());
+  const activeBreakpointId = useStore((state) => state.activeBreakpointId);
   const selectedIds = useStore((state) => state.selectedIds);
   const activeScreen = project.screens.find((screen) => screen.id === activeScreenId);
   const [menu, setMenu] = useState<MenuState>(null);
@@ -305,12 +310,25 @@ export function ScreenLayerSidebar() {
   const [movePickerOpen, setMovePickerOpen] = useState(false);
   const [layerScrollTop, setLayerScrollTop] = useState(0);
   const [layerViewportHeight, setLayerViewportHeight] = useState(300);
+  const [screenScrollTop, setScreenScrollTop] = useState(0);
+  const [screenViewportHeight, setScreenViewportHeight] = useState(240);
   const [recentWidgetIds, setRecentWidgetIds] = useState<Set<string>>(() => new Set());
   const cancelScreenRenameRef = useRef(false);
   const cancelWidgetRenameRef = useRef(false);
   const layerTreeRef = useRef<HTMLDivElement>(null);
+  const screenListRef = useRef<HTMLDivElement>(null);
   const previousWidgetIdsRef = useRef<{ screenId: string; ids: Set<string> } | null>(null);
   const recentWidgetTimersRef = useRef(new Map<string, number>());
+
+  useEffect(() => {
+    const list = screenListRef.current;
+    if (!list) return;
+    const updateHeight = () => setScreenViewportHeight(list.clientHeight || 240);
+    updateHeight();
+    const observer = new ResizeObserver(updateHeight);
+    observer.observe(list);
+    return () => observer.disconnect();
+  }, []);
 
   useEffect(() => {
     const previous = previousWidgetIdsRef.current;
@@ -576,6 +594,24 @@ export function ScreenLayerSidebar() {
     LAYER_ROW_HEIGHT,
   );
   const visibleLayerEntries = layerEntries.slice(virtualizedRange.start, virtualizedRange.end);
+  const screenVirtualizedRange = project.screens.length > 20
+    ? getVirtualizedRange(
+        project.screens.length,
+        screenScrollTop,
+        screenViewportHeight,
+        SCREEN_ROW_HEIGHT,
+        3,
+      )
+    : {
+        start: 0,
+        end: project.screens.length,
+        topSpacerHeight: 0,
+        bottomSpacerHeight: 0,
+      };
+  const visibleScreens = project.screens.slice(
+    screenVirtualizedRange.start,
+    screenVirtualizedRange.end,
+  );
 
   const addScreen = (device: ScreenDevice) => {
     const name = device.presetId === "custom"
@@ -1208,68 +1244,150 @@ export function ScreenLayerSidebar() {
             <Plus size={15} />
           </button>
         </div>
-        {project.screens.map((screen) => (
-          <div
-            className={`page-item${screen.id === activeScreenId ? " selected" : ""}${screen.id === draggedScreenId ? " is-dragging" : ""}`}
-            key={screen.id}
-            aria-current={screen.id === activeScreenId ? "page" : undefined}
-            draggable={renamingScreenId !== screen.id}
-            onClick={() => useStore.getState().setActiveScreen(screen.id)}
-            onDoubleClick={() => startScreenRename(screen)}
-            onContextMenu={(event) => {
-              event.preventDefault();
-              setMenu({ kind: "screen", id: screen.id, x: event.clientX, y: event.clientY });
-            }}
-            onDragStart={(event) => {
-              setDraggedScreenId(screen.id);
-              beginScreenDrag(event, screen);
-              event.dataTransfer.effectAllowed = "copyMove";
-              event.dataTransfer.dropEffect = "move";
-            }}
-            onDragOver={(event) => screenDragOver(event, screen.id)}
-            onDrop={(event) => screenDrop(event, screen.id)}
-            onDragEnd={(event) => {
-              setActiveLayerDragPayload(null);
-              setDraggedScreenId(null);
-              delete event.currentTarget.dataset.dropEdge;
-            }}
-          >
-            <span className="page-thumb"><span /></span>
-            {renamingScreenId === screen.id ? (
-              <input
-                className="screen-rename-input"
-                aria-label="Screen name"
-                autoFocus
-                value={renameDraft}
-                onChange={(event) => setRenameDraft(event.target.value)}
-                onBlur={() => finishScreenRename(screen.id)}
+        <div
+          className="screen-list"
+          role="listbox"
+          aria-label="Screens"
+          ref={screenListRef}
+          onScroll={(event) => setScreenScrollTop(event.currentTarget.scrollTop)}
+        >
+          {screenVirtualizedRange.topSpacerHeight > 0 && (
+            <div style={{ height: screenVirtualizedRange.topSpacerHeight }} aria-hidden="true" />
+          )}
+          {visibleScreens.map((screen, visibleIndex) => {
+            const screenIndex = screenVirtualizedRange.start + visibleIndex;
+            const device = screen.device ?? toScreenDevice(DEFAULT_DEVICE_PRESET);
+            const deviceName = screen.device?.presetId === "custom"
+              ? "Custom size"
+              : findDevicePreset(device.presetId)?.name ?? "Desktop";
+            const dimensions = `${device.width} × ${device.height}`;
+            const normalizedDeviceName = deviceName.toLowerCase().replace(/[×\s]/g, "");
+            const deviceDetails = normalizedDeviceName.includes(dimensions.toLowerCase().replace(/[×\s]/g, ""))
+              ? deviceName
+              : `${deviceName} · ${dimensions}`;
+            const screenTooltip = `${screen.name} · ${deviceDetails}`;
+            return (
+              <div
+                className={`page-item${screen.id === activeScreenId ? " selected" : ""}${screen.id === draggedScreenId ? " is-dragging" : ""}`}
+                key={screen.id}
+                role="option"
+                tabIndex={0}
+                data-screen-index={screenIndex}
+                aria-selected={screen.id === activeScreenId}
+                aria-current={screen.id === activeScreenId ? "page" : undefined}
+                title={screenTooltip}
+                draggable={renamingScreenId !== screen.id}
+                onClick={() => useStore.getState().setActiveScreen(screen.id)}
+                onDoubleClick={() => startScreenRename(screen)}
                 onKeyDown={(event) => {
-                  if (event.key === "Enter") finishScreenRename(screen.id);
-                  if (event.key === "Escape") {
-                    cancelScreenRenameRef.current = true;
-                    setRenamingScreenId(null);
-                    event.currentTarget.blur();
+                  if (event.target !== event.currentTarget || renamingScreenId === screen.id) return;
+                  if (
+                    event.key === "ArrowDown" ||
+                    event.key === "ArrowUp" ||
+                    event.key === "Home" ||
+                    event.key === "End"
+                  ) {
+                    event.preventDefault();
+                    const nextIndex = event.key === "Home"
+                      ? 0
+                      : event.key === "End"
+                        ? project.screens.length - 1
+                        : Math.max(
+                            0,
+                            Math.min(
+                              project.screens.length - 1,
+                              screenIndex + (event.key === "ArrowDown" ? 1 : -1),
+                            ),
+                          );
+                    const focusNextScreen = () => {
+                      screenListRef.current
+                        ?.querySelector<HTMLElement>(`[data-screen-index="${nextIndex}"]`)
+                        ?.focus();
+                    };
+                    const nextOption = screenListRef.current
+                      ?.querySelector<HTMLElement>(`[data-screen-index="${nextIndex}"]`);
+                    if (nextOption) {
+                      nextOption.focus();
+                    } else {
+                      if (screenListRef.current) {
+                        screenListRef.current.scrollTop = nextIndex * SCREEN_ROW_HEIGHT;
+                      }
+                      window.requestAnimationFrame(() =>
+                        window.requestAnimationFrame(focusNextScreen),
+                      );
+                    }
+                  } else if (event.key === "Enter") {
+                    event.preventDefault();
+                    useStore.getState().setActiveScreen(screen.id);
+                  } else if (event.key === "Delete") {
+                    event.preventDefault();
+                    deleteScreen(screen.id);
                   }
                 }}
-                onClick={(event) => event.stopPropagation()}
-              />
-            ) : (
-              <span>{screen.name}</span>
-            )}
-            {screen.device && (
-              <span
-                className="page-device-size"
-                title={`${findDevicePreset(screen.device.presetId)?.name ?? "Custom"} · ${screen.device.width} × ${screen.device.height} · ${screen.device.dpr}×`}
+                onContextMenu={(event) => {
+                  event.preventDefault();
+                  setMenu({ kind: "screen", id: screen.id, x: event.clientX, y: event.clientY });
+                }}
+                onDragStart={(event) => {
+                  setDraggedScreenId(screen.id);
+                  beginScreenDrag(event, screen);
+                  event.dataTransfer.effectAllowed = "copyMove";
+                  event.dataTransfer.dropEffect = "move";
+                }}
+                onDragOver={(event) => screenDragOver(event, screen.id)}
+                onDrop={(event) => screenDrop(event, screen.id)}
+                onDragEnd={(event) => {
+                  setActiveLayerDragPayload(null);
+                  setDraggedScreenId(null);
+                  delete event.currentTarget.dataset.dropEdge;
+                }}
               >
-                {screen.device.width} × {screen.device.height}
-              </span>
-            )}
-            {screen.id === project.startScreenId && (
-              <span className="start-screen-badge" title="Start screen">Start</span>
-            )}
-            <span className="page-count">{screen.widgets.length}</span>
-          </div>
-        ))}
+                <div className="page-item-heading">
+                  {renamingScreenId === screen.id ? (
+                    <input
+                      className="screen-rename-input"
+                      aria-label="Screen name"
+                      autoFocus
+                      value={renameDraft}
+                      onChange={(event) => setRenameDraft(event.target.value)}
+                      onBlur={() => finishScreenRename(screen.id)}
+                      onKeyDown={(event) => {
+                        if (event.key === "Enter") finishScreenRename(screen.id);
+                        if (event.key === "Escape") {
+                          cancelScreenRenameRef.current = true;
+                          setRenamingScreenId(null);
+                          event.currentTarget.blur();
+                        }
+                        event.stopPropagation();
+                      }}
+                      onClick={(event) => event.stopPropagation()}
+                    />
+                  ) : (
+                    <span className="page-item-name">{screen.name}</span>
+                  )}
+                  {screen.id === project.startScreenId && (
+                    <span className="start-screen-badge" title="Start screen">Start</span>
+                  )}
+                  {screen.id === activeScreenId && (
+                    <span className="screen-active-check" title="Active screen">
+                      <Check size={12} aria-hidden="true" />
+                    </span>
+                  )}
+                </div>
+                <span className="page-item-device">
+                  {deviceDetails}
+                </span>
+                <ScreenThumbnail
+                  screen={screen}
+                  breakpointId={screen.id === activeScreenId ? activeBreakpointId : null}
+                />
+              </div>
+            );
+          })}
+          {screenVirtualizedRange.bottomSpacerHeight > 0 && (
+            <div style={{ height: screenVirtualizedRange.bottomSpacerHeight }} aria-hidden="true" />
+          )}
+        </div>
       </section>
 
       <section className="sidebar-section layers-section" aria-label="Layers">
@@ -1550,6 +1668,13 @@ export function ScreenLayerSidebar() {
         >
           {menu.kind === "screen" && (
             <>
+              <button role="menuitem" onClick={() => {
+                const screen = project.screens.find((item) => item.id === menu.id);
+                if (screen) startScreenRename(screen);
+                setMenu(null);
+              }}>
+                <MoreHorizontal size={14} /> Rename screen
+              </button>
               <button role="menuitem" onClick={() => {
                 setDeviceTargetScreenId(menu.id);
                 setScreenPickerOpen(true);
