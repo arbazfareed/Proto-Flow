@@ -151,6 +151,45 @@ describe("ProtoFlow project schema", () => {
     ).toThrow(SchemaValidationError);
   });
 
+  it("persists supported appearance controls and text styling", () => {
+    const project = createCompleteProject();
+    const screen = project.screens[0];
+    const widget = screen.widgets[0];
+    const styled: Project = {
+      ...project,
+      screens: [
+        {
+          ...screen,
+          widgets: [{
+            ...widget,
+            style: {
+              ...widget.style,
+              fillOpacity: 0.45,
+              strokeOpacity: 0.8,
+              dash: [8, 4],
+              lineCap: "square",
+              lineJoin: "bevel",
+              blendMode: "multiply",
+              shadow: { ...widget.style.shadow, opacity: 0.3 },
+            },
+            props: {
+              ...widget.props,
+              fontFamily: "Georgia",
+              fontSize: 18,
+              fontWeight: "bold",
+              fontStyle: "italic",
+              underline: true,
+              verticalAlign: "middle",
+              letterSpacing: 1.5,
+            },
+          }],
+        },
+      ],
+    };
+
+    expect(parseProject(serializeProject(styled))).toEqual(styled);
+  });
+
   it("throws SchemaValidationError with the Zod issues for unsupported versions", () => {
     const project = createEmptyProject();
     const unsupported = { ...project, schemaVersion: "2.0.0" };

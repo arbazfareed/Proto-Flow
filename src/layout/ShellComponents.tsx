@@ -16,23 +16,31 @@ import {
   Minus,
   PanelLeftClose,
   PanelRightClose,
+  Pipette,
   Plus,
   Redo2,
   Sparkles,
   Square,
   Unlock,
   Undo2,
+  RotateCcw,
   X,
 } from "lucide-react";
 import { isTauri } from "@tauri-apps/api/core";
 import { useStore } from "../store";
-import type { Project, Widget } from "../project/schema";
+import type { Project, Widget, WidgetStyle } from "../project/schema";
 import {
   evaluateGeometryExpression,
   getGeometryUpdates,
   normalizeRotation,
   type GeometryField,
 } from "../canvas/geometryInspector";
+import {
+  getDefaultTextProperties,
+  getStyleUpdates,
+  getTextPropertyUpdates,
+  parseStyleColor,
+} from "../canvas/styleInspector";
 import {
   PRIMITIVE_TOOLS,
   WIDGET_TOOLS,
@@ -437,6 +445,417 @@ interface GeometryEditSession {
   snapshot: Project;
   widgets: Widget[];
   timer: number | null;
+}
+
+interface StyleEditSession {
+  snapshot: Project;
+  widgetIds: string[];
+  timer: number | null;
+}
+
+type StyleColorField = "fill" | "stroke";
+type StyleColorValue = { color: string; opacity: number } | null;
+
+const BLEND_MODES: NonNullable<WidgetStyle["blendMode"]>[] = [
+  "source-over",
+  "multiply",
+  "screen",
+  "overlay",
+  "darken",
+  "lighten",
+  "color-dodge",
+  "color-burn",
+  "hard-light",
+  "soft-light",
+  "difference",
+  "exclusion",
+];
+
+function StyleSection({ widgets }: { widgets: Widget[] }) {
+  const editSessionRef = useRef<StyleEditSession | null>(null);
+  const [colorDraft, setColorDraft] = useState<Record<StyleColorField, string>>({
+    fill: "",
+    stroke: "",
+  });
+  const [colorError, setColorError] = useState<StyleColorField | null>(null);
+  const [recentColors, setRecentColors] = useState<string[]>([]);
+  const [advancedRadius, setAdvancedRadius] = useState(false);
+
+  const editableWidgets = widgets.filter((widget) => !widget.locked);
+  const valuesFor = <K extends keyof WidgetStyle>(key: K): WidgetStyle[K][] =>
+    editableWidgets.map((widget) => widget.style[key]);
+  const mixed = <T,>(values: T[]): boolean =>
+    values.some((value) => JSON.stringify(value) !== JSON.stringify(values[0]));
+  const commonStyleValue = <K extends keyof WidgetStyle>(
+    key: K,
+    fallback: WidgetStyle[K],
+  ): WidgetStyle[K] | undefined => {
+    const values = valuesFor(key);
+    return values.length > 0 && !mixed(values) ? values[0] : fallback;
+  };
+
+  const selectionKey = widgets.map((widget) => widget.id).join("\u0000");
+
+  const finishEditSession = useCallback(() => {
+    const session = editSessionRef.current;
+    if (!session) return;
+    if (session.timer !== null) window.clearTimeout(session.timer);
+    editSessionRef.current = null;
+    const current = useStore.getState();
+    const currentWidgets =
+      current.project.screens.find((screen) => screen.id === current.project.startScreenId)?.widgets ?? [];
+    const beforeWidgets =
+      session.snapshot.screens.find((screen) => screen.id === session.snapshot.startScreenId)?.widgets ?? [];
+    const changed = session.widgetIds.some((id) => {
+      const before = beforeWidgets.find((widget) => widget.id === id);
+      const after = currentWidgets.find((widget) => widget.id === id);
+      return Boolean(
+        before &&
+          after &&
+          (JSON.stringify(before.style) !== JSON.stringify(after.style) ||
+            JSON.stringify(before.props) !== JSON.stringify(after.props)),
+      );
+    });
+    if (changed) current.pushHistory(session.snapshot);
+  }, []);
+
+  useEffect(() => {
+    finishEditSession();
+    setColorDraft({ fill: "", stroke: "" });
+    setColorError(null);
+  }, [finishEditSession, selectionKey]);
+
+  const applyStyle = useCallback(
+    (patch: Partial<WidgetStyle>) => {
+      if (editableWidgets.length === 0) return;
+      if (!editSessionRef.current) {
+        editSessionRef.current = {
+          snapshot: useStore.getState().project,
+          widgetIds: editableWidgets.map((widget) => widget.id),
+          timer: null,
+        };
+      }
+      const session = editSessionRef.current;
+      const current = useStore.getState();
+      const screenId = current.project.startScreenId;
+      const screen = current.project.screens.find((item) => item.id === screenId);
+      const targetWidgets =
+        screen?.widgets.filter((widget) => session.widgetIds.includes(widget.id)) ?? [];
+      const updates = new Map(
+        getStyleUpdates(targetWidgets, patch).map((update) => [update.id, update.style]),
+      );
+      const project: Project = {
+        ...current.project,
+        updatedAt: new Date().toISOString(),
+        screens: current.project.screens.map((item) =>
+          item.id !== screenId
+            ? item
+            : {
+                ...item,
+                widgets: item.widgets.map((widget) =>
+                  updates.has(widget.id)
+                    ? { ...widget, style: updates.get(widget.id)! }
+                    : widget,
+                ),
+              },
+        ),
+      };
+      useStore.setState({ project, isDirty: true });
+      if (session.timer !== null) window.clearTimeout(session.timer);
+      session.timer = window.setTimeout(finishEditSession, 500);
+    },
+    [editableWidgets, finishEditSession],
+  );
+
+  const applyText = useCallback(
+    (patch: Record<string, unknown>) => {
+      if (editableWidgets.length === 0) return;
+      if (!editSessionRef.current) {
+        editSessionRef.current = {
+          snapshot: useStore.getState().project,
+          widgetIds: editableWidgets.map((widget) => widget.id),
+          timer: null,
+        };
+      }
+      const session = editSessionRef.current;
+      const current = useStore.getState();
+      const screenId = current.project.startScreenId;
+      const screen = current.project.screens.find((item) => item.id === screenId);
+      const targetWidgets =
+        screen?.widgets.filter((widget) => session.widgetIds.includes(widget.id)) ?? [];
+      const updates = new Map(
+        getTextPropertyUpdates(targetWidgets, patch).map((update) => [update.id, update.props]),
+      );
+      const project: Project = {
+        ...current.project,
+        updatedAt: new Date().toISOString(),
+        screens: current.project.screens.map((item) =>
+          item.id !== screenId
+            ? item
+            : {
+                ...item,
+                widgets: item.widgets.map((widget) =>
+                  updates.has(widget.id)
+                    ? { ...widget, props: updates.get(widget.id)! }
+                    : widget,
+                ),
+              },
+        ),
+      };
+      useStore.setState({ project, isDirty: true });
+      if (session.timer !== null) window.clearTimeout(session.timer);
+      session.timer = window.setTimeout(finishEditSession, 500);
+    },
+    [editableWidgets, finishEditSession],
+  );
+
+  useEffect(() => () => finishEditSession(), [finishEditSession]);
+
+  const colorValue = (field: StyleColorField): StyleColorValue => {
+    const key = field === "fill" ? "fillOpacity" : "strokeOpacity";
+    const colors = editableWidgets.map((widget) => widget.style[field] ?? null);
+    const opacities = editableWidgets.map((widget) => widget.style[key] ?? 1);
+    if (colors.length === 0 || mixed(colors) || mixed(opacities)) return null;
+    const color = colors[0];
+    return color === null ? null : { color, opacity: opacities[0] };
+  };
+
+  const commitColor = (field: StyleColorField, raw: string) => {
+    if (raw.trim().toLowerCase() === "none") {
+      applyStyle({ [field]: null, [field === "fill" ? "fillOpacity" : "strokeOpacity"]: 1 });
+      setColorDraft((current) => ({ ...current, [field]: "" }));
+      setColorError(null);
+      return;
+    }
+    const parsed = parseStyleColor(raw);
+    if (!parsed) {
+      setColorError(field);
+      return;
+    }
+    const opacityKey = field === "fill" ? "fillOpacity" : "strokeOpacity";
+    applyStyle({ [field]: parsed.hex, [opacityKey]: parsed.opacity });
+    setColorError(null);
+    setRecentColors((current) => [
+      parsed.hex,
+      ...current.filter((color) => color !== parsed.hex),
+    ].slice(0, 8));
+  };
+
+  const pickColor = async (field: StyleColorField) => {
+    const eyeDropperWindow = window as Window & {
+      EyeDropper?: new () => { open: () => Promise<{ sRGBHex: string }> };
+    };
+    if (!eyeDropperWindow.EyeDropper) return;
+    try {
+      const result = await new eyeDropperWindow.EyeDropper().open();
+      commitColor(field, result.sRGBHex);
+    } catch (error) {
+      if (!(error instanceof DOMException && error.name === "AbortError")) {
+        console.error("Could not sample a canvas color.", error);
+      }
+    }
+  };
+
+  const resetSection = (section: "fill" | "stroke" | "radius" | "shadow" | "blend" | "text") => {
+    if (section === "text") {
+      const textWidgets = editableWidgets.filter((widget) =>
+        ["text", "button", "input", "checkbox", "radio", "toggle"].includes(widget.type),
+      );
+      const defaults = textWidgets[0] ? getDefaultTextProperties(textWidgets[0]) : {};
+      applyText(defaults);
+      return;
+    }
+    const patch: Partial<WidgetStyle> =
+      section === "fill"
+        ? { fill: null, fillOpacity: 1 }
+        : section === "stroke"
+          ? { stroke: null, strokeOpacity: 1, strokeWidth: 0, dash: [], lineCap: "round", lineJoin: "round" }
+          : section === "radius"
+            ? { cornerRadius: 0 }
+            : section === "shadow"
+              ? { shadow: undefined }
+              : { blendMode: "source-over" };
+    if (section === "fill" || section === "stroke") {
+      const defaultStyle = getShapeToolDefinition(editableWidgets[0]?.type ?? "")?.style;
+      const defaultColor = defaultStyle?.[section] ?? null;
+      const defaultOpacity = section === "fill" ? "fillOpacity" : "strokeOpacity";
+      patch[section] = defaultColor;
+      patch[defaultOpacity] = 1;
+      if (section === "stroke") {
+        patch.strokeWidth = defaultStyle?.strokeWidth ?? 0;
+        patch.dash = defaultStyle?.dash ?? [];
+        patch.lineCap = defaultStyle?.lineCap ?? "round";
+        patch.lineJoin = defaultStyle?.lineJoin ?? "round";
+      }
+    } else if (section === "radius") {
+      patch.cornerRadius =
+        getShapeToolDefinition(editableWidgets[0]?.type ?? "")?.style.cornerRadius ?? 0;
+    }
+    applyStyle(patch);
+  };
+
+  const radiusValue = commonStyleValue("cornerRadius", 0);
+  const radiusMixed = mixed(valuesFor("cornerRadius"));
+  const commonShadow = commonStyleValue("shadow", undefined);
+  const shadowMixed = mixed(valuesFor("shadow"));
+  const hasText = editableWidgets.some((widget) =>
+    ["text", "button", "input", "checkbox", "radio", "toggle"].includes(widget.type),
+  );
+  const textProperty = (key: string, fallback: unknown): unknown[] =>
+    editableWidgets
+      .filter((widget) => ["text", "button", "input", "checkbox", "radio", "toggle"].includes(widget.type))
+      .map((widget) => widget.props[key] ?? getDefaultTextProperties(widget)[key] ?? fallback);
+  const textValue = (key: string, fallback: unknown): unknown => {
+    const values = textProperty(key, fallback);
+    return values.length > 0 && !mixed(values) ? values[0] : values.length > 1 ? "Mixed" : fallback;
+  };
+  const textMixed = (key: string) => textValue(key, null) === "Mixed";
+  const colorInput = (field: StyleColorField, label: string) => {
+    const value = colorValue(field);
+    const opacityKey = field === "fill" ? "fillOpacity" : "strokeOpacity";
+    const opacity = commonStyleValue(opacityKey, 1) ?? 1;
+    return (
+      <div className="style-color-field" key={field}>
+        <label className="field-label" htmlFor={`style-${field}`}>{label}</label>
+        <div className="style-color-row">
+          <input
+            id={`style-${field}-picker`}
+            aria-label={`${label} color picker`}
+            className="style-color-picker"
+            type="color"
+            value={value?.color ?? "#000000"}
+            disabled={editableWidgets.length === 0}
+            onChange={(event) => commitColor(field, event.currentTarget.value)}
+          />
+          <input
+            id={`style-${field}`}
+            aria-label={`${label} hex, RGBA, or HSL`}
+            className="text-field style-color-text"
+            value={colorDraft[field] || value?.color || ""}
+            placeholder={mixed(editableWidgets.map((widget) => widget.style[field] ?? null)) ? "Mixed" : "None"}
+            aria-invalid={colorError === field}
+            disabled={editableWidgets.length === 0}
+            onChange={(event) => {
+              const raw = event.currentTarget.value;
+              setColorDraft((current) => ({ ...current, [field]: raw }));
+              if (parseStyleColor(raw)) commitColor(field, raw);
+            }}
+            onBlur={(event) => {
+              const raw = event.currentTarget.value;
+              if (raw) commitColor(field, raw);
+              setColorDraft((current) => ({ ...current, [field]: "" }));
+              finishEditSession();
+            }}
+            onKeyDown={(event) => {
+              if (event.key === "Enter") event.currentTarget.blur();
+              if (event.key === "Escape") {
+                setColorDraft((current) => ({ ...current, [field]: "" }));
+                setColorError(null);
+                event.currentTarget.blur();
+              }
+            }}
+          />
+          <button type="button" className="icon-button small-icon" aria-label={`Sample ${label} color`} title="Pick a color from the screen" disabled={!("EyeDropper" in window)} onClick={() => void pickColor(field)}><Pipette size={13} /></button>
+          <button type="button" className="icon-button small-icon" aria-label={`Reset ${label}`} title={`Reset ${label}`} onClick={() => resetSection(field)}><RotateCcw size={12} /></button>
+        </div>
+        {colorError === field && <p className="field-hint style-error">Enter a valid hex, RGB(A), or HSL(A) color.</p>}
+        <div className="style-opacity-row">
+          <input
+            type="range"
+            min="0"
+            max="100"
+            aria-label={`${label} opacity`}
+            value={Math.round((value?.opacity ?? opacity) * 100)}
+            disabled={editableWidgets.length === 0 || !value}
+            onChange={(event) => applyStyle({ [opacityKey]: Number(event.currentTarget.value) / 100 })}
+            onPointerUp={finishEditSession}
+          />
+          <span>{value ? `${Math.round((value.opacity ?? opacity) * 100)}%` : mixed(editableWidgets.map((widget) => widget.style[opacityKey] ?? 1)) ? "Mixed" : "—"}</span>
+          <button type="button" className="style-none-button" disabled={editableWidgets.length === 0} onClick={() => commitColor(field, "none")}>None</button>
+        </div>
+        {recentColors.length > 0 && (
+          <div className="style-swatches" aria-label={`Recent ${label} colors`}>
+            {recentColors.map((color) => <button key={color} type="button" aria-label={`${label} ${color}`} title={color} style={{ backgroundColor: color }} onClick={() => commitColor(field, color)} />)}
+          </div>
+        )}
+      </div>
+    );
+  };
+
+  if (widgets.length === 0) return null;
+  const strokeWidth = commonStyleValue("strokeWidth", 0) ?? 0;
+  const strokeWidthMixed = mixed(valuesFor("strokeWidth"));
+  const lineCapMixed = mixed(valuesFor("lineCap"));
+  const lineJoinMixed = mixed(valuesFor("lineJoin"));
+  const dash = commonStyleValue("dash", []) ?? [];
+  const dashMixed = mixed(valuesFor("dash"));
+  const shadow = commonShadow ?? {};
+  const radiusArray: number[] = Array.isArray(radiusValue)
+    ? radiusValue.map((value) => Number(value ?? 0))
+    : [Number(radiusValue ?? 0), Number(radiusValue ?? 0), Number(radiusValue ?? 0), Number(radiusValue ?? 0)];
+  const maxRadius = Math.floor(
+    Math.min(...editableWidgets.map((widget) => Math.min(widget.width, widget.height))) / 2,
+  );
+
+  return (
+    <section className="style-section" aria-label="Style">
+      <div className="section-label style-heading"><span>STYLE</span></div>
+      <div className="style-color-grid">
+        {colorInput("fill", "Fill")}
+        {colorInput("stroke", "Stroke")}
+      </div>
+      <div className="style-control-grid">
+        <label className="style-control">
+          <span>Stroke width <button type="button" className="icon-button small-icon" aria-label="Reset stroke" onClick={() => resetSection("stroke")}><RotateCcw size={11} /></button></span>
+          <input type="number" min="0" max="50" step="1" aria-label="Stroke width" value={strokeWidthMixed ? "" : strokeWidth} placeholder={strokeWidthMixed ? "Mixed" : undefined} disabled={!editableWidgets.length} onChange={(event) => applyStyle({ strokeWidth: Math.min(50, Math.max(0, Number(event.currentTarget.value))) })} onBlur={finishEditSession} />
+        </label>
+        <label className="style-control">
+          <span>Dash</span>
+          <select aria-label="Stroke dash preset" value={dashMixed ? "" : dash.length === 0 ? "solid" : dash.length === 2 && dash[0] === 2 && dash[1] === 4 ? "dotted" : dash.length === 2 && dash[0] === 8 && dash[1] === 5 ? "dashed" : "custom"} onChange={(event) => applyStyle({ dash: event.currentTarget.value === "solid" ? [] : event.currentTarget.value === "dashed" ? [8, 5] : event.currentTarget.value === "dotted" ? [2, 4] : [6, 3] })}>
+            <option value="" disabled>Mixed</option><option value="solid">Solid</option><option value="dashed">Dashed</option><option value="dotted">Dotted</option><option value="custom">Custom</option>
+          </select>
+        </label>
+        {dash.length > 0 && !([2, 4].every((value, index) => dash[index] === value) || [8, 5].every((value, index) => dash[index] === value)) && <label className="style-control"><span>Custom dash</span><input type="text" aria-label="Custom dash array" value={dash.join(", ")} onChange={(event) => { const values = event.currentTarget.value.split(",").map((part) => part.trim()).filter(Boolean).map(Number); if (values.length > 0 && values.every((value) => Number.isFinite(value) && value >= 0)) applyStyle({ dash: values }); }} onBlur={finishEditSession} /></label>}
+        <label className="style-control"><span>Line cap</span><select aria-label="Line cap" value={lineCapMixed ? "" : commonStyleValue("lineCap", "round") ?? "round"} onChange={(event) => applyStyle({ lineCap: event.currentTarget.value as WidgetStyle["lineCap"] })}><option value="" disabled>Mixed</option><option value="butt">Butt</option><option value="round">Round</option><option value="square">Square</option></select></label>
+        <label className="style-control"><span>Line join</span><select aria-label="Line join" value={lineJoinMixed ? "" : commonStyleValue("lineJoin", "round") ?? "round"} onChange={(event) => applyStyle({ lineJoin: event.currentTarget.value as WidgetStyle["lineJoin"] })}><option value="" disabled>Mixed</option><option value="miter">Miter</option><option value="round">Round</option><option value="bevel">Bevel</option></select></label>
+        <label className="style-control">
+          <span>Corner radius <button type="button" className="icon-button small-icon" aria-label="Reset corner radius" onClick={() => resetSection("radius")}><RotateCcw size={11} /></button></span>
+          <input type="number" min="0" max={maxRadius} aria-label="Corner radius" value={!radiusMixed && typeof radiusValue === "number" ? radiusValue : ""} placeholder={Array.isArray(radiusValue) ? "Per-corner" : radiusMixed ? "Mixed" : undefined} disabled={!editableWidgets.length || Array.isArray(radiusValue)} onChange={(event) => { applyStyle({ cornerRadius: Math.min(maxRadius, Math.max(0, Number(event.currentTarget.value))) }); }} onBlur={finishEditSession} />
+        </label>
+        <button type="button" className="style-advanced-toggle" aria-expanded={advancedRadius} onClick={() => setAdvancedRadius((current) => !current)}>{advancedRadius ? "Hide per-corner radius" : "Advanced corners"}</button>
+        {advancedRadius && [0, 1, 2, 3].map((corner) => <label className="style-control" key={corner}><span>{["Top left", "Top right", "Bottom right", "Bottom left"][corner]}</span><input type="number" min="0" max={maxRadius} aria-label={`${["Top left", "Top right", "Bottom right", "Bottom left"][corner]} radius`} value={radiusArray[corner]} disabled={!editableWidgets.length} onChange={(event) => { const next = [...radiusArray]; next[corner] = Math.min(maxRadius, Math.max(0, Number(event.currentTarget.value))); applyStyle({ cornerRadius: next }); }} onBlur={finishEditSession} /></label>)}
+        <label className="style-control style-blend"><span>Blend mode <button type="button" className="icon-button small-icon" aria-label="Reset blend mode" onClick={() => resetSection("blend")}><RotateCcw size={11} /></button></span><select aria-label="Blend mode" value={mixed(valuesFor("blendMode")) ? "" : commonStyleValue("blendMode", "source-over") ?? "source-over"} onChange={(event) => applyStyle({ blendMode: event.currentTarget.value as WidgetStyle["blendMode"] })}><option value="" disabled>Mixed</option>{BLEND_MODES.map((mode) => <option key={mode} value={mode}>{mode === "source-over" ? "Normal" : mode.replaceAll("-", " ")}</option>)}</select></label>
+      </div>
+      <details className="style-shadow">
+        <summary>Drop shadow</summary>
+        <button type="button" className="icon-button small-icon style-details-reset" aria-label="Reset drop shadow" onClick={() => resetSection("shadow")}><RotateCcw size={11} /></button>
+        <label className="style-shadow-enable"><input type="checkbox" checked={Boolean(commonShadow)} onChange={(event) => applyStyle({ shadow: event.currentTarget.checked ? { color: "#000000", blur: 8, offsetX: 0, offsetY: 4, opacity: 0.35 } : undefined })} /> {shadowMixed ? "Mixed" : "Enabled"}</label>
+        {Boolean(commonShadow) && <div className="style-control-grid">
+          <label className="style-control"><span>Shadow color</span><input type="color" aria-label="Shadow color" value={shadow.color ?? "#000000"} onChange={(event) => applyStyle({ shadow: { ...shadow, color: event.currentTarget.value } })} /></label>
+          <label className="style-control"><span>Blur</span><input type="number" min="0" aria-label="Shadow blur" value={shadow.blur ?? 8} onChange={(event) => applyStyle({ shadow: { ...shadow, blur: Math.max(0, Number(event.currentTarget.value)) } })} onBlur={finishEditSession} /></label>
+          <label className="style-control"><span>Offset X</span><input type="number" aria-label="Shadow offset X" value={shadow.offsetX ?? 0} onChange={(event) => applyStyle({ shadow: { ...shadow, offsetX: Number(event.currentTarget.value) } })} onBlur={finishEditSession} /></label>
+          <label className="style-control"><span>Offset Y</span><input type="number" aria-label="Shadow offset Y" value={shadow.offsetY ?? 4} onChange={(event) => applyStyle({ shadow: { ...shadow, offsetY: Number(event.currentTarget.value) } })} onBlur={finishEditSession} /></label>
+          <label className="style-control"><span>Opacity</span><input type="range" min="0" max="100" aria-label="Shadow opacity" value={Math.round((shadow.opacity ?? 0.35) * 100)} onChange={(event) => applyStyle({ shadow: { ...shadow, opacity: Number(event.currentTarget.value) / 100 } })} onPointerUp={finishEditSession} /></label>
+        </div>}
+      </details>
+      {hasText && <details className="style-text" open>
+        <summary>Text</summary>
+        <button type="button" className="icon-button small-icon style-details-reset" aria-label="Reset text style" onClick={() => resetSection("text")}><RotateCcw size={11} /></button>
+        <div className="style-control-grid">
+          <label className="style-control"><span>Font family</span><select aria-label="Font family" value={String(textValue("fontFamily", "Arial"))} onChange={(event) => applyText({ fontFamily: event.currentTarget.value })}>{textMixed("fontFamily") && <option value="Mixed" disabled>Mixed</option>}{["Arial", "Inter", "Georgia", "Times New Roman", "Verdana", "Trebuchet MS", "Courier New", "system-ui"].map((family) => <option key={family}>{family}</option>)}</select></label>
+          <label className="style-control"><span>Font size</span><input type="number" min="1" max="500" aria-label="Font size" value={textMixed("fontSize") ? "" : String(textValue("fontSize", 14))} placeholder={textMixed("fontSize") ? "Mixed" : undefined} onChange={(event) => applyText({ fontSize: Math.min(500, Math.max(1, Number(event.currentTarget.value))) })} onBlur={finishEditSession} /></label>
+          <label className="style-control"><span>Weight</span><select aria-label="Font weight" value={String(textValue("fontWeight", "normal"))} onChange={(event) => applyText({ fontWeight: event.currentTarget.value })}>{textMixed("fontWeight") && <option value="Mixed" disabled>Mixed</option>}<option value="normal">Regular</option><option value="bold">Bold</option></select></label>
+          <label className="style-control"><span>Style</span><select aria-label="Font style" value={String(textValue("fontStyle", "normal"))} onChange={(event) => applyText({ fontStyle: event.currentTarget.value })}>{textMixed("fontStyle") && <option value="Mixed" disabled>Mixed</option>}<option value="normal">Normal</option><option value="italic">Italic</option></select></label>
+          <label className="style-control"><span>Underline {textMixed("underline") ? "(Mixed)" : ""}</span><input type="checkbox" aria-label="Underline text" checked={textValue("underline", false) === true} onChange={(event) => applyText({ underline: event.currentTarget.checked })} /></label>
+          <label className="style-control"><span>Line height</span><input type="number" min="0.5" max="5" step="0.1" aria-label="Text line height" value={textMixed("lineHeight") ? "" : String(textValue("lineHeight", 1.2))} placeholder={textMixed("lineHeight") ? "Mixed" : undefined} onChange={(event) => applyText({ lineHeight: Math.min(5, Math.max(0.5, Number(event.currentTarget.value))) })} onBlur={finishEditSession} /></label>
+          <label className="style-control"><span>Letter spacing</span><input type="number" min="-20" max="100" step="0.5" aria-label="Letter spacing" value={textMixed("letterSpacing") ? "" : String(textValue("letterSpacing", 0))} placeholder={textMixed("letterSpacing") ? "Mixed" : undefined} onChange={(event) => applyText({ letterSpacing: Math.min(100, Math.max(-20, Number(event.currentTarget.value))) })} onBlur={finishEditSession} /></label>
+          <label className="style-control"><span>Align</span><select aria-label="Text alignment" value={String(textValue("align", "left"))} onChange={(event) => applyText({ align: event.currentTarget.value })}>{textMixed("align") && <option value="Mixed" disabled>Mixed</option>}<option value="left">Left</option><option value="center">Center</option><option value="right">Right</option><option value="justify">Justify</option></select></label>
+          <label className="style-control"><span>Vertical align</span><select aria-label="Vertical text alignment" value={String(textValue("verticalAlign", "top"))} onChange={(event) => applyText({ verticalAlign: event.currentTarget.value })}>{textMixed("verticalAlign") && <option value="Mixed" disabled>Mixed</option>}<option value="top">Top</option><option value="middle">Middle</option><option value="bottom">Bottom</option></select></label>
+        </div>
+      </details>}
+      {editableWidgets.length === 0 && <p className="field-hint">Unlock the selected element to edit its style.</p>}
+    </section>
+  );
 }
 
 function GeometrySection({ widgets }: { widgets: Widget[] }) {
@@ -950,6 +1369,7 @@ export function RightInspector({ onToggle, onUpdates, onRename }: RightInspector
           <div className="inspector-placeholder"><span className="inspector-placeholder-icon"><Layers2 size={17} /></span><span>Select an element on the canvas or in Layers to inspect it.</span></div>
         )}
         <GeometrySection widgets={selectedWidgets} />
+        <StyleSection widgets={selectedWidgets} />
         <div className="inspector-rule" />
         <div className="section-label inspector-project-label"><span>PROJECT DETAILS</span></div>
         <label className="field-label" htmlFor="project-name">Project name</label>
