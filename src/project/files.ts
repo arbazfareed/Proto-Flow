@@ -1,5 +1,9 @@
 import { invoke, isTauri } from "@tauri-apps/api/core";
-import { IMAGE_ASSET_THRESHOLD, imageDataToBytes } from "../canvas/images";
+import {
+  IMAGE_ASSET_THRESHOLD,
+  MAX_INLINE_IMAGE_BYTES,
+  imageDataToBytes,
+} from "../canvas/images";
 import { parseProject, serializeProject, type Project, type Widget } from "./schema";
 
 function requireDesktopRuntime(): void {
@@ -29,38 +33,45 @@ export async function saveProjectFile(
   }
   if (!path) return null;
 
-  const updatedScreens = await Promise.all(
-    project.screens.map(async (screen) => ({
-      ...screen,
-      widgets: await Promise.all(
-        screen.widgets.map(async (widget): Promise<Widget> => {
-          const src = widget.props.src;
-          const assetPath = widget.props.assetPath;
-          const mime = widget.props.mime;
-          if (
-            widget.type !== "image" ||
-            typeof src !== "string" ||
-            !src.startsWith("data:image/") ||
-            typeof mime !== "string" ||
-            typeof assetPath === "string"
-          ) {
-            return widget;
-          }
-          const bytes = imageDataToBytes(src);
-          if (bytes.byteLength < IMAGE_ASSET_THRESHOLD) return widget;
-          const savedAssetPath = await invoke<string>("save_image_asset", {
-            projectPath: path,
-            mime,
-            base64: src.slice(src.indexOf(",") + 1),
-          });
-          return {
-            ...widget,
-            props: { ...widget.props, assetPath: savedAssetPath },
-          };
-        }),
-      ),
-    })),
-  );
+  let inlineImageBytes = 0;
+  const updatedScreens = [];
+  for (const screen of project.screens) {
+    const widgets: Widget[] = [];
+    for (const widget of screen.widgets) {
+      const src = widget.props.src;
+      const assetPath = widget.props.assetPath;
+      const mime = widget.props.mime;
+      if (
+        widget.type !== "image" ||
+        typeof src !== "string" ||
+        !src.startsWith("data:image/") ||
+        typeof mime !== "string" ||
+        typeof assetPath === "string"
+      ) {
+        widgets.push(widget);
+        continue;
+      }
+      const bytes = imageDataToBytes(src);
+      const exceedsInlineBudget =
+        inlineImageBytes + bytes.byteLength > MAX_INLINE_IMAGE_BYTES;
+      if (bytes.byteLength < IMAGE_ASSET_THRESHOLD && !exceedsInlineBudget) {
+        inlineImageBytes += bytes.byteLength;
+        widgets.push(widget);
+        continue;
+      }
+      const savedAssetPath = await invoke<string>("save_image_asset", {
+        projectPath: path,
+        mime,
+        base64: src.slice(src.indexOf(",") + 1),
+      });
+      const { src: _embeddedSource, ...props } = widget.props;
+      widgets.push({
+        ...widget,
+        props: { ...props, assetPath: savedAssetPath },
+      });
+    }
+    updatedScreens.push({ ...screen, widgets });
+  }
   const projectWithAssets = { ...project, screens: updatedScreens };
   const savedPath = await invoke<string | null>("save_project", {
     path,

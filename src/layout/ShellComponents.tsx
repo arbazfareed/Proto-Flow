@@ -36,6 +36,7 @@ import {
   type GeometryField,
 } from "../canvas/geometryInspector";
 import {
+  SAFE_BLEND_MODES,
   getDefaultTextProperties,
   getStyleUpdates,
   getTextPropertyUpdates,
@@ -456,21 +457,6 @@ interface StyleEditSession {
 type StyleColorField = "fill" | "stroke";
 type StyleColorValue = { color: string; opacity: number } | null;
 
-const BLEND_MODES: NonNullable<WidgetStyle["blendMode"]>[] = [
-  "source-over",
-  "multiply",
-  "screen",
-  "overlay",
-  "darken",
-  "lighten",
-  "color-dodge",
-  "color-burn",
-  "hard-light",
-  "soft-light",
-  "difference",
-  "exclusion",
-];
-
 function StyleSection({ widgets }: { widgets: Widget[] }) {
   const editSessionRef = useRef<StyleEditSession | null>(null);
   const [colorDraft, setColorDraft] = useState<Record<StyleColorField, string>>({
@@ -519,6 +505,15 @@ function StyleSection({ widgets }: { widgets: Widget[] }) {
     if (changed) current.pushHistory(session.snapshot);
   }, []);
 
+  const beginStyleEdit = useCallback(() => {
+    if (editableWidgets.length === 0 || editSessionRef.current) return;
+    editSessionRef.current = {
+      snapshot: useStore.getState().project,
+      widgetIds: editableWidgets.map((widget) => widget.id),
+      timer: null,
+    };
+  }, [editableWidgets]);
+
   useEffect(() => {
     finishEditSession();
     setColorDraft({ fill: "", stroke: "" });
@@ -528,14 +523,9 @@ function StyleSection({ widgets }: { widgets: Widget[] }) {
   const applyStyle = useCallback(
     (patch: Partial<WidgetStyle>) => {
       if (editableWidgets.length === 0) return;
-      if (!editSessionRef.current) {
-        editSessionRef.current = {
-          snapshot: useStore.getState().project,
-          widgetIds: editableWidgets.map((widget) => widget.id),
-          timer: null,
-        };
-      }
+      beginStyleEdit();
       const session = editSessionRef.current;
+      if (!session) return;
       const current = useStore.getState();
       const screenId = current.project.startScreenId;
       const screen = current.project.screens.find((item) => item.id === screenId);
@@ -564,20 +554,15 @@ function StyleSection({ widgets }: { widgets: Widget[] }) {
       if (session.timer !== null) window.clearTimeout(session.timer);
       session.timer = window.setTimeout(finishEditSession, 500);
     },
-    [editableWidgets, finishEditSession],
+    [editableWidgets, beginStyleEdit, finishEditSession],
   );
 
   const applyText = useCallback(
     (patch: Record<string, unknown>) => {
       if (editableWidgets.length === 0) return;
-      if (!editSessionRef.current) {
-        editSessionRef.current = {
-          snapshot: useStore.getState().project,
-          widgetIds: editableWidgets.map((widget) => widget.id),
-          timer: null,
-        };
-      }
+      beginStyleEdit();
       const session = editSessionRef.current;
+      if (!session) return;
       const current = useStore.getState();
       const screenId = current.project.startScreenId;
       const screen = current.project.screens.find((item) => item.id === screenId);
@@ -606,7 +591,7 @@ function StyleSection({ widgets }: { widgets: Widget[] }) {
       if (session.timer !== null) window.clearTimeout(session.timer);
       session.timer = window.setTimeout(finishEditSession, 500);
     },
-    [editableWidgets, finishEditSession],
+    [editableWidgets, beginStyleEdit, finishEditSession],
   );
 
   useEffect(() => () => finishEditSession(), [finishEditSession]);
@@ -725,6 +710,9 @@ function StyleSection({ widgets }: { widgets: Widget[] }) {
             type="color"
             value={value?.color ?? "#000000"}
             disabled={editableWidgets.length === 0}
+            onPointerDown={beginStyleEdit}
+            onPointerUp={finishEditSession}
+            onPointerCancel={finishEditSession}
             onChange={(event) => commitColor(field, event.currentTarget.value)}
           />
           <input
@@ -796,6 +784,11 @@ function StyleSection({ widgets }: { widgets: Widget[] }) {
   const maxRadius = Math.floor(
     Math.min(...editableWidgets.map((widget) => Math.min(widget.width, widget.height))) / 2,
   );
+  const selectedBlendMode = commonStyleValue("blendMode", "source-over");
+  const displayedBlendMode =
+    selectedBlendMode && SAFE_BLEND_MODES.includes(selectedBlendMode)
+      ? selectedBlendMode
+      : "source-over";
 
   return (
     <section className="style-section" aria-label="Style">
@@ -824,7 +817,7 @@ function StyleSection({ widgets }: { widgets: Widget[] }) {
         </label>
         <button type="button" className="style-advanced-toggle" aria-expanded={advancedRadius} onClick={() => setAdvancedRadius((current) => !current)}>{advancedRadius ? "Hide per-corner radius" : "Advanced corners"}</button>
         {advancedRadius && [0, 1, 2, 3].map((corner) => <label className="style-control" key={corner}><span>{["Top left", "Top right", "Bottom right", "Bottom left"][corner]}</span><input type="number" min="0" max={maxRadius} aria-label={`${["Top left", "Top right", "Bottom right", "Bottom left"][corner]} radius`} value={radiusArray[corner]} disabled={!editableWidgets.length} onChange={(event) => { const next = [...radiusArray]; next[corner] = Math.min(maxRadius, Math.max(0, Number(event.currentTarget.value))); applyStyle({ cornerRadius: next }); }} onBlur={finishEditSession} /></label>)}
-        <label className="style-control style-blend"><span>Blend mode <button type="button" className="icon-button small-icon" aria-label="Reset blend mode" onClick={() => resetSection("blend")}><RotateCcw size={11} /></button></span><select aria-label="Blend mode" value={mixed(valuesFor("blendMode")) ? "" : commonStyleValue("blendMode", "source-over") ?? "source-over"} onChange={(event) => applyStyle({ blendMode: event.currentTarget.value as WidgetStyle["blendMode"] })}><option value="" disabled>Mixed</option>{BLEND_MODES.map((mode) => <option key={mode} value={mode}>{mode === "source-over" ? "Normal" : mode.replaceAll("-", " ")}</option>)}</select></label>
+        <label className="style-control style-blend"><span>Blend mode <button type="button" className="icon-button small-icon" aria-label="Reset blend mode" onClick={() => resetSection("blend")}><RotateCcw size={11} /></button></span><select aria-label="Blend mode" value={mixed(valuesFor("blendMode")) ? "" : displayedBlendMode} onChange={(event) => applyStyle({ blendMode: event.currentTarget.value as WidgetStyle["blendMode"] })}><option value="" disabled>Mixed</option>{SAFE_BLEND_MODES.map((mode) => <option key={mode} value={mode}>{mode === "source-over" ? "Normal" : mode.replaceAll("-", " ")}</option>)}</select></label>
       </div>
       <details className="style-shadow">
         <summary>Drop shadow</summary>
@@ -1135,6 +1128,8 @@ function GeometrySection({ widgets }: { widgets: Widget[] }) {
         ? ""
         : String(Number(commonValue.toFixed(2)));
     const mixed = commonValue === null && editableWidgets.length > 1;
+    const invalidExpression =
+      isActive && Boolean(draft.trim()) && evaluateGeometryExpression(draft) === null;
     const unit = unitFor(field);
     return (
       <div className="geometry-field" key={field}>
@@ -1153,12 +1148,13 @@ function GeometrySection({ widgets }: { widgets: Widget[] }) {
         <div className="geometry-input-wrap">
           <input
             id={`geometry-${field}`}
-            className="geometry-input"
+            className={`geometry-input${invalidExpression ? " geometry-input-invalid" : ""}`}
             type="text"
             inputMode="decimal"
             value={displayValue}
             placeholder={mixed ? "Mixed" : "—"}
             aria-label={label}
+            aria-invalid={invalidExpression}
             disabled={editableWidgets.length === 0}
             onFocus={() => {
               setActiveField(field);
@@ -1225,6 +1221,11 @@ function GeometrySection({ widgets }: { widgets: Widget[] }) {
             </button>
           )}
         </div>
+        {invalidExpression && (
+          <p className="field-hint geometry-expression-error">
+            Enter a valid arithmetic expression; the previous value is unchanged.
+          </p>
+        )}
       </div>
     );
   };
@@ -1232,6 +1233,10 @@ function GeometrySection({ widgets }: { widgets: Widget[] }) {
   if (widgets.length === 0) return null;
 
   const opacityValue = fieldValue("opacity") ?? (editableWidgets[0]?.opacity ?? 1) * 100;
+  const opacityExpressionInvalid =
+    activeField === "opacity" &&
+    Boolean(draft.trim()) &&
+    evaluateGeometryExpression(draft) === null;
   return (
     <section className="geometry-section" aria-label="Geometry">
       <div className="section-label geometry-heading"><span>GEOMETRY</span></div>
@@ -1270,7 +1275,7 @@ function GeometrySection({ widgets }: { widgets: Widget[] }) {
             />
             <input
               id="geometry-opacity"
-              className="geometry-input opacity-number"
+              className={`geometry-input opacity-number${opacityExpressionInvalid ? " geometry-input-invalid" : ""}`}
               type="text"
               inputMode="decimal"
               value={
@@ -1282,6 +1287,7 @@ function GeometrySection({ widgets }: { widgets: Widget[] }) {
               }
               placeholder={fieldValue("opacity") === null ? "Mixed" : "100"}
               aria-label="Opacity percent"
+              aria-invalid={opacityExpressionInvalid}
               disabled={editableWidgets.length === 0}
               onFocus={() => {
                 setActiveField("opacity");
@@ -1311,6 +1317,11 @@ function GeometrySection({ widgets }: { widgets: Widget[] }) {
             />
             <span className="geometry-percent">%</span>
           </div>
+          {opacityExpressionInvalid && (
+            <p className="field-hint geometry-expression-error">
+              Enter a valid arithmetic expression; the previous value is unchanged.
+            </p>
+          )}
         </div>
       </div>
       {editableWidgets.length === 0 && (

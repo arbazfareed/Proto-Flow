@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { createShapeWidget } from "./shapes";
 import {
   getDefaultTextProperties,
+  getSafeBlendMode,
   getStyleUpdates,
   getTextPropertyUpdates,
   parseStyleColor,
@@ -23,8 +24,14 @@ describe("style inspector helpers", () => {
       hex: "#00ff00",
       opacity: 1,
     });
+    expect(parseStyleColor("rgba(1, 2, 3, .)")).toBeNull();
     expect(parseStyleColor("rgb(nope)")).toBeNull();
     expect(styleColorToRgba("#336699", 0.5)).toBe("rgba(51, 102, 153, 0.5)");
+  });
+
+  it("maps unsupported blend operations to the standard source-over composite", () => {
+    expect(getSafeBlendMode("multiply")).toBe("multiply");
+    expect(getSafeBlendMode("difference")).toBe("source-over");
   });
 
   it("merges appearance updates and excludes locked widgets", () => {

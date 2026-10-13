@@ -5,6 +5,7 @@ import {
   getSelectionUpdates,
   getWidgetsInsideBounds,
   offsetSelection,
+  constrainTransformerBounds,
 } from "./selection";
 
 function widget(
@@ -21,6 +22,16 @@ function widget(
 }
 
 describe("selection geometry", () => {
+  it("transformer-inversion rejects inverted, undersized, and non-finite bounds", () => {
+    const oldBox = { x: 0, y: 0, width: 20, height: 20 };
+    expect(constrainTransformerBounds(oldBox, { x: 10, y: 10, width: -2, height: 20 }))
+      .toBe(oldBox);
+    expect(constrainTransformerBounds(oldBox, { x: 10, y: 10, width: 3, height: 20 }))
+      .toBe(oldBox);
+    expect(constrainTransformerBounds(oldBox, { x: 1, y: 2, width: 4, height: 5 }))
+      .toEqual({ x: 1, y: 2, width: 4, height: 5 });
+  });
+
   it("returns bounds for selected elements", () => {
     expect(getSelectionBounds([widget(10, 20, 20, 10), widget(-5, 8, 5, 12)])).toEqual({
       x: -5,
@@ -62,7 +73,7 @@ describe("selection geometry", () => {
     expect(getSelectionUpdates(widgets.slice(0, 2), "distribute-horizontal")).toEqual([]);
   });
 
-  it("nudges only unlocked selected elements", () => {
+  it("multi-drag-offsets preserves relative positions and skips locked elements", () => {
     const movable = widget(10, 20);
     const locked = widget(30, 40, 20, 10, { locked: true });
     expect(offsetSelection([movable, locked], { x: 10, y: -10 })).toEqual([

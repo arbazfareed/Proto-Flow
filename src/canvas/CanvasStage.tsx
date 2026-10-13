@@ -12,7 +12,10 @@ import {
   centerCanvasView,
   clampCanvasZoom,
   fitCanvasBounds,
+  getVisibleGridSpacing,
   getWidgetBounds,
+  normalizeCanvasViewport,
+  worldToScreen,
   zoomAroundPointer,
 } from "./navigation";
 import { snapWidgetPosition, type CanvasGuide, type CanvasPoint } from "./snapping";
@@ -21,9 +24,11 @@ import {
   getShapeDefinition,
   measureTextBounds,
   renderWidgetShape,
+  MAX_WIDGET_TEXT_LENGTH,
   type ShapeTool,
 } from "./shapes";
 import {
+  constrainTransformerBounds,
   getSelectionBounds,
   getSelectionUpdates,
   getWidgetsInsideBounds,
@@ -31,6 +36,9 @@ import {
 } from "./selection";
 import {
   IMAGE_ASSET_THRESHOLD,
+  MAX_INLINE_IMAGE_BYTES,
+  getImageDataByteSize,
+  getInlineImageBytes,
   readImageFile,
   type ImportedImage,
 } from "./images";
@@ -149,10 +157,7 @@ function GridLayer({
   const top = -pan.y / zoom;
   const right = (size.width - pan.x) / zoom;
   const bottom = (size.height - pan.y) / zoom;
-  const screenSpacing = gridSize * zoom;
-  const gridMultiplier =
-    screenSpacing >= 8 ? 1 : 2 ** Math.ceil(Math.log2(8 / screenSpacing));
-  const spacing = gridSize * gridMultiplier;
+  const spacing = getVisibleGridSpacing(gridSize, zoom);
 
   return (
     <Layer listening={false} perfectDrawEnabled={false}>
@@ -612,7 +617,25 @@ export function CanvasStage({
       }
       const current = useStore.getState();
       let assetPath: string | undefined;
-      if (image.size >= IMAGE_ASSET_THRESHOLD && current.filePath && isTauri()) {
+      const existingInlineImages = current.project.screens.flatMap((screen) =>
+        screen.widgets
+          .filter((widget) => widget.type === "image" && widget.id !== targetWidgetId)
+          .map((widget) => widget.props.src)
+          .filter((source): source is string => typeof source === "string"),
+      );
+      const inlineBytes = getInlineImageBytes(existingInlineImages);
+      const imageBytes = getImageDataByteSize(image.src);
+      const needsExternalAsset =
+        imageBytes >= IMAGE_ASSET_THRESHOLD ||
+        inlineBytes + imageBytes > MAX_INLINE_IMAGE_BYTES;
+      if (needsExternalAsset && !(current.filePath && isTauri())) {
+        onNotify(
+          "Save the project in the desktop app before adding images that exceed the 2 MB inline image budget.",
+          true,
+        );
+        return;
+      }
+      if (needsExternalAsset && current.filePath && isTauri()) {
         try {
           assetPath = await invoke<string>("save_image_asset", {
             projectPath: current.filePath,
@@ -632,7 +655,7 @@ export function CanvasStage({
         targetWidgetId ?? createWidgetAt("image", position);
       if (!imageWidgetId) return;
       updateWidgetProps(imageWidgetId, {
-        src: image.src,
+        src: assetPath ? undefined : image.src,
         mime: image.mime,
         fileName: image.name,
         assetPath,
@@ -681,7 +704,7 @@ export function CanvasStage({
       const editable = getEditableWidgetText(widget);
       if (!editable) return;
       setEditing({ widgetId: widget.id, ...editable });
-      setEditValue(editable.value);
+      setEditValue(editable.value.slice(0, MAX_WIDGET_TEXT_LENGTH));
     },
     [openImagePicker],
   );
@@ -939,6 +962,8 @@ export function CanvasStage({
             .map((widget) => widget.id),
         );
         if (selected.size === 0) return;
+        transformerRef.current?.nodes([]);
+        contentLayerRef.current?.batchDraw();
         current.setProject({
           ...current.project,
           updatedAt: new Date().toISOString(),
@@ -1009,10 +1034,7 @@ export function CanvasStage({
     const resizeObserver = new ResizeObserver((entries) => {
       const entry = entries[0];
       if (!entry) return;
-      const nextSize = {
-        width: Math.floor(entry.contentRect.width),
-        height: Math.floor(entry.contentRect.height),
-      };
+      const nextSize = normalizeCanvasViewport(entry.contentRect);
       setSize((previous) =>
         previous.width === nextSize.width && previous.height === nextSize.height
           ? previous
@@ -1229,6 +1251,7 @@ export function CanvasStage({
       onPointerMove={handlePointerMove}
       onPointerUp={handlePointerUp}
       onPointerCancel={handlePointerUp}
+      onLostPointerCapture={handlePointerUp}
       onAuxClick={(event) => {
         if (event.button === 1) event.preventDefault();
       }}
@@ -1446,7 +1469,7 @@ export function CanvasStage({
               borderStroke="#9a7cf4"
               borderStrokeWidth={1}
               boundBoxFunc={(oldBox, newBox) =>
-                Math.abs(newBox.width) < 4 || Math.abs(newBox.height) < 4
+                constrainTransformerBounds(oldBox, newBox) === oldBox
                   ? oldBox
                   : newBox
               }
@@ -1603,8 +1626,12 @@ export function CanvasStage({
         const widget = screenWidgets.find((item) => item.id === editing.widgetId);
         if (!widget) return null;
         const toggleLabel = widget.type === "toggle" && editing.key === "label";
-        const left = pan.x + (widget.x + (toggleLabel ? widget.width + 10 : 0)) * zoom;
-        const top = pan.y + widget.y * zoom;
+        const screenPosition = worldToScreen(
+          { x: widget.x + (toggleLabel ? widget.width + 10 : 0), y: widget.y },
+          { zoom, pan },
+        );
+        const left = screenPosition.x;
+        const top = screenPosition.y;
         const width = Math.max(80, widget.width * zoom * (toggleLabel ? 1 : 1));
         const height = Math.max(28, widget.height * zoom);
         return (
@@ -1617,10 +1644,14 @@ export function CanvasStage({
               width,
               height,
               transform: `rotate(${widget.rotation}deg)`,
+              fontFamily: typeof widget.props.fontFamily === "string" ? widget.props.fontFamily : "Arial",
+              fontSize: `${(typeof widget.props.fontSize === "number" ? widget.props.fontSize : 14) * zoom}px`,
+              lineHeight: String(typeof widget.props.lineHeight === "number" ? widget.props.lineHeight : 1.2),
             }}
+            maxLength={MAX_WIDGET_TEXT_LENGTH}
             value={editValue}
             autoFocus
-            onChange={(event) => setEditValue(event.currentTarget.value)}
+            onChange={(event) => setEditValue(event.currentTarget.value.slice(0, MAX_WIDGET_TEXT_LENGTH))}
             onMouseDown={(event) => event.stopPropagation()}
             onBlur={() => {
               if (cancelEditRef.current) {

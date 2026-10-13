@@ -119,8 +119,8 @@ describe("native project file commands", () => {
     expect(result?.path).toBe("images.pflow");
     expect(result?.project.screens[0].widgets[0].props).toMatchObject({
       assetPath: "assets/generated.png",
-      src,
     });
+    expect(result?.project.screens[0].widgets[0].props).not.toHaveProperty("src");
     expect(invokeMock).toHaveBeenNthCalledWith(
       1,
       "save_image_asset",
@@ -135,6 +135,41 @@ describe("native project file commands", () => {
       fileName: "large.png",
       assetPath: "assets/generated.png",
     });
+  });
+
+  it("externalizes the image that would exceed the cumulative inline-payload budget", async () => {
+    const project = createEmptyProject("Image budget");
+    const src = `data:image/png;base64,${"A".repeat(600_000)}`;
+    const images = Array.from({ length: 5 }, (_, index) => ({
+      id: crypto.randomUUID(),
+      type: "image",
+      x: index * 10,
+      y: 0,
+      width: 200,
+      height: 200,
+      rotation: 0,
+      opacity: 1,
+      visible: true,
+      locked: false,
+      zIndex: index,
+      style: {},
+      props: { src, mime: "image/png", fileName: `image-${index}.png` },
+    }));
+    const projectWithImages = {
+      ...project,
+      screens: [{ ...project.screens[0], widgets: images }],
+    };
+    invokeMock
+      .mockResolvedValueOnce("assets/budget.png")
+      .mockResolvedValueOnce("budget.pflow");
+
+    const saved = await saveProjectFile(projectWithImages, "budget.pflow");
+    const savedImages = saved?.project.screens[0].widgets ?? [];
+
+    expect(savedImages.slice(0, 4).every((widget) => widget.props.src === src)).toBe(true);
+    expect(savedImages[4].props).not.toHaveProperty("src");
+    expect(savedImages[4].props.assetPath).toBe("assets/budget.png");
+    expect(invokeMock).toHaveBeenCalledTimes(2);
   });
 
   it("rejects project file operations outside the desktop runtime", async () => {

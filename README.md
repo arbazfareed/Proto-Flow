@@ -29,7 +29,7 @@ npm test
 
 ## Phase 1 status
 
-Phase 1 is complete: the desktop shell, local project schema, native file I/O, local autosave and crash recovery, keyboard shortcuts, command palette, and updater integration are implemented. Phase 2 canvas work is underway: the Konva stage and navigation controls, configurable dot/line grid, grid snapping, sibling smart guides, primitive shapes, and mockup UI widgets are implemented. Selection transforms, inspector editing, and the rest of the canvas workflow remain future work.
+Phase 1 is complete: the desktop shell, local project schema, native file I/O, local autosave and crash recovery, keyboard shortcuts, command palette, and updater integration are implemented. Phase 2 tasks PF-T201 through PF-T207 are implemented: Konva navigation, configurable grid and snapping, primitive shapes and UI widgets, selection transforms, and geometry/style inspectors.
 
 ### Phase 1 implementation reference
 
@@ -37,12 +37,35 @@ The Phase 2 canvas extends these foundations rather than introducing a parallel 
 
 - `src/project/schema.ts` defines the versioned project, screen, and widget types and validates imported project data. Widgets already persist geometry, rotation, opacity, visibility, locking, z-order, style, and `props`.
 - `src/store/documentSlice.ts` owns the active project, file path, dirty state, and document actions. `src/store/canvasSlice.ts` owns zoom, pan, grid and snap settings, and selected IDs. `src/store/historySlice.ts` owns bounded undo/redo snapshots. The slices are composed in `src/store/index.ts`.
-- `src/canvas/CanvasStage.tsx` mounts the Konva stage in the center pane, tracks pane size with `ResizeObserver`, renders the configurable navigation grid and project widgets, and implements pointer-anchored zoom and Space/middle-button panning. Widget dragging and shape creation support grid snapping, Alt override, and sibling alignment guides. `src/canvas/shapes.tsx` is the shape registry for primitives and mockup widgets. The canvas toolbar activates click-and-drag tools, grouped as Shapes and Widgets. `R`, `O`, `T`, `L`, `B`, `I`, `M`, and `C` create a rectangle, ellipse, text, line, button, input, image, or checkbox; `Shift+R` and `Shift+T` create radio and toggle widgets. Double-click text-bearing widgets to edit their label; double-click an image placeholder to choose an image, or drop one onto the canvas. Images under 500 KB are embedded; larger desktop project images are saved beside the `.pflow` file in `assets/`. `Delete` removes the selection and supports undo. `Ctrl/Cmd+0` resets zoom and centers content; `Ctrl/Cmd+1` fits the selection. The stage's upper-right zoom control keeps the current percentage visible, overflowing workspace sidebars scroll independently, and the side panels collapse at narrower widths to preserve canvas space.
+- `src/canvas/CanvasStage.tsx` mounts the Konva stage in the center pane, tracks pane size with `ResizeObserver`, renders the configurable navigation grid and project widgets, and implements pointer-anchored zoom and Space/middle-button panning. Widget dragging and shape creation support grid snapping, Alt override, and sibling alignment guides. `src/canvas/shapes.tsx` is the shape registry for primitives and mockup widgets. The canvas toolbar activates click-and-drag tools, grouped as Shapes and Widgets. `R`, `O`, `T`, `L`, `B`, `I`, `M`, and `C` create a rectangle, ellipse, text, line, button, input, image, or checkbox; `Shift+R` and `Shift+T` create radio and toggle widgets. Double-click text-bearing widgets to edit their label; double-click an image placeholder to choose an image, or drop one onto the canvas. Inline image payloads are limited to 2 MiB decoded per project; desktop saves move large or over-budget image data to `assets/` and remove the embedded base64 from the project. `Delete` removes the selection and supports undo. `Ctrl/Cmd+0` resets zoom and centers content; `Ctrl/Cmd+1` fits the selection. The stage's upper-right zoom control keeps the current percentage visible, overflowing workspace sidebars scroll independently, and the side panels collapse at narrower widths to preserve canvas space.
 - `src/layout/ShellComponents.tsx` contains the surrounding shell. Extend the stage while preserving panel toggles, status bar, and selective Zustand subscriptions.
 - `src/project/files.ts` and the Rust commands in `src-tauri/src/commands/file_io.rs` provide validated local project open/save. Keep rendered edits in the project model so the existing save and autosave flows continue to persist them.
 - `src/commands/registry.tsx` is the extension point for new user commands; global shortcuts are handled in `src/commands/shortcuts.ts`.
 
-Selection transforms, widget inspector editing, and screen/layer editing are still to be implemented.
+Selection transforms and geometry/style inspector editing are implemented. Screen and layer editing remain future work.
+
+### Phase 2 failure-matrix verification
+
+The failure-focused checks for PF-T201–PF-T207 are tracked alongside their implementation tests. Run the targeted regression groups with:
+
+```sh
+npm run test -- -t "geometry-math|expression-eval|snap-engine"
+npm run test -- -t "transformer-inversion|multi-drag-offsets"
+npm run test -- -t "image-payload-budget|svg-sanitization"
+cd src-tauri && cargo test accepts_standard_svg_namespaces_and_rejects_active_or_remote_content
+```
+
+| Task | Decision and safeguards |
+|---|---|
+| PF-T201 | Pointer-anchored zoom uses bounded zoom and 1e-4 pan precision; zero-sized resize observations are clamped to a 1px stage. Space-pan is reset on blur, pointer cancel, and lost pointer capture. Unit coverage includes repeated fractional zoom at both zoom limits. |
+| PF-T202 | Smart sibling guides take priority independently on each axis; grid rendering uses visible stage bounds and increases spacing at low zoom to bound draw work. Tests cover sibling priority and low-zoom spacing. |
+| PF-T203 | Measured and displayed widget text is capped at 10,000 characters. Icon rendering only accepts predefined Lucide path data by icon name, so imported props cannot inject arbitrary path strings. |
+| PF-T204 | Image budgets use decoded bytes, not base64 string length. Projects keep at most 2 MiB of inline image bytes; desktop saves externalize over-budget payloads and omit base64 from `.pflow`. Browser-only imports that exceed the budget are rejected with a save-to-desktop message. Native image validation accepts standard SVG namespaces while rejecting script and remote references. Inline text editors use world-to-screen transforms and scale font size with zoom. |
+| PF-T205 | Transformer bounds reject negative, non-finite, and sub-4px boxes. Multi-drag applies the primary node's position delta to each selected node; delete clears transformer references before unmounting. |
+| PF-T206 | Geometry input uses a restricted arithmetic parser, rejects division by zero and invalid expressions without changing stored geometry, and marks invalid drafts. Focused fields render from their local draft until commit or blur. |
+| PF-T207 | Blend-mode selection exposes only the supported safe subset; older persisted modes render as `source-over`. Color parsing rejects non-finite alpha. Color-picker changes are grouped into one history snapshot per pointer gesture, with the idle debounce as a keyboard/native-picker fallback. |
+
+Automated tests verify pure math, parser and schema behavior, image payload externalization, text limits, and selection bounds. Pointer-capture lifecycle and actual native file dialogs still require manual desktop interaction; they are not claimed as automated end-to-end coverage.
 
 ### `.pflow` project schema
 

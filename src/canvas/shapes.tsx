@@ -22,7 +22,7 @@ import {
   type ShapeToolDefinition,
   type WidgetTool,
 } from "./shapeTools";
-import { styleColorToRgba } from "./styleInspector";
+import { getSafeBlendMode, styleColorToRgba } from "./styleInspector";
 export { SHAPE_TOOLS };
 export type { ShapeTool };
 
@@ -38,6 +38,7 @@ export interface ShapeDefinition extends ShapeToolDefinition {
 }
 
 const DEFAULT_STROKE = "#a78bfa";
+export const MAX_WIDGET_TEXT_LENGTH = 10_000;
 
 function getPoints(widget: Widget): number[] {
   const points = widget.props.points;
@@ -96,7 +97,9 @@ function TextShape({ widget, fill, stroke, strokeWidth }: ShapeComponentProps) {
     typeof widget.props.fontWeight === "string" ? widget.props.fontWeight : "normal";
   const fontStyle =
     typeof widget.props.fontStyle === "string" ? widget.props.fontStyle : "normal";
-  const text = typeof widget.props.text === "string" ? widget.props.text : "Text";
+  const text = typeof widget.props.text === "string"
+    ? widget.props.text.slice(0, MAX_WIDGET_TEXT_LENGTH)
+    : "Text";
 
   return (
     <KonvaText
@@ -201,7 +204,9 @@ function IconShape({ widget, stroke, strokeWidth }: ShapeComponentProps) {
 
 function getWidgetProp(widget: Widget, key: string, fallback = ""): string {
   const value = widget.props[key];
-  return typeof value === "string" ? value : fallback;
+  return typeof value === "string"
+    ? value.slice(0, MAX_WIDGET_TEXT_LENGTH)
+    : fallback;
 }
 
 function ButtonShape({ widget, fill: baseFill, stroke, strokeWidth }: ShapeComponentProps) {
@@ -620,7 +625,7 @@ export function measureTextBounds(
   fontWeight = "normal",
   lineHeight = 1.2,
 ): { width: number; height: number } {
-  const lines = text.split(/\r?\n/);
+  const lines = text.slice(0, MAX_WIDGET_TEXT_LENGTH).split(/\r?\n/);
   let measuredWidth = 0;
   if (typeof document !== "undefined") {
     const context = document.createElement("canvas").getContext("2d");
@@ -659,7 +664,7 @@ export function renderWidgetShape(
 
   return (
     <Group
-      globalCompositeOperation={widget.style.blendMode ?? "source-over"}
+      globalCompositeOperation={getSafeBlendMode(widget.style.blendMode)}
       shadowColor={widget.style.shadow?.color
         ? styleColorToRgba(widget.style.shadow.color)
         : "#000000"}

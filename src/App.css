@@ -166,6 +166,8 @@
 .geometry-input-wrap:focus-within { border-color:#8c71de; box-shadow:0 0 0 2px #8c71de26; }
 .geometry-input { width:100%; min-width:0; height:28px; padding:0 7px; border:0; outline:0; color:#e2e2e8; background:transparent; font:10px ui-monospace,SFMono-Regular,Consolas,monospace; font-variant-numeric:tabular-nums; }
 .geometry-input::placeholder { color:#89858f; font:9px Inter,system-ui,sans-serif; }
+.geometry-input-invalid { border-color:#d86e79 !important; }
+.geometry-expression-error { color:#e98a94; }
 .geometry-input:disabled { opacity:.45; }
 .geometry-steppers { display:flex; height:24px; flex:0 0 14px; flex-direction:column; margin-right:3px; }
 .geometry-steppers button { display:grid; width:14px; height:12px; place-items:center; padding:0; border:0; border-radius:2px; color:#85818e; background:transparent; cursor:pointer; }

@@ -4,6 +4,7 @@ import {
   createShapeWidget,
   getShapeDefinition,
   measureTextBounds,
+  MAX_WIDGET_TEXT_LENGTH,
   SHAPE_TOOLS,
 } from "./shapes";
 
@@ -124,5 +125,12 @@ describe("canvas shape registry", () => {
       width: 62,
       height: 52,
     });
+  });
+
+  it("TC-FAIL-203A caps text measurement work at ten thousand characters", () => {
+    expect(MAX_WIDGET_TEXT_LENGTH).toBe(10_000);
+    const measured = measureTextBounds("x".repeat(20_000), "Arial", 12);
+    expect(measured.width).toBeLessThan(100_000);
+    expect(measured.height).toBeLessThan(20_000);
   });
 });

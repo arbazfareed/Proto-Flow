@@ -3,11 +3,14 @@ import {
   centerCanvasView,
   clampCanvasZoom,
   fitCanvasBounds,
+  getVisibleGridSpacing,
   getWidgetBounds,
+  normalizeCanvasViewport,
+  worldToScreen,
   zoomAroundPointer,
 } from "./navigation";
 
-describe("canvas navigation math", () => {
+describe("canvas navigation math | geometry-math", () => {
   it("clamps zoom to the supported range", () => {
     expect(clampCanvasZoom(0)).toBe(0.1);
     expect(clampCanvasZoom(10)).toBe(4);
@@ -26,6 +29,48 @@ describe("canvas navigation math", () => {
     expect((pointer.y - next.pan.y) / next.zoom).toBeCloseTo(
       (pointer.y - current.pan.y) / current.zoom,
     );
+  });
+
+  it("TC-FAIL-201A preserves a fractional zoom anchor through repeated clamped gestures", () => {
+    const pointer = { x: 317.375, y: 226.625 };
+    let view = { zoom: 1, pan: { x: -0.125, y: 13.0625 } };
+    for (let index = 0; index < 500; index += 1) {
+      const target = index % 2 === 0 ? view.zoom * 1.0003 : view.zoom / 1.0003;
+      view = zoomAroundPointer(view, pointer, target);
+    }
+    for (const bound of [0.1, 4]) {
+      const bounded = zoomAroundPointer(view, pointer, bound);
+      expect(bounded.zoom).toBe(bound);
+      expect(worldToScreen(
+        { x: (pointer.x - view.pan.x) / view.zoom, y: (pointer.y - view.pan.y) / view.zoom },
+        bounded,
+      ).x).toBeCloseTo(pointer.x, 3);
+      expect(worldToScreen(
+        { x: (pointer.x - view.pan.x) / view.zoom, y: (pointer.y - view.pan.y) / view.zoom },
+        bounded,
+      ).y).toBeCloseTo(pointer.y, 3);
+    }
+  });
+
+  it("TC-FAIL-201C clamps zero-sized observed viewports before rendering", () => {
+    expect(normalizeCanvasViewport({ width: 0, height: 0 })).toEqual({
+      width: 1,
+      height: 1,
+    });
+  });
+
+  it("TC-FAIL-202B bounds low-zoom grid work to visible screen spacing", () => {
+    const spacing = getVisibleGridSpacing(10, 0.1);
+    expect(spacing * 0.1).toBeGreaterThanOrEqual(8);
+    expect(Math.ceil(1200 / (spacing * 0.1))).toBeLessThanOrEqual(150);
+    expect(() => getVisibleGridSpacing(0, 0.1)).toThrow("finite positive");
+  });
+
+  it("TC-FAIL-204B maps inline-editor positions into screen coordinates at zoom bounds", () => {
+    expect(worldToScreen({ x: 50, y: 40 }, { zoom: 0.1, pan: { x: 20, y: -10 } }))
+      .toEqual({ x: 25, y: -6 });
+    expect(worldToScreen({ x: 50, y: 40 }, { zoom: 4, pan: { x: 20, y: -10 } }))
+      .toEqual({ x: 220, y: 150 });
   });
 
   it("computes bounds for all supplied widgets", () => {
