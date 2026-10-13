@@ -20,6 +20,7 @@ export interface DocumentSlice {
 }
 
 export interface CanvasSlice {
+  activeScreenId: string | null;
   zoom: number;
   pan: { x: number; y: number };
   gridSize: 5 | 10 | 20;
@@ -36,6 +37,8 @@ export interface CanvasSlice {
   toggleSnap: () => void;
   select: (ids: string[]) => void;
   clearSelection: () => void;
+  setActiveScreen: (screenId: string) => void;
+  getActiveScreenId: () => string;
   setGeometryPreview: (preview: CanvasGeometryPreview) => void;
   clearGeometryPreview: () => void;
 }

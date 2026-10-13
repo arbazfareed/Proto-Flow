@@ -21,7 +21,6 @@ import {
   Redo2,
   Sparkles,
   Square,
-  Unlock,
   Undo2,
   RotateCcw,
   X,
@@ -29,6 +28,7 @@ import {
 import { isTauri } from "@tauri-apps/api/core";
 import { useStore } from "../store";
 import type { Project, Widget, WidgetStyle } from "../project/schema";
+import { ScreenLayerSidebar } from "./ScreenLayerSidebar";
 import {
   evaluateGeometryExpression,
   getGeometryUpdates,
@@ -157,8 +157,6 @@ export function LeftSidebar({ onNew, onOpen, onToggle, onOpenPalette, onUpdates 
   const project = useStore((state) => state.project);
   const isDirty = useStore((state) => state.isDirty);
   const leftPanelOpen = useStore((state) => state.leftPanelOpen);
-  const selectedIds = useStore((state) => state.selectedIds);
-  const activeScreen = project.screens.find((screen) => screen.id === project.startScreenId);
 
   if (!leftPanelOpen) return null;
 
@@ -180,92 +178,7 @@ export function LeftSidebar({ onNew, onOpen, onToggle, onOpenPalette, onUpdates 
         <div className="nav-item active" aria-current="page"><FileText size={16} /><span>{project.name}</span><span className="nav-unsaved">{isDirty ? "•" : ""}</span></div>
         <button className="nav-item" onClick={onOpen}><FolderOpen size={16} /><span>Open project…</span><kbd>Ctrl O</kbd></button>
       </div>
-      <div className="sidebar-section pages-section">
-        <div className="section-label"><span>SCREENS</span><button className="icon-button small-icon" aria-label="Add screen" title="Screen editing is coming with canvas editing" disabled><Plus size={15} /></button></div>
-        {project.screens.length ? project.screens.map((screen) => (
-          <div className="page-item selected" key={screen.id} aria-current={screen.id === project.startScreenId ? "page" : undefined}>
-            <span className="page-thumb"><span /></span><span>{screen.name}</span><span className="page-count">{screen.widgets.length}</span>
-          </div>
-        )) : <p className="sidebar-empty">Screens will appear here.</p>}
-      </div>
-      <div className="sidebar-section layers-section">
-        <div className="section-label"><span>LAYERS</span></div>
-        {activeScreen?.widgets.length ? (
-          <div className="layer-list" aria-label="Widget layers">
-            {[...activeScreen.widgets].sort((a, b) => b.zIndex - a.zIndex).map((widget) => {
-              const definition = getShapeToolDefinition(widget.type);
-              const Icon = definition?.icon ?? Layers2;
-              const labelValue =
-                widget.props.label ?? widget.props.text ?? widget.props.fileName;
-              const label =
-                typeof labelValue === "string" && labelValue.trim()
-                  ? labelValue.trim()
-                  : definition?.label ?? widget.type;
-              const selected = selectedIds.includes(widget.id);
-              return (
-                <div
-                  className={`layer-row${selected ? " is-selected" : ""}${widget.locked ? " is-locked" : ""}`}
-                  key={widget.id}
-                >
-                  <button
-                    className="layer-select"
-                    aria-label={`Select ${definition?.label ?? widget.type}: ${label}`}
-                    aria-pressed={selected}
-                    onClick={(event) => {
-                      const current = useStore.getState().selectedIds;
-                      useStore.getState().select(
-                        event.shiftKey
-                          ? current.includes(widget.id)
-                            ? current.filter((id) => id !== widget.id)
-                            : [...current, widget.id]
-                          : [widget.id],
-                      );
-                    }}
-                  >
-                    <Icon size={14} aria-hidden="true" />
-                    <span className="layer-copy">
-                      <span className="layer-name">{label}</span>
-                      <span className="layer-type">{definition?.label ?? widget.type}</span>
-                    </span>
-                  </button>
-                  <button
-                    className="layer-lock"
-                    aria-label={`${widget.locked ? "Unlock" : "Lock"} ${definition?.label ?? widget.type}: ${label}`}
-                    aria-pressed={widget.locked}
-                    title={widget.locked ? "Unlock layer" : "Lock layer"}
-                    onClick={() => {
-                      const current = useStore.getState();
-                      current.setProject({
-                        ...current.project,
-                        updatedAt: new Date().toISOString(),
-                        screens: current.project.screens.map((screen) =>
-                          screen.id !== current.project.startScreenId
-                            ? screen
-                            : {
-                                ...screen,
-                                widgets: screen.widgets.map((item) =>
-                                  item.id === widget.id
-                                    ? { ...item, locked: !item.locked }
-                                    : item,
-                                ),
-                              },
-                        ),
-                      });
-                    }}
-                  >
-                    {widget.locked ? <Lock size={13} /> : <Unlock size={13} />}
-                  </button>
-                </div>
-              );
-            })}
-          </div>
-        ) : (
-          <div className="sidebar-empty-state">
-            <Layers2 size={16} />
-            <span>Widgets will appear here as you add them.</span>
-          </div>
-        )}
-      </div>
+      <ScreenLayerSidebar />
       <div className="sidebar-footer">
         <button className="nav-item" onClick={onOpenPalette}><Keyboard size={16} /><span>Keyboard shortcuts</span></button>
         <button className="nav-item" onClick={onUpdates}><CircleHelp size={16} /><span>Help & updates</span></button>
@@ -444,12 +357,14 @@ type UnitField = "x" | "y" | "width" | "height";
 
 interface GeometryEditSession {
   snapshot: Project;
+  screenId: string;
   widgets: Widget[];
   timer: number | null;
 }
 
 interface StyleEditSession {
   snapshot: Project;
+  screenId: string;
   widgetIds: string[];
   timer: number | null;
 }
@@ -489,9 +404,9 @@ function StyleSection({ widgets }: { widgets: Widget[] }) {
     editSessionRef.current = null;
     const current = useStore.getState();
     const currentWidgets =
-      current.project.screens.find((screen) => screen.id === current.project.startScreenId)?.widgets ?? [];
+      current.project.screens.find((screen) => screen.id === session.screenId)?.widgets ?? [];
     const beforeWidgets =
-      session.snapshot.screens.find((screen) => screen.id === session.snapshot.startScreenId)?.widgets ?? [];
+      session.snapshot.screens.find((screen) => screen.id === session.screenId)?.widgets ?? [];
     const changed = session.widgetIds.some((id) => {
       const before = beforeWidgets.find((widget) => widget.id === id);
       const after = currentWidgets.find((widget) => widget.id === id);
@@ -509,6 +424,7 @@ function StyleSection({ widgets }: { widgets: Widget[] }) {
     if (editableWidgets.length === 0 || editSessionRef.current) return;
     editSessionRef.current = {
       snapshot: useStore.getState().project,
+      screenId: useStore.getState().getActiveScreenId(),
       widgetIds: editableWidgets.map((widget) => widget.id),
       timer: null,
     };
@@ -527,7 +443,7 @@ function StyleSection({ widgets }: { widgets: Widget[] }) {
       const session = editSessionRef.current;
       if (!session) return;
       const current = useStore.getState();
-      const screenId = current.project.startScreenId;
+      const screenId = current.getActiveScreenId();
       const screen = current.project.screens.find((item) => item.id === screenId);
       const targetWidgets =
         screen?.widgets.filter((widget) => session.widgetIds.includes(widget.id)) ?? [];
@@ -564,7 +480,7 @@ function StyleSection({ widgets }: { widgets: Widget[] }) {
       const session = editSessionRef.current;
       if (!session) return;
       const current = useStore.getState();
-      const screenId = current.project.startScreenId;
+      const screenId = session.screenId;
       const screen = current.project.screens.find((item) => item.id === screenId);
       const targetWidgets =
         screen?.widgets.filter((widget) => session.widgetIds.includes(widget.id)) ?? [];
@@ -933,9 +849,9 @@ function GeometrySection({ widgets }: { widgets: Widget[] }) {
 
     const current = useStore.getState();
     const currentWidgets =
-      current.project.screens.find((screen) => screen.id === current.project.startScreenId)?.widgets ?? [];
+      current.project.screens.find((screen) => screen.id === session.screenId)?.widgets ?? [];
     const snapshotWidgets =
-      session.snapshot.screens.find((screen) => screen.id === session.snapshot.startScreenId)?.widgets ?? [];
+      session.snapshot.screens.find((screen) => screen.id === session.screenId)?.widgets ?? [];
     const changed = session.widgets.some((widget) => {
       const before = snapshotWidgets.find((item) => item.id === widget.id);
       const after = currentWidgets.find((item) => item.id === widget.id);
@@ -962,13 +878,14 @@ function GeometrySection({ widgets }: { widgets: Widget[] }) {
       }
       const current = useStore.getState();
       const selected = current.project.screens
-        .find((screen) => screen.id === current.project.startScreenId)
+        .find((screen) => screen.id === current.getActiveScreenId())
         ?.widgets.filter(
           (widget) => selectedIds.includes(widget.id) && !widget.locked,
         ) ?? [];
       if (selected.length === 0) return;
       editSessionRef.current = {
         snapshot: current.project,
+        screenId: current.getActiveScreenId(),
         widgets: selected,
         timer: null,
       };
@@ -1008,7 +925,7 @@ function GeometrySection({ widgets }: { widgets: Widget[] }) {
         ...current.project,
         updatedAt: new Date().toISOString(),
         screens: current.project.screens.map((screen) =>
-          screen.id !== current.project.startScreenId
+          screen.id !== current.getActiveScreenId()
             ? screen
             : {
                 ...screen,
@@ -1333,12 +1250,13 @@ function GeometrySection({ widgets }: { widgets: Widget[] }) {
 
 export function RightInspector({ onToggle, onUpdates, onRename }: RightInspectorProps) {
   const project = useStore((state) => state.project);
+  const activeScreenId = useStore((state) => state.getActiveScreenId());
   const selectedIds = useStore((state) => state.selectedIds);
   const filePath = useStore((state) => state.filePath);
   const rightPanelOpen = useStore((state) => state.rightPanelOpen);
   const displayPath = filePath ? filePath.replaceAll("\\", "/").split("/").at(-1) : "Not saved yet";
   const selectedWidgets =
-    project.screens.find((screen) => screen.id === project.startScreenId)?.widgets.filter(
+    project.screens.find((screen) => screen.id === activeScreenId)?.widgets.filter(
       (widget) => selectedIds.includes(widget.id),
     ) ?? [];
   const selectedWidget = selectedWidgets.length === 1 ? selectedWidgets[0] : undefined;
