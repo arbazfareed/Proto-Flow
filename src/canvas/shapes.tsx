@@ -22,6 +22,7 @@ import {
   type ShapeToolDefinition,
   type WidgetTool,
 } from "./shapeTools";
+import { styleColorToRgba } from "./styleInspector";
 export { SHAPE_TOOLS };
 export type { ShapeTool };
 
@@ -60,6 +61,9 @@ function RectangleShape({ widget, fill, stroke, strokeWidth }: ShapeComponentPro
       fill={fill}
       stroke={stroke}
       strokeWidth={strokeWidth}
+      dash={widget.style.dash}
+      lineCap={widget.style.lineCap ?? "round"}
+      lineJoin={widget.style.lineJoin ?? "round"}
       cornerRadius={cornerRadius}
       perfectDrawEnabled={false}
     />
@@ -76,6 +80,9 @@ function EllipseShape({ widget, fill, stroke, strokeWidth }: ShapeComponentProps
       fill={fill}
       stroke={stroke}
       strokeWidth={strokeWidth}
+      dash={widget.style.dash}
+      lineCap={widget.style.lineCap ?? "round"}
+      lineJoin={widget.style.lineJoin ?? "round"}
       perfectDrawEnabled={false}
     />
   );
@@ -99,7 +106,10 @@ function TextShape({ widget, fill, stroke, strokeWidth }: ShapeComponentProps) {
       fontFamily={fontFamily}
       fontSize={fontSize}
       fontStyle={`${fontStyle} ${fontWeight}`.trim()}
+      letterSpacing={typeof widget.props.letterSpacing === "number" ? widget.props.letterSpacing : 0}
+      textDecoration={widget.props.underline === true ? "underline" : undefined}
       align={typeof widget.props.align === "string" ? widget.props.align : "left"}
+      verticalAlign={typeof widget.props.verticalAlign === "string" ? widget.props.verticalAlign : "top"}
       lineHeight={
         typeof widget.props.lineHeight === "number" ? widget.props.lineHeight : 1.2
       }
@@ -107,6 +117,7 @@ function TextShape({ widget, fill, stroke, strokeWidth }: ShapeComponentProps) {
       fill={fill}
       stroke={stroke}
       strokeWidth={strokeWidth}
+      dash={widget.style.dash}
       perfectDrawEnabled={false}
     />
   );
@@ -118,8 +129,8 @@ function LineShape({ widget, stroke, strokeWidth }: ShapeComponentProps) {
       points={getPoints(widget)}
       stroke={stroke}
       strokeWidth={strokeWidth}
-      lineCap="round"
-      lineJoin="round"
+      lineCap={widget.style.lineCap ?? "round"}
+      lineJoin={widget.style.lineJoin ?? "round"}
       perfectDrawEnabled={false}
     />
   );
@@ -132,10 +143,11 @@ function ArrowShape({ widget, stroke, strokeWidth }: ShapeComponentProps) {
       stroke={stroke}
       fill={stroke}
       strokeWidth={strokeWidth}
+      dash={widget.style.dash}
       pointerLength={typeof widget.props.pointerLength === "number" ? widget.props.pointerLength : 10}
       pointerWidth={typeof widget.props.pointerWidth === "number" ? widget.props.pointerWidth : 8}
-      lineCap="round"
-      lineJoin="round"
+      lineCap={widget.style.lineCap ?? "round"}
+      lineJoin={widget.style.lineJoin ?? "round"}
       perfectDrawEnabled={false}
     />
   );
@@ -192,7 +204,7 @@ function getWidgetProp(widget: Widget, key: string, fallback = ""): string {
   return typeof value === "string" ? value : fallback;
 }
 
-function ButtonShape({ widget }: ShapeComponentProps) {
+function ButtonShape({ widget, fill: baseFill, stroke, strokeWidth }: ShapeComponentProps) {
   const [pointerState, setPointerState] = useState<"default" | "hover" | "pressed">("default");
   const variant = getWidgetProp(widget, "variant", "primary");
   const state = getWidgetProp(widget, "state", "default");
@@ -221,21 +233,27 @@ function ButtonShape({ widget }: ShapeComponentProps) {
       <Rect
         width={widget.width}
         height={widget.height}
-        fill={fill}
-        stroke={colors.stroke}
-        strokeWidth={1}
-        cornerRadius={Math.min(8, widget.height / 2)}
+        fill={widget.style.fill === null ? undefined : baseFill ?? fill ?? colors.fill}
+        stroke={stroke}
+        strokeWidth={strokeWidth}
+        dash={widget.style.dash}
+        lineCap={widget.style.lineCap ?? "round"}
+        lineJoin={widget.style.lineJoin ?? "round"}
+        cornerRadius={widget.style.cornerRadius ?? Math.min(8, widget.height / 2)}
         perfectDrawEnabled={false}
       />
       <KonvaText
         width={widget.width}
         height={widget.height}
         text={getWidgetProp(widget, "label", "Button")}
-        fontSize={Math.max(10, Math.min(14, widget.height * 0.36))}
-        fontFamily="Arial"
-        fontStyle="bold"
-        align="center"
-        verticalAlign="middle"
+        fontSize={typeof widget.props.fontSize === "number" ? widget.props.fontSize : Math.max(10, Math.min(14, widget.height * 0.36))}
+        fontFamily={typeof widget.props.fontFamily === "string" ? widget.props.fontFamily : "Arial"}
+        fontStyle={`${typeof widget.props.fontStyle === "string" ? widget.props.fontStyle : "normal"} ${typeof widget.props.fontWeight === "string" ? widget.props.fontWeight : "bold"}`.trim()}
+        textDecoration={widget.props.underline === true ? "underline" : undefined}
+        letterSpacing={typeof widget.props.letterSpacing === "number" ? widget.props.letterSpacing : 0}
+        lineHeight={typeof widget.props.lineHeight === "number" ? widget.props.lineHeight : 1.2}
+        align={typeof widget.props.align === "string" ? widget.props.align : "center"}
+        verticalAlign={typeof widget.props.verticalAlign === "string" ? widget.props.verticalAlign : "middle"}
         fill={variant === "primary" ? "#191321" : colors.text}
         perfectDrawEnabled={false}
       />
@@ -243,7 +261,7 @@ function ButtonShape({ widget }: ShapeComponentProps) {
   );
 }
 
-function InputShape({ widget, stroke }: ShapeComponentProps) {
+function InputShape({ widget, fill, stroke, strokeWidth }: ShapeComponentProps) {
   const label = getWidgetProp(widget, "label");
   const value = getWidgetProp(widget, "value");
   const displayedValue = value
@@ -260,8 +278,12 @@ function InputShape({ widget, stroke }: ShapeComponentProps) {
           width={widget.width}
           height={16}
           text={label}
-          fontSize={12}
-          fontFamily="Arial"
+          fontSize={typeof widget.props.fontSize === "number" ? widget.props.fontSize : 12}
+          fontFamily={typeof widget.props.fontFamily === "string" ? widget.props.fontFamily : "Arial"}
+          fontStyle={`${typeof widget.props.fontStyle === "string" ? widget.props.fontStyle : "normal"} ${typeof widget.props.fontWeight === "string" ? widget.props.fontWeight : "normal"}`.trim()}
+          textDecoration={widget.props.underline === true ? "underline" : undefined}
+          letterSpacing={typeof widget.props.letterSpacing === "number" ? widget.props.letterSpacing : 0}
+          lineHeight={typeof widget.props.lineHeight === "number" ? widget.props.lineHeight : 1.2}
           fill="#c5c5cc"
           perfectDrawEnabled={false}
         />
@@ -269,10 +291,13 @@ function InputShape({ widget, stroke }: ShapeComponentProps) {
       <Rect
         width={widget.width}
         height={widget.height}
-        fill={widget.style.fill ?? "#1e1f23"}
-        stroke={stroke ?? "#45464e"}
-        strokeWidth={1}
-        cornerRadius={Math.min(6, widget.height / 3)}
+        fill={widget.style.fill === null ? undefined : fill ?? "#1e1f23"}
+        stroke={stroke}
+        strokeWidth={strokeWidth}
+        dash={widget.style.dash}
+        lineCap={widget.style.lineCap ?? "round"}
+        lineJoin={widget.style.lineJoin ?? "round"}
+        cornerRadius={widget.style.cornerRadius ?? Math.min(6, widget.height / 3)}
         perfectDrawEnabled={false}
       />
       <KonvaText
@@ -280,9 +305,14 @@ function InputShape({ widget, stroke }: ShapeComponentProps) {
         width={Math.max(1, widget.width - 24)}
         height={widget.height}
         text={displayedValue}
-        fontSize={Math.max(10, Math.min(14, widget.height * 0.36))}
-        fontFamily="Arial"
-        verticalAlign="middle"
+        fontSize={typeof widget.props.fontSize === "number" ? widget.props.fontSize : Math.max(10, Math.min(14, widget.height * 0.36))}
+        fontFamily={typeof widget.props.fontFamily === "string" ? widget.props.fontFamily : "Arial"}
+        fontStyle={`${typeof widget.props.fontStyle === "string" ? widget.props.fontStyle : "normal"} ${typeof widget.props.fontWeight === "string" ? widget.props.fontWeight : "normal"}`.trim()}
+        textDecoration={widget.props.underline === true ? "underline" : undefined}
+        letterSpacing={typeof widget.props.letterSpacing === "number" ? widget.props.letterSpacing : 0}
+        lineHeight={typeof widget.props.lineHeight === "number" ? widget.props.lineHeight : 1.2}
+        align={typeof widget.props.align === "string" ? widget.props.align : "left"}
+        verticalAlign={typeof widget.props.verticalAlign === "string" ? widget.props.verticalAlign : "middle"}
         fill={value ? "#e9e9ec" : "#85858f"}
         perfectDrawEnabled={false}
       />
@@ -290,7 +320,7 @@ function InputShape({ widget, stroke }: ShapeComponentProps) {
   );
 }
 
-function CheckboxShape({ widget }: ShapeComponentProps) {
+function CheckboxShape({ widget, fill, stroke, strokeWidth }: ShapeComponentProps) {
   const checked = widget.props.checked === true;
   const size = Math.min(20, widget.height);
   return (
@@ -300,10 +330,13 @@ function CheckboxShape({ widget }: ShapeComponentProps) {
         y={(widget.height - size) / 2}
         width={size}
         height={size}
-        fill={checked ? "#8b69ed" : "#1e1f23"}
-        stroke={checked ? "#8b69ed" : "#777780"}
-        strokeWidth={1.4}
-        cornerRadius={4}
+        fill={widget.style.fill === null ? undefined : fill ?? (checked ? "#8b69ed" : undefined)}
+        stroke={stroke}
+        strokeWidth={strokeWidth}
+        dash={widget.style.dash}
+        lineCap={widget.style.lineCap ?? "round"}
+        lineJoin={widget.style.lineJoin ?? "round"}
+        cornerRadius={widget.style.cornerRadius ?? 4}
         perfectDrawEnabled={false}
       />
       {checked && (
@@ -321,9 +354,14 @@ function CheckboxShape({ widget }: ShapeComponentProps) {
         width={Math.max(1, widget.width - size - 9)}
         height={widget.height}
         text={getWidgetProp(widget, "label", "Checkbox")}
-        fontSize={Math.max(10, Math.min(14, widget.height * 0.58))}
-        fontFamily="Arial"
-        verticalAlign="middle"
+        fontSize={typeof widget.props.fontSize === "number" ? widget.props.fontSize : Math.max(10, Math.min(14, widget.height * 0.58))}
+        fontFamily={typeof widget.props.fontFamily === "string" ? widget.props.fontFamily : "Arial"}
+        fontStyle={`${typeof widget.props.fontStyle === "string" ? widget.props.fontStyle : "normal"} ${typeof widget.props.fontWeight === "string" ? widget.props.fontWeight : "normal"}`.trim()}
+        textDecoration={widget.props.underline === true ? "underline" : undefined}
+        letterSpacing={typeof widget.props.letterSpacing === "number" ? widget.props.letterSpacing : 0}
+        lineHeight={typeof widget.props.lineHeight === "number" ? widget.props.lineHeight : 1.2}
+        align={typeof widget.props.align === "string" ? widget.props.align : "left"}
+        verticalAlign={typeof widget.props.verticalAlign === "string" ? widget.props.verticalAlign : "middle"}
         fill="#d7d6dd"
         perfectDrawEnabled={false}
       />
@@ -331,7 +369,7 @@ function CheckboxShape({ widget }: ShapeComponentProps) {
   );
 }
 
-function RadioShape({ widget }: ShapeComponentProps) {
+function RadioShape({ widget, fill, stroke, strokeWidth }: ShapeComponentProps) {
   const selected = widget.props.selected === true;
   const size = Math.min(20, widget.height);
   return (
@@ -340,9 +378,9 @@ function RadioShape({ widget }: ShapeComponentProps) {
         x={size / 2 + 1}
         y={widget.height / 2}
         radius={size / 2 - 1}
-        fill="#1e1f23"
-        stroke={selected ? "#a78bfa" : "#777780"}
-        strokeWidth={1.4}
+        fill={fill}
+        stroke={stroke}
+        strokeWidth={strokeWidth}
         perfectDrawEnabled={false}
       />
       {selected && (
@@ -359,9 +397,14 @@ function RadioShape({ widget }: ShapeComponentProps) {
         width={Math.max(1, widget.width - size - 9)}
         height={widget.height}
         text={getWidgetProp(widget, "label", "Radio")}
-        fontSize={Math.max(10, Math.min(14, widget.height * 0.58))}
-        fontFamily="Arial"
-        verticalAlign="middle"
+        fontSize={typeof widget.props.fontSize === "number" ? widget.props.fontSize : Math.max(10, Math.min(14, widget.height * 0.58))}
+        fontFamily={typeof widget.props.fontFamily === "string" ? widget.props.fontFamily : "Arial"}
+        fontStyle={`${typeof widget.props.fontStyle === "string" ? widget.props.fontStyle : "normal"} ${typeof widget.props.fontWeight === "string" ? widget.props.fontWeight : "normal"}`.trim()}
+        textDecoration={widget.props.underline === true ? "underline" : undefined}
+        letterSpacing={typeof widget.props.letterSpacing === "number" ? widget.props.letterSpacing : 0}
+        lineHeight={typeof widget.props.lineHeight === "number" ? widget.props.lineHeight : 1.2}
+        align={typeof widget.props.align === "string" ? widget.props.align : "left"}
+        verticalAlign={typeof widget.props.verticalAlign === "string" ? widget.props.verticalAlign : "middle"}
         fill="#d7d6dd"
         perfectDrawEnabled={false}
       />
@@ -369,7 +412,7 @@ function RadioShape({ widget }: ShapeComponentProps) {
   );
 }
 
-function ToggleShape({ widget }: ShapeComponentProps) {
+function ToggleShape({ widget, fill, stroke, strokeWidth }: ShapeComponentProps) {
   const isOn = widget.props.on === true;
   const label = getWidgetProp(widget, "label");
   const knobSize = Math.max(8, widget.height - 8);
@@ -378,8 +421,13 @@ function ToggleShape({ widget }: ShapeComponentProps) {
       <Rect
         width={widget.width}
         height={widget.height}
-        fill={isOn ? "#8b69ed" : "#34353b"}
-        cornerRadius={widget.height / 2}
+        fill={widget.style.fill === null ? undefined : fill ?? (isOn ? "#8b69ed" : "#34353b")}
+        stroke={stroke}
+        strokeWidth={strokeWidth}
+        dash={widget.style.dash}
+        lineCap={widget.style.lineCap ?? "round"}
+        lineJoin={widget.style.lineJoin ?? "round"}
+        cornerRadius={widget.style.cornerRadius ?? widget.height / 2}
         perfectDrawEnabled={false}
       />
       <Circle
@@ -395,9 +443,14 @@ function ToggleShape({ widget }: ShapeComponentProps) {
           width={180}
           height={widget.height}
           text={label}
-          fontSize={Math.max(10, Math.min(14, widget.height * 0.45))}
-          fontFamily="Arial"
-          verticalAlign="middle"
+          fontSize={typeof widget.props.fontSize === "number" ? widget.props.fontSize : Math.max(10, Math.min(14, widget.height * 0.45))}
+          fontFamily={typeof widget.props.fontFamily === "string" ? widget.props.fontFamily : "Arial"}
+          fontStyle={`${typeof widget.props.fontStyle === "string" ? widget.props.fontStyle : "normal"} ${typeof widget.props.fontWeight === "string" ? widget.props.fontWeight : "normal"}`.trim()}
+          textDecoration={widget.props.underline === true ? "underline" : undefined}
+          letterSpacing={typeof widget.props.letterSpacing === "number" ? widget.props.letterSpacing : 0}
+          lineHeight={typeof widget.props.lineHeight === "number" ? widget.props.lineHeight : 1.2}
+          align={typeof widget.props.align === "string" ? widget.props.align : "left"}
+          verticalAlign={typeof widget.props.verticalAlign === "string" ? widget.props.verticalAlign : "middle"}
           fill="#d7d6dd"
           perfectDrawEnabled={false}
         />
@@ -406,7 +459,7 @@ function ToggleShape({ widget }: ShapeComponentProps) {
   );
 }
 
-function ImageShape({ widget, stroke, strokeWidth }: ShapeComponentProps) {
+function ImageShape({ widget, fill, stroke, strokeWidth }: ShapeComponentProps) {
   const filePath = useStore((state) => state.filePath);
   const [image, setImage] = useState<HTMLImageElement | null>(null);
   const imageNodeRef = useRef<Konva.Image>(null);
@@ -472,7 +525,7 @@ function ImageShape({ widget, stroke, strokeWidth }: ShapeComponentProps) {
       <Rect
         width={widget.width}
         height={widget.height}
-        fill={widget.style.fill ?? "#202126"}
+        fill={fill}
         stroke={stroke ?? "#56515f"}
         strokeWidth={strokeWidth}
         dash={[6, 4]}
@@ -588,27 +641,40 @@ export function renderWidgetShape(
   widget: Widget,
   selected: boolean,
 ): ReactNode {
+  void selected;
   const definition = getShapeDefinition(widget.type);
   const ShapeComponent = definition?.component ?? RectangleShape;
-  const fill =
+  const defaultFill =
     widget.type === "text"
-      ? (widget.style.fill ?? "#e9e9ec")
-      : (widget.style.fill ?? (widget.type === "icon" ? undefined : "#5c4a89"));
-  const stroke = selected
-    ? "#bba5ff"
-    : widget.style.stroke === null
+      ? "#e9e9ec"
+      : ["rectangle", "ellipse"].includes(widget.type)
+        ? "#5c4a89"
+        : undefined;
+  const fill = widget.style.fill === null ? undefined : widget.style.fill ?? defaultFill;
+  const stroke =
+    widget.style.stroke === null
       ? undefined
       : (widget.style.stroke ?? DEFAULT_STROKE);
-  const strokeWidth = selected
-    ? Math.max(widget.style.strokeWidth ?? 1, 1.5)
-    : (widget.style.strokeWidth ?? 1);
+  const strokeWidth = widget.style.strokeWidth ?? 1;
 
   return (
-    <ShapeComponent
-      widget={widget}
-      fill={fill}
-      stroke={stroke}
-      strokeWidth={strokeWidth}
-    />
+    <Group
+      globalCompositeOperation={widget.style.blendMode ?? "source-over"}
+      shadowColor={widget.style.shadow?.color
+        ? styleColorToRgba(widget.style.shadow.color)
+        : "#000000"}
+      shadowBlur={widget.style.shadow?.blur ?? 0}
+      shadowOffsetX={widget.style.shadow?.offsetX ?? 0}
+      shadowOffsetY={widget.style.shadow?.offsetY ?? 0}
+      shadowOpacity={widget.style.shadow?.opacity ?? 0.5}
+      shadowEnabled={Boolean(widget.style.shadow)}
+    >
+      <ShapeComponent
+        widget={widget}
+        fill={fill ? styleColorToRgba(fill, widget.style.fillOpacity) : undefined}
+        stroke={stroke ? styleColorToRgba(stroke, widget.style.strokeOpacity) : undefined}
+        strokeWidth={strokeWidth}
+      />
+    </Group>
   );
 }

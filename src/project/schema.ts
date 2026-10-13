@@ -65,14 +65,20 @@ export const WidgetShadowSchema = z
     blur: z.number().finite().nonnegative().optional(),
     offsetX: z.number().finite().optional(),
     offsetY: z.number().finite().optional(),
+    opacity: z.number().finite().min(0).max(1).optional(),
   })
   .strict();
 
 export const WidgetStyleSchema = z
   .object({
     fill: HexColorSchema.nullable().optional(),
+    fillOpacity: z.number().finite().min(0).max(1).optional(),
     stroke: HexColorSchema.nullable().optional(),
+    strokeOpacity: z.number().finite().min(0).max(1).optional(),
     strokeWidth: z.number().finite().nonnegative().optional(),
+    dash: z.array(z.number().finite().nonnegative()).optional(),
+    lineCap: z.enum(["butt", "round", "square"]).optional(),
+    lineJoin: z.enum(["miter", "round", "bevel"]).optional(),
     cornerRadius: z
       .union([
         z.number().finite().nonnegative(),
@@ -80,6 +86,20 @@ export const WidgetStyleSchema = z
       ])
       .optional(),
     shadow: WidgetShadowSchema.optional(),
+    blendMode: z.enum([
+      "source-over",
+      "multiply",
+      "screen",
+      "overlay",
+      "darken",
+      "lighten",
+      "color-dodge",
+      "color-burn",
+      "hard-light",
+      "soft-light",
+      "difference",
+      "exclusion",
+    ]).optional(),
   })
   .strict();
 
