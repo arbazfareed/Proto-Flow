@@ -156,6 +156,7 @@ export const ProtoWidgetSchema = z
     type: z.string().trim().min(1),
     name: z.string().trim().min(1).max(120).optional(),
     groupId: z.string().uuid().optional(),
+    layerCategory: z.enum(["shapes", "widgets", "advanced", "symbols", "containers", "other"]).optional(),
     x: z.number().finite().min(-COORDINATE_LIMIT).max(COORDINATE_LIMIT),
     y: z.number().finite().min(-COORDINATE_LIMIT).max(COORDINATE_LIMIT),
     width: z.number().finite().min(1),

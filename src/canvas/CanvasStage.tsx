@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import type { DragEvent as ReactDragEvent } from "react";
 import { Group, Layer, Line, Rect, Shape, Stage, Text, Transformer } from "react-konva";
 import type Konva from "konva";
 import { ArrowDownToLine, FolderOpen, Minus, Plus } from "lucide-react";
@@ -24,6 +25,12 @@ import {
 } from "../devices/frame";
 import type { ScreenDevice } from "../devices/types";
 import type { Widget, Project, Screen } from "../project/schema";
+import {
+  createDraggedWidgetCopies,
+  getActiveLayerDragPayload,
+  LAYER_DRAG_MIME,
+  parseLayerDragPayload,
+} from "../project/layerDrag";
 import {
   clampCanvasZoom,
   fitCanvasBounds,
@@ -93,6 +100,46 @@ interface SelectionDraft {
 type WidgetGeometryUpdate = Partial<
   Pick<Widget, "x" | "y" | "width" | "height" | "rotation">
 > & { id: string };
+
+interface CanvasDropFeedback {
+  x: number;
+  y: number;
+  targetId: string | null;
+  targetType?: string;
+  itemCount: number;
+  label: string;
+}
+
+function duplicateScreenForCanvas(screen: Screen): Screen {
+  const widgetIds = new Map<string, string>();
+  const groupIds = new Map<string, string>();
+  const widgets = screen.widgets.map((widget) => {
+    const id = crypto.randomUUID();
+    widgetIds.set(widget.id, id);
+    if (widget.groupId && !groupIds.has(widget.groupId)) {
+      groupIds.set(widget.groupId, crypto.randomUUID());
+    }
+    return {
+      ...structuredClone(widget),
+      id,
+      groupId: widget.groupId ? groupIds.get(widget.groupId) : undefined,
+    };
+  });
+  return {
+    ...structuredClone(screen),
+    id: crypto.randomUUID(),
+    name: `${screen.name} copy`.slice(0, 120),
+    widgets,
+    interactionRules: screen.interactionRules.map((rule) => ({
+      ...structuredClone(rule),
+      id: crypto.randomUUID(),
+      actions: rule.actions.map((action) => ({
+        ...action,
+        target: widgetIds.get(action.target) ?? action.target,
+      })),
+    })),
+  };
+}
 
 function getEffectiveScreenWidgets(screen: Screen, breakpointId: string | null): Widget[] {
   const breakpoint = resolveActiveBreakpoint(screen, breakpointId);
@@ -451,6 +498,8 @@ export function CanvasStage({
   });
   const pendingViewRef = useRef<PendingView | null>(null);
   const animationFrameRef = useRef<number | null>(null);
+  const dragFeedbackFrameRef = useRef<number | null>(null);
+  const pendingDragFeedbackRef = useRef<CanvasDropFeedback | null>(null);
   const [size, setSize] = useState<CanvasSize>({ width: 0, height: 0 });
   const [spacePressed, setSpacePressed] = useState(false);
   const [isPanning, setIsPanning] = useState(false);
@@ -458,6 +507,7 @@ export function CanvasStage({
   const [guides, setGuides] = useState<CanvasGuide[]>([]);
   const [shapeDraft, setShapeDraft] = useState<ShapeDraft | null>(null);
   const [selectionDraft, setSelectionDraft] = useState<SelectionDraft | null>(null);
+  const [canvasDropFeedback, setCanvasDropFeedback] = useState<CanvasDropFeedback | null>(null);
   const [hoveredWidgetId, setHoveredWidgetId] = useState<string | null>(null);
   const [editing, setEditing] = useState<{
     widgetId: string;
@@ -857,6 +907,162 @@ export function CanvasStage({
     },
     [],
   );
+
+  const getCanvasDropTarget = useCallback((clientX: number, clientY: number): string | null => {
+    const surface = surfaceRef.current;
+    const stage = stageRef.current;
+    if (!surface || !stage) return null;
+    const bounds = surface.getBoundingClientRect();
+    const node = stage.getIntersection({
+      x: clientX - bounds.left,
+      y: clientY - bounds.top,
+    });
+    let current: Konva.Node | null = node;
+    while (current) {
+      const id = current.id();
+      if (id && screenWidgets.some((widget) => widget.id === id)) return id;
+      current = current.getParent();
+    }
+    return null;
+  }, [screenWidgets]);
+
+  const updateCanvasDropFeedback = useCallback((event: ReactDragEvent<HTMLDivElement>) => {
+    const bounds = surfaceRef.current?.getBoundingClientRect();
+    if (!bounds) return;
+    const payload = getActiveLayerDragPayload() ??
+      parseLayerDragPayload(event.dataTransfer.getData(LAYER_DRAG_MIME));
+    const targetId = getCanvasDropTarget(event.clientX, event.clientY);
+    const screenDrop = payload?.kind === "screen";
+    pendingDragFeedbackRef.current = {
+      x: event.clientX - bounds.left,
+      y: event.clientY - bounds.top,
+      targetId: screenDrop ? null : targetId,
+      targetType: screenDrop ? undefined : screenWidgets.find((widget) => widget.id === targetId)?.type,
+      itemCount: payload?.kind === "widgets" ? payload.widgetIds.length : 1,
+      label: payload?.kind === "widgets"
+        ? screenWidgets.find((widget) => widget.id === payload.widgetIds[0])?.name ??
+          screenWidgets.find((widget) => widget.id === payload.widgetIds[0])?.type ?? "Layer"
+        : "Screen",
+    };
+    if (dragFeedbackFrameRef.current !== null) return;
+    dragFeedbackFrameRef.current = window.requestAnimationFrame(() => {
+      dragFeedbackFrameRef.current = null;
+      setCanvasDropFeedback(pendingDragFeedbackRef.current);
+    });
+  }, [getCanvasDropTarget]);
+
+  const clearCanvasDropFeedback = useCallback(() => {
+    if (dragFeedbackFrameRef.current !== null) {
+      window.cancelAnimationFrame(dragFeedbackFrameRef.current);
+      dragFeedbackFrameRef.current = null;
+    }
+    pendingDragFeedbackRef.current = null;
+    setCanvasDropFeedback(null);
+  }, []);
+
+  const handleLayerDrop = useCallback((event: ReactDragEvent<HTMLDivElement>) => {
+    if (!event.dataTransfer.types.includes(LAYER_DRAG_MIME)) return false;
+    event.preventDefault();
+    clearCanvasDropFeedback();
+    if (event.ctrlKey || event.metaKey) return true;
+    const payload = parseLayerDragPayload(event.dataTransfer.getData(LAYER_DRAG_MIME));
+    if (!payload) return true;
+
+    const current = useStore.getState();
+    if (payload.kind === "screen") {
+      const source = current.project.screens.find((screen) => screen.id === payload.screenId);
+      if (!source) return true;
+      const duplicate = duplicateScreenForCanvas(source);
+      current.setProject({
+        ...current.project,
+        updatedAt: new Date().toISOString(),
+        screens: [...current.project.screens, duplicate],
+      });
+      useStore.getState().setActiveScreen(duplicate.id);
+      return true;
+    }
+
+    const screenId = current.getActiveScreenId();
+    const screen = current.project.screens.find((item) => item.id === screenId);
+    if (!screen) return true;
+    const sourceWidgets = screen.widgets.filter((widget) => payload.widgetIds.includes(widget.id));
+    if (sourceWidgets.length !== payload.widgetIds.length) return true;
+    if (
+      event.altKey &&
+      sourceWidgets.some((widget) =>
+        ["symbol", "symbol-instance", "symbolInstance"].includes(widget.type),
+      )
+    ) {
+      onNotify("Linked symbol instances are not supported by the current project schema.", true);
+      return true;
+    }
+    const position = getWorldPositionFromClient(event.clientX, event.clientY);
+    let copies = createDraggedWidgetCopies(
+      sourceWidgets,
+      position,
+      Math.max(0, ...screen.widgets.map((widget) => widget.zIndex)),
+    );
+    const targetId = getCanvasDropTarget(event.clientX, event.clientY);
+    let selected = copies;
+    let nextWidgets = [...screen.widgets, ...copies];
+    if (targetId && !sourceWidgets.some((widget) => widget.id === targetId)) {
+      const target = screen.widgets.find((widget) => widget.id === targetId);
+      if (target) {
+        if (["group", "frame", "panel", "dynamic-panel", "dynamicPanel", "repeater"].includes(target.type)) {
+          copies = copies.map((widget) => ({ ...widget, groupId: target.id }));
+          selected = copies;
+          nextWidgets = [...screen.widgets, ...copies];
+        } else {
+          const replacement = {
+            ...copies[0],
+            id: target.id,
+            name: target.name,
+            x: target.x,
+            y: target.y,
+            width: target.width,
+            height: target.height,
+            rotation: target.rotation,
+            opacity: target.opacity,
+            visible: target.visible,
+            locked: target.locked,
+            zIndex: target.zIndex,
+            overrides: target.overrides,
+            cascadeMode: target.cascadeMode,
+            constraints: target.constraints,
+          };
+          selected = [replacement, ...copies.slice(1)];
+          nextWidgets = screen.widgets.map((widget) =>
+            widget.id === targetId ? replacement : widget,
+          ).concat(copies.slice(1));
+        }
+      }
+    }
+    current.setProject({
+      ...current.project,
+      updatedAt: new Date().toISOString(),
+      screens: current.project.screens.map((item) =>
+        item.id === screenId ? { ...item, widgets: nextWidgets } : item,
+      ),
+    });
+    useStore.getState().select(selected.map((widget) => widget.id));
+    return true;
+  }, [clearCanvasDropFeedback, getCanvasDropTarget, getWorldPositionFromClient, onNotify]);
+
+  useEffect(() => {
+    const cancelDropFeedback = (event: KeyboardEvent) => {
+      if (event.key === "Escape") clearCanvasDropFeedback();
+    };
+    const finishNativeDrag = () => clearCanvasDropFeedback();
+    window.addEventListener("keydown", cancelDropFeedback);
+    window.addEventListener("dragend", finishNativeDrag);
+    return () => {
+      window.removeEventListener("keydown", cancelDropFeedback);
+      window.removeEventListener("dragend", finishNativeDrag);
+      if (dragFeedbackFrameRef.current !== null) {
+        window.cancelAnimationFrame(dragFeedbackFrameRef.current);
+      }
+    };
+  }, [clearCanvasDropFeedback]);
 
   const handleDroppedImagePaths = useCallback(
     async (paths: string[], position: CanvasPoint) => {
@@ -1399,11 +1605,19 @@ export function CanvasStage({
         if (event.button === 1) event.preventDefault();
       }}
       onDragOver={(event) => {
+        if (event.dataTransfer.types.includes(LAYER_DRAG_MIME)) {
+          event.preventDefault();
+          event.dataTransfer.dropEffect = event.ctrlKey || event.metaKey ? "none" : "copy";
+          updateCanvasDropFeedback(event);
+          return;
+        }
         if (!isTauri() && event.dataTransfer.types.includes("Files")) {
           event.preventDefault();
         }
       }}
       onDrop={(event) => {
+        if (handleLayerDrop(event)) return;
+        clearCanvasDropFeedback();
         if (isTauri() || event.dataTransfer.files.length === 0) return;
         event.preventDefault();
         const position = getWorldPositionFromClient(event.clientX, event.clientY);
@@ -1411,6 +1625,50 @@ export function CanvasStage({
         void handleImageFile(event.dataTransfer.files[0], position);
       }}
     >
+      {canvasDropFeedback && (
+        <>
+          {(() => {
+            const target = screenWidgets.find((widget) => widget.id === canvasDropFeedback.targetId);
+            if (!target) return null;
+            const position = worldToScreen(target, { zoom, pan });
+            return (
+              <div
+                className="canvas-drop-target"
+                data-testid="canvas-drop-target"
+                style={{
+                  left: position.x,
+                  top: position.y,
+                  width: target.width * zoom,
+                  height: target.height * zoom,
+                }}
+              />
+            );
+          })()}
+          <div
+            className="canvas-drop-insertion"
+            aria-hidden="true"
+            style={{ left: canvasDropFeedback.x, top: canvasDropFeedback.y }}
+          />
+          <div
+            className="canvas-drop-preview"
+            data-testid="canvas-drop-preview"
+            style={{ left: canvasDropFeedback.x + 12, top: canvasDropFeedback.y + 12 }}
+          >
+            <span className="canvas-drop-thumbnail">
+              {canvasDropFeedback.itemCount > 1 ? `+${canvasDropFeedback.itemCount}` : <FolderOpen size={18} />}
+            </span>
+            <span>
+              {canvasDropFeedback.targetType &&
+              ["group", "frame", "panel", "dynamic-panel", "dynamicPanel", "repeater"].includes(canvasDropFeedback.targetType)
+                ? `Add to ${canvasDropFeedback.targetType}`
+                : canvasDropFeedback.targetId
+                  ? "Replace widget"
+                  : `Create ${canvasDropFeedback.label}`}
+              {canvasDropFeedback.itemCount > 1 ? ` · ${canvasDropFeedback.itemCount} layers` : ""}
+            </span>
+          </div>
+        </>
+      )}
       <input
         ref={imageInputRef}
         className="canvas-image-file-input"
