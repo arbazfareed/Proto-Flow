@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Ellipse, Group, Layer, Line, Rect, Shape, Stage, Text } from "react-konva";
+import { Group, Layer, Line, Shape, Stage, Text } from "react-konva";
 import { ArrowDownToLine, FolderOpen, Minus, Plus } from "lucide-react";
 import type { Stage as KonvaStage } from "konva/lib/Stage";
 import { useStore } from "../store";
@@ -12,6 +12,13 @@ import {
   zoomAroundPointer,
 } from "./navigation";
 import { snapWidgetPosition, type CanvasGuide, type CanvasPoint } from "./snapping";
+import {
+  createShapeWidget,
+  getShapeDefinition,
+  measureTextBounds,
+  renderWidgetShape,
+  type ShapeTool,
+} from "./shapes";
 
 interface CanvasSize {
   width: number;
@@ -22,11 +29,21 @@ interface CanvasStageProps {
   onSaveAs: () => void;
   onOpen: () => void;
   onOpenPalette: () => void;
+  activeTool: ShapeTool | null;
+  onToolChange: (tool: ShapeTool | null) => void;
 }
 
 interface PendingView {
   zoom: number;
   pan: { x: number; y: number };
+}
+
+interface ShapeDraft {
+  tool: ShapeTool;
+  start: CanvasPoint;
+  current: CanvasPoint;
+  altKey: boolean;
+  preview: Widget;
 }
 
 function isEditingTarget(target: EventTarget | null): boolean {
@@ -154,6 +171,7 @@ function GuideLayer({
 function WidgetNode({
   widget,
   selected,
+  activeTool,
   position,
   onSelect,
   onDragMove,
@@ -162,27 +180,13 @@ function WidgetNode({
 }: {
   widget: Widget;
   selected: boolean;
+  activeTool: ShapeTool | null;
   position: CanvasPoint;
   onSelect: (event: { evt: MouseEvent | TouchEvent }) => void;
   onDragMove: (position: CanvasPoint, altKey: boolean) => void;
   onDragEnd: (position: CanvasPoint) => void;
   onDragBound: (position: CanvasPoint) => CanvasPoint;
 }) {
-  const fill = widget.style.fill ?? "#5c4a89";
-  const stroke = selected ? "#bba5ff" : widget.style.stroke ?? "#a78bfa";
-  const strokeWidth = selected
-    ? Math.max(widget.style.strokeWidth ?? 1, 1.5)
-    : widget.style.strokeWidth ?? 1;
-  const commonProps = {
-    width: widget.width,
-    height: widget.height,
-    fill: widget.type === "text" ? (widget.style.fill ?? "#e9e9ec") : fill,
-    stroke: widget.style.stroke === null && !selected ? undefined : stroke,
-    strokeWidth,
-    opacity: widget.opacity,
-    perfectDrawEnabled: false,
-  };
-
   return (
     <Group
       id={widget.id}
@@ -190,7 +194,7 @@ function WidgetNode({
       y={position.y}
       rotation={widget.rotation}
       visible={widget.visible}
-      draggable={!widget.locked}
+      draggable={!widget.locked && activeTool === null}
       dragBoundFunc={onDragBound}
       onClick={(event) => onSelect(event)}
       onTap={(event) => onSelect(event)}
@@ -204,31 +208,7 @@ function WidgetNode({
         onDragEnd({ x: event.target.x(), y: event.target.y() })
       }
     >
-      {widget.type === "text" ? (
-        <Text
-          {...commonProps}
-          text={
-            typeof widget.props.text === "string"
-              ? widget.props.text
-              : "Text"
-          }
-          fontSize={Math.max(12, Math.min(widget.height, 24))}
-          verticalAlign="middle"
-        />
-      ) : widget.type === "ellipse" || widget.type === "circle" ? (
-        <Ellipse
-          {...commonProps}
-          radiusX={widget.width / 2}
-          radiusY={widget.height / 2}
-          x={widget.width / 2}
-          y={widget.height / 2}
-        />
-      ) : (
-        <Rect
-          {...commonProps}
-          cornerRadius={widget.style.cornerRadius ?? 0}
-        />
-      )}
+      {renderWidgetShape(widget, selected)}
     </Group>
   );
 }
@@ -237,6 +217,8 @@ export function CanvasStage({
   onSaveAs,
   onOpen,
   onOpenPalette,
+  activeTool,
+  onToolChange,
 }: CanvasStageProps) {
   const surfaceRef = useRef<HTMLDivElement>(null);
   const stageRef = useRef<KonvaStage>(null);
@@ -255,8 +237,12 @@ export function CanvasStage({
   const [isPanning, setIsPanning] = useState(false);
   const [previewPositions, setPreviewPositions] = useState<Record<string, CanvasPoint>>({});
   const [guides, setGuides] = useState<CanvasGuide[]>([]);
+  const [shapeDraft, setShapeDraft] = useState<ShapeDraft | null>(null);
   const altHeldRef = useRef(false);
   const pendingGuidesRef = useRef<CanvasGuide[]>([]);
+  const guideTimerRef = useRef<number | null>(null);
+  const activeToolRef = useRef<ShapeTool | null>(activeTool);
+  const lastPointerWorldRef = useRef<CanvasPoint>({ x: 0, y: 0 });
   const zoom = useStore((state) => state.zoom);
   const pan = useStore((state) => state.pan);
   const gridSize = useStore((state) => state.gridSize);
@@ -267,6 +253,9 @@ export function CanvasStage({
     state.project.screens.find((screen) => screen.id === state.project.startScreenId),
   );
   const selectedIds = useStore((state) => state.selectedIds);
+  useEffect(() => {
+    activeToolRef.current = activeTool;
+  }, [activeTool]);
   const screenWidgets = activeScreen
     ? [...activeScreen.widgets].sort((first, second) => first.zIndex - second.zIndex)
     : [];
@@ -301,6 +290,243 @@ export function CanvasStage({
       commitViewOnFrame(normalizedView);
     },
     [commitViewOnFrame],
+  );
+
+  const getPointerWorldPosition = useCallback((): CanvasPoint | null => {
+    const stage = stageRef.current;
+    const pointer = stage?.getPointerPosition();
+    if (!stage || !pointer) return null;
+    return stage.getAbsoluteTransform().copy().invert().point(pointer);
+  }, []);
+
+  const createWidgetAt = useCallback(
+    (
+      type: ShapeTool,
+      position: CanvasPoint,
+      bounds?: { width: number; height: number; points?: number[] },
+      altKey = altHeldRef.current,
+    ) => {
+      const current = useStore.getState();
+      const screen = current.project.screens.find(
+        (item) => item.id === current.project.startScreenId,
+      );
+      if (!screen) return;
+
+      const definition = getShapeDefinition(type);
+      if (!definition) return;
+      let width = bounds?.width ?? definition.width;
+      let height = bounds?.height ?? definition.height;
+      let props = { ...definition.props };
+      if (bounds?.points) props.points = bounds.points;
+
+      if (type === "text") {
+        const text = typeof props.text === "string" ? props.text : "Text";
+        const fontSize = typeof props.fontSize === "number" ? props.fontSize : 24;
+        const fontFamily =
+          typeof props.fontFamily === "string" ? props.fontFamily : "Arial";
+        const fontWeight =
+          typeof props.fontWeight === "string" ? props.fontWeight : "normal";
+        const lineHeight =
+          typeof props.lineHeight === "number" ? props.lineHeight : 1.2;
+        if (!bounds) {
+          const measured = measureTextBounds(
+            text,
+            fontFamily,
+            fontSize,
+            fontWeight,
+            lineHeight,
+          );
+          width = measured.width;
+          height = measured.height;
+        } else {
+          props.autoSize = false;
+        }
+      }
+
+      const widget = createShapeWidget(type, position.x, position.y, width, height, props);
+      const siblings = screen.widgets.map((item) => ({
+        id: item.id,
+        x: item.x,
+        y: item.y,
+        width: item.width,
+        height: item.height,
+      }));
+      const snap = snapWidgetPosition(
+        {
+          id: widget.id,
+          x: widget.x,
+          y: widget.y,
+          width: widget.width,
+          height: widget.height,
+        },
+        siblings,
+        current.gridSize,
+        current.snapEnabled,
+        altKey,
+      );
+      widget.x = snap.position.x;
+      widget.y = snap.position.y;
+      widget.zIndex = screen.widgets.reduce(
+        (highest, item) => Math.max(highest, item.zIndex),
+        -1,
+      ) + 1;
+
+      current.setProject({
+        ...current.project,
+        updatedAt: new Date().toISOString(),
+        screens: current.project.screens.map((item) =>
+          item.id === screen.id
+            ? { ...item, widgets: [...item.widgets, widget] }
+            : item,
+        ),
+      });
+      useStore.getState().select([widget.id]);
+
+      if (guideTimerRef.current !== null) {
+        window.clearTimeout(guideTimerRef.current);
+      }
+      setGuides(snap.guides);
+      guideTimerRef.current = window.setTimeout(() => {
+        guideTimerRef.current = null;
+        setGuides([]);
+      }, 900);
+    },
+    [],
+  );
+
+  const finishDrawing = useCallback(
+    (draft: ShapeDraft, end: CanvasPoint) => {
+      const deltaX = end.x - draft.start.x;
+      const deltaY = end.y - draft.start.y;
+      const dragged = Math.max(Math.abs(deltaX), Math.abs(deltaY)) >= 3;
+      let bounds: { width: number; height: number; points?: number[] } | undefined;
+      let position = draft.start;
+
+      if (dragged) {
+        const width = Math.max(1, Math.abs(deltaX));
+        const height = Math.max(1, Math.abs(deltaY));
+        position = {
+          x: Math.min(draft.start.x, end.x),
+          y: Math.min(draft.start.y, end.y),
+        };
+        bounds = { width, height };
+        if (draft.tool === "line" || draft.tool === "arrow") {
+          bounds.points = [
+            deltaX < 0 ? width : 0,
+            deltaY < 0 ? height : 0,
+            deltaX < 0 ? 0 : width,
+            deltaY < 0 ? 0 : height,
+          ];
+        }
+      }
+
+      createWidgetAt(draft.tool, position, bounds, draft.altKey);
+      setShapeDraft(null);
+      onToolChange(null);
+    },
+    [createWidgetAt, onToolChange],
+  );
+
+  const handleShapePointerDown = useCallback(
+    (event: { evt: MouseEvent | TouchEvent; target: unknown; cancelBubble: boolean }) => {
+      const stage = stageRef.current;
+      if (!stage) return;
+      const position = getPointerWorldPosition();
+      if (!position) return;
+      lastPointerWorldRef.current = position;
+      const tool = activeToolRef.current;
+      if (!tool) {
+        if (event.target === stage) useStore.getState().clearSelection();
+        return;
+      }
+      if (event.evt instanceof MouseEvent && event.evt.button !== 0) return;
+
+      const definition = getShapeDefinition(tool);
+      if (!definition) return;
+      event.cancelBubble = true;
+      setShapeDraft({
+        tool,
+        start: position,
+        current: position,
+        altKey: "altKey" in event.evt && Boolean(event.evt.altKey),
+        preview: createShapeWidget(tool, position.x, position.y),
+      });
+    },
+    [getPointerWorldPosition],
+  );
+
+  const handleShapePointerMove = useCallback(() => {
+    const position = getPointerWorldPosition();
+    if (!position) return;
+    lastPointerWorldRef.current = position;
+    setShapeDraft((draft) => {
+      if (!draft) return draft;
+      const deltaX = position.x - draft.start.x;
+      const deltaY = position.y - draft.start.y;
+      const width = Math.max(1, Math.abs(deltaX));
+      const height = Math.max(1, Math.abs(deltaY));
+      const preview = {
+        ...draft.preview,
+        x: Math.min(draft.start.x, position.x),
+        y: Math.min(draft.start.y, position.y),
+        width,
+        height,
+        props:
+          draft.tool === "line" || draft.tool === "arrow"
+            ? {
+                ...draft.preview.props,
+                points: [
+                  deltaX < 0 ? width : 0,
+                  deltaY < 0 ? height : 0,
+                  deltaX < 0 ? 0 : width,
+                  deltaY < 0 ? 0 : height,
+                ],
+              }
+            : draft.preview.props,
+      };
+      return { ...draft, current: position, preview };
+    });
+  }, [getPointerWorldPosition]);
+
+  const handleShapePointerUp = useCallback(() => {
+    const draft = shapeDraft;
+    const position = getPointerWorldPosition();
+    if (!draft || !position) return;
+    finishDrawing(draft, position);
+  }, [finishDrawing, getPointerWorldPosition, shapeDraft]);
+
+  useEffect(() => {
+    const shortcuts: Record<string, ShapeTool> = {
+      r: "rectangle",
+      o: "ellipse",
+      t: "text",
+      l: "line",
+      i: "icon",
+    };
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.ctrlKey || event.metaKey || event.altKey || isEditingTarget(event.target)) {
+        return;
+      }
+      if (event.key === "Escape" && activeToolRef.current) {
+        onToolChange(null);
+        setShapeDraft(null);
+        event.preventDefault();
+        return;
+      }
+      const tool = shortcuts[event.key.toLowerCase()];
+      if (!tool) return;
+      event.preventDefault();
+      createWidgetAt(tool, lastPointerWorldRef.current);
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [createWidgetAt, onToolChange]);
+
+  useEffect(
+    () => () => {
+      if (guideTimerRef.current !== null) window.clearTimeout(guideTimerRef.current);
+    },
+    [],
   );
 
   useEffect(() => {
@@ -522,7 +748,7 @@ export function CanvasStage({
   return (
     <div
       ref={surfaceRef}
-      className={`canvas-stage-surface${spacePressed ? " is-space-ready" : ""}${isPanning ? " is-panning" : ""}`}
+      className={`canvas-stage-surface${spacePressed ? " is-space-ready" : ""}${isPanning ? " is-panning" : ""}${activeTool ? " is-drawing" : ""}`}
       data-canvas-zoom={zoom}
       data-canvas-pan-x={pan.x}
       data-canvas-pan-y={pan.y}
@@ -544,6 +770,12 @@ export function CanvasStage({
           scaleX={zoom}
           scaleY={zoom}
           onWheel={handleWheel}
+          onMouseDown={handleShapePointerDown}
+          onMouseMove={handleShapePointerMove}
+          onMouseUp={handleShapePointerUp}
+          onTouchStart={handleShapePointerDown}
+          onTouchMove={handleShapePointerMove}
+          onTouchEnd={handleShapePointerUp}
         >
           <GridLayer
             size={size}
@@ -581,6 +813,7 @@ export function CanvasStage({
                   key={widget.id}
                   widget={widget}
                   selected={selectedIds.includes(widget.id)}
+                  activeTool={activeTool}
                   position={
                     previewPositions[widget.id] ?? { x: widget.x, y: widget.y }
                   }
@@ -653,6 +886,18 @@ export function CanvasStage({
               );
             })}
           </Layer>
+          {shapeDraft && (
+            <Layer listening={false} perfectDrawEnabled={false}>
+              <Group
+                x={shapeDraft.preview.x}
+                y={shapeDraft.preview.y}
+                opacity={0.55}
+                listening={false}
+              >
+                {renderWidgetShape(shapeDraft.preview, false)}
+              </Group>
+            </Layer>
+          )}
           <GuideLayer guides={guides} size={size} zoom={zoom} pan={pan} />
         </Stage>
       )}
@@ -661,7 +906,7 @@ export function CanvasStage({
           <div className="empty-icon-wrap"><span className="empty-canvas-mark">PF</span></div>
           <span className="eyebrow">YOUR CANVAS IS READY</span>
           <h1>A little room to think.</h1>
-          <p>Save your project locally or open an existing prototype. Canvas tools for drawing and editing are coming next.</p>
+          <p>Choose a shape tool above to start your prototype, or open an existing project.</p>
           <div className="canvas-empty-actions">
             <button className="button button-primary" onClick={onSaveAs}><ArrowDownToLine size={15} /> Save your project</button>
             <button className="button button-secondary" onClick={onOpen}><FolderOpen size={15} /> Open a project</button>

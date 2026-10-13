@@ -22,6 +22,11 @@ import {
 } from "lucide-react";
 import { isTauri } from "@tauri-apps/api/core";
 import { useStore } from "../store";
+import {
+  SHAPE_TOOLS,
+  getShapeToolDefinition,
+  type ShapeTool,
+} from "../canvas/shapeTools";
 
 const CanvasStage = lazy(() =>
   import("../canvas/CanvasStage").then((module) => ({
@@ -203,6 +208,7 @@ export function CanvasArea({
   const toggleGrid = useStore((state) => state.toggleGrid);
   const toggleSnap = useStore((state) => state.toggleSnap);
   const [viewMenuOpen, setViewMenuOpen] = useState(false);
+  const [activeTool, setActiveTool] = useState<ShapeTool | null>(null);
 
   return (
     <main className="canvas-area">
@@ -212,6 +218,28 @@ export function CanvasArea({
           <span className="breadcrumb-muted">Workspace</span><ArrowRight size={13} /><span>{project.name}</span>
         </div>
         <div className="canvas-toolbar-actions">
+          <div className="shape-tools" role="toolbar" aria-label="Shape tools">
+            {SHAPE_TOOLS.map((tool) => {
+              const definition = getShapeToolDefinition(tool);
+              if (!definition) return null;
+              const ToolIcon = definition.icon;
+              return (
+                <button
+                  key={tool}
+                  className={`icon-button small-icon shape-tool-button${activeTool === tool ? " is-active" : ""}`}
+                  type="button"
+                  aria-label={`Draw ${definition.label}`}
+                  aria-pressed={activeTool === tool}
+                  title={`${definition.label}${definition.shortcut ? ` (${definition.shortcut})` : ""}`}
+                  onClick={() =>
+                    setActiveTool((current) => (current === tool ? null : tool))
+                  }
+                >
+                  <ToolIcon size={15} strokeWidth={1.8} />
+                </button>
+              );
+            })}
+          </div>
           <span className="canvas-mode"><span className="mode-dot" /> Canvas</span>
           {!rightPanelOpen && <button className="icon-button small-icon" aria-label="Show inspector panel" onClick={onToggleRight}><PanelRightClose size={15} /></button>}
           <div className="canvas-view-menu-anchor">
@@ -290,6 +318,8 @@ export function CanvasArea({
             onSaveAs={onSaveAs}
             onOpen={onOpen}
             onOpenPalette={onOpenPalette}
+            activeTool={activeTool}
+            onToolChange={setActiveTool}
           />
         </Suspense>
       </div>

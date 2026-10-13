@@ -29,7 +29,7 @@ npm test
 
 ## Phase 1 status
 
-Phase 1 is complete: the desktop shell, local project schema, native file I/O, local autosave and crash recovery, keyboard shortcuts, command palette, and updater integration are implemented. Phase 2 canvas work is underway: the Konva stage and navigation controls, configurable dot/line grid, grid spacing, grid snapping, and sibling smart guides are implemented. Drawing tools, selection transforms, inspector editing, and the rest of the canvas workflow remain future work.
+Phase 1 is complete: the desktop shell, local project schema, native file I/O, local autosave and crash recovery, keyboard shortcuts, command palette, and updater integration are implemented. Phase 2 canvas work is underway: the Konva stage and navigation controls, configurable dot/line grid, grid snapping, sibling smart guides, and rectangle, ellipse, text, line, arrow, and Lucide icon creation are implemented. Selection transforms, inspector editing, and the rest of the canvas workflow remain future work.
 
 ### Phase 1 implementation reference
 
@@ -37,12 +37,12 @@ The Phase 2 canvas extends these foundations rather than introducing a parallel 
 
 - `src/project/schema.ts` defines the versioned project, screen, and widget types and validates imported project data. Widgets already persist geometry, rotation, opacity, visibility, locking, z-order, style, and `props`.
 - `src/store/documentSlice.ts` owns the active project, file path, dirty state, and document actions. `src/store/canvasSlice.ts` owns zoom, pan, grid and snap settings, and selected IDs. `src/store/historySlice.ts` owns bounded undo/redo snapshots. The slices are composed in `src/store/index.ts`.
-- `src/canvas/CanvasStage.tsx` mounts the Konva stage in the center pane, tracks pane size with `ResizeObserver`, renders the configurable navigation grid and existing project widgets, and implements pointer-anchored zoom and Space/middle-button panning. Widget dragging supports grid snapping, Alt override, and sibling alignment guides. `Ctrl/Cmd+0` resets zoom and centers content; `Ctrl/Cmd+1` fits the selection. The stage's upper-right zoom control keeps the current percentage visible, and overflowing workspace sidebars scroll independently.
+- `src/canvas/CanvasStage.tsx` mounts the Konva stage in the center pane, tracks pane size with `ResizeObserver`, renders the configurable navigation grid and project widgets, and implements pointer-anchored zoom and Space/middle-button panning. Widget dragging and shape creation support grid snapping, Alt override, and sibling alignment guides. `src/canvas/shapes.tsx` is the shape registry for renderers and defaults. The canvas toolbar activates click-and-drag shape tools; `R`, `O`, `T`, `L`, and `I` create a rectangle, ellipse, text, line, or icon at the current canvas pointer. `Ctrl/Cmd+0` resets zoom and centers content; `Ctrl/Cmd+1` fits the selection. The stage's upper-right zoom control keeps the current percentage visible, and overflowing workspace sidebars scroll independently.
 - `src/layout/ShellComponents.tsx` contains the surrounding shell. Extend the stage while preserving panel toggles, status bar, and selective Zustand subscriptions.
 - `src/project/files.ts` and the Rust commands in `src-tauri/src/commands/file_io.rs` provide validated local project open/save. Keep rendered edits in the project model so the existing save and autosave flows continue to persist them.
 - `src/commands/registry.tsx` is the extension point for new user commands; global shortcuts are handled in `src/commands/shortcuts.ts`.
 
-Shape drawing tools, selection transforms, widget inspector editing, and screen/layer editing are still to be implemented.
+Selection transforms, widget inspector editing, and screen/layer editing are still to be implemented.
 
 ### `.pflow` project schema
 

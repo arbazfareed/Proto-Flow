@@ -73,7 +73,12 @@ export const WidgetStyleSchema = z
     fill: HexColorSchema.nullable().optional(),
     stroke: HexColorSchema.nullable().optional(),
     strokeWidth: z.number().finite().nonnegative().optional(),
-    cornerRadius: z.number().finite().nonnegative().optional(),
+    cornerRadius: z
+      .union([
+        z.number().finite().nonnegative(),
+        z.array(z.number().finite().nonnegative()).length(4),
+      ])
+      .optional(),
     shadow: WidgetShadowSchema.optional(),
   })
   .strict();

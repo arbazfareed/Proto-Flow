@@ -80,6 +80,10 @@
 .breadcrumb svg { color:#62626b; }
 .breadcrumb-muted { color:#777780; }
 .canvas-toolbar-actions { gap:10px; }
+.shape-tools { display:flex; align-items:center; gap:2px; padding-right:8px; border-right:1px solid #303137; }
+.shape-tool-button { width:26px; height:26px; flex:0 0 26px; color:#9999a3; }
+.shape-tool-button:hover,.shape-tool-button.is-active { color:#e8ddff; background:#292431; }
+.canvas-toolbar-actions .canvas-view-menu-anchor { flex:0 0 auto; }
 .canvas-mode { display:flex; align-items:center; gap:7px; padding:5px 8px; border:1px solid #303137; border-radius:5px; color:#a8a8b1; font-size:9px; }
 .canvas-view-menu-anchor { position:relative; }
 .canvas-view-menu-anchor>.icon-button.is-active { color:#e8ddff; background:#292431; }
@@ -100,6 +104,7 @@
 .canvas-stage-surface { position:absolute; inset:0; overflow:hidden; touch-action:none; }
 .canvas-stage-surface.is-space-ready { cursor:grab; }
 .canvas-stage-surface.is-panning { cursor:grabbing; }
+.canvas-stage-surface.is-drawing { cursor:crosshair; }
 .canvas-stage-surface canvas { cursor:inherit; }
 .canvas-empty-state { position:absolute; z-index:1; top:50%; left:50%; width:min(390px,80%); display:flex; align-items:center; flex-direction:column; transform:translate(-50%,-50%); text-align:center; pointer-events:none; }
 .canvas-empty-state button { pointer-events:auto; }
