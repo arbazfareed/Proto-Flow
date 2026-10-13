@@ -508,7 +508,6 @@ export function CanvasStage({
   const [shapeDraft, setShapeDraft] = useState<ShapeDraft | null>(null);
   const [selectionDraft, setSelectionDraft] = useState<SelectionDraft | null>(null);
   const [canvasDropFeedback, setCanvasDropFeedback] = useState<CanvasDropFeedback | null>(null);
-  const [hoveredWidgetId, setHoveredWidgetId] = useState<string | null>(null);
   const [editing, setEditing] = useState<{
     widgetId: string;
     key: EditableWidgetText["key"];
@@ -542,6 +541,7 @@ export function CanvasStage({
   );
   const activeBreakpointId = useStore((state) => state.activeBreakpointId);
   const selectedIds = useStore((state) => state.selectedIds);
+  const hoveredWidgetId = useStore((state) => state.hoveredWidgetId);
   useEffect(() => {
     activeToolRef.current = activeTool;
   }, [activeTool]);
@@ -1770,7 +1770,7 @@ export function CanvasStage({
                   }
                   onEdit={() => beginWidgetTextEdit(widget)}
                   onHover={(hovered) =>
-                    setHoveredWidgetId(hovered ? widget.id : null)
+                    useStore.getState().setCanvasHoveredWidget(hovered ? widget.id : null)
                   }
                   onSelect={(event) => {
                     if (widget.locked) return;

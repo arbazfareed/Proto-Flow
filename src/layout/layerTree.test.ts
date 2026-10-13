@@ -1,0 +1,136 @@
+import { describe, expect, it } from "vitest";
+import type { Widget } from "../project/schema";
+import {
+  buildLayerHierarchy,
+  filterLayerHierarchy,
+  flattenLayerHierarchy,
+  getContainerBadge,
+  isLayerContainer,
+} from "./layerTree";
+
+function widget(
+  id: string,
+  type: string,
+  zIndex: number,
+  groupId?: string,
+): Widget {
+  return {
+    id,
+    type,
+    groupId,
+    x: 0,
+    y: 0,
+    width: 100,
+    height: 40,
+    rotation: 0,
+    opacity: 1,
+    visible: true,
+    locked: false,
+    zIndex,
+    style: {},
+    props: {},
+  };
+}
+
+describe("layer hierarchy", () => {
+  it("nests container children and semantic groups without flattening descendants", () => {
+    const widgets = [
+      widget("frame", "frame", 0),
+      widget("title", "text", 4, "frame"),
+      widget("form", "group", 3, "frame"),
+      widget("button", "button", 2, "form"),
+      widget("shape", "rectangle", 1),
+    ];
+    const roots = buildLayerHierarchy(widgets, (item) => item.id);
+
+    expect(roots.map((node) => node.id)).toEqual(["frame", "shape"]);
+    expect(roots[0].children.map((node) => node.id)).toEqual(["title", "form"]);
+    expect(roots[0].children[1].children.map((node) => node.id)).toEqual(["button"]);
+    expect(roots[0].descendantCount).toBe(3);
+  });
+
+  it("represents Ctrl+G groups as expandable virtual containers", () => {
+    const roots = buildLayerHierarchy(
+      [widget("one", "text", 5, "semantic-id"), widget("two", "image", 4, "semantic-id")],
+      (item) => item.id,
+    );
+
+    expect(roots).toHaveLength(1);
+    expect(roots[0]).toMatchObject({ kind: "group", groupId: "semantic-id", descendantCount: 2 });
+    expect(roots[0].children.map((node) => node.id)).toEqual(["one", "two"]);
+  });
+
+  it("flattens nested nodes with depth, branch metadata, and persisted collapse keys", () => {
+    const roots = buildLayerHierarchy([
+      widget("frame", "frame", 5),
+      widget("first", "text", 4, "frame"),
+      widget("second", "text", 3, "frame"),
+      widget("last", "text", 2),
+    ], (item) => item.id);
+    const entries = flattenLayerHierarchy(roots, new Set());
+
+    expect(entries.map(({ node, depth, isLastChild }) => [node.id, depth, isLastChild]))
+      .toEqual([
+        ["frame", 0, false],
+        ["first", 1, false],
+        ["second", 1, true],
+        ["last", 0, true],
+      ]);
+    expect(entries[1].ancestorContinues).toEqual([true]);
+    expect(entries.map(({ position, siblingCount }) => [position, siblingCount]))
+      .toEqual([[1, 2], [1, 2], [2, 2], [2, 2]]);
+    expect(flattenLayerHierarchy(roots, new Set(["container:frame"])).map(({ node }) => node.id))
+      .toEqual(["frame", "last"]);
+  });
+
+  it("retains matching descendants and only the ancestors needed to show their hierarchy", () => {
+    const roots = buildLayerHierarchy([
+      widget("frame", "frame", 5),
+      widget("button", "button", 4, "frame"),
+      widget("unmatched", "text", 3),
+    ], (item) => item.id);
+    const filtered = filterLayerHierarchy(
+      roots,
+      (node) => node.widget?.type === "button",
+    );
+
+    expect(filtered.map((node) => node.id)).toEqual(["frame"]);
+    expect(filtered[0].children.map((node) => node.id)).toEqual(["button"]);
+  });
+
+  it("handles cyclic or orphaned parent references without recursing forever", () => {
+    const roots = buildLayerHierarchy([
+      widget("first", "frame", 2, "second"),
+      widget("second", "frame", 1, "first"),
+      widget("orphan", "text", 0, "missing-container"),
+    ], (item) => item.id);
+
+    expect(flattenLayerHierarchy(roots, new Set())
+      .flatMap(({ node }) => node.widget ? [node.widget.id] : [])
+      .sort())
+      .toEqual(["first", "orphan", "second"]);
+  });
+
+  it("flattens large expanded trees so the sidebar can virtualize their rows", () => {
+    const widgets = Array.from({ length: 500 }, (_, index) =>
+      widget(`widget-${index}`, "text", 500 - index),
+    );
+    const entries = flattenLayerHierarchy(buildLayerHierarchy(widgets, (item) => item.id), new Set());
+
+    expect(entries).toHaveLength(500);
+    expect(entries[0].node.id).toBe("widget-0");
+  });
+
+  it("identifies container types and renders useful state and row count badges", () => {
+    const frame = widget("frame", "frame", 0);
+    const repeater = { ...widget("repeater", "repeater", 0), props: { rows: 3 } };
+    const panel = { ...widget("panel", "panel", 0), props: { states: ["default", "open"] } };
+
+    expect(isLayerContainer(frame)).toBe(true);
+    expect(isLayerContainer(widget("button", "button", 0))).toBe(false);
+    expect(getContainerBadge(frame, 0)).toBe("empty");
+    expect(getContainerBadge(frame, 1)).toBe("1 child");
+    expect(getContainerBadge(repeater, 0)).toBe("3 rows");
+    expect(getContainerBadge(panel, 0)).toBe("2 states");
+  });
+});

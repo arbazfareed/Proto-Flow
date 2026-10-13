@@ -21,4 +21,13 @@ describe("layer tree virtualization", () => {
       bottomSpacerHeight: 0,
     });
   });
+
+  it("clamps a stale scroll position after the tree collapses", () => {
+    expect(getVirtualizedRange(3, 6_000, 300, 30)).toEqual({
+      start: 0,
+      end: 3,
+      topSpacerHeight: 0,
+      bottomSpacerHeight: 0,
+    });
+  });
 });

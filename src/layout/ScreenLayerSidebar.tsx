@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import type { DragEvent, KeyboardEvent as ReactKeyboardEvent } from "react";
+import type { CSSProperties, DragEvent, KeyboardEvent as ReactKeyboardEvent } from "react";
 import {
   ChevronDown,
   ChevronRight,
@@ -55,16 +55,25 @@ import type { LayerTreePreferences } from "./layerTreePreferences";
 import { WidgetThumbnail } from "./WidgetThumbnail";
 import { WidgetIcon } from "./widgetIcons";
 import { ScreenThumbnail } from "./ScreenThumbnail";
+import {
+  buildLayerHierarchy,
+  filterLayerHierarchy,
+  flattenLayerHierarchy,
+  getContainerBadge,
+  getLayerTreeCollapseKey,
+  isLayerContainer,
+} from "./layerTree";
+import type { FlattenedLayerTreeEntry, LayerTreeNode } from "./layerTree";
 
 type MenuState =
   | { kind: "screen" | "layer" | "group"; id: string; x: number; y: number }
   | null;
 
 type DropIndicator = { id: string; edge: "before" | "after" } | null;
+type LayerDropIndicator = { id: string; edge: "before" | "after" | "inside" } | null;
 type LayerTreeEntry =
-  | { kind: "category"; group: LayerGroup; collapsed: boolean }
-  | { kind: "group"; id: string; members: Widget[]; collapsed: boolean }
-  | { kind: "widget"; widget: Widget; nested: boolean };
+  | { kind: "category"; group: LayerGroup; collapsed: boolean; visibleCount: number }
+  | ({ kind: "node" } & FlattenedLayerTreeEntry);
 const LAYER_ROW_HEIGHT = 30;
 const SCREEN_ROW_HEIGHT = 152;
 
@@ -116,6 +125,48 @@ function widgetLabel(widget: Widget): string {
   const value = widget.props.label ?? widget.props.text ?? widget.props.fileName;
   if (typeof value === "string" && value.trim()) return value.trim();
   return getShapeToolDefinition(widget.type)?.label ?? widget.type;
+}
+
+function categoryAccent(widget: Widget): string {
+  return LAYER_CATEGORY_DEFINITIONS[
+    getLayerCategory(widget.type, widget.layerCategory)
+  ].badge;
+}
+
+function wouldCreateLayerCycle(
+  widgets: readonly Widget[],
+  draggedIds: readonly string[],
+  targetId: string,
+): boolean {
+  const dragged = new Set(draggedIds);
+  if (dragged.has(targetId)) return true;
+  const widgetsById = new Map(widgets.map((widget) => [widget.id, widget]));
+  const visited = new Set<string>();
+  let ancestorId = widgetsById.get(targetId)?.groupId;
+  while (ancestorId && !visited.has(ancestorId)) {
+    if (dragged.has(ancestorId)) return true;
+    visited.add(ancestorId);
+    ancestorId = widgetsById.get(ancestorId)?.groupId;
+  }
+  return false;
+}
+
+function findLayerTreeNode(
+  nodes: readonly LayerTreeNode[],
+  widgetId: string,
+): LayerTreeNode | undefined {
+  for (const node of nodes) {
+    if (node.widget?.id === widgetId) return node;
+    const nested = findLayerTreeNode(node.children, widgetId);
+    if (nested) return nested;
+  }
+  return undefined;
+}
+
+function layerNodeDomId(node: LayerTreeNode): string {
+  return node.widget
+    ? `layer-row-${node.widget.id}`
+    : `layer-group-${node.groupId ?? node.id}`;
 }
 
 function beginLayerDrag(
@@ -176,7 +227,7 @@ function beginLayerDrag(
     ghost.append(placeholder);
   }
   const caption = document.createElement("span");
-  caption.textContent = `${label}${widgets.length > 1 ? `  +${widgets.length - 1}` : ""}`;
+  caption.textContent = `${label} · ${widgets.length} item${widgets.length === 1 ? "" : "s"}`;
   ghost.append(caption);
   document.body.append(ghost);
   event.dataTransfer.setDragImage(ghost, 34, 34);
@@ -285,6 +336,7 @@ export function ScreenLayerSidebar() {
   const activeScreenId = useStore((state) => state.getActiveScreenId());
   const activeBreakpointId = useStore((state) => state.activeBreakpointId);
   const selectedIds = useStore((state) => state.selectedIds);
+  const hoveredWidgetId = useStore((state) => state.hoveredWidgetId);
   const activeScreen = project.screens.find((screen) => screen.id === activeScreenId);
   const [menu, setMenu] = useState<MenuState>(null);
   const [renamingScreenId, setRenamingScreenId] = useState<string | null>(null);
@@ -294,7 +346,7 @@ export function ScreenLayerSidebar() {
   const [deviceTargetScreenId, setDeviceTargetScreenId] = useState<string | null>(null);
   const [draggedScreenId, setDraggedScreenId] = useState<string | null>(null);
   const [draggedLayerIds, setDraggedLayerIds] = useState<string[]>([]);
-  const [dropIndicator, setDropIndicator] = useState<DropIndicator>(null);
+  const [dropIndicator, setDropIndicator] = useState<LayerDropIndicator>(null);
   const [collapsedByScreen, setCollapsedByScreen] = useState(() =>
     readCollapsedGroups(project.id),
   );
@@ -319,6 +371,8 @@ export function ScreenLayerSidebar() {
   const screenListRef = useRef<HTMLDivElement>(null);
   const previousWidgetIdsRef = useRef<{ screenId: string; ids: Set<string> } | null>(null);
   const recentWidgetTimersRef = useRef(new Map<string, number>());
+  const autoExpandTimerRef = useRef<number | null>(null);
+  const autoExpandTargetRef = useRef<string | null>(null);
 
   useEffect(() => {
     const list = screenListRef.current;
@@ -356,6 +410,7 @@ export function ScreenLayerSidebar() {
 
   useEffect(() => () => {
     for (const timer of recentWidgetTimersRef.current.values()) window.clearTimeout(timer);
+    if (autoExpandTimerRef.current !== null) window.clearTimeout(autoExpandTimerRef.current);
   }, []);
 
   useEffect(() => {
@@ -550,43 +605,61 @@ export function ScreenLayerSidebar() {
     layerPreferences.groupNames,
     layerPreferences.groupOrder,
   ]);
+  const hierarchyRoots = useMemo(() => {
+    const roots = buildLayerHierarchy(activeScreen?.widgets ?? [], widgetLabel);
+    const query = categorySearch.trim().toLowerCase();
+    return query
+      ? filterLayerHierarchy(roots, (node) =>
+          node.label.toLowerCase().includes(query) ||
+          node.widget?.type.toLowerCase().includes(query) === true ||
+          LAYER_CATEGORY_DEFINITIONS[node.category].label.toLowerCase().includes(query),
+        )
+      : roots;
+  }, [activeScreen, categorySearch]);
   const layerEntries = useMemo<LayerTreeEntry[]>(() => {
     const entries: LayerTreeEntry[] = [];
+    const collapsedIds = new Set(collapsedGroups);
+    const groupWidgetIds = new Set<string>();
+    const claimedRootIds = new Set<string>();
+    const addDescendantIds = (node: LayerTreeNode) => {
+      if (node.widget) groupWidgetIds.add(node.widget.id);
+      node.children.forEach(addDescendantIds);
+    };
+    const appendRoots = (roots: LayerTreeNode[]) => {
+      const flattened = flattenLayerHierarchy(roots, collapsedIds);
+      for (const entry of flattened) entries.push({ kind: "node", ...entry });
+    };
+
+    if (layerMode === "z-order") {
+      appendRoots(hierarchyRoots);
+      return entries;
+    }
+
     for (const group of layerGroups) {
       const collapsed = collapsedGroups.includes(layerGroupCollapseKey(layerMode, group.id));
-      if (layerMode !== "z-order") {
-        entries.push({ kind: "category", group, collapsed });
-      }
-      if (!collapsed) {
-        const visitedGroups = new Set<string>();
-        for (const widget of group.widgets) {
-          if (!widget.groupId) {
-            entries.push({ kind: "widget", widget, nested: layerMode !== "z-order" });
-            continue;
-          }
-          if (visitedGroups.has(widget.groupId)) continue;
-          visitedGroups.add(widget.groupId);
-          const members = group.widgets.filter((item) => item.groupId === widget.groupId);
-          const semanticCollapseKey = `semantic:${widget.groupId}`;
-          const groupCollapsed = collapsedGroups.includes(semanticCollapseKey);
-          entries.push({
-            kind: "group",
-            id: widget.groupId,
-            members,
-            collapsed: groupCollapsed,
-          });
-          if (!groupCollapsed) {
-            entries.push(...members.map((member) => ({
-              kind: "widget" as const,
-              widget: member,
-              nested: true,
-            })));
-          }
-        }
-      }
+      const matchingWidgetIds = new Set(group.widgets.map((widget) => widget.id));
+      const roots = hierarchyRoots.filter((root) => {
+        if (claimedRootIds.has(root.id)) return false;
+        groupWidgetIds.clear();
+        addDescendantIds(root);
+        const containsMatchingWidget = [...groupWidgetIds].some((id) => matchingWidgetIds.has(id));
+        const isPrimaryGroup = layerMode === "category"
+          ? root.category === group.category
+          : root.widget?.type === group.id ||
+            (!root.widget && root.children[0]?.widget?.type === group.id);
+        const matches = categorySearch.trim()
+          ? containsMatchingWidget
+          : isPrimaryGroup;
+        if (matches) claimedRootIds.add(root.id);
+        return matches;
+      });
+      if (roots.length === 0) continue;
+      entries.push({ kind: "category", group, collapsed, visibleCount: roots.length });
+      if (!collapsed) appendRoots(roots);
+      groupWidgetIds.clear();
     }
     return entries;
-  }, [collapsedGroups, layerGroups, layerMode]);
+  }, [categorySearch, collapsedGroups, hierarchyRoots, layerGroups, layerMode]);
   const virtualizedRange = getVirtualizedRange(
     layerEntries.length,
     layerScrollTop,
@@ -594,6 +667,76 @@ export function ScreenLayerSidebar() {
     LAYER_ROW_HEIGHT,
   );
   const visibleLayerEntries = layerEntries.slice(virtualizedRange.start, virtualizedRange.end);
+  const visibleLayerNodeIds = new Set(
+    visibleLayerEntries
+      .filter((entry): entry is Extract<LayerTreeEntry, { kind: "node" }> => entry.kind === "node")
+      .map((entry) => entry.node.id),
+  );
+  useEffect(() => {
+    const focusWidgetId = hoveredWidgetId ?? selectedIds[0];
+    if (!focusWidgetId) return;
+    const findAncestors = (
+      nodes: readonly LayerTreeNode[],
+      targetId: string,
+      ancestors: string[] = [],
+    ): string[] | null => {
+      for (const node of nodes) {
+        const nextAncestors = getLayerTreeCollapseKey(node)
+          ? [...ancestors, getLayerTreeCollapseKey(node)!]
+          : ancestors;
+        if (node.widget?.id === targetId) return ancestors;
+        const nested = findAncestors(node.children, targetId, nextAncestors);
+        if (nested) return nested;
+      }
+      return null;
+    };
+    const ancestors = findAncestors(
+      buildLayerHierarchy(activeScreen?.widgets ?? [], widgetLabel),
+      focusWidgetId,
+    );
+    const categoryKeys = layerMode === "z-order"
+      ? []
+      : layerGroups
+          .filter((group) => group.widgets.some((widget) => widget.id === focusWidgetId))
+          .map((group) => layerGroupCollapseKey(layerMode, group.id));
+    const collapsedPath = [...(ancestors ?? []), ...categoryKeys];
+    if (collapsedPath.some((key) => collapsedGroups.includes(key))) {
+      const nextCollapsed = collapsedGroups.filter((key) => !collapsedPath.includes(key));
+      const next = { ...collapsedByScreen, [activeScreenId]: nextCollapsed };
+      setCollapsedByScreen(next);
+      try {
+        localStorage.setItem(collapsedStorageKey(project.id), JSON.stringify(next));
+      } catch (error) {
+        console.error("Could not save the layer-tree collapse state.", error);
+      }
+      return;
+    }
+    const entryIndex = layerEntries.findIndex(
+      (entry) => entry.kind === "node" && entry.node.widget?.id === focusWidgetId,
+    );
+    if (entryIndex < 0) return;
+    const rowTop = entryIndex * LAYER_ROW_HEIGHT;
+    const list = layerTreeRef.current;
+    if (list && (rowTop < list.scrollTop || rowTop + LAYER_ROW_HEIGHT > list.scrollTop + list.clientHeight)) {
+      list.scrollTop = rowTop;
+      setLayerScrollTop(rowTop);
+    }
+    const frame = window.requestAnimationFrame(() => {
+      document.getElementById(`layer-row-${focusWidgetId}`)?.scrollIntoView({ block: "nearest" });
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [
+    activeScreen,
+    activeScreenId,
+    collapsedByScreen,
+    collapsedGroups,
+    hoveredWidgetId,
+    layerEntries,
+    project.id,
+    layerGroups,
+    layerMode,
+    selectedIds,
+  ]);
   const screenVirtualizedRange = project.screens.length > 20
     ? getVirtualizedRange(
         project.screens.length,
@@ -761,15 +904,38 @@ export function ScreenLayerSidebar() {
     }
   };
 
+  const setTreeCollapsed = (root: LayerTreeNode, collapsed: boolean) => {
+    const keys = new Set<string>();
+    const visit = (node: LayerTreeNode) => {
+      const key = getLayerTreeCollapseKey(node);
+      if (key) keys.add(key);
+      node.children.forEach(visit);
+    };
+    visit(root);
+    const nextForScreen = collapsed
+      ? [...new Set([...collapsedGroups, ...keys])]
+      : collapsedGroups.filter((key) => !keys.has(key));
+    const next = { ...collapsedByScreen, [activeScreenId]: nextForScreen };
+    setCollapsedByScreen(next);
+    try {
+      localStorage.setItem(collapsedStorageKey(project.id), JSON.stringify(next));
+    } catch (error) {
+      console.error("Could not save the layer-tree collapse state.", error);
+    }
+  };
+
   const setAllGroupsCollapsed = (collapsed: boolean) => {
     const activeKeys = new Set(
-      buildLayerGroups(
-        activeScreen?.widgets ?? [],
-        layerMode,
-        [],
-        (type) => getShapeToolDefinition(type)?.label ?? type,
-      ).map((group) => layerGroupCollapseKey(layerMode, group.id)),
+      buildLayerGroups(activeScreen?.widgets ?? [], layerMode, []).map(
+        (group) => layerGroupCollapseKey(layerMode, group.id),
+      ),
     );
+    const collectTreeKeys = (node: LayerTreeNode) => {
+      const key = getLayerTreeCollapseKey(node);
+      if (key) activeKeys.add(key);
+      node.children.forEach(collectTreeKeys);
+    };
+    buildLayerHierarchy(activeScreen?.widgets ?? [], widgetLabel).forEach(collectTreeKeys);
     const nextForScreen = collapsed
       ? [...new Set([...collapsedGroups, ...activeKeys])]
       : collapsedGroups.filter((id) => !activeKeys.has(id));
@@ -896,24 +1062,88 @@ export function ScreenLayerSidebar() {
   };
 
   const navigateLayerTree = (event: ReactKeyboardEvent<HTMLDivElement>) => {
-    if (event.key === "Enter" || event.key === " ") {
+    if (
+      event.target !== event.currentTarget &&
+      event.target instanceof HTMLElement &&
+      event.target.closest("button, input")
+    ) return;
+    const collapseKey = event.currentTarget.dataset.collapseKey;
+    const widgetId = event.currentTarget.dataset.widgetId;
+    const widget = widgetId ? activeScreen?.widgets.find((item) => item.id === widgetId) : undefined;
+    const expanded = event.currentTarget.getAttribute("aria-expanded") === "true";
+    const currentIndex = Number(event.currentTarget.dataset.entryIndex);
+    const getDepth = (index: number) => {
+      const entry = layerEntries[index];
+      return entry?.kind === "node" ? entry.depth : 0;
+    };
+    const focusEntry = (index: number) => {
+      const list = layerTreeRef.current;
+      if (!list || index < 0 || index >= layerEntries.length) return;
+      const row = list.querySelector<HTMLElement>(`[data-entry-index="${index}"]`);
+      if (row) {
+        row.focus();
+        return;
+      }
+      const top = index * LAYER_ROW_HEIGHT;
+      list.scrollTop = Math.max(0, top - Math.floor(list.clientHeight / 2));
+      setLayerScrollTop(list.scrollTop);
+      window.requestAnimationFrame(() => {
+        list.querySelector<HTMLElement>(`[data-entry-index="${index}"]`)?.focus();
+      });
+    };
+    const consumeTreeKey = () => {
       event.preventDefault();
+      event.stopPropagation();
+    };
+    if (event.key === "Enter") {
+      consumeTreeKey();
       const groupId = event.currentTarget.dataset.groupId;
-      if (groupId?.startsWith("semantic:")) {
-        toggleGroup(groupId.slice("semantic:".length), groupId);
+      if (collapseKey) {
+        toggleGroup(widgetId ?? groupId?.replace(/^semantic:/, "") ?? collapseKey, collapseKey);
       } else if (groupId) {
         toggleGroup(groupId);
+      } else if (widget) {
+        beginWidgetRename(widget);
+      }
+      return;
+    }
+    if (event.key === " " && widget) {
+      consumeTreeKey();
+      setWidgetProperty(widget.id, { visible: !widget.visible });
+      if (widget.visible && selectedIds.includes(widget.id)) {
+        useStore.getState().select(selectedIds.filter((id) => id !== widget.id));
+      }
+      return;
+    }
+    if (event.key === "ArrowRight" && collapseKey) {
+      consumeTreeKey();
+      if (!expanded) {
+        toggleGroup(widgetId ?? collapseKey.replace(/^semantic:/, ""), collapseKey);
+      } else {
+        if (getDepth(currentIndex + 1) === getDepth(currentIndex) + 1) {
+          focusEntry(currentIndex + 1);
+        }
+      }
+      return;
+    }
+    if (event.key === "ArrowLeft") {
+      consumeTreeKey();
+      if (collapseKey && expanded) {
+        toggleGroup(widgetId ?? collapseKey.replace(/^semantic:/, ""), collapseKey);
+      } else {
+        const currentLevel = Number(event.currentTarget.getAttribute("aria-level") ?? 1);
+        let parentIndex = currentIndex - 1;
+        while (parentIndex >= 0 && getDepth(parentIndex) + 1 >= currentLevel) parentIndex -= 1;
+        if (parentIndex >= 0) focusEntry(parentIndex);
       }
       return;
     }
     if (event.key !== "ArrowDown" && event.key !== "ArrowUp") return;
-    event.preventDefault();
-    const treeItems = [...(layerTreeRef.current?.querySelectorAll<HTMLElement>('[role="treeitem"]') ?? [])];
-    const currentIndex = treeItems.indexOf(event.currentTarget);
+    consumeTreeKey();
     const nextIndex = event.key === "ArrowDown"
-      ? Math.min(treeItems.length - 1, currentIndex + 1)
+      ? Math.min(layerEntries.length - 1, currentIndex + 1)
       : Math.max(0, currentIndex - 1);
-    treeItems[nextIndex]?.focus();
+    focusEntry(nextIndex);
   };
 
   const updateScreenOrder = (draggedId: string, targetId: string, edge: "before" | "after") => {
@@ -939,15 +1169,27 @@ export function ScreenLayerSidebar() {
     delete event.currentTarget.dataset.dropEdge;
   };
 
+  const clearAutoExpandTimer = () => {
+    if (autoExpandTimerRef.current !== null) {
+      window.clearTimeout(autoExpandTimerRef.current);
+      autoExpandTimerRef.current = null;
+    }
+    autoExpandTargetRef.current = null;
+  };
+
   const layerDragOver = (
     event: DragEvent<HTMLElement>,
     targetId: string,
     canContain = false,
+    collapseKey = canContain ? `container:${targetId}` : null,
   ) => {
     if (draggedLayerIds.length === 0 || draggedLayerIds.includes(targetId)) return;
     event.preventDefault();
     const bounds = event.currentTarget.getBoundingClientRect();
-    const edge = event.clientY < bounds.top + bounds.height / 2 ? "before" : "after";
+    const offset = event.clientY - bounds.top;
+    const edge = canContain && offset > bounds.height * 0.2 && offset < bounds.height * 0.8
+      ? "inside"
+      : offset < bounds.height / 2 ? "before" : "after";
     setDropIndicator({ id: targetId, edge });
     const tree = layerTreeRef.current;
     if (tree) {
@@ -957,19 +1199,44 @@ export function ScreenLayerSidebar() {
       if (topDistance < 28) tree.scrollTop -= Math.max(1, Math.ceil((28 - topDistance) / 28 * 6));
       else if (bottomDistance < 28) tree.scrollTop += Math.max(1, Math.ceil((28 - bottomDistance) / 28 * 6));
     }
-    if (canContain && event.currentTarget.classList.contains("layer-group-row")) return;
+    if (edge === "inside" && canContain && collapseKey) {
+      if (collapsedGroups.includes(collapseKey) && autoExpandTargetRef.current !== targetId) {
+        if (autoExpandTimerRef.current !== null) window.clearTimeout(autoExpandTimerRef.current);
+        autoExpandTargetRef.current = targetId;
+        autoExpandTimerRef.current = window.setTimeout(() => {
+          toggleGroup(targetId, collapseKey);
+          autoExpandTimerRef.current = null;
+          autoExpandTargetRef.current = null;
+        }, 500);
+      } else if (!collapsedGroups.includes(collapseKey) && autoExpandTargetRef.current !== targetId) {
+        clearAutoExpandTimer();
+      }
+    } else if (autoExpandTimerRef.current !== null) {
+      window.clearTimeout(autoExpandTimerRef.current);
+      autoExpandTimerRef.current = null;
+      autoExpandTargetRef.current = null;
+    }
   };
 
   const layerDrop = (event: DragEvent<HTMLElement>, targetId: string, groupId?: string) => {
     event.preventDefault();
     event.stopPropagation();
-    if (!activeScreen || draggedLayerIds.length === 0) return;
+    if (!activeScreen || draggedLayerIds.length === 0) {
+      clearAutoExpandTimer();
+      return;
+    }
+    clearAutoExpandTimer();
     if (draggedLayerIds.includes(targetId)) {
       setDraggedLayerIds([]);
       setDropIndicator(null);
       return;
     }
     if (groupId) {
+      if (wouldCreateLayerCycle(activeScreen.widgets, draggedLayerIds, groupId)) {
+        setDraggedLayerIds([]);
+        setDropIndicator(null);
+        return;
+      }
       if (draggedLayerIds.every((id) =>
         activeScreen.widgets.find((widget) => widget.id === id)?.groupId === groupId,
       )) {
@@ -990,7 +1257,7 @@ export function ScreenLayerSidebar() {
               },
         ),
       }));
-    } else if (dropIndicator?.id === targetId) {
+    } else if (dropIndicator?.id === targetId && dropIndicator.edge !== "inside") {
       editProject((current) => ({
         ...current,
         screens: current.screens.map((screen) =>
@@ -1002,7 +1269,7 @@ export function ScreenLayerSidebar() {
                   screen.widgets,
                   draggedLayerIds,
                   targetId,
-                  dropIndicator.edge,
+                  dropIndicator.edge === "after" ? "after" : "before",
                 );
                 return {
                   ...screen,
@@ -1038,18 +1305,55 @@ export function ScreenLayerSidebar() {
     setRenamingWidgetId(null);
   };
 
-  const renderWidgetRow = (widget: Widget, nested = false) => {
+  const renderWidgetRow = (
+    widget: Widget,
+    entry: FlattenedLayerTreeEntry,
+    entryIndex: number,
+  ) => {
     const definition = getShapeToolDefinition(widget.type);
     const selected = selectedIds.includes(widget.id);
     const label = widgetLabel(widget);
+    const container = isLayerContainer(widget);
+    const hasChildren = entry.node.children.length > 0;
+    const collapseKey = getLayerTreeCollapseKey(entry.node);
+    const indentation = Math.min(entry.depth, 5) * 16;
+    const childBadge = getContainerBadge(widget, entry.node.children.length);
+    const ownedChildIds = entry.node.children
+      .filter((child) => visibleLayerNodeIds.has(child.id))
+      .map(layerNodeDomId)
+      .join(" ");
+    const invalidDrop = container &&
+      draggedLayerIds.length > 0 &&
+      wouldCreateLayerCycle(activeScreen?.widgets ?? [], draggedLayerIds, widget.id);
     return (
       <div
         key={widget.id}
-        className={`layer-row${nested ? " is-nested" : ""}${selected ? " is-selected" : ""}${widget.locked ? " is-locked" : ""}${!widget.visible ? " is-hidden" : ""}${["symbol", "symbol-instance", "symbolInstance"].includes(widget.type) ? " is-symbol" : ""}${recentWidgetIds.has(widget.id) ? " is-new" : ""}${dropIndicator?.id === widget.id ? ` drop-${dropIndicator.edge}` : ""}`}
+        id={`layer-row-${widget.id}`}
+        data-widget-id={widget.id}
+        data-entry-index={entryIndex}
+        className={`layer-row${entry.depth > 0 ? " is-nested" : ""}${container ? " is-container" : ""}${selected ? " is-selected" : ""}${hoveredWidgetId === widget.id ? " is-canvas-hovered" : ""}${widget.locked ? " is-locked" : ""}${!widget.visible ? " is-hidden" : ""}${invalidDrop ? " is-invalid-drop" : ""}${["symbol", "symbol-instance", "symbolInstance"].includes(widget.type) ? " is-symbol" : ""}${recentWidgetIds.has(widget.id) ? " is-new" : ""}${dropIndicator?.id === widget.id ? ` drop-${dropIndicator.edge}` : ""}`}
         role="treeitem"
-        tabIndex={-1}
+        tabIndex={selected || hoveredWidgetId === widget.id || entry.depth === 0 ? 0 : -1}
+        aria-level={entry.depth + 1}
         aria-selected={selected}
+        aria-posinset={entry.position}
+        aria-setsize={entry.siblingCount}
+        aria-owns={ownedChildIds || undefined}
+        aria-expanded={container ? (hasChildren ? !entry.collapsed : false) : undefined}
+        data-collapse-key={collapseKey ?? undefined}
+        data-depth={entry.depth}
+        style={{
+          paddingLeft: `${indentation}px`,
+          "--layer-accent": categoryAccent(widget),
+        } as CSSProperties & { "--layer-accent": string }}
         draggable={!renamingWidgetId}
+        onKeyDown={navigateLayerTree}
+        onMouseEnter={() => useStore.getState().setLayerHoveredWidget(widget.id)}
+        onMouseLeave={() => {
+          if (useStore.getState().hoveredLayerWidgetId === widget.id) {
+            useStore.getState().setLayerHoveredWidget(null);
+          }
+        }}
         onDragStart={(event) => {
           const sourceIds = selectedIds.includes(widget.id) ? selectedIds : [widget.id];
           const sourceWidgets = (activeScreen?.widgets ?? []).filter((item) =>
@@ -1058,12 +1362,23 @@ export function ScreenLayerSidebar() {
           setDraggedLayerIds(sourceWidgets.map((item) => item.id));
           beginLayerDrag(event, sourceWidgets, label);
         }}
-        onDragOver={(event) => layerDragOver(event, widget.id)}
-        onDrop={(event) => layerDrop(event, widget.id)}
+        onDragOver={(event) => layerDragOver(event, widget.id, container)}
+        onDragLeave={(event) => {
+          if (!event.currentTarget.contains(event.relatedTarget as Node | null)) {
+            clearAutoExpandTimer();
+          }
+        }}
+        onDrop={(event) => {
+          const bounds = event.currentTarget.getBoundingClientRect();
+          const offset = event.clientY - bounds.top;
+          const dropInside = container && offset > bounds.height * 0.2 && offset < bounds.height * 0.8;
+          layerDrop(event, widget.id, dropInside ? widget.id : undefined);
+        }}
         onDragEnd={() => {
           setActiveLayerDragPayload(null);
           setDraggedLayerIds([]);
           setDropIndicator(null);
+          clearAutoExpandTimer();
         }}
         onContextMenu={(event) => {
           event.preventDefault();
@@ -1105,13 +1420,69 @@ export function ScreenLayerSidebar() {
               );
             }}
           >
-            <span className="layer-chevron-spacer" aria-hidden="true" />
+            {entry.ancestorContinues.map((continues, index) => (
+              <span
+                key={index}
+                className={`layer-tree-guide${continues ? "" : " is-last-path"}`}
+                style={{ left: `${index * 16 + 8}px` }}
+                aria-hidden="true"
+              />
+            ))}
+            {entry.depth > 0 && (
+              <span
+                className={`layer-tree-branch${entry.isLastChild ? " is-last" : ""}`}
+                style={{ left: `${(entry.depth - 1) * 16 + 8}px` }}
+                aria-hidden="true"
+              />
+            )}
+            {container && collapseKey ? (
+              <button
+                className="layer-expand-toggle"
+                aria-label={hasChildren
+                  ? `${entry.collapsed ? "Expand" : "Collapse"} ${label}`
+                  : `${label} is empty`}
+                aria-expanded={hasChildren ? !entry.collapsed : false}
+                disabled={!hasChildren}
+                onClick={(event) => {
+                  event.stopPropagation();
+                  if (!hasChildren) return;
+                  if (event.altKey) {
+                    setTreeCollapsed(entry.node, !entry.collapsed);
+                  } else {
+                    toggleGroup(widget.id, collapseKey);
+                  }
+                }}
+                onContextMenu={(event) => {
+                  if (!hasChildren) return;
+                  event.preventDefault();
+                  event.stopPropagation();
+                  setMenu({ kind: "layer", id: widget.id, x: event.clientX, y: event.clientY });
+                }}
+              >
+                {!hasChildren || entry.collapsed
+                  ? <ChevronRight size={13} />
+                  : <ChevronDown size={13} />}
+              </button>
+            ) : (
+              <span className="layer-chevron-spacer" aria-hidden="true" />
+            )}
             <WidgetThumbnail widget={widget} />
             <WidgetIcon type={widget.type} />
             <span className="layer-copy">
               <span className="layer-name">{label}</span>
               <span className="layer-type">{definition?.label ?? widget.type}</span>
             </span>
+            {container && (
+              <span
+                className="layer-child-count"
+                aria-label={childBadge}
+              >
+                {entry.collapsed ? `(${childBadge})` : childBadge}
+              </span>
+            )}
+            {invalidDrop && (
+              <CircleX className="layer-invalid-drop-icon" size={14} aria-label="Invalid drop target" />
+            )}
           </button>
         )}
         <button
@@ -1148,6 +1519,15 @@ export function ScreenLayerSidebar() {
 
   const selectedGroup = categoryMenu
     ? layerGroups.find((group) => group.id === categoryMenu.id)
+    : undefined;
+  const menuLayerWidget = menu?.kind === "layer"
+    ? activeScreen?.widgets.find((widget) => widget.id === menu.id)
+    : undefined;
+  const menuLayerNode = menuLayerWidget
+    ? findLayerTreeNode(
+        buildLayerHierarchy(activeScreen?.widgets ?? [], widgetLabel),
+        menuLayerWidget.id,
+      )
     : undefined;
   const selectedGroupAllVisible = selectedGroup?.widgets.some((widget) => widget.visible) ?? false;
   const semanticGroups = [...new Set(
@@ -1493,59 +1873,148 @@ export function ScreenLayerSidebar() {
             }}
           >
             <div className="layer-virtual-spacer" style={{ height: virtualizedRange.topSpacerHeight }} aria-hidden="true" />
-            {visibleLayerEntries.map((entry) => {
-              if (entry.kind === "widget") return renderWidgetRow(entry.widget, entry.nested);
-              if (entry.kind === "group") {
-                const collapseKey = `semantic:${entry.id}`;
+            {visibleLayerEntries.map((entry, visibleIndex) => {
+              const entryIndex = virtualizedRange.start + visibleIndex;
+              if (entry.kind === "node" && entry.node.kind === "widget" && entry.node.widget) {
+                return renderWidgetRow(entry.node.widget, entry, entryIndex);
+              }
+              if (entry.kind === "node") {
+                const node = entry.node;
+                const groupId = node.groupId ?? node.id;
+                const members = node.children.flatMap((child) => child.widget ? [child.widget] : []);
+                const allMembers: Widget[] = [];
+                const collectMembers = (current: LayerTreeNode) => {
+                  if (current.widget) allMembers.push(current.widget);
+                  current.children.forEach(collectMembers);
+                };
+                node.children.forEach(collectMembers);
+                const allVisible = allMembers.length > 0 && allMembers.every((member) => member.visible);
+                const allLocked = allMembers.length > 0 && allMembers.every((member) => member.locked);
+                const collapseKey = getLayerTreeCollapseKey(node) ?? `semantic:${groupId}`;
                 const invalidDrop = draggedLayerIds.length > 0 &&
-                  entry.members.some((member) => draggedLayerIds.includes(member.id));
+                  members.some((member) => draggedLayerIds.includes(member.id));
+                const indentation = Math.min(entry.depth, 5) * 16;
                 return (
                   <div
-                    key={`semantic-${entry.id}`}
-                    className={`layer-group-row${dropIndicator?.id === entry.id ? ` drop-${dropIndicator.edge}` : ""}${dropIndicator?.id === entry.id && draggedLayerIds.length > 0 ? invalidDrop ? " is-invalid-drop" : " is-drop-target" : ""}`}
+                    key={node.id}
+                    className={`layer-group-row${entry.depth > 0 ? " is-nested" : ""}${allLocked ? " is-locked" : ""}${!allVisible ? " is-hidden" : ""}${hoveredWidgetId && allMembers.some((member) => member.id === hoveredWidgetId) ? " is-canvas-hovered" : ""}${dropIndicator?.id === groupId ? ` drop-${dropIndicator.edge}` : ""}${dropIndicator?.id === groupId && draggedLayerIds.length > 0 ? invalidDrop ? " is-invalid-drop" : " is-drop-target" : ""}`}
                     role="treeitem"
-                    tabIndex={0}
+                    tabIndex={entry.depth === 0 ? 0 : -1}
+                    data-entry-index={entryIndex}
+                    id={`layer-group-${groupId}`}
+                    aria-level={entry.depth + 1}
+                    aria-label={`Group, ${node.descendantCount} children`}
                     aria-expanded={!entry.collapsed}
-                    data-group-id={collapseKey}
+                    aria-posinset={entry.position}
+                    aria-setsize={entry.siblingCount}
+                    aria-owns={
+                      node.children
+                        .filter((child) => visibleLayerNodeIds.has(child.id))
+                        .map(layerNodeDomId)
+                        .join(" ") || undefined
+                    }
+                    data-group-id={groupId}
+                    data-collapse-key={collapseKey}
+                    data-depth={entry.depth}
+                    style={{
+                      paddingLeft: `${indentation}px`,
+                      "--layer-accent": node.children[0]?.widget
+                        ? categoryAccent(node.children[0].widget)
+                        : LAYER_CATEGORY_DEFINITIONS[node.category].badge,
+                    } as CSSProperties & { "--layer-accent": string }}
                     onKeyDown={navigateLayerTree}
-                    onClick={() => toggleGroup(entry.id, collapseKey)}
+                    onMouseEnter={() => members[0] && useStore.getState().setLayerHoveredWidget(members[0].id)}
+                    onMouseLeave={() => {
+                      if (members[0] && useStore.getState().hoveredLayerWidgetId === members[0].id) {
+                        useStore.getState().setLayerHoveredWidget(null);
+                      }
+                    }}
+                    onClick={() => toggleGroup(groupId, collapseKey)}
                     onContextMenu={(event) => {
                       event.preventDefault();
-                      setMenu({ kind: "group", id: entry.id, x: event.clientX, y: event.clientY });
+                      setMenu({ kind: "group", id: groupId, x: event.clientX, y: event.clientY });
                     }}
                     draggable
                     onDragStart={(event) => {
-                      setDraggedLayerIds(entry.members.map((member) => member.id));
-                      beginLayerDrag(event, entry.members, "Group");
+                      setDraggedLayerIds(members.map((member) => member.id));
+                      beginLayerDrag(event, members, "Group");
                     }}
                     onDragEnd={() => {
                       setActiveLayerDragPayload(null);
                       setDraggedLayerIds([]);
                       setDropIndicator(null);
+                      clearAutoExpandTimer();
                     }}
-                    onDragOver={(event) => layerDragOver(event, entry.id, true)}
-                    onDrop={(event) => layerDrop(event, entry.id, entry.id)}
+                    onDragOver={(event) => layerDragOver(event, groupId, true, collapseKey)}
+                    onDragLeave={(event) => {
+                      if (!event.currentTarget.contains(event.relatedTarget as Node | null)) {
+                        clearAutoExpandTimer();
+                      }
+                    }}
+                    onDrop={(event) => layerDrop(event, groupId, groupId)}
                   >
+                    {entry.ancestorContinues.map((continues, index) => (
+                      <span
+                        key={index}
+                        className={`layer-tree-guide${continues ? "" : " is-last-path"}`}
+                        style={{ left: `${index * 16 + 8}px` }}
+                        aria-hidden="true"
+                      />
+                    ))}
+                    {entry.depth > 0 && (
+                      <span
+                        className={`layer-tree-branch${entry.isLastChild ? " is-last" : ""}`}
+                        style={{ left: `${(entry.depth - 1) * 16 + 8}px` }}
+                        aria-hidden="true"
+                      />
+                    )}
                     <button
                       className="layer-group-toggle"
-                      aria-label={`${entry.collapsed ? "Expand" : "Collapse"} group`}
+                      aria-label={`${entry.collapsed ? "Expand" : "Collapse"} ${node.label}`}
                       onClick={(event) => {
                         event.stopPropagation();
-                        toggleGroup(entry.id, collapseKey);
+                        if (event.altKey) setTreeCollapsed(node, !entry.collapsed);
+                        else toggleGroup(groupId, collapseKey);
                       }}
                     >
                       {entry.collapsed ? <ChevronRight size={13} /> : <ChevronDown size={13} />}
                     </button>
                     <Folder size={14} aria-hidden="true" />
-                    <span className="layer-group-name">Group</span>
-                    <span className="layer-group-count">{entry.members.length}</span>
+                    <span className="layer-group-name">{node.label}</span>
+                    <span className="layer-group-count" aria-label={`${node.descendantCount} children`}>
+                      {node.descendantCount} {node.descendantCount === 1 ? "child" : "children"}
+                    </span>
+                    <button
+                      className="layer-visibility"
+                      aria-label={`${allVisible ? "Hide" : "Show"} ${node.label}`}
+                      aria-pressed={!allVisible}
+                      title={allVisible ? "Hide group" : "Show group"}
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        setWidgetsProperty(allMembers, { visible: !allVisible });
+                      }}
+                    >
+                      {allVisible ? <Eye size={13} /> : <EyeOff size={13} />}
+                    </button>
+                    <button
+                      className="layer-lock"
+                      aria-label={`${allLocked ? "Unlock" : "Lock"} ${node.label}`}
+                      aria-pressed={allLocked}
+                      title={allLocked ? "Unlock group" : "Lock group"}
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        setWidgetsProperty(allMembers, { locked: !allLocked });
+                      }}
+                    >
+                      {allLocked ? <Lock size={13} /> : <Unlock size={13} />}
+                    </button>
                     {invalidDrop && <CircleX className="layer-invalid-drop-icon" size={14} aria-label="Invalid drop target" />}
                     <button
                       className="layer-tree-action"
                       aria-label="Group options"
                       onClick={(event) => {
                         event.stopPropagation();
-                        setMenu({ kind: "group", id: entry.id, x: event.clientX, y: event.clientY });
+                        setMenu({ kind: "group", id: groupId, x: event.clientX, y: event.clientY });
                       }}
                     >
                       <MoreHorizontal size={13} />
@@ -1553,7 +2022,7 @@ export function ScreenLayerSidebar() {
                   </div>
                 );
               }
-              const { group, collapsed } = entry;
+              const { group, collapsed, visibleCount } = entry;
               const { id: groupId, widgets } = group;
               const category = LAYER_CATEGORY_DEFINITIONS[group.category];
               const displayNameKey = layerGroupNameKey(layerMode, groupId);
@@ -1564,8 +2033,9 @@ export function ScreenLayerSidebar() {
                   key={groupId}
                   category={category}
                   groupId={groupId}
+                  entryIndex={entryIndex}
                   label={isRenaming ? renameGroupDraft : currentLabel}
-                  count={widgets.length}
+                  count={visibleCount}
                   collapsed={collapsed}
                   dropEdge={categoryDropIndicator?.id === groupId ? categoryDropIndicator.edge : undefined}
                   isDropTarget={
@@ -1709,6 +2179,22 @@ export function ScreenLayerSidebar() {
           )}
           {menu.kind === "layer" && (
             <>
+              {menuLayerWidget && isLayerContainer(menuLayerWidget) && menuLayerNode?.children.length ? (
+                <>
+                  <button role="menuitem" onClick={() => {
+                    setTreeCollapsed(menuLayerNode, false);
+                    setMenu(null);
+                  }}>
+                    <ChevronDown size={14} /> Expand all
+                  </button>
+                  <button role="menuitem" onClick={() => {
+                    setTreeCollapsed(menuLayerNode, true);
+                    setMenu(null);
+                  }}>
+                    <ChevronRight size={14} /> Collapse all
+                  </button>
+                </>
+              ) : null}
               <button role="menuitem" onClick={() => {
                 const widget = activeScreen?.widgets.find((item) => item.id === menu.id);
                 if (widget) beginWidgetRename(widget);
@@ -1726,7 +2212,7 @@ export function ScreenLayerSidebar() {
           )}
           {menu.kind === "group" && (
             <>
-              <button role="menuitem" onClick={() => toggleGroup(menu.id)}>
+              <button role="menuitem" onClick={() => toggleGroup(menu.id, `semantic:${menu.id}`)}>
                 <Folder size={14} /> Toggle group
               </button>
               <button role="menuitem" onClick={() => {

@@ -29,6 +29,9 @@ export interface CanvasSlice {
   gridVisible: boolean;
   snapEnabled: boolean;
   selectedIds: string[];
+  hoveredWidgetId: string | null;
+  hoveredCanvasWidgetId: string | null;
+  hoveredLayerWidgetId: string | null;
   geometryPreview: CanvasGeometryPreview | null;
   setZoom: (zoom: number) => void;
   setPan: (x: number, y: number) => void;
@@ -38,6 +41,8 @@ export interface CanvasSlice {
   toggleSnap: () => void;
   select: (ids: string[]) => void;
   clearSelection: () => void;
+  setCanvasHoveredWidget: (widgetId: string | null) => void;
+  setLayerHoveredWidget: (widgetId: string | null) => void;
   setActiveScreen: (screenId: string) => void;
   setActiveBreakpoint: (breakpointId: string | null) => void;
   getActiveScreenId: () => string;
