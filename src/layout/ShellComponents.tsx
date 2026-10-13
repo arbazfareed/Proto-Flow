@@ -1,8 +1,10 @@
-import { lazy, Suspense, useState } from "react";
+import { lazy, Suspense, useCallback, useEffect, useRef, useState } from "react";
 import {
   ArrowDownToLine,
   ArrowRight,
   Bell,
+  ChevronDown,
+  ChevronUp,
   CircleHelp,
   FilePlus2,
   FileText,
@@ -24,6 +26,13 @@ import {
 } from "lucide-react";
 import { isTauri } from "@tauri-apps/api/core";
 import { useStore } from "../store";
+import type { Project, Widget } from "../project/schema";
+import {
+  evaluateGeometryExpression,
+  getGeometryUpdates,
+  normalizeRotation,
+  type GeometryField,
+} from "../canvas/geometryInspector";
 import {
   PRIMITIVE_TOOLS,
   WIDGET_TOOLS,
@@ -421,6 +430,477 @@ interface RightInspectorProps {
   onRename: (name: string) => void;
 }
 
+type GeometryUnit = "px" | "%";
+type UnitField = "x" | "y" | "width" | "height";
+
+interface GeometryEditSession {
+  snapshot: Project;
+  widgets: Widget[];
+  timer: number | null;
+}
+
+function GeometrySection({ widgets }: { widgets: Widget[] }) {
+  const selectedIds = useStore((state) => state.selectedIds);
+  const zoom = useStore((state) => state.zoom);
+  const pan = useStore((state) => state.pan);
+  const geometryPreview = useStore((state) => state.geometryPreview);
+  const editSessionRef = useRef<GeometryEditSession | null>(null);
+  const scrubRef = useRef<{
+    field: GeometryField;
+    startX: number;
+    startValue: number;
+  } | null>(null);
+  const [viewport, setViewport] = useState({ width: 1, height: 1 });
+  const [units, setUnits] = useState<Record<UnitField, GeometryUnit>>({
+    x: "px",
+    y: "px",
+    width: "px",
+    height: "px",
+  });
+  const [activeField, setActiveField] = useState<GeometryField | null>(null);
+  const [draft, setDraft] = useState("");
+
+  useEffect(() => {
+    const canvas = document.querySelector(".canvas-stage");
+    if (!(canvas instanceof HTMLElement)) return;
+    const observer = new ResizeObserver(() => {
+      setViewport({
+        width: Math.max(1, canvas.clientWidth),
+        height: Math.max(1, canvas.clientHeight),
+      });
+    });
+    observer.observe(canvas);
+    setViewport({
+      width: Math.max(1, canvas.clientWidth),
+      height: Math.max(1, canvas.clientHeight),
+    });
+    return () => observer.disconnect();
+  }, []);
+
+  const editableWidgets = widgets
+    .map((widget) => ({
+      ...widget,
+      ...(geometryPreview?.[widget.id] ?? {}),
+    }))
+    .filter((widget) => !widget.locked);
+  const worldWidth = viewport.width / zoom;
+  const worldHeight = viewport.height / zoom;
+  const originX = -pan.x / zoom;
+  const originY = -pan.y / zoom;
+
+  const toDisplayValue = (widget: Widget, field: GeometryField): number => {
+    if (field === "rotation") return normalizeRotation(widget.rotation);
+    if (field === "opacity") return widget.opacity * 100;
+    if (field === "x" && units.x === "%") {
+      return ((widget.x - originX) / worldWidth) * 100;
+    }
+    if (field === "y" && units.y === "%") {
+      return ((widget.y - originY) / worldHeight) * 100;
+    }
+    if (field === "width" && units.width === "%") {
+      return (widget.width / worldWidth) * 100;
+    }
+    if (field === "height" && units.height === "%") {
+      return (widget.height / worldHeight) * 100;
+    }
+    return widget[field];
+  };
+
+  const fieldValue = (field: GeometryField): number | null => {
+    if (editableWidgets.length === 0) return null;
+    const values = editableWidgets.map((widget) => toDisplayValue(widget, field));
+    if (values.some((value) => Math.abs(value - values[0]) > 0.001)) return null;
+    return values[0];
+  };
+
+  const commitEditSession = useCallback(() => {
+    const session = editSessionRef.current;
+    if (!session) return;
+    if (session.timer !== null) window.clearTimeout(session.timer);
+    editSessionRef.current = null;
+
+    const current = useStore.getState();
+    const currentWidgets =
+      current.project.screens.find((screen) => screen.id === current.project.startScreenId)?.widgets ?? [];
+    const snapshotWidgets =
+      session.snapshot.screens.find((screen) => screen.id === session.snapshot.startScreenId)?.widgets ?? [];
+    const changed = session.widgets.some((widget) => {
+      const before = snapshotWidgets.find((item) => item.id === widget.id);
+      const after = currentWidgets.find((item) => item.id === widget.id);
+      return Boolean(
+        before &&
+          after &&
+          (before.x !== after.x ||
+            before.y !== after.y ||
+            before.width !== after.width ||
+            before.height !== after.height ||
+            before.rotation !== after.rotation ||
+            before.opacity !== after.opacity),
+      );
+    });
+    if (changed) current.pushHistory(session.snapshot);
+  }, []);
+
+  const beginEdit = useCallback(
+    (field: GeometryField) => {
+      const session = editSessionRef.current;
+      if (session) {
+        if (activeField === field) return;
+        commitEditSession();
+      }
+      const current = useStore.getState();
+      const selected = current.project.screens
+        .find((screen) => screen.id === current.project.startScreenId)
+        ?.widgets.filter(
+          (widget) => selectedIds.includes(widget.id) && !widget.locked,
+        ) ?? [];
+      if (selected.length === 0) return;
+      editSessionRef.current = {
+        snapshot: current.project,
+        widgets: selected,
+        timer: null,
+      };
+    },
+    [activeField, commitEditSession, selectedIds],
+  );
+
+  const applyValue = useCallback(
+    (field: GeometryField, displayValue: number) => {
+      if (!Number.isFinite(displayValue)) return;
+      beginEdit(field);
+      const session = editSessionRef.current;
+      if (!session) return;
+
+      let value = displayValue;
+      if (field === "x" && units.x === "%") {
+        value = originX + (displayValue / 100) * worldWidth;
+      } else if (field === "y" && units.y === "%") {
+        value = originY + (displayValue / 100) * worldHeight;
+      } else if (field === "width" && units.width === "%") {
+        value = (displayValue / 100) * worldWidth;
+      } else if (field === "height" && units.height === "%") {
+        value = (displayValue / 100) * worldHeight;
+      } else if (field === "rotation") {
+        value = normalizeRotation(displayValue);
+      } else if (field === "opacity") {
+        value = displayValue / 100;
+      }
+
+      if (field === "width" || field === "height") value = Math.max(4, value);
+      if (field === "opacity") value = Math.min(1, Math.max(0, value));
+
+      const updates = getGeometryUpdates(session.widgets, field, value);
+      const updateById = new Map(updates.map((update) => [update.id, update]));
+      const current = useStore.getState();
+      const project: Project = {
+        ...current.project,
+        updatedAt: new Date().toISOString(),
+        screens: current.project.screens.map((screen) =>
+          screen.id !== current.project.startScreenId
+            ? screen
+            : {
+                ...screen,
+                widgets: screen.widgets.map((widget) => {
+                  const update = updateById.get(widget.id);
+                  return update ? { ...widget, ...update } : widget;
+                }),
+              },
+        ),
+      };
+      useStore.setState({ project, isDirty: true });
+
+      const currentSession = editSessionRef.current;
+      if (currentSession) {
+        if (currentSession.timer !== null) window.clearTimeout(currentSession.timer);
+        currentSession.timer = window.setTimeout(commitEditSession, 500);
+      }
+    },
+    [
+      beginEdit,
+      commitEditSession,
+      originX,
+      originY,
+      units.height,
+      units.width,
+      units.x,
+      units.y,
+      worldHeight,
+      worldWidth,
+    ],
+  );
+
+  const handleInputChange = (field: GeometryField, rawValue: string) => {
+    setDraft(rawValue);
+    const value = evaluateGeometryExpression(rawValue);
+    if (value === null) return;
+    applyValue(field, value);
+  };
+
+  const startScrub = (field: GeometryField, event: React.PointerEvent<HTMLLabelElement>) => {
+    if (event.button !== 0 || editableWidgets.length === 0) return;
+    event.preventDefault();
+    const value = fieldValue(field) ?? toDisplayValue(editableWidgets[0], field);
+    event.currentTarget.setPointerCapture(event.pointerId);
+    scrubRef.current = {
+      field,
+      startX: event.clientX,
+      startValue: value,
+    };
+    setActiveField(field);
+    setDraft(String(Number(value.toFixed(2))));
+    beginEdit(field);
+  };
+
+  const moveScrub = (event: React.PointerEvent<HTMLLabelElement>) => {
+    const scrub = scrubRef.current;
+    if (!scrub) return;
+    const sensitivity = event.shiftKey ? 10 : 1;
+    const value = scrub.startValue + (event.clientX - scrub.startX) * sensitivity;
+    setDraft(String(Number(value.toFixed(2))));
+    applyValue(scrub.field, value);
+  };
+
+  const finishScrub = () => {
+    if (!scrubRef.current) return;
+    scrubRef.current = null;
+    commitEditSession();
+    setActiveField(null);
+  };
+
+  const cancelEdit = () => {
+    const session = editSessionRef.current;
+    if (session) {
+      if (session.timer !== null) window.clearTimeout(session.timer);
+      editSessionRef.current = null;
+      useStore.setState({ project: session.snapshot, isDirty: true });
+    }
+    setActiveField(null);
+    setDraft("");
+  };
+
+  const finishField = () => {
+    commitEditSession();
+    setActiveField(null);
+    setDraft("");
+  };
+
+  const unitFor = (field: GeometryField): GeometryUnit | null =>
+    field === "x" || field === "y" || field === "width" || field === "height"
+      ? units[field]
+      : null;
+
+  const cycleUnit = (field: UnitField) => {
+    setUnits((current) => ({
+      ...current,
+      [field]: current[field] === "px" ? "%" : "px",
+    }));
+  };
+
+  const stepField = (field: GeometryField, direction: -1 | 1) => {
+    const currentValue =
+      evaluateGeometryExpression(activeField === field ? draft : "") ??
+      fieldValue(field) ??
+      (editableWidgets[0] ? toDisplayValue(editableWidgets[0], field) : 0);
+    const nextValue = currentValue + direction;
+    setActiveField(field);
+    setDraft(String(nextValue));
+    applyValue(field, nextValue);
+  };
+
+  const renderField = (field: GeometryField, label: string) => {
+    const commonValue = fieldValue(field);
+    const isActive = activeField === field;
+    const displayValue = isActive
+      ? draft
+      : commonValue === null
+        ? ""
+        : String(Number(commonValue.toFixed(2)));
+    const mixed = commonValue === null && editableWidgets.length > 1;
+    const unit = unitFor(field);
+    return (
+      <div className="geometry-field" key={field}>
+        <label
+          className="geometry-field-label"
+          htmlFor={`geometry-${field}`}
+          title={`Drag to adjust ${label}; hold Shift for larger steps`}
+          onPointerDown={(event) => startScrub(field, event)}
+          onPointerMove={moveScrub}
+          onPointerUp={finishScrub}
+          onPointerCancel={finishScrub}
+          onLostPointerCapture={finishScrub}
+        >
+          {label}
+        </label>
+        <div className="geometry-input-wrap">
+          <input
+            id={`geometry-${field}`}
+            className="geometry-input"
+            type="text"
+            inputMode="decimal"
+            value={displayValue}
+            placeholder={mixed ? "Mixed" : "—"}
+            aria-label={label}
+            disabled={editableWidgets.length === 0}
+            onFocus={() => {
+              setActiveField(field);
+              setDraft(commonValue === null ? "" : String(Number(commonValue.toFixed(2))));
+            }}
+            onChange={(event) => handleInputChange(field, event.currentTarget.value)}
+            onBlur={finishField}
+            onKeyDown={(event) => {
+              if (event.key === "Escape") {
+                event.preventDefault();
+                cancelEdit();
+                event.currentTarget.blur();
+                return;
+              }
+              if (event.key === "Enter") {
+                event.preventDefault();
+                finishField();
+                event.currentTarget.blur();
+                return;
+              }
+              if (event.key !== "ArrowUp" && event.key !== "ArrowDown") return;
+              event.preventDefault();
+              const currentValue =
+                evaluateGeometryExpression(displayValue) ??
+                commonValue ??
+                toDisplayValue(editableWidgets[0], field);
+              const step = event.shiftKey ? 10 : 1;
+              const nextValue =
+                currentValue + (event.key === "ArrowUp" ? step : -step);
+              setDraft(String(nextValue));
+              applyValue(field, nextValue);
+            }}
+          />
+          <span className="geometry-steppers">
+            <button
+              type="button"
+              aria-label={`Increase ${label}`}
+              disabled={editableWidgets.length === 0}
+              onMouseDown={(event) => event.preventDefault()}
+              onClick={() => stepField(field, 1)}
+            >
+              <ChevronUp size={9} />
+            </button>
+            <button
+              type="button"
+              aria-label={`Decrease ${label}`}
+              disabled={editableWidgets.length === 0}
+              onMouseDown={(event) => event.preventDefault()}
+              onClick={() => stepField(field, -1)}
+            >
+              <ChevronDown size={9} />
+            </button>
+          </span>
+          {unit && (
+            <button
+              className="geometry-unit"
+              type="button"
+              aria-label={`Cycle ${label} unit, currently ${unit}`}
+              title={`${unit === "px" ? "Switch to percent of visible canvas" : "Switch to pixels"}`}
+              disabled={editableWidgets.length === 0}
+              onClick={() => cycleUnit(field as UnitField)}
+            >
+              {unit}
+            </button>
+          )}
+        </div>
+      </div>
+    );
+  };
+
+  if (widgets.length === 0) return null;
+
+  const opacityValue = fieldValue("opacity") ?? (editableWidgets[0]?.opacity ?? 1) * 100;
+  return (
+    <section className="geometry-section" aria-label="Geometry">
+      <div className="section-label geometry-heading"><span>GEOMETRY</span></div>
+      <div className="geometry-grid">
+        {renderField("x", "X")}
+        {renderField("y", "Y")}
+        {renderField("width", "Width")}
+        {renderField("height", "Height")}
+        {renderField("rotation", "Rotation")}
+        <div className="geometry-field opacity-field">
+          <label
+            className="geometry-field-label"
+            htmlFor="geometry-opacity"
+            title="Drag to adjust opacity; hold Shift for larger steps"
+            onPointerDown={(event) => startScrub("opacity", event)}
+            onPointerMove={moveScrub}
+            onPointerUp={finishScrub}
+            onPointerCancel={finishScrub}
+            onLostPointerCapture={finishScrub}
+          >
+            Opacity
+          </label>
+          <div className="geometry-opacity-control">
+            <input
+              className="geometry-opacity-slider"
+              type="range"
+              min="0"
+              max="100"
+              step="1"
+              value={Math.min(100, Math.max(0, opacityValue))}
+              aria-label="Opacity slider"
+              disabled={editableWidgets.length === 0}
+              onPointerDown={() => beginEdit("opacity")}
+              onPointerUp={finishScrub}
+              onChange={(event) => applyValue("opacity", Number(event.currentTarget.value))}
+            />
+            <input
+              id="geometry-opacity"
+              className="geometry-input opacity-number"
+              type="text"
+              inputMode="decimal"
+              value={
+                activeField === "opacity"
+                  ? draft
+                  : fieldValue("opacity") === null
+                    ? ""
+                    : String(Number(opacityValue.toFixed(2)))
+              }
+              placeholder={fieldValue("opacity") === null ? "Mixed" : "100"}
+              aria-label="Opacity percent"
+              disabled={editableWidgets.length === 0}
+              onFocus={() => {
+                setActiveField("opacity");
+                setDraft(String(Number(opacityValue.toFixed(2))));
+              }}
+              onChange={(event) => handleInputChange("opacity", event.currentTarget.value)}
+              onBlur={finishField}
+              onKeyDown={(event) => {
+                if (event.key === "Enter") {
+                  event.preventDefault();
+                  finishField();
+                  event.currentTarget.blur();
+                } else if (event.key === "Escape") {
+                  event.preventDefault();
+                  cancelEdit();
+                  event.currentTarget.blur();
+                } else if (event.key === "ArrowUp" || event.key === "ArrowDown") {
+                  event.preventDefault();
+                  const currentValue = evaluateGeometryExpression(draft) ?? opacityValue;
+                  const step = event.shiftKey ? 10 : 1;
+                  const nextValue =
+                    currentValue + (event.key === "ArrowUp" ? step : -step);
+                  setDraft(String(nextValue));
+                  applyValue("opacity", nextValue);
+                }
+              }}
+            />
+            <span className="geometry-percent">%</span>
+          </div>
+        </div>
+      </div>
+      {editableWidgets.length === 0 && (
+        <p className="field-hint">Unlock the selected element to edit its geometry.</p>
+      )}
+    </section>
+  );
+}
+
 export function RightInspector({ onToggle, onUpdates, onRename }: RightInspectorProps) {
   const project = useStore((state) => state.project);
   const selectedIds = useStore((state) => state.selectedIds);
@@ -469,6 +949,7 @@ export function RightInspector({ onToggle, onUpdates, onRename }: RightInspector
         ) : (
           <div className="inspector-placeholder"><span className="inspector-placeholder-icon"><Layers2 size={17} /></span><span>Select an element on the canvas or in Layers to inspect it.</span></div>
         )}
+        <GeometrySection widgets={selectedWidgets} />
         <div className="inspector-rule" />
         <div className="section-label inspector-project-label"><span>PROJECT DETAILS</span></div>
         <label className="field-label" htmlFor="project-name">Project name</label>

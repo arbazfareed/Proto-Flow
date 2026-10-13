@@ -18,6 +18,7 @@ function resetStore(): void {
     gridVisible: true,
     snapEnabled: true,
     selectedIds: [],
+    geometryPreview: null,
     paletteOpen: false,
     leftPanelOpen: true,
     rightPanelOpen: true,
@@ -105,6 +106,10 @@ describe("composed Zustand store", () => {
 
     store.clearSelection();
     expect(useStore.getState().selectedIds).toEqual([]);
+
+    store.setGeometryPreview({ "widget-a": { x: 12 } });
+    store.select(["widget-b"]);
+    expect(useStore.getState().geometryPreview).toBeNull();
   });
 
   it("toggles UI slice state independently", () => {

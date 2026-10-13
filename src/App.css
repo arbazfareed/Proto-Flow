@@ -157,6 +157,28 @@
 .inspector-selection-copy { display:flex; flex:1; flex-direction:column; min-width:0; gap:3px; }
 .inspector-selection-copy strong { overflow:hidden; color:#dedbe6; font-size:10px; font-weight:600; text-overflow:ellipsis; white-space:nowrap; }
 .inspector-selection-copy code { color:#888590; font:9px ui-monospace,SFMono-Regular,Consolas,monospace; }
+.geometry-section { margin-top:15px; }
+.geometry-heading { margin-bottom:8px; }
+.geometry-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:9px 8px; }
+.geometry-field { min-width:0; }
+.geometry-field-label { display:block; width:max-content; max-width:100%; margin:0 0 5px; color:#9e9da7; font-size:9px; cursor:ew-resize; touch-action:none; user-select:none; }
+.geometry-input-wrap { display:flex; min-width:0; height:30px; align-items:center; border:1px solid #35363d; border-radius:5px; background:#1e1f23; }
+.geometry-input-wrap:focus-within { border-color:#8c71de; box-shadow:0 0 0 2px #8c71de26; }
+.geometry-input { width:100%; min-width:0; height:28px; padding:0 7px; border:0; outline:0; color:#e2e2e8; background:transparent; font:10px ui-monospace,SFMono-Regular,Consolas,monospace; font-variant-numeric:tabular-nums; }
+.geometry-input::placeholder { color:#89858f; font:9px Inter,system-ui,sans-serif; }
+.geometry-input:disabled { opacity:.45; }
+.geometry-steppers { display:flex; height:24px; flex:0 0 14px; flex-direction:column; margin-right:3px; }
+.geometry-steppers button { display:grid; width:14px; height:12px; place-items:center; padding:0; border:0; border-radius:2px; color:#85818e; background:transparent; cursor:pointer; }
+.geometry-steppers button:hover:not(:disabled) { color:#e1d8fb; background:#35313e; }
+.geometry-steppers button:disabled { opacity:.4; cursor:default; }
+.geometry-unit { min-width:27px; height:24px; margin-right:3px; padding:0 4px; border:0; border-radius:3px; color:#8e8a98; background:#292a30; font:9px ui-monospace,SFMono-Regular,Consolas,monospace; cursor:pointer; }
+.geometry-unit:hover:not(:disabled) { color:#ded2ff; background:#37313f; }
+.geometry-unit:disabled { opacity:.4; cursor:default; }
+.geometry-opacity-control { display:flex; height:30px; align-items:center; gap:5px; }
+.geometry-opacity-slider { width:100%; min-width:0; height:14px; accent-color:#9b80ef; cursor:pointer; }
+.opacity-number { width:49px; flex:0 0 49px; height:30px; border:1px solid #35363d; border-radius:5px; background:#1e1f23; }
+.opacity-number:focus { border-color:#8c71de; box-shadow:0 0 0 2px #8c71de26; }
+.geometry-percent { color:#89858f; font-size:9px; }
 .inspector-project-label { padding:0; }
 .field-label { display:block; margin:7px 0 7px; color:#b9b9c1; font-size:10px; font-weight:550; }
 .text-field { width:100%; height:32px; padding:0 9px; border:1px solid #35363d; border-radius:5px; outline:none; color:#e2e2e8; background:#1e1f23; font-size:10px; }
