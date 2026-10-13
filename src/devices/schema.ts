@@ -16,6 +16,7 @@ export const ScreenDeviceSchema = z
     height: z.number().int().min(1).max(16_384),
     dpr: z.number().finite().min(0.25).max(8),
     insets: DeviceInsetsSchema,
+    orientation: z.enum(["portrait", "landscape"]).optional(),
   })
   .strict()
   .superRefine((device, context) => {

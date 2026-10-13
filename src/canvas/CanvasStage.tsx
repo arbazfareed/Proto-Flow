@@ -7,9 +7,16 @@ import type { Layer as KonvaLayer } from "konva/lib/Layer";
 import { invoke, isTauri } from "@tauri-apps/api/core";
 import { getCurrentWebview } from "@tauri-apps/api/webview";
 import { useStore } from "../store";
+import { DEFAULT_DEVICE_PRESET, findDevicePreset, toScreenDevice } from "../devices/catalog";
+import { DeviceFrame } from "../devices/DeviceFrame";
+import {
+  getDeviceFrameBounds,
+  getSafeAreaBounds,
+  getWidgetsOutsideSafeArea,
+} from "../devices/frame";
+import type { ScreenDevice } from "../devices/types";
 import type { Widget, Project } from "../project/schema";
 import {
-  centerCanvasView,
   clampCanvasZoom,
   fitCanvasBounds,
   getVisibleGridSpacing,
@@ -416,6 +423,7 @@ export function CanvasStage({
   const dragHistorySnapshotRef = useRef<Project | null>(null);
   const transformHistorySnapshotRef = useRef<Project | null>(null);
   const guideTimerRef = useRef<number | null>(null);
+  const lastFitKeyRef = useRef("");
   const activeToolRef = useRef<ShapeTool | null>(activeTool);
   const lastPointerWorldRef = useRef<CanvasPoint>({ x: 0, y: 0 });
   const zoom = useStore((state) => state.zoom);
@@ -424,6 +432,12 @@ export function CanvasStage({
   const gridStyle = useStore((state) => state.gridStyle);
   const gridVisible = useStore((state) => state.gridVisible);
   const snapEnabled = useStore((state) => state.snapEnabled);
+  const showDeviceFrame = useStore((state) => state.showDeviceFrame);
+  const showSafeArea = useStore((state) => state.showSafeArea);
+  const statusBarTheme = useStore((state) => state.statusBarTheme);
+  const statusBarTimeMode = useStore((state) => state.statusBarTimeMode);
+  const showBattery = useStore((state) => state.showBattery);
+  const showSignal = useStore((state) => state.showSignal);
   const activeScreen = useStore((state) =>
     state.project.screens.find((screen) => screen.id === state.getActiveScreenId()),
   );
@@ -434,6 +448,11 @@ export function CanvasStage({
   const screenWidgets = activeScreen
     ? [...activeScreen.widgets].sort((first, second) => first.zIndex - second.zIndex)
     : [];
+  const activeDevice: ScreenDevice =
+    activeScreen?.device ?? toScreenDevice(DEFAULT_DEVICE_PRESET);
+  const activeDevicePreset = findDevicePreset(activeDevice.presetId);
+  const safeAreaBounds = getSafeAreaBounds(activeDevice);
+  const widgetsOutsideSafeArea = getWidgetsOutsideSafeArea(screenWidgets, activeDevice);
   const selectedWidgets = screenWidgets.filter((widget) =>
     selectedIds.includes(widget.id),
   );
@@ -484,6 +503,33 @@ export function CanvasStage({
     [commitViewOnFrame],
   );
 
+  useEffect(() => {
+    if (size.width === 0 || size.height === 0) return;
+    const frameBounds = getDeviceFrameBounds(
+      activeDevice,
+      activeDevicePreset?.frameChrome?.bezel ?? 0,
+      showDeviceFrame,
+    );
+    const fitKey = [
+      activeScreen?.id ?? "",
+      activeDevice.presetId,
+      activeDevice.width,
+      activeDevice.height,
+      activeDevicePreset?.frameChrome?.bezel ?? 0,
+      showDeviceFrame,
+    ].join(":");
+    if (lastFitKeyRef.current === fitKey) return;
+    lastFitKeyRef.current = fitKey;
+    applyView(fitCanvasBounds(frameBounds, size, 40));
+  }, [
+    activeDevice,
+    activeDevicePreset?.frameChrome?.bezel,
+    activeScreen?.id,
+    applyView,
+    showDeviceFrame,
+    size,
+  ]);
+
   const getPointerWorldPosition = useCallback((): CanvasPoint | null => {
     const stage = stageRef.current;
     const pointer = stage?.getPointerPosition();
@@ -502,6 +548,7 @@ export function CanvasStage({
       const screen = current.project.screens.find(
         (item) => item.id === current.getActiveScreenId(),
       );
+      const device = screen?.device ?? toScreenDevice(DEFAULT_DEVICE_PRESET);
       if (!screen) return null;
 
       const definition = getShapeDefinition(type);
@@ -564,6 +611,7 @@ export function CanvasStage({
         current.gridSize,
         current.snapEnabled,
         altKey,
+        getSafeAreaBounds(device),
       );
       widget.x = snap.position.x;
       widget.y = snap.position.y;
@@ -1130,6 +1178,7 @@ export function CanvasStage({
       const screen = store.project.screens.find(
         (item) => item.id === store.getActiveScreenId(),
       );
+      const device = screen?.device ?? toScreenDevice(DEFAULT_DEVICE_PRESET);
       const widgets = screen?.widgets ?? [];
       const bounds =
         key === "1"
@@ -1144,13 +1193,21 @@ export function CanvasStage({
       applyView(
         key === "1" && bounds
           ? fitCanvasBounds(bounds, viewport)
-          : centerCanvasView(bounds, viewport, 1),
+          : fitCanvasBounds(
+              getDeviceFrameBounds(
+                device,
+                findDevicePreset(device.presetId)?.frameChrome?.bezel ?? 0,
+                showDeviceFrame,
+              ),
+              viewport,
+              40,
+            ),
       );
     };
 
     window.addEventListener("keydown", onFitShortcut);
     return () => window.removeEventListener("keydown", onFitShortcut);
-  }, [applyView, size]);
+  }, [applyView, showDeviceFrame, size]);
 
   const handleWheel = useCallback(
     (event: { evt: WheelEvent; target: { getStage: () => KonvaStage | null } }) => {
@@ -1313,7 +1370,25 @@ export function CanvasStage({
             gridStyle={gridStyle}
             visible={gridVisible}
           />
-          <Layer ref={contentLayerRef} perfectDrawEnabled={false}>
+          <DeviceFrame
+            device={activeDevice}
+            preset={activeDevicePreset}
+            widgets={screenWidgets}
+            showFrame={showDeviceFrame}
+            showSafeArea={showSafeArea}
+            statusBarTheme={statusBarTheme}
+            statusBarTimeMode={statusBarTimeMode}
+            showBattery={showBattery}
+            showSignal={showSignal}
+          />
+          <Layer
+            ref={contentLayerRef}
+            clipX={0}
+            clipY={0}
+            clipWidth={activeDevice.width}
+            clipHeight={activeDevice.height}
+            perfectDrawEnabled={false}
+          >
             {screenWidgets.map((widget) => {
               const snapPosition = (position: CanvasPoint, altKey = altHeldRef.current) =>
                 snapWidgetPosition(
@@ -1336,6 +1411,7 @@ export function CanvasStage({
                   gridSize,
                   snapEnabled,
                   altKey,
+                  safeAreaBounds,
                 );
               return (
                 <WidgetNode
@@ -1569,6 +1645,12 @@ export function CanvasStage({
           <GuideLayer guides={guides} size={size} zoom={zoom} pan={pan} />
         </Stage>
       )}
+      {widgetsOutsideSafeArea.length > 0 && (
+        <div className="device-safe-area-warning" role="status" aria-live="polite">
+          {widgetsOutsideSafeArea.length}{" "}
+          {widgetsOutsideSafeArea.length === 1 ? "widget is" : "widgets are"} outside the safe area
+        </div>
+      )}
       {selectionBounds && selectedWidgets.length > 1 && (
         <div
           className="selection-actions"
@@ -1609,7 +1691,7 @@ export function CanvasStage({
           ))}
         </div>
       )}
-      {screenWidgets.length === 0 && (
+      {screenWidgets.length === 0 && !showDeviceFrame && (
         <div className="canvas-empty-state">
           <div className="empty-icon-wrap"><span className="empty-canvas-mark">PF</span></div>
           <span className="eyebrow">YOUR CANVAS IS READY</span>

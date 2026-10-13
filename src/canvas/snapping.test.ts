@@ -85,4 +85,21 @@ describe("widget snapping | snap-engine", () => {
     expect(result.position).toEqual({ x: 20, y: 40 });
     expect(result.guides).toEqual([]);
   });
+
+  it("snaps widget edges to the screen safe-area boundaries", () => {
+    const result = snapWidgetPosition(
+      { ...dragged, x: 3, y: 62 },
+      [],
+      10,
+      true,
+      false,
+      { x: 20, y: 60, width: 300, height: 700 },
+    );
+
+    expect(result.position).toEqual({ x: 0, y: 60 });
+    expect(result.guides).toEqual([
+      { axis: "x", coordinate: 20, distance: 3 },
+      { axis: "y", coordinate: 60, distance: 2 },
+    ]);
+  });
 });

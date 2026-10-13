@@ -19,6 +19,7 @@ import {
   Pipette,
   Plus,
   Redo2,
+  RotateCw,
   Sparkles,
   Square,
   Undo2,
@@ -28,6 +29,13 @@ import {
 import { isTauri } from "@tauri-apps/api/core";
 import { useStore } from "../store";
 import type { Project, Widget, WidgetStyle } from "../project/schema";
+import { DEFAULT_DEVICE_PRESET, toScreenDevice } from "../devices/catalog";
+import {
+  rotateDevice,
+  rotateWidgetForDevice,
+  widgetOverflowsDevice,
+} from "../devices/frame";
+import type { ScreenDevice } from "../devices/types";
 import { ScreenLayerSidebar } from "./ScreenLayerSidebar";
 import {
   evaluateGeometryExpression,
@@ -212,12 +220,104 @@ export function CanvasArea({
   const gridStyle = useStore((state) => state.gridStyle);
   const gridVisible = useStore((state) => state.gridVisible);
   const snapEnabled = useStore((state) => state.snapEnabled);
+  const showDeviceFrame = useStore((state) => state.showDeviceFrame);
+  const showSafeArea = useStore((state) => state.showSafeArea);
+  const statusBarTheme = useStore((state) => state.statusBarTheme);
+  const statusBarTimeMode = useStore((state) => state.statusBarTimeMode);
+  const showBattery = useStore((state) => state.showBattery);
+  const showSignal = useStore((state) => state.showSignal);
+  const activeScreenId = useStore((state) => state.getActiveScreenId());
+  const activeScreen = project.screens.find((screen) => screen.id === activeScreenId);
+  const activeOrientation =
+    activeScreen?.device?.orientation ??
+    ((activeScreen?.device?.width ?? DEFAULT_DEVICE_PRESET.viewport.width) >=
+    (activeScreen?.device?.height ?? DEFAULT_DEVICE_PRESET.viewport.height)
+      ? "landscape"
+      : "portrait");
   const setGridSize = useStore((state) => state.setGridSize);
   const setGridStyle = useStore((state) => state.setGridStyle);
   const toggleGrid = useStore((state) => state.toggleGrid);
   const toggleSnap = useStore((state) => state.toggleSnap);
+  const toggleDeviceFrame = useStore((state) => state.toggleDeviceFrame);
+  const toggleSafeArea = useStore((state) => state.toggleSafeArea);
+  const setStatusBarTheme = useStore((state) => state.setStatusBarTheme);
+  const setStatusBarTimeMode = useStore((state) => state.setStatusBarTimeMode);
+  const toggleBattery = useStore((state) => state.toggleBattery);
+  const toggleSignal = useStore((state) => state.toggleSignal);
   const [viewMenuOpen, setViewMenuOpen] = useState(false);
   const [activeTool, setActiveTool] = useState<ShapeTool | null>(null);
+  const [orientationRequest, setOrientationRequest] = useState<{
+    screenId: string;
+    device: ScreenDevice;
+    overflowingCount: number;
+  } | null>(null);
+
+  const commitOrientation = (rotateWidgets: boolean) => {
+    if (!orientationRequest) return;
+    const current = useStore.getState();
+    const screen = current.project.screens.find(
+      (item) => item.id === orientationRequest.screenId,
+    );
+    if (!screen) {
+      setOrientationRequest(null);
+      return;
+    }
+    const oldDevice = screen.device ?? toScreenDevice(DEFAULT_DEVICE_PRESET);
+    current.setProject({
+      ...current.project,
+      updatedAt: new Date().toISOString(),
+      screens: current.project.screens.map((item) =>
+        item.id !== screen.id
+          ? item
+          : {
+              ...item,
+              device: orientationRequest.device,
+              widgets: rotateWidgets
+                ? item.widgets.map((widget) =>
+                    rotateWidgetForDevice(
+                      widget,
+                      oldDevice,
+                      orientationRequest.device.orientation ?? "landscape",
+                    ),
+                  )
+                : item.widgets,
+            },
+      ),
+    });
+    if (orientationRequest.overflowingCount > 0 && !rotateWidgets) {
+      onNotify(
+        `Device rotated; ${orientationRequest.overflowingCount} widget${orientationRequest.overflowingCount === 1 ? "" : "s"} may extend beyond the viewport.`,
+      );
+    }
+    setOrientationRequest(null);
+  };
+
+  const requestOrientationChange = () => {
+    if (!activeScreen) return;
+    const currentDevice = activeScreen.device ?? toScreenDevice(DEFAULT_DEVICE_PRESET);
+    const nextDevice = rotateDevice(currentDevice);
+    const overflowingCount = activeScreen.widgets.filter((widget) =>
+      widgetOverflowsDevice(widget, nextDevice),
+    ).length;
+    if (overflowingCount > 0) {
+      setOrientationRequest({
+        screenId: activeScreen.id,
+        device: nextDevice,
+        overflowingCount,
+      });
+      return;
+    }
+    const current = useStore.getState();
+    current.setProject({
+      ...current.project,
+      updatedAt: new Date().toISOString(),
+      screens: current.project.screens.map((screen) =>
+        screen.id === activeScreen.id
+          ? { ...screen, device: nextDevice }
+          : screen,
+      ),
+    });
+  };
 
   return (
     <main className="canvas-area">
@@ -296,6 +396,91 @@ export function CanvasArea({
                 >
                   <span>Snap &amp; smart guides</span><kbd>Ctrl Shift '</kbd>
                   <span className={`view-toggle-indicator${snapEnabled ? " is-on" : ""}`} />
+                </button>
+                <button
+                  className="view-popover-toggle"
+                  aria-pressed={showDeviceFrame}
+                  onClick={toggleDeviceFrame}
+                >
+                  <span>Show device frame</span>
+                  <span className={`view-toggle-indicator${showDeviceFrame ? " is-on" : ""}`} />
+                </button>
+                <button
+                  className="view-popover-toggle"
+                  aria-pressed={showSafeArea}
+                  onClick={toggleSafeArea}
+                >
+                  <span>Show safe area</span>
+                  <span className={`view-toggle-indicator${showSafeArea ? " is-on" : ""}`} />
+                </button>
+                <button
+                  className="view-popover-toggle"
+                  onClick={requestOrientationChange}
+                  aria-label="Rotate device orientation"
+                >
+                  <span>
+                    {activeOrientation === "landscape" ? "Switch to portrait" : "Switch to landscape"}
+                  </span>
+                  <RotateCw size={13} />
+                </button>
+                {orientationRequest && (
+                  <div className="orientation-warning" role="group" aria-label="Orientation overflow choices">
+                    <p>
+                      {orientationRequest.overflowingCount} widget
+                      {orientationRequest.overflowingCount === 1 ? "" : "s"} may overflow the new viewport.
+                    </p>
+                    <button className="view-option" onClick={() => commitOrientation(false)}>
+                      Keep widgets as-is
+                    </button>
+                    <button className="view-option" onClick={() => commitOrientation(true)}>
+                      Rotate widgets too
+                    </button>
+                    <button className="orientation-cancel" onClick={() => setOrientationRequest(null)}>
+                      Cancel
+                    </button>
+                  </div>
+                )}
+                <div className="view-popover-divider" />
+                <div className="view-popover-label">Status bar</div>
+                <div className="view-option-group" role="group" aria-label="Status bar theme">
+                  {(["light", "dark"] as const).map((theme) => (
+                    <button
+                      key={theme}
+                      className={`view-option${statusBarTheme === theme ? " is-selected" : ""}`}
+                      aria-pressed={statusBarTheme === theme}
+                      onClick={() => setStatusBarTheme(theme)}
+                    >
+                      {theme === "light" ? "Light" : "Dark"}
+                    </button>
+                  ))}
+                </div>
+                <div className="view-option-group status-bar-time-options" role="group" aria-label="Status bar time">
+                  {(["static", "real"] as const).map((mode) => (
+                    <button
+                      key={mode}
+                      className={`view-option${statusBarTimeMode === mode ? " is-selected" : ""}`}
+                      aria-pressed={statusBarTimeMode === mode}
+                      onClick={() => setStatusBarTimeMode(mode)}
+                    >
+                      {mode === "static" ? "Static 9:41" : "Local time"}
+                    </button>
+                  ))}
+                </div>
+                <button
+                  className="view-popover-toggle"
+                  aria-pressed={showBattery}
+                  onClick={toggleBattery}
+                >
+                  <span>Show battery</span>
+                  <span className={`view-toggle-indicator${showBattery ? " is-on" : ""}`} />
+                </button>
+                <button
+                  className="view-popover-toggle"
+                  aria-pressed={showSignal}
+                  onClick={toggleSignal}
+                >
+                  <span>Show signal</span>
+                  <span className={`view-toggle-indicator${showSignal ? " is-on" : ""}`} />
                 </button>
                 <div className="view-popover-divider" />
                 <div className="view-popover-label">Grid spacing</div>

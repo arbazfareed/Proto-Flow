@@ -77,6 +77,7 @@ export function toScreenDevice(device: DevicePreset): ScreenDevice {
     height: device.viewport.height,
     dpr: device.dpr,
     insets: { ...device.insets },
+    orientation: device.orientation,
   };
 }
 

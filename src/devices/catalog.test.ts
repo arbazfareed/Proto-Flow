@@ -64,6 +64,7 @@ describe("device preset catalog", () => {
       height: 852,
       dpr: 3,
       insets: { top: 59, bottom: 34, left: 0, right: 0 },
+      orientation: "portrait",
     });
   });
 });
