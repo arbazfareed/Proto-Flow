@@ -80,10 +80,15 @@
 .canvas-toolbar-actions { gap:10px; }
 .canvas-mode { display:flex; align-items:center; gap:7px; padding:5px 8px; border:1px solid #303137; border-radius:5px; color:#a8a8b1; font-size:9px; }
 .mode-dot { width:5px; height:5px; background:#9d83ee; }
-.canvas-stage { position:relative; flex:1; overflow:hidden; display:grid; place-items:center; }
-.canvas-grid { position:absolute; inset:0; opacity:.42; background-image:radial-gradient(#32333a 1px,transparent 1px); background-size:20px 20px; mask-image:radial-gradient(ellipse at center,#000 20%,transparent 83%); }
-.canvas-empty-state { position:relative; z-index:1; width:min(390px,80%); display:flex; align-items:center; flex-direction:column; text-align:center; }
+.canvas-stage { position:relative; min-height:0; flex:1; overflow:hidden; background:var(--surface-canvas); }
+.canvas-stage-surface { position:absolute; inset:0; overflow:hidden; touch-action:none; }
+.canvas-stage-surface.is-space-ready { cursor:grab; }
+.canvas-stage-surface.is-panning { cursor:grabbing; }
+.canvas-stage-surface canvas { cursor:inherit; }
+.canvas-empty-state { position:absolute; z-index:1; top:50%; left:50%; width:min(390px,80%); display:flex; align-items:center; flex-direction:column; transform:translate(-50%,-50%); text-align:center; pointer-events:none; }
+.canvas-empty-state button { pointer-events:auto; }
 .empty-icon-wrap { width:49px; height:49px; display:grid; place-items:center; margin-bottom:21px; border:1px solid #37333f; border-radius:14px; color:#b6a0f7; background:linear-gradient(145deg,#26222f,#1b1b20); box-shadow:0 8px 28px #0004; }
+.empty-canvas-mark { color:#c8b9f6; font-size:15px; font-weight:800; letter-spacing:-1px; }
 .eyebrow { color:#9b82e8; font-size:9px; font-weight:700; letter-spacing:.13em; }
 .canvas-empty-state h1 { margin:11px 0 7px; color:#e2e0e7; font-size:25px; font-weight:560; letter-spacing:-.8px; }
 .canvas-empty-state>p { max-width:340px; margin:0; color:#85858f; font-size:11px; line-height:1.75; }

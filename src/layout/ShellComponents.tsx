@@ -1,3 +1,4 @@
+import { lazy, Suspense } from "react";
 import {
   ArrowDownToLine,
   ArrowRight,
@@ -22,6 +23,12 @@ import {
 } from "lucide-react";
 import { isTauri } from "@tauri-apps/api/core";
 import { useStore } from "../store";
+
+const CanvasStage = lazy(() =>
+  import("../canvas/CanvasStage").then((module) => ({
+    default: module.CanvasStage,
+  })),
+);
 
 interface TopBarProps {
   onNew: () => void;
@@ -188,7 +195,7 @@ export function CanvasArea({
   const project = useStore((state) => state.project);
   const leftPanelOpen = useStore((state) => state.leftPanelOpen);
   const rightPanelOpen = useStore((state) => state.rightPanelOpen);
-  const gridVisible = useStore((state) => state.gridVisible);
+  const zoom = useStore((state) => state.zoom);
 
   return (
     <main className="canvas-area">
@@ -204,19 +211,16 @@ export function CanvasArea({
         </div>
       </div>
       <div className="canvas-stage">
-        {gridVisible && <div className="canvas-grid" />}
-        <div className="canvas-empty-state">
-          <div className="empty-icon-wrap"><Layers2 size={22} /></div>
-          <span className="eyebrow">YOUR CANVAS STARTS HERE</span>
-          <h1>A little room to think.</h1>
-          <p>Your project is ready. The visual canvas arrives in Phase 2 — for now, name your project and save it locally.</p>
-          <div className="canvas-empty-actions">
-            <button className="button button-primary" onClick={onSaveAs}><ArrowDownToLine size={15} /> Save your project</button>
-            <button className="button button-secondary" onClick={onOpen}><FolderOpen size={15} /> Open a project</button>
-          </div>
-          <div className="empty-shortcut"><span>Press</span> <button className="shortcut-link" onClick={onOpenPalette}>Ctrl K</button> <span>to see all actions</span></div>
+        <Suspense fallback={<div className="canvas-stage-surface" />}>
+          <CanvasStage
+            onSaveAs={onSaveAs}
+            onOpen={onOpen}
+            onOpenPalette={onOpenPalette}
+          />
+        </Suspense>
+        <div className="canvas-zoom" aria-label={`Canvas zoom ${Math.round(zoom * 100)} percent`}>
+          {Math.round(zoom * 100)}% <ChevronDown size={13} />
         </div>
-        <div className="canvas-zoom">100% <ChevronDown size={13} /></div>
       </div>
     </main>
   );

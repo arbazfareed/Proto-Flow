@@ -29,19 +29,20 @@ npm test
 
 ## Phase 1 status
 
-Phase 1 is complete: the desktop shell, local project schema, native file I/O, local autosave and crash recovery, keyboard shortcuts, command palette, and updater integration are implemented. The canvas renderer is intentionally reserved for Phase 2.
+Phase 1 is complete: the desktop shell, local project schema, native file I/O, local autosave and crash recovery, keyboard shortcuts, command palette, and updater integration are implemented. Phase 2 canvas work is underway; the Konva stage and navigation controls are implemented, while shape editing and the rest of the canvas workflow remain future work.
 
 ### Phase 1 implementation reference
 
-The current canvas is a placeholder; the project format and state needed to build a renderer already exist. Phase 2 should extend these foundations rather than introduce a parallel project model:
+The Phase 2 canvas extends these foundations rather than introducing a parallel project model:
 
 - `src/project/schema.ts` defines the versioned project, screen, and widget types and validates imported project data. Widgets already persist geometry, rotation, opacity, visibility, locking, z-order, style, and `props`.
 - `src/store/documentSlice.ts` owns the active project, file path, dirty state, and document actions. `src/store/canvasSlice.ts` owns zoom, pan, grid and snap settings, and selected IDs. `src/store/historySlice.ts` owns bounded undo/redo snapshots. The slices are composed in `src/store/index.ts`.
-- `src/layout/ShellComponents.tsx` contains the existing canvas-area placeholder and surrounding shell. Replace or extend the placeholder with the renderer while preserving the shell, panel toggles, status bar, and selective Zustand subscriptions.
+- `src/canvas/CanvasStage.tsx` mounts the Konva stage in the center pane, tracks pane size with `ResizeObserver`, renders the navigation grid, and implements pointer-anchored zoom and Space/middle-button panning. `Ctrl/Cmd+0` resets zoom and centers content; `Ctrl/Cmd+1` fits the selection.
+- `src/layout/ShellComponents.tsx` contains the surrounding shell. Extend the stage while preserving panel toggles, status bar, and selective Zustand subscriptions.
 - `src/project/files.ts` and the Rust commands in `src-tauri/src/commands/file_io.rs` provide validated local project open/save. Keep rendered edits in the project model so the existing save and autosave flows continue to persist them.
 - `src/commands/registry.tsx` is the extension point for new user commands; global shortcuts are handled in `src/commands/shortcuts.ts`.
 
-Canvas rendering, pointer interactions, widget editing, and screen/layer editing are not implemented in Phase 1.
+Shape drawing, selection and transforms, widget editing, and screen/layer editing are still to be implemented.
 
 ### `.pflow` project schema
 
@@ -61,7 +62,7 @@ Unsaved projects are snapshotted to browser local storage every 30 seconds. Clea
 
 ### Desktop layout
 
-The desktop layout is composed in `src/AppShell.tsx` from the top bar, screens/layers sidebar, canvas placeholder, inspector, and status bar. Sidebar visibility, canvas zoom, grid, and selection are driven by the Zustand UI and canvas slices.
+The desktop layout is composed in `src/AppShell.tsx` from the top bar, screens/layers sidebar, canvas, inspector, and status bar. The canvas stage resizes with its pane; zoom, pan, grid, and selection are driven by the Zustand canvas slice.
 
 ### Command palette and shortcuts
 
