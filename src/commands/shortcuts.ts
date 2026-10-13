@@ -8,6 +8,7 @@ export interface ShortcutActions {
   newProject: () => void;
   openProject: () => void;
   toggleGrid: () => void;
+  toggleSnap: () => void;
 }
 
 export interface ShortcutEvent {
@@ -74,11 +75,9 @@ export function handleGlobalShortcut(
   } else if (key === "o") {
     event.preventDefault();
     actions.openProject();
-  } else if (
-    (key === "'" || (event.code === "Quote" && !event.shiftKey)) &&
-    !editing
-  ) {
+  } else if ((key === "'" || event.code === "Quote") && !editing) {
     event.preventDefault();
-    actions.toggleGrid();
+    if (event.shiftKey) actions.toggleSnap();
+    else actions.toggleGrid();
   }
 }

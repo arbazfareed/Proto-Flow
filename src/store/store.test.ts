@@ -14,6 +14,7 @@ function resetStore(): void {
     zoom: 1,
     pan: { x: 0, y: 0 },
     gridSize: 10,
+    gridStyle: "dots",
     gridVisible: true,
     snapEnabled: true,
     selectedIds: [],
@@ -89,12 +90,14 @@ describe("composed Zustand store", () => {
 
     store.setPan(12, -4);
     store.setGridSize(20);
+    store.setGridStyle("lines");
     store.toggleGrid();
     store.toggleSnap();
     store.select(["widget-a", "widget-a", "widget-b"]);
     expect(useStore.getState()).toMatchObject({
       pan: { x: 12, y: -4 },
       gridSize: 20,
+      gridStyle: "lines",
       gridVisible: false,
       snapEnabled: false,
       selectedIds: ["widget-a", "widget-b"],
