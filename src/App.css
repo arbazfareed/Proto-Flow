@@ -206,3 +206,18 @@
   .left-sidebar { width:240px; }
   .command-trigger>span { margin-right:3px; }
 }
+@media (max-width:900px) {
+  .left-sidebar { display:none; }
+}
+@media (max-width:600px) {
+  .inspector { display:none; }
+  .topbar { gap:6px; padding:0 8px; }
+  .brand-lockup { flex:0 0 auto; }
+  .brand-name,.topbar-divider,.document-heading,.topbar-actions>.icon-button,.command-trigger,.topbar-actions>.button-secondary,.wallet-placeholder { display:none; }
+  .topbar-actions { gap:0; margin-left:auto; }
+  .topbar-actions>.button-primary { padding:0 8px; }
+  .canvas-toolbar { justify-content:flex-end; padding:0 8px; }
+  .breadcrumb { display:none; }
+  .canvas-toolbar-actions { gap:5px; }
+  .shape-tools { padding-right:5px; }
+}
