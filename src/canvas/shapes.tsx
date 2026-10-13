@@ -31,6 +31,7 @@ export interface ShapeComponentProps {
   fill: string | undefined;
   stroke: string | undefined;
   strokeWidth: number;
+  onThumbnailReady?: () => void;
 }
 
 export interface ShapeDefinition extends ShapeToolDefinition {
@@ -464,7 +465,7 @@ function ToggleShape({ widget, fill, stroke, strokeWidth }: ShapeComponentProps)
   );
 }
 
-function ImageShape({ widget, fill, stroke, strokeWidth }: ShapeComponentProps) {
+function ImageShape({ widget, fill, stroke, strokeWidth, onThumbnailReady }: ShapeComponentProps) {
   const filePath = useStore((state) => state.filePath);
   const [image, setImage] = useState<HTMLImageElement | null>(null);
   const imageNodeRef = useRef<Konva.Image>(null);
@@ -484,13 +485,19 @@ function ImageShape({ widget, fill, stroke, strokeWidth }: ShapeComponentProps) 
         });
         sourceData = `data:${asset.mime};base64,${asset.base64}`;
       }
-      if (!sourceData) return;
+      if (!sourceData) {
+        onThumbnailReady?.();
+        return;
+      }
       const element = new window.Image();
       element.onload = () => {
         if (active) setImage(element);
       };
       element.onerror = () => {
-        if (active) setImage(null);
+        if (active) {
+          setImage(null);
+          onThumbnailReady?.();
+        }
       };
       element.src = sourceData.startsWith("data:")
         ? sourceData
@@ -498,11 +505,12 @@ function ImageShape({ widget, fill, stroke, strokeWidth }: ShapeComponentProps) 
     };
     void load().catch((error: unknown) => {
       console.error("Could not load the project image asset.", error);
+      onThumbnailReady?.();
     });
     return () => {
       active = false;
     };
-  }, [assetPath, filePath, mime, source]);
+  }, [assetPath, filePath, mime, onThumbnailReady, source]);
 
   useEffect(() => {
     const node = imageNodeRef.current;
@@ -510,7 +518,8 @@ function ImageShape({ widget, fill, stroke, strokeWidth }: ShapeComponentProps) 
     node.clearCache();
     node.cache({ pixelRatio: 1 });
     node.getLayer()?.batchDraw();
-  }, [image]);
+    onThumbnailReady?.();
+  }, [image, onThumbnailReady]);
 
   if (image) {
     return (
@@ -645,6 +654,7 @@ export function measureTextBounds(
 export function renderWidgetShape(
   widget: Widget,
   selected: boolean,
+  onThumbnailReady?: () => void,
 ): ReactNode {
   void selected;
   const definition = getShapeDefinition(widget.type);
@@ -679,6 +689,7 @@ export function renderWidgetShape(
         fill={fill ? styleColorToRgba(fill, widget.style.fillOpacity) : undefined}
         stroke={stroke ? styleColorToRgba(stroke, widget.style.strokeOpacity) : undefined}
         strokeWidth={strokeWidth}
+        onThumbnailReady={onThumbnailReady}
       />
     </Group>
   );
