@@ -8,6 +8,7 @@ import {
   FileText,
   FolderOpen,
   Keyboard,
+  Lock,
   Layers2,
   MoreHorizontal,
   Minus,
@@ -17,6 +18,7 @@ import {
   Redo2,
   Sparkles,
   Square,
+  Unlock,
   Undo2,
   X,
 } from "lucide-react";
@@ -137,6 +139,8 @@ export function LeftSidebar({ onNew, onOpen, onToggle, onOpenPalette, onUpdates 
   const project = useStore((state) => state.project);
   const isDirty = useStore((state) => state.isDirty);
   const leftPanelOpen = useStore((state) => state.leftPanelOpen);
+  const selectedIds = useStore((state) => state.selectedIds);
+  const activeScreen = project.screens.find((screen) => screen.id === project.startScreenId);
 
   if (!leftPanelOpen) return null;
 
@@ -168,10 +172,81 @@ export function LeftSidebar({ onNew, onOpen, onToggle, onOpenPalette, onUpdates 
       </div>
       <div className="sidebar-section layers-section">
         <div className="section-label"><span>LAYERS</span></div>
-        <div className="sidebar-empty-state">
-          <Layers2 size={16} />
-          <span>Widget layers will appear here in Phase 2.</span>
-        </div>
+        {activeScreen?.widgets.length ? (
+          <div className="layer-list" aria-label="Widget layers">
+            {[...activeScreen.widgets].sort((a, b) => b.zIndex - a.zIndex).map((widget) => {
+              const definition = getShapeToolDefinition(widget.type);
+              const Icon = definition?.icon ?? Layers2;
+              const labelValue =
+                widget.props.label ?? widget.props.text ?? widget.props.fileName;
+              const label =
+                typeof labelValue === "string" && labelValue.trim()
+                  ? labelValue.trim()
+                  : definition?.label ?? widget.type;
+              const selected = selectedIds.includes(widget.id);
+              return (
+                <div
+                  className={`layer-row${selected ? " is-selected" : ""}${widget.locked ? " is-locked" : ""}`}
+                  key={widget.id}
+                >
+                  <button
+                    className="layer-select"
+                    aria-label={`Select ${definition?.label ?? widget.type}: ${label}`}
+                    aria-pressed={selected}
+                    onClick={(event) => {
+                      const current = useStore.getState().selectedIds;
+                      useStore.getState().select(
+                        event.shiftKey
+                          ? current.includes(widget.id)
+                            ? current.filter((id) => id !== widget.id)
+                            : [...current, widget.id]
+                          : [widget.id],
+                      );
+                    }}
+                  >
+                    <Icon size={14} aria-hidden="true" />
+                    <span className="layer-copy">
+                      <span className="layer-name">{label}</span>
+                      <span className="layer-type">{definition?.label ?? widget.type}</span>
+                    </span>
+                  </button>
+                  <button
+                    className="layer-lock"
+                    aria-label={`${widget.locked ? "Unlock" : "Lock"} ${definition?.label ?? widget.type}: ${label}`}
+                    aria-pressed={widget.locked}
+                    title={widget.locked ? "Unlock layer" : "Lock layer"}
+                    onClick={() => {
+                      const current = useStore.getState();
+                      current.setProject({
+                        ...current.project,
+                        updatedAt: new Date().toISOString(),
+                        screens: current.project.screens.map((screen) =>
+                          screen.id !== current.project.startScreenId
+                            ? screen
+                            : {
+                                ...screen,
+                                widgets: screen.widgets.map((item) =>
+                                  item.id === widget.id
+                                    ? { ...item, locked: !item.locked }
+                                    : item,
+                                ),
+                              },
+                        ),
+                      });
+                    }}
+                  >
+                    {widget.locked ? <Lock size={13} /> : <Unlock size={13} />}
+                  </button>
+                </div>
+              );
+            })}
+          </div>
+        ) : (
+          <div className="sidebar-empty-state">
+            <Layers2 size={16} />
+            <span>Widgets will appear here as you add them.</span>
+          </div>
+        )}
       </div>
       <div className="sidebar-footer">
         <button className="nav-item" onClick={onOpenPalette}><Keyboard size={16} /><span>Keyboard shortcuts</span></button>
@@ -348,20 +423,52 @@ interface RightInspectorProps {
 
 export function RightInspector({ onToggle, onUpdates, onRename }: RightInspectorProps) {
   const project = useStore((state) => state.project);
+  const selectedIds = useStore((state) => state.selectedIds);
   const filePath = useStore((state) => state.filePath);
   const rightPanelOpen = useStore((state) => state.rightPanelOpen);
   const displayPath = filePath ? filePath.replaceAll("\\", "/").split("/").at(-1) : "Not saved yet";
+  const selectedWidgets =
+    project.screens.find((screen) => screen.id === project.startScreenId)?.widgets.filter(
+      (widget) => selectedIds.includes(widget.id),
+    ) ?? [];
+  const selectedWidget = selectedWidgets.length === 1 ? selectedWidgets[0] : undefined;
+  const selectedDefinition = selectedWidget
+    ? getShapeToolDefinition(selectedWidget.type)
+    : undefined;
+  const SelectedIcon = selectedDefinition?.icon ?? Layers2;
+  const selectedLabelValue =
+    selectedWidget?.props.label ?? selectedWidget?.props.text ?? selectedWidget?.props.fileName;
+  const selectedLabel =
+    typeof selectedLabelValue === "string" && selectedLabelValue.trim()
+      ? selectedLabelValue.trim()
+      : selectedDefinition?.label ?? selectedWidget?.type;
 
   if (!rightPanelOpen) return null;
 
   return (
     <aside className="sidebar inspector">
       <div className="inspector-top">
-        <div><span className="inspector-overline">INSPECTOR</span><h2>Select a shape</h2></div>
+        <div><span className="inspector-overline">INSPECTOR</span><h2>{selectedWidget ? selectedLabel : selectedWidgets.length > 1 ? `${selectedWidgets.length} items selected` : "Select an element"}</h2></div>
         <button className="icon-button small-icon" aria-label="Close inspector" onClick={onToggle}><PanelRightClose size={15} /></button>
       </div>
       <div className="inspector-body">
-        <div className="inspector-placeholder"><span className="inspector-placeholder-icon"><Layers2 size={17} /></span><span>Select a shape on the canvas to inspect its properties.</span></div>
+        {selectedWidget ? (
+          <div className="inspector-selection" aria-label="Selected element identity">
+            <span className="inspector-placeholder-icon"><SelectedIcon size={17} /></span>
+            <span className="inspector-selection-copy">
+              <strong>{selectedDefinition?.label ?? selectedWidget.type}</strong>
+              <code>{selectedWidget.type}</code>
+            </span>
+            {selectedWidget.locked && <Lock size={14} aria-label="Locked" />}
+          </div>
+        ) : selectedWidgets.length > 1 ? (
+          <div className="inspector-selection" aria-label={`${selectedWidgets.length} selected elements`}>
+            <span className="inspector-placeholder-icon"><Layers2 size={17} /></span>
+            <span>{selectedWidgets.length} elements selected</span>
+          </div>
+        ) : (
+          <div className="inspector-placeholder"><span className="inspector-placeholder-icon"><Layers2 size={17} /></span><span>Select an element on the canvas or in Layers to inspect it.</span></div>
+        )}
         <div className="inspector-rule" />
         <div className="section-label inspector-project-label"><span>PROJECT DETAILS</span></div>
         <label className="field-label" htmlFor="project-name">Project name</label>

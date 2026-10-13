@@ -74,6 +74,18 @@
 .sidebar-empty { margin:7px 8px 0; color:var(--text-muted); font-size:9px; }
 .sidebar-empty-state { display:flex; align-items:center; gap:8px; margin:7px 6px 0; padding:8px; border:1px dashed #303137; border-radius:5px; color:var(--text-muted); font-size:9px; line-height:1.5; }
 .sidebar-empty-state svg { flex-shrink:0; color:#8d829e; }
+.layer-list { display:flex; flex-direction:column; gap:2px; margin:7px 3px 0; }
+.layer-row { display:flex; align-items:center; min-width:0; border-radius:5px; }
+.layer-row.is-selected { background:#292431; }
+.layer-select { display:flex; align-items:center; flex:1; min-width:0; gap:8px; padding:5px 6px; border:0; color:#aaaab4; background:transparent; text-align:left; cursor:pointer; }
+.layer-select:hover,.layer-row.is-selected .layer-select { color:#e2d7ff; }
+.layer-select>svg { flex:0 0 auto; color:#a995dd; }
+.layer-copy { display:flex; flex-direction:column; min-width:0; gap:2px; }
+.layer-name,.layer-type { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.layer-name { color:#c9c8d0; font-size:9px; }
+.layer-type { color:#777780; font-size:8px; }
+.layer-lock { display:grid; width:25px; height:27px; flex:0 0 25px; place-items:center; border:0; border-radius:4px; color:#777780; background:transparent; cursor:pointer; }
+.layer-lock:hover,.layer-row.is-locked .layer-lock { color:#d6c4ff; background:#302a3c; }
 .canvas-area { min-width:0; min-height:0; flex:1; display:flex; flex-direction:column; background:var(--surface-canvas); }
 .canvas-toolbar { height:43px; justify-content:space-between; padding:0 14px; border-bottom:1px solid #232429; }
 .breadcrumb { gap:8px; color:#bdbdc5; font-size:10px; }
@@ -110,6 +122,10 @@
 .canvas-stage-surface.is-drawing { cursor:crosshair; }
 .canvas-stage-surface canvas { cursor:inherit; }
 .canvas-image-file-input { display:none; }
+.selection-actions { position:absolute; z-index:4; display:flex; align-items:center; gap:2px; max-width:calc(100% - 16px); overflow-x:auto; padding:4px; border:1px solid #393840; border-radius:7px; background:#202126f2; box-shadow:0 5px 16px #0006; transform:translateX(-50%); }
+.selection-action { width:26px; height:25px; flex:0 0 26px; border:0; border-radius:4px; color:#d4d1dc; background:transparent; font-size:10px; font-weight:650; cursor:pointer; }
+.selection-action:hover:not(:disabled) { color:#fff; background:#3a3448; }
+.selection-action:disabled { opacity:.35; cursor:default; }
 .canvas-inline-editor { position:absolute; z-index:3; resize:none; padding:4px 6px; border:1px solid var(--accent); border-radius:3px; outline:0; color:var(--text-primary); background:#19181feF; font:inherit; line-height:1.2; transform-origin:top left; }
 .canvas-empty-state { position:absolute; z-index:1; top:50%; left:50%; width:min(390px,80%); display:flex; align-items:center; flex-direction:column; transform:translate(-50%,-50%); text-align:center; pointer-events:none; }
 .canvas-empty-state button { pointer-events:auto; }
@@ -137,6 +153,10 @@
 .inspector-body { min-height:0; flex:1; overflow:auto; padding:4px 15px 14px; }
 .inspector-placeholder { display:flex; align-items:center; gap:9px; padding:9px; border:1px solid var(--border-subtle); border-radius:6px; color:var(--text-muted); font-size:9px; line-height:1.6; }
 .inspector-placeholder-icon { width:27px; height:27px; display:grid; flex-shrink:0; place-items:center; border-radius:5px; color:#a995dd; background:#292431; }
+.inspector-selection { display:flex; align-items:center; gap:9px; min-width:0; padding:9px; border:1px solid var(--border-subtle); border-radius:6px; color:var(--text-muted); font-size:9px; line-height:1.5; }
+.inspector-selection-copy { display:flex; flex:1; flex-direction:column; min-width:0; gap:3px; }
+.inspector-selection-copy strong { overflow:hidden; color:#dedbe6; font-size:10px; font-weight:600; text-overflow:ellipsis; white-space:nowrap; }
+.inspector-selection-copy code { color:#888590; font:9px ui-monospace,SFMono-Regular,Consolas,monospace; }
 .inspector-project-label { padding:0; }
 .field-label { display:block; margin:7px 0 7px; color:#b9b9c1; font-size:10px; font-weight:550; }
 .text-field { width:100%; height:32px; padding:0 9px; border:1px solid #35363d; border-radius:5px; outline:none; color:#e2e2e8; background:#1e1f23; font-size:10px; }
