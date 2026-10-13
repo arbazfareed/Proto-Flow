@@ -219,6 +219,7 @@
 .canvas-warnings { position:absolute; z-index:3; top:12px; left:14px; display:flex; max-width:calc(100% - 120px); flex-direction:column; gap:5px; pointer-events:none; }
 .device-safe-area-warning,.responsive-viewport-warning { max-width:100%; padding:6px 9px; border:1px solid #81504b; border-radius:5px; color:#ffd9d3; background:#3a2524ef; box-shadow:0 3px 12px #0004; font-size:9px; }
 .responsive-viewport-warning { border-color:#806a3d; color:#ffe8b3; background:#342e20ef; }
+.responsive-override-warning { max-width:100%; padding:6px 9px; border:1px solid #6b5682; border-radius:5px; color:#e8d9ff; background:#30243eef; box-shadow:0 3px 12px #0004; font-size:9px; }
 .canvas-image-file-input { display:none; }
 .selection-actions { position:absolute; z-index:4; display:flex; align-items:center; gap:2px; max-width:calc(100% - 16px); overflow-x:auto; padding:4px; border:1px solid #393840; border-radius:7px; background:#202126f2; box-shadow:0 5px 16px #0006; transform:translateX(-50%); }
 .selection-action { width:26px; height:25px; flex:0 0 26px; border:0; border-radius:4px; color:#d4d1dc; background:transparent; font-size:10px; font-weight:650; cursor:pointer; }
@@ -358,6 +359,9 @@
 .responsive-visible-field .responsive-reset-field { position:static; margin-left:auto; }
 .responsive-reset-all { width:100%; justify-content:center; margin-top:7px; }
 .responsive-persistence-note { margin-top:12px; line-height:1.5; }
+.responsive-important-field { margin:11px 0; }
+.responsive-constraints-label { margin-top:13px; padding:0; }
+.responsive-missing-override { color:#d9b6f5; line-height:1.5; }
 .breakpoint-modal-backdrop { position:fixed; z-index:30; inset:0; display:grid; place-items:center; padding:20px; background:#08090bb3; backdrop-filter:blur(4px); }
 .breakpoint-modal { display:flex; width:min(760px,95vw); max-height:min(720px,90vh); flex-direction:column; overflow:hidden; border:1px solid #3a3b42; border-radius:10px; color:#e5e5ea; background:#1b1c20; box-shadow:0 22px 80px #0009; }
 .breakpoint-modal-header { display:flex; justify-content:space-between; align-items:center; padding:15px 17px 12px; border-bottom:1px solid #303137; }

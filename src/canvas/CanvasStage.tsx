@@ -9,6 +9,7 @@ import { getCurrentWebview } from "@tauri-apps/api/webview";
 import { useStore } from "../store";
 import {
   getScreenBreakpoints,
+  getWidgetsMissingBreakpointOverrides,
   getWidgetsOutsideBreakpointViewport,
   resolveWidgetsForBreakpoint,
   resolveActiveBreakpoint,
@@ -99,6 +100,7 @@ function getEffectiveScreenWidgets(screen: Screen, breakpointId: string | null):
     screen.widgets,
     breakpoint,
     screen.device?.width ?? DEFAULT_DEVICE_PRESET.viewport.width,
+    screen.device?.height ?? DEFAULT_DEVICE_PRESET.viewport.height,
   );
 }
 
@@ -502,6 +504,7 @@ export function CanvasStage({
         baseScreenWidgets,
         activeBreakpoint,
         activeScreen.device?.width ?? DEFAULT_DEVICE_PRESET.viewport.width,
+        activeScreen.device?.height ?? DEFAULT_DEVICE_PRESET.viewport.height,
       )
     : [...baseScreenWidgets].sort((first, second) => first.zIndex - second.zIndex);
   const baseDevice: ScreenDevice =
@@ -524,6 +527,9 @@ export function CanvasStage({
   const widgetsOutsideSafeArea = getWidgetsOutsideSafeArea(screenWidgets, activeDevice);
   const widgetsOutsideBreakpointViewport = activeBreakpoint
     ? getWidgetsOutsideBreakpointViewport(screenWidgets, activeBreakpoint)
+    : [];
+  const widgetsMissingBreakpointOverrides = activeBreakpoint
+    ? getWidgetsMissingBreakpointOverrides(screenWidgets, activeBreakpoint.id)
     : [];
   const selectedWidgets = screenWidgets.filter((widget) =>
     selectedIds.includes(widget.id),
@@ -1730,7 +1736,9 @@ export function CanvasStage({
           <GuideLayer guides={guides} size={size} zoom={zoom} pan={pan} />
         </Stage>
       )}
-      {(widgetsOutsideBreakpointViewport.length > 0 || widgetsOutsideSafeArea.length > 0) && (
+      {(widgetsOutsideBreakpointViewport.length > 0 ||
+        widgetsOutsideSafeArea.length > 0 ||
+        widgetsMissingBreakpointOverrides.length > 0) && (
         <div className="canvas-warnings" aria-live="polite">
           {widgetsOutsideBreakpointViewport.length > 0 && (
             <div className="responsive-viewport-warning" role="status">
@@ -1742,6 +1750,12 @@ export function CanvasStage({
             <div className="device-safe-area-warning" role="status">
               {widgetsOutsideSafeArea.length}{" "}
               {widgetsOutsideSafeArea.length === 1 ? "widget is" : "widgets are"} outside the safe area
+            </div>
+          )}
+          {widgetsMissingBreakpointOverrides.length > 0 && (
+            <div className="responsive-override-warning" role="status">
+              {widgetsMissingBreakpointOverrides.length} important{" "}
+              {widgetsMissingBreakpointOverrides.length === 1 ? "widget needs" : "widgets need"} an override at {activeBreakpoint?.name}
             </div>
           )}
         </div>

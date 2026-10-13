@@ -145,6 +145,10 @@ export const WidgetOverrideSchema = z.object({
 }).strict();
 
 export const WidgetCascadeModeSchema = z.enum(["absolute", "stack", "fluid", "hide"]);
+export const ResponsiveConstraintsSchema = z.object({
+  horizontal: z.enum(["left", "right", "center", "scale", "stretch"]),
+  vertical: z.enum(["top", "bottom", "center", "scale", "stretch"]),
+}).strict();
 
 export const ProtoWidgetSchema = z
   .object({
@@ -164,6 +168,8 @@ export const ProtoWidgetSchema = z
     style: WidgetStyleSchema,
     props: z.record(z.string(), z.unknown()),
     cascadeMode: WidgetCascadeModeSchema.optional(),
+    constraints: ResponsiveConstraintsSchema.optional(),
+    important: z.boolean().optional(),
     overrides: z.record(z.string(), WidgetOverrideSchema).optional(),
   })
   .strict();
@@ -250,6 +256,7 @@ export type Widget = z.infer<typeof ProtoWidgetSchema>;
 export type WidgetOverride = z.infer<typeof WidgetOverrideSchema>;
 export type Breakpoint = z.infer<typeof BreakpointSchema>;
 export type WidgetCascadeMode = z.infer<typeof WidgetCascadeModeSchema>;
+export type ResponsiveConstraints = z.infer<typeof ResponsiveConstraintsSchema>;
 export type { ScreenDevice };
 export type Screen = z.infer<typeof ProtoScreenSchema>;
 export type ProtoWidget = Widget;

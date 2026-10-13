@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { createEmptyProject, parseProject, serializeProject } from "./schema";
 import {
   createDefaultBreakpoints,
+  getWidgetsMissingBreakpointOverrides,
   getWidgetsOutsideBreakpointViewport,
   resolveActiveBreakpoint,
   resolveWidgetsForBreakpoint,
@@ -91,10 +92,68 @@ describe("responsive breakpoints", () => {
     expect(getWidgetsOutsideBreakpointViewport([visible, hidden], mobile)).toEqual([visible]);
   });
 
+  it("applies pin, center, stretch, and scaling constraints against the base viewport", () => {
+    const breakpoint = createDefaultBreakpoints()[0];
+    const constrained = makeWidget({
+      x: 100,
+      y: 50,
+      width: 1200,
+      height: 700,
+      constraints: { horizontal: "stretch", vertical: "stretch" },
+    });
+    const rightBottom = makeWidget({
+      x: 100,
+      y: 100,
+      width: 200,
+      height: 100,
+      constraints: { horizontal: "right", vertical: "bottom" },
+    });
+    const center = makeWidget({
+      x: 620,
+      y: 400,
+      width: 200,
+      height: 100,
+      constraints: { horizontal: "center", vertical: "center" },
+    });
+    const scaled = makeWidget({
+      constraints: { horizontal: "scale", vertical: "scale" },
+    });
+    const byId = new Map(
+      resolveWidgetsForBreakpoint(
+        [constrained, rightBottom, center, scaled],
+        breakpoint,
+        1440,
+        900,
+      ).map((widget) => [widget.id, widget]),
+    );
+
+    expect(byId.get(constrained.id)).toMatchObject({ x: 100, width: 150, y: 50, height: 644 });
+    expect(byId.get(rightBottom.id)).toMatchObject({ x: -750, y: 144 });
+    expect(byId.get(center.id)).toMatchObject({ x: 95, y: 372 });
+    expect(byId.get(scaled.id)?.width).toBeCloseTo(scaled.width * 390 / 1440);
+    expect(byId.get(scaled.id)?.height).toBeCloseTo(scaled.height * 844 / 900);
+  });
+
+  it("warns only for important, visible widgets without an override at the breakpoint", () => {
+    const important = makeWidget({ important: true });
+    const overridden = makeWidget({
+      important: true,
+      overrides: { mobile: {} },
+    });
+    const hidden = makeWidget({ important: true, visible: false });
+
+    expect(
+      getWidgetsMissingBreakpointOverrides([important, overridden, hidden], "mobile"),
+    ).toEqual([important]);
+  });
+
   it("round-trips responsive screen and widget data and rejects overlapping ranges", () => {
     const project = createEmptyProject();
     const screen = project.screens[0];
-    const widget = updateWidgetOverride(makeWidget(), "mobile", {
+    const widget = updateWidgetOverride(makeWidget({
+      important: true,
+      constraints: { horizontal: "right", vertical: "bottom" },
+    }), "mobile", {
       x: 24,
       rotation: 15,
     });

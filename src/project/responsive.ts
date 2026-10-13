@@ -1,4 +1,10 @@
-import type { Breakpoint, Screen, Widget, WidgetOverride } from "./schema";
+import type {
+  Breakpoint,
+  ResponsiveConstraints,
+  Screen,
+  Widget,
+  WidgetOverride,
+} from "./schema";
 
 export const BREAKPOINT_PRESETS = [
   { id: "mobile", name: "Mobile", minWidth: 0, maxWidth: 767, width: 390, height: 844 },
@@ -48,10 +54,68 @@ function applyOverride(widget: Widget, override: WidgetOverride | undefined): Wi
   };
 }
 
+function applyConstraints(
+  widget: Widget,
+  constraints: ResponsiveConstraints,
+  breakpoint: Breakpoint,
+  baseWidth: number,
+  baseHeight: number,
+): Widget {
+  const next = { ...widget };
+  const horizontalScale = breakpoint.width / baseWidth;
+  const verticalScale = breakpoint.height / baseHeight;
+
+  switch (constraints.horizontal) {
+    case "right":
+      next.x = breakpoint.width - (baseWidth - widget.x - widget.width);
+      break;
+    case "center":
+      next.x =
+        (breakpoint.width - widget.width) / 2 +
+        widget.x -
+        (baseWidth - widget.width) / 2;
+      break;
+    case "scale":
+      next.x *= horizontalScale;
+      next.width *= horizontalScale;
+      break;
+    case "stretch":
+      next.width = Math.max(
+        1,
+        breakpoint.width - (baseWidth - widget.x - widget.width) - widget.x,
+      );
+      break;
+  }
+
+  switch (constraints.vertical) {
+    case "bottom":
+      next.y = breakpoint.height - (baseHeight - widget.y - widget.height);
+      break;
+    case "center":
+      next.y =
+        (breakpoint.height - widget.height) / 2 +
+        widget.y -
+        (baseHeight - widget.height) / 2;
+      break;
+    case "scale":
+      next.y *= verticalScale;
+      next.height *= verticalScale;
+      break;
+    case "stretch":
+      next.height = Math.max(
+        1,
+        breakpoint.height - (baseHeight - widget.y - widget.height) - widget.y,
+      );
+      break;
+  }
+  return next;
+}
+
 export function resolveWidgetsForBreakpoint(
   widgets: readonly Widget[],
   breakpoint: Breakpoint,
   baseWidth: number,
+  baseHeight = 900,
 ): Widget[] {
   const ordered = [...widgets].sort((first, second) => first.zIndex - second.zIndex);
   let nextStackY = 24;
@@ -76,11 +140,36 @@ export function resolveWidgetsForBreakpoint(
       };
       nextStackY += responsiveWidget.height + 16;
     }
+    if (
+      widget.constraints &&
+      (widget.cascadeMode === undefined || widget.cascadeMode === "absolute")
+    ) {
+      responsiveWidget = applyConstraints(
+        responsiveWidget,
+        widget.constraints,
+        breakpoint,
+        baseWidth,
+        baseHeight,
+      );
+    }
     return applyOverride(
       responsiveWidget,
       widget.overrides?.[breakpoint.id],
     );
   });
+}
+
+export function getWidgetsMissingBreakpointOverrides(
+  widgets: readonly Widget[],
+  breakpointId: string,
+): Widget[] {
+  return widgets.filter(
+    (widget) =>
+      widget.important &&
+      widget.visible &&
+      widget.cascadeMode !== "hide" &&
+      !widget.overrides?.[breakpointId],
+  );
 }
 
 export function getWidgetsOutsideBreakpointViewport(

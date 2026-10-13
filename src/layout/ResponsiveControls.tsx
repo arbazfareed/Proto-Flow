@@ -3,6 +3,7 @@ import { Plus, Trash2, X } from "lucide-react";
 import {
   BREAKPOINT_PRESETS,
   getScreenBreakpoints,
+  getWidgetsMissingBreakpointOverrides,
   getWidgetsOutsideBreakpointViewport,
   resolveActiveBreakpoint,
   resolveWidgetsForBreakpoint,
@@ -12,6 +13,7 @@ import {
   ProtoScreenSchema,
   type Breakpoint,
   type Project,
+  type ResponsiveConstraints,
   type Screen,
   type Widget,
   type WidgetOverride,
@@ -391,10 +393,15 @@ export function ResponsivePanel({
     screen.widgets,
     breakpoint,
     screen.device?.width ?? 1440,
+    screen.device?.height ?? 900,
   ).find((item) => item.id === widget.id) ?? widget;
   const overflows = getWidgetsOutsideBreakpointViewport(
     [effectiveWidget],
     breakpoint,
+  ).length > 0;
+  const missingOwnOverride = getWidgetsMissingBreakpointOverrides(
+    [widget],
+    breakpoint.id,
   ).length > 0;
   useEffect(() => {
     setFieldErrors({});
@@ -451,6 +458,33 @@ export function ResponsivePanel({
     );
   };
 
+  const setConstraint = (
+    axis: keyof ResponsiveConstraints,
+    value: string,
+  ) => {
+    if (axis === "horizontal") {
+      if (!["left", "right", "center", "scale", "stretch"].includes(value)) return;
+      const horizontal = value as ResponsiveConstraints["horizontal"];
+      updateSelectedWidget(screen.id, widget.id, (current) => ({
+        ...current,
+        constraints: {
+          horizontal,
+          vertical: current.constraints?.vertical ?? "top",
+        },
+      }));
+      return;
+    }
+    if (!["top", "bottom", "center", "scale", "stretch"].includes(value)) return;
+    const vertical = value as ResponsiveConstraints["vertical"];
+    updateSelectedWidget(screen.id, widget.id, (current) => ({
+      ...current,
+      constraints: {
+        horizontal: current.constraints?.horizontal ?? "left",
+        vertical,
+      },
+    }));
+  };
+
   const textKey = typeof effectiveWidget.props.label === "string" ? "label" : "text";
   const textValue = effectiveWidget.props[textKey];
 
@@ -463,6 +497,11 @@ export function ResponsivePanel({
         </div>
         {overflows && <span className="responsive-overflow-warning" role="status">Overflows viewport</span>}
       </div>
+      {missingOwnOverride && (
+        <p className="field-hint responsive-missing-override" role="status">
+          This important widget has no override at this breakpoint.
+        </p>
+      )}
       <label className="field-label" htmlFor="widget-cascade-mode">Cascade behavior</label>
       <select
         id="widget-cascade-mode"
@@ -491,6 +530,46 @@ export function ResponsivePanel({
               ? "This widget is hidden at every breakpoint."
               : "Base layout stays fixed unless this breakpoint has overrides."}
       </p>
+      <label className="responsive-visible-field responsive-important-field">
+        <input
+          type="checkbox"
+          checked={widget.important ?? false}
+          onChange={(event) => updateSelectedWidget(screen.id, widget.id, (current) => ({
+            ...current,
+            important: event.target.checked,
+          }))}
+        />
+        Important: require a breakpoint override
+      </label>
+      <div className="section-label responsive-constraints-label">
+        <span>Position constraints</span>
+      </div>
+      <label className="field-label" htmlFor="responsive-horizontal-constraint">Horizontal</label>
+      <select
+        id="responsive-horizontal-constraint"
+        className="text-field"
+        value={widget.constraints?.horizontal ?? "left"}
+        onChange={(event) => setConstraint("horizontal", event.currentTarget.value)}
+      >
+        <option value="left">Pin left</option>
+        <option value="right">Pin right</option>
+        <option value="center">Center</option>
+        <option value="scale">Scale with width</option>
+        <option value="stretch">Pin left and right</option>
+      </select>
+      <label className="field-label" htmlFor="responsive-vertical-constraint">Vertical</label>
+      <select
+        id="responsive-vertical-constraint"
+        className="text-field"
+        value={widget.constraints?.vertical ?? "top"}
+        onChange={(event) => setConstraint("vertical", event.currentTarget.value)}
+      >
+        <option value="top">Pin top</option>
+        <option value="bottom">Pin bottom</option>
+        <option value="center">Center</option>
+        <option value="scale">Scale with height</option>
+        <option value="stretch">Pin top and bottom</option>
+      </select>
       {!override ? (
         <button className="button button-secondary responsive-add-override" onClick={addOverride}>
           <Plus size={13} /> Add override for this breakpoint
