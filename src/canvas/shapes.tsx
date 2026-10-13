@@ -1,19 +1,26 @@
-import type { ComponentType, ReactNode } from "react";
+import { useEffect, useRef, useState, type ComponentType, type ReactNode } from "react";
+import { invoke, isTauri } from "@tauri-apps/api/core";
 import {
   Arrow,
+  Circle,
   Ellipse,
   Group,
+  Image as KonvaImage,
   Line,
   Path,
   Rect,
   Text as KonvaText,
 } from "react-konva";
+import type Konva from "konva";
 import type { Widget } from "../project/schema";
+import { useStore } from "../store";
 import {
   SHAPE_TOOL_DEFINITIONS,
   SHAPE_TOOLS,
+  type PrimitiveTool,
   type ShapeTool,
   type ShapeToolDefinition,
+  type WidgetTool,
 } from "./shapeTools";
 export { SHAPE_TOOLS };
 export type { ShapeTool };
@@ -180,10 +187,316 @@ function IconShape({ widget, stroke, strokeWidth }: ShapeComponentProps) {
   );
 }
 
-const SHAPE_COMPONENTS: Record<
-  ShapeTool,
-  ComponentType<ShapeComponentProps>
-> = {
+function getWidgetProp(widget: Widget, key: string, fallback = ""): string {
+  const value = widget.props[key];
+  return typeof value === "string" ? value : fallback;
+}
+
+function ButtonShape({ widget }: ShapeComponentProps) {
+  const [pointerState, setPointerState] = useState<"default" | "hover" | "pressed">("default");
+  const variant = getWidgetProp(widget, "variant", "primary");
+  const state = getWidgetProp(widget, "state", "default");
+  const disabled = state === "disabled";
+  const visualState = disabled ? "disabled" : state === "default" ? pointerState : state;
+  const colors = variant === "ghost"
+    ? { fill: "transparent", stroke: "#5d5277", text: "#d9d0ef" }
+    : variant === "secondary"
+      ? { fill: "#292a30", stroke: "#45464e", text: "#e9e9ec" }
+      : { fill: "#8b69ed", stroke: "#8b69ed", text: "#ffffff" };
+  const fill =
+    visualState === "pressed"
+      ? "#6247b3"
+      : visualState === "hover" && variant !== "ghost"
+        ? "#9a7cf4"
+        : colors.fill;
+
+  return (
+    <Group
+      onMouseEnter={() => setPointerState("hover")}
+      onMouseLeave={() => setPointerState("default")}
+      onMouseDown={() => setPointerState("pressed")}
+      onMouseUp={() => setPointerState("hover")}
+      opacity={disabled ? 0.48 : 1}
+    >
+      <Rect
+        width={widget.width}
+        height={widget.height}
+        fill={fill}
+        stroke={colors.stroke}
+        strokeWidth={1}
+        cornerRadius={Math.min(8, widget.height / 2)}
+        perfectDrawEnabled={false}
+      />
+      <KonvaText
+        width={widget.width}
+        height={widget.height}
+        text={getWidgetProp(widget, "label", "Button")}
+        fontSize={Math.max(10, Math.min(14, widget.height * 0.36))}
+        fontFamily="Arial"
+        fontStyle="bold"
+        align="center"
+        verticalAlign="middle"
+        fill={variant === "primary" ? "#191321" : colors.text}
+        perfectDrawEnabled={false}
+      />
+    </Group>
+  );
+}
+
+function InputShape({ widget, stroke }: ShapeComponentProps) {
+  const label = getWidgetProp(widget, "label");
+  const value = getWidgetProp(widget, "value");
+  const displayedValue = value
+    ? getWidgetProp(widget, "type") === "password"
+      ? "•".repeat(value.length)
+      : value
+    : getWidgetProp(widget, "placeholder", "Enter text…");
+
+  return (
+    <Group>
+      {label && (
+        <KonvaText
+          y={-19}
+          width={widget.width}
+          height={16}
+          text={label}
+          fontSize={12}
+          fontFamily="Arial"
+          fill="#c5c5cc"
+          perfectDrawEnabled={false}
+        />
+      )}
+      <Rect
+        width={widget.width}
+        height={widget.height}
+        fill={widget.style.fill ?? "#1e1f23"}
+        stroke={stroke ?? "#45464e"}
+        strokeWidth={1}
+        cornerRadius={Math.min(6, widget.height / 3)}
+        perfectDrawEnabled={false}
+      />
+      <KonvaText
+        x={12}
+        width={Math.max(1, widget.width - 24)}
+        height={widget.height}
+        text={displayedValue}
+        fontSize={Math.max(10, Math.min(14, widget.height * 0.36))}
+        fontFamily="Arial"
+        verticalAlign="middle"
+        fill={value ? "#e9e9ec" : "#85858f"}
+        perfectDrawEnabled={false}
+      />
+    </Group>
+  );
+}
+
+function CheckboxShape({ widget }: ShapeComponentProps) {
+  const checked = widget.props.checked === true;
+  const size = Math.min(20, widget.height);
+  return (
+    <Group>
+      <Rect
+        x={1}
+        y={(widget.height - size) / 2}
+        width={size}
+        height={size}
+        fill={checked ? "#8b69ed" : "#1e1f23"}
+        stroke={checked ? "#8b69ed" : "#777780"}
+        strokeWidth={1.4}
+        cornerRadius={4}
+        perfectDrawEnabled={false}
+      />
+      {checked && (
+        <Line
+          points={[5, widget.height / 2, 9, widget.height / 2 + 4, 16, widget.height / 2 - 4]}
+          stroke="#191321"
+          strokeWidth={2}
+          lineCap="round"
+          lineJoin="round"
+          perfectDrawEnabled={false}
+        />
+      )}
+      <KonvaText
+        x={size + 9}
+        width={Math.max(1, widget.width - size - 9)}
+        height={widget.height}
+        text={getWidgetProp(widget, "label", "Checkbox")}
+        fontSize={Math.max(10, Math.min(14, widget.height * 0.58))}
+        fontFamily="Arial"
+        verticalAlign="middle"
+        fill="#d7d6dd"
+        perfectDrawEnabled={false}
+      />
+    </Group>
+  );
+}
+
+function RadioShape({ widget }: ShapeComponentProps) {
+  const selected = widget.props.selected === true;
+  const size = Math.min(20, widget.height);
+  return (
+    <Group>
+      <Circle
+        x={size / 2 + 1}
+        y={widget.height / 2}
+        radius={size / 2 - 1}
+        fill="#1e1f23"
+        stroke={selected ? "#a78bfa" : "#777780"}
+        strokeWidth={1.4}
+        perfectDrawEnabled={false}
+      />
+      {selected && (
+        <Circle
+          x={size / 2 + 1}
+          y={widget.height / 2}
+          radius={size / 4}
+          fill="#a78bfa"
+          perfectDrawEnabled={false}
+        />
+      )}
+      <KonvaText
+        x={size + 9}
+        width={Math.max(1, widget.width - size - 9)}
+        height={widget.height}
+        text={getWidgetProp(widget, "label", "Radio")}
+        fontSize={Math.max(10, Math.min(14, widget.height * 0.58))}
+        fontFamily="Arial"
+        verticalAlign="middle"
+        fill="#d7d6dd"
+        perfectDrawEnabled={false}
+      />
+    </Group>
+  );
+}
+
+function ToggleShape({ widget }: ShapeComponentProps) {
+  const isOn = widget.props.on === true;
+  const label = getWidgetProp(widget, "label");
+  const knobSize = Math.max(8, widget.height - 8);
+  return (
+    <Group>
+      <Rect
+        width={widget.width}
+        height={widget.height}
+        fill={isOn ? "#8b69ed" : "#34353b"}
+        cornerRadius={widget.height / 2}
+        perfectDrawEnabled={false}
+      />
+      <Circle
+        x={isOn ? widget.width - widget.height / 2 : widget.height / 2}
+        y={widget.height / 2}
+        radius={knobSize / 2}
+        fill="#ffffff"
+        perfectDrawEnabled={false}
+      />
+      {label && (
+        <KonvaText
+          x={widget.width + 10}
+          width={180}
+          height={widget.height}
+          text={label}
+          fontSize={Math.max(10, Math.min(14, widget.height * 0.45))}
+          fontFamily="Arial"
+          verticalAlign="middle"
+          fill="#d7d6dd"
+          perfectDrawEnabled={false}
+        />
+      )}
+    </Group>
+  );
+}
+
+function ImageShape({ widget, stroke, strokeWidth }: ShapeComponentProps) {
+  const filePath = useStore((state) => state.filePath);
+  const [image, setImage] = useState<HTMLImageElement | null>(null);
+  const imageNodeRef = useRef<Konva.Image>(null);
+  const source = getWidgetProp(widget, "src");
+  const assetPath = getWidgetProp(widget, "assetPath");
+  const mime = getWidgetProp(widget, "mime");
+
+  useEffect(() => {
+    let active = true;
+    setImage(null);
+    const load = async () => {
+      let sourceData = source;
+      if (!sourceData && assetPath && filePath && isTauri()) {
+        const asset = await invoke<{ mime: string; base64: string }>("read_image_asset", {
+          projectPath: filePath,
+          assetPath,
+        });
+        sourceData = `data:${asset.mime};base64,${asset.base64}`;
+      }
+      if (!sourceData) return;
+      const element = new window.Image();
+      element.onload = () => {
+        if (active) setImage(element);
+      };
+      element.onerror = () => {
+        if (active) setImage(null);
+      };
+      element.src = sourceData.startsWith("data:")
+        ? sourceData
+        : `data:${mime};base64,${sourceData}`;
+    };
+    void load().catch((error: unknown) => {
+      console.error("Could not load the project image asset.", error);
+    });
+    return () => {
+      active = false;
+    };
+  }, [assetPath, filePath, mime, source]);
+
+  useEffect(() => {
+    const node = imageNodeRef.current;
+    if (!image || !node) return;
+    node.clearCache();
+    node.cache({ pixelRatio: 1 });
+    node.getLayer()?.batchDraw();
+  }, [image]);
+
+  if (image) {
+    return (
+      <KonvaImage
+        ref={imageNodeRef}
+        image={image}
+        width={widget.width}
+        height={widget.height}
+        stroke={stroke}
+        strokeWidth={strokeWidth}
+        perfectDrawEnabled={false}
+      />
+    );
+  }
+  return (
+    <Group>
+      <Rect
+        width={widget.width}
+        height={widget.height}
+        fill={widget.style.fill ?? "#202126"}
+        stroke={stroke ?? "#56515f"}
+        strokeWidth={strokeWidth}
+        dash={[6, 4]}
+        cornerRadius={4}
+        perfectDrawEnabled={false}
+      />
+      <KonvaText
+        width={widget.width}
+        height={widget.height}
+        text="Drop image or double-click to choose"
+        fontSize={Math.max(9, Math.min(13, widget.width / 15))}
+        fontFamily="Arial"
+        align="center"
+        verticalAlign="middle"
+        fill="#a2a2aa"
+        padding={8}
+        wrap="word"
+        perfectDrawEnabled={false}
+      />
+    </Group>
+  );
+}
+
+const SHAPE_COMPONENTS: Record<PrimitiveTool, ComponentType<ShapeComponentProps>> = {
   rectangle: RectangleShape,
   ellipse: EllipseShape,
   text: TextShape,
@@ -191,11 +504,25 @@ const SHAPE_COMPONENTS: Record<
   arrow: ArrowShape,
   icon: IconShape,
 };
+const WIDGET_COMPONENTS: Record<WidgetTool, ComponentType<ShapeComponentProps>> = {
+  button: ButtonShape,
+  input: InputShape,
+  image: ImageShape,
+  checkbox: CheckboxShape,
+  radio: RadioShape,
+  toggle: ToggleShape,
+};
 
 const SHAPE_REGISTRY = Object.fromEntries(
   Object.entries(SHAPE_TOOL_DEFINITIONS).map(([type, definition]) => [
     type,
-    { ...definition, component: SHAPE_COMPONENTS[type as ShapeTool] },
+    {
+      ...definition,
+      component:
+        type in WIDGET_COMPONENTS
+          ? WIDGET_COMPONENTS[type as WidgetTool]
+          : SHAPE_COMPONENTS[type as PrimitiveTool],
+    },
   ]),
 ) as Record<ShapeTool, ShapeDefinition>;
 

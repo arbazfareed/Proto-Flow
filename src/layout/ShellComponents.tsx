@@ -23,7 +23,8 @@ import {
 import { isTauri } from "@tauri-apps/api/core";
 import { useStore } from "../store";
 import {
-  SHAPE_TOOLS,
+  PRIMITIVE_TOOLS,
+  WIDGET_TOOLS,
   getShapeToolDefinition,
   type ShapeTool,
 } from "../canvas/shapeTools";
@@ -187,6 +188,7 @@ interface CanvasAreaProps {
   onSaveAs: () => void;
   onOpen: () => void;
   onOpenPalette: () => void;
+  onNotify: (message: string, isError?: boolean) => void;
 }
 
 export function CanvasArea({
@@ -195,6 +197,7 @@ export function CanvasArea({
   onSaveAs,
   onOpen,
   onOpenPalette,
+  onNotify,
 }: CanvasAreaProps) {
   const project = useStore((state) => state.project);
   const leftPanelOpen = useStore((state) => state.leftPanelOpen);
@@ -218,27 +221,36 @@ export function CanvasArea({
           <span className="breadcrumb-muted">Workspace</span><ArrowRight size={13} /><span>{project.name}</span>
         </div>
         <div className="canvas-toolbar-actions">
-          <div className="shape-tools" role="toolbar" aria-label="Shape tools">
-            {SHAPE_TOOLS.map((tool) => {
-              const definition = getShapeToolDefinition(tool);
-              if (!definition) return null;
-              const ToolIcon = definition.icon;
-              return (
-                <button
-                  key={tool}
-                  className={`icon-button small-icon shape-tool-button${activeTool === tool ? " is-active" : ""}`}
-                  type="button"
-                  aria-label={`Draw ${definition.label}`}
-                  aria-pressed={activeTool === tool}
-                  title={`${definition.label}${definition.shortcut ? ` (${definition.shortcut})` : ""}`}
-                  onClick={() =>
-                    setActiveTool((current) => (current === tool ? null : tool))
-                  }
-                >
-                  <ToolIcon size={15} strokeWidth={1.8} />
-                </button>
-              );
-            })}
+          <div className="shape-tools" role="toolbar" aria-label="Canvas tools">
+            {([["Shapes", PRIMITIVE_TOOLS], ["Widgets", WIDGET_TOOLS]] as const).map(
+              ([groupName, tools]) => (
+                <div className="shape-tool-group" key={groupName} role="group" aria-label={groupName}>
+                  <span className="shape-tool-group-label">{groupName}</span>
+                  <div className="shape-tool-buttons">
+                    {tools.map((tool) => {
+                      const definition = getShapeToolDefinition(tool);
+                      if (!definition) return null;
+                      const ToolIcon = definition.icon;
+                      return (
+                        <button
+                          key={tool}
+                          className={`icon-button small-icon shape-tool-button${activeTool === tool ? " is-active" : ""}`}
+                          type="button"
+                          aria-label={`Draw ${definition.label}`}
+                          aria-pressed={activeTool === tool}
+                          title={`${definition.label}${definition.shortcut ? ` (${definition.shortcut})` : ""}`}
+                          onClick={() =>
+                            setActiveTool((current) => (current === tool ? null : tool))
+                          }
+                        >
+                          <ToolIcon size={14} strokeWidth={1.8} />
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              ),
+            )}
           </div>
           <span className="canvas-mode"><span className="mode-dot" /> Canvas</span>
           {!rightPanelOpen && <button className="icon-button small-icon" aria-label="Show inspector panel" onClick={onToggleRight}><PanelRightClose size={15} /></button>}
@@ -318,6 +330,7 @@ export function CanvasArea({
             onSaveAs={onSaveAs}
             onOpen={onOpen}
             onOpenPalette={onOpenPalette}
+            onNotify={onNotify}
             activeTool={activeTool}
             onToolChange={setActiveTool}
           />

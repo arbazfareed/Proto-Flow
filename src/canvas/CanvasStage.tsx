@@ -2,8 +2,10 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { Group, Layer, Line, Shape, Stage, Text } from "react-konva";
 import { ArrowDownToLine, FolderOpen, Minus, Plus } from "lucide-react";
 import type { Stage as KonvaStage } from "konva/lib/Stage";
+import { invoke, isTauri } from "@tauri-apps/api/core";
+import { getCurrentWebview } from "@tauri-apps/api/webview";
 import { useStore } from "../store";
-import type { Widget } from "../project/schema";
+import type { Widget, Project } from "../project/schema";
 import {
   centerCanvasView,
   clampCanvasZoom,
@@ -19,6 +21,11 @@ import {
   renderWidgetShape,
   type ShapeTool,
 } from "./shapes";
+import {
+  IMAGE_ASSET_THRESHOLD,
+  readImageFile,
+  type ImportedImage,
+} from "./images";
 
 interface CanvasSize {
   width: number;
@@ -29,6 +36,7 @@ interface CanvasStageProps {
   onSaveAs: () => void;
   onOpen: () => void;
   onOpenPalette: () => void;
+  onNotify: (message: string, isError?: boolean) => void;
   activeTool: ShapeTool | null;
   onToolChange: (tool: ShapeTool | null) => void;
 }
@@ -177,6 +185,7 @@ function WidgetNode({
   onDragMove,
   onDragEnd,
   onDragBound,
+  onEdit,
 }: {
   widget: Widget;
   selected: boolean;
@@ -186,6 +195,7 @@ function WidgetNode({
   onDragMove: (position: CanvasPoint, altKey: boolean) => void;
   onDragEnd: (position: CanvasPoint) => void;
   onDragBound: (position: CanvasPoint) => CanvasPoint;
+  onEdit: () => void;
 }) {
   return (
     <Group
@@ -198,6 +208,10 @@ function WidgetNode({
       dragBoundFunc={onDragBound}
       onClick={(event) => onSelect(event)}
       onTap={(event) => onSelect(event)}
+      onDblClick={(event) => {
+        event.cancelBubble = true;
+        onEdit();
+      }}
       onDragMove={(event) =>
         onDragMove(
           { x: event.target.x(), y: event.target.y() },
@@ -213,15 +227,64 @@ function WidgetNode({
   );
 }
 
+type EditableWidgetText = {
+  key: "text" | "label" | "placeholder" | "value";
+  value: string;
+};
+
+function getEditableWidgetText(widget: Widget): EditableWidgetText | null {
+  const keys =
+    widget.type === "text"
+      ? ["text"]
+      : widget.type === "input"
+        ? [widget.props.value ? "value" : "placeholder"]
+        : ["button", "checkbox", "radio", "toggle"].includes(widget.type)
+          ? ["label"]
+          : [];
+  const key = keys[0] as EditableWidgetText["key"] | undefined;
+  if (!key) return null;
+  const value = widget.props[key];
+  return { key, value: typeof value === "string" ? value : "" };
+}
+
+function updateWidgetProps(
+  widgetId: string,
+  patch: Record<string, unknown>,
+): void {
+  const current = useStore.getState();
+  const screenId = current.project.startScreenId;
+  const project: Project = {
+    ...current.project,
+    updatedAt: new Date().toISOString(),
+    screens: current.project.screens.map((screen) =>
+      screen.id !== screenId
+        ? screen
+        : {
+            ...screen,
+            widgets: screen.widgets.map((widget) =>
+              widget.id === widgetId
+                ? { ...widget, props: { ...widget.props, ...patch } }
+                : widget,
+            ),
+          },
+    ),
+  };
+  current.setProject(project);
+}
+
 export function CanvasStage({
   onSaveAs,
   onOpen,
   onOpenPalette,
+  onNotify,
   activeTool,
   onToolChange,
 }: CanvasStageProps) {
   const surfaceRef = useRef<HTMLDivElement>(null);
   const stageRef = useRef<KonvaStage>(null);
+  const imageInputRef = useRef<HTMLInputElement>(null);
+  const imageTargetRef = useRef<string | null>(null);
+  const cancelEditRef = useRef(false);
   const panGestureRef = useRef<{ pointerId: number; x: number; y: number } | null>(
     null,
   );
@@ -238,6 +301,12 @@ export function CanvasStage({
   const [previewPositions, setPreviewPositions] = useState<Record<string, CanvasPoint>>({});
   const [guides, setGuides] = useState<CanvasGuide[]>([]);
   const [shapeDraft, setShapeDraft] = useState<ShapeDraft | null>(null);
+  const [editing, setEditing] = useState<{
+    widgetId: string;
+    key: EditableWidgetText["key"];
+    value: string;
+  } | null>(null);
+  const [editValue, setEditValue] = useState("");
   const altHeldRef = useRef(false);
   const pendingGuidesRef = useRef<CanvasGuide[]>([]);
   const guideTimerRef = useRef<number | null>(null);
@@ -305,15 +374,15 @@ export function CanvasStage({
       position: CanvasPoint,
       bounds?: { width: number; height: number; points?: number[] },
       altKey = altHeldRef.current,
-    ) => {
+    ): string | null => {
       const current = useStore.getState();
       const screen = current.project.screens.find(
         (item) => item.id === current.project.startScreenId,
       );
-      if (!screen) return;
+      if (!screen) return null;
 
       const definition = getShapeDefinition(type);
-      if (!definition) return;
+      if (!definition) return null;
       let width = bounds?.width ?? definition.width;
       let height = bounds?.height ?? definition.height;
       let props = { ...definition.props };
@@ -344,6 +413,15 @@ export function CanvasStage({
       }
 
       const widget = createShapeWidget(type, position.x, position.y, width, height, props);
+      if (type === "button" && typeof window !== "undefined") {
+        const accent = getComputedStyle(document.documentElement)
+          .getPropertyValue("--accent-strong")
+          .trim();
+        if (/^#[\da-f]{3,8}$/i.test(accent)) {
+          widget.style.fill = accent;
+          widget.style.stroke = accent;
+        }
+      }
       const siblings = screen.widgets.map((item) => ({
         id: item.id,
         x: item.x,
@@ -390,9 +468,194 @@ export function CanvasStage({
         guideTimerRef.current = null;
         setGuides([]);
       }, 900);
+      return widget.id;
     },
     [],
   );
+
+  const applyImportedImage = useCallback(
+    async (
+      image: ImportedImage,
+      position: CanvasPoint,
+      targetWidgetId: string | null = null,
+    ) => {
+      if (targetWidgetId) {
+        const target = useStore
+          .getState()
+          .project.screens.some((screen) =>
+            screen.widgets.some(
+              (widget) => widget.id === targetWidgetId && widget.type === "image",
+            ),
+          );
+        if (!target) {
+          onNotify("Select an image widget before replacing its image.", true);
+          return;
+        }
+      }
+      const current = useStore.getState();
+      let assetPath: string | undefined;
+      if (image.size >= IMAGE_ASSET_THRESHOLD && current.filePath && isTauri()) {
+        try {
+          assetPath = await invoke<string>("save_image_asset", {
+            projectPath: current.filePath,
+            mime: image.mime,
+            base64: image.src.slice(image.src.indexOf(",") + 1),
+          });
+        } catch (error) {
+          onNotify(
+            error instanceof Error ? error.message : "Could not save the image asset.",
+            true,
+          );
+          return;
+        }
+      }
+
+      const imageWidgetId =
+        targetWidgetId ?? createWidgetAt("image", position);
+      if (!imageWidgetId) return;
+      updateWidgetProps(imageWidgetId, {
+        src: image.src,
+        mime: image.mime,
+        fileName: image.name,
+        assetPath,
+      });
+      useStore.getState().select([imageWidgetId]);
+      onNotify(
+        assetPath ? "Image added to the project assets." : "Image added.",
+      );
+    },
+    [createWidgetAt, onNotify],
+  );
+
+  const handleImageFile = useCallback(
+    async (
+      file: File,
+      position: CanvasPoint,
+      targetWidgetId: string | null = null,
+    ) => {
+      try {
+        const image = await readImageFile(file);
+        await applyImportedImage(image, position, targetWidgetId);
+      } catch (error) {
+        onNotify(
+          error instanceof Error ? error.message : "Could not load the selected image.",
+          true,
+        );
+      }
+    },
+    [applyImportedImage, onNotify],
+  );
+
+  const openImagePicker = useCallback((widgetId: string) => {
+    imageTargetRef.current = widgetId;
+    if (imageInputRef.current) {
+      imageInputRef.current.value = "";
+      imageInputRef.current.click();
+    }
+  }, []);
+
+  const beginWidgetTextEdit = useCallback(
+    (widget: Widget) => {
+      if (widget.type === "image") {
+        openImagePicker(widget.id);
+        return;
+      }
+      const editable = getEditableWidgetText(widget);
+      if (!editable) return;
+      setEditing({ widgetId: widget.id, ...editable });
+      setEditValue(editable.value);
+    },
+    [openImagePicker],
+  );
+
+  const commitWidgetTextEdit = useCallback(() => {
+    if (!editing) return;
+    updateWidgetProps(editing.widgetId, { [editing.key]: editValue });
+    setEditing(null);
+  }, [editValue, editing]);
+
+  const cancelWidgetTextEdit = useCallback(() => {
+    cancelEditRef.current = true;
+    setEditing(null);
+  }, []);
+
+  const getWorldPositionFromClient = useCallback(
+    (clientX: number, clientY: number): CanvasPoint => {
+      const bounds = surfaceRef.current?.getBoundingClientRect();
+      if (!bounds) return { x: 0, y: 0 };
+      return {
+        x: (clientX - bounds.left - currentViewRef.current.pan.x) / currentViewRef.current.zoom,
+        y: (clientY - bounds.top - currentViewRef.current.pan.y) / currentViewRef.current.zoom,
+      };
+    },
+    [],
+  );
+
+  const handleDroppedImagePaths = useCallback(
+    async (paths: string[], position: CanvasPoint) => {
+      if (paths.length === 0) return;
+      try {
+        const image = await invoke<{
+          name: string;
+          mime: string;
+          size: number;
+          base64: string;
+        }>("read_dropped_image", { path: paths[0] });
+        await applyImportedImage(
+          {
+            name: image.name,
+            mime: image.mime,
+            size: image.size,
+            src: `data:${image.mime};base64,${image.base64}`,
+          },
+          position,
+        );
+      } catch (error) {
+        onNotify(
+          error instanceof Error ? error.message : "Could not import the dropped image.",
+          true,
+        );
+      }
+    },
+    [applyImportedImage, onNotify],
+  );
+
+  useEffect(() => {
+    if (!isTauri()) return;
+    let unlisten: (() => void) | undefined;
+    void getCurrentWebview()
+      .onDragDropEvent((event) => {
+        if (event.payload.type !== "drop") return;
+        const bounds = surfaceRef.current?.getBoundingClientRect();
+        if (!bounds) return;
+        const clientX = event.payload.position.x / window.devicePixelRatio;
+        const clientY = event.payload.position.y / window.devicePixelRatio;
+        if (
+          clientX < bounds.left ||
+          clientX > bounds.right ||
+          clientY < bounds.top ||
+          clientY > bounds.bottom
+        ) {
+          return;
+        }
+        void handleDroppedImagePaths(
+          event.payload.paths,
+          getWorldPositionFromClient(clientX, clientY),
+        );
+      })
+      .then((stopListening) => {
+        unlisten = stopListening;
+      })
+      .catch((error: unknown) => {
+        onNotify(
+          error instanceof Error
+            ? error.message
+            : "Could not listen for dropped image files.",
+          true,
+        );
+      });
+    return () => unlisten?.();
+  }, [getWorldPositionFromClient, handleDroppedImagePaths, onNotify]);
 
   const finishDrawing = useCallback(
     (draft: ShapeDraft, end: CanvasPoint) => {
@@ -501,7 +764,10 @@ export function CanvasStage({
       o: "ellipse",
       t: "text",
       l: "line",
-      i: "icon",
+      b: "button",
+      i: "input",
+      m: "image",
+      c: "checkbox",
     };
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.ctrlKey || event.metaKey || event.altKey || isEditingTarget(event.target)) {
@@ -513,7 +779,37 @@ export function CanvasStage({
         event.preventDefault();
         return;
       }
-      const tool = shortcuts[event.key.toLowerCase()];
+      if (
+        (event.key === "Delete" || event.key === "Backspace") &&
+        !activeToolRef.current
+      ) {
+        const current = useStore.getState();
+        if (current.selectedIds.length === 0) return;
+        const selected = new Set(current.selectedIds);
+        current.setProject({
+          ...current.project,
+          updatedAt: new Date().toISOString(),
+          screens: current.project.screens.map((screen) =>
+            screen.id === current.project.startScreenId
+              ? {
+                  ...screen,
+                  widgets: screen.widgets.filter((widget) => !selected.has(widget.id)),
+                }
+              : screen,
+          ),
+        });
+        current.clearSelection();
+        event.preventDefault();
+        return;
+      }
+      const key = event.key.toLowerCase();
+      const tool = event.shiftKey
+        ? key === "r"
+          ? "radio"
+          : key === "t"
+            ? "toggle"
+            : undefined
+        : shortcuts[key];
       if (!tool) return;
       event.preventDefault();
       createWidgetAt(tool, lastPointerWorldRef.current);
@@ -759,7 +1055,39 @@ export function CanvasStage({
       onAuxClick={(event) => {
         if (event.button === 1) event.preventDefault();
       }}
+      onDragOver={(event) => {
+        if (!isTauri() && event.dataTransfer.types.includes("Files")) {
+          event.preventDefault();
+        }
+      }}
+      onDrop={(event) => {
+        if (isTauri() || event.dataTransfer.files.length === 0) return;
+        event.preventDefault();
+        const position = getWorldPositionFromClient(event.clientX, event.clientY);
+        lastPointerWorldRef.current = position;
+        void handleImageFile(event.dataTransfer.files[0], position);
+      }}
     >
+      <input
+        ref={imageInputRef}
+        className="canvas-image-file-input"
+        type="file"
+        accept=".png,.jpg,.jpeg,.svg,.webp,image/png,image/jpeg,image/svg+xml,image/webp"
+        aria-label="Choose an image file"
+        onChange={(event) => {
+          const file = event.currentTarget.files?.[0];
+          const targetId = imageTargetRef.current;
+          imageTargetRef.current = null;
+          if (!file) return;
+          const target = targetId
+            ? screenWidgets.find((widget) => widget.id === targetId)
+            : undefined;
+          const position = target
+            ? { x: target.x, y: target.y }
+            : lastPointerWorldRef.current;
+          void handleImageFile(file, position, targetId);
+        }}
+      />
       {size.width > 0 && size.height > 0 && (
         <Stage
           ref={stageRef}
@@ -817,6 +1145,7 @@ export function CanvasStage({
                   position={
                     previewPositions[widget.id] ?? { x: widget.x, y: widget.y }
                   }
+                  onEdit={() => beginWidgetTextEdit(widget)}
                   onSelect={(event) => {
                     const selected = useStore.getState().selectedIds;
                     if (event.evt.shiftKey) {
@@ -914,6 +1243,48 @@ export function CanvasStage({
           <div className="empty-shortcut"><span>Press</span> <button className="shortcut-link" onClick={onOpenPalette}>Ctrl K</button> <span>to see all actions</span></div>
         </div>
       )}
+      {editing && (() => {
+        const widget = screenWidgets.find((item) => item.id === editing.widgetId);
+        if (!widget) return null;
+        const toggleLabel = widget.type === "toggle" && editing.key === "label";
+        const left = pan.x + (widget.x + (toggleLabel ? widget.width + 10 : 0)) * zoom;
+        const top = pan.y + widget.y * zoom;
+        const width = Math.max(80, widget.width * zoom * (toggleLabel ? 1 : 1));
+        const height = Math.max(28, widget.height * zoom);
+        return (
+          <textarea
+            className="canvas-inline-editor"
+            aria-label={`Edit ${widget.type} text`}
+            style={{
+              left,
+              top,
+              width,
+              height,
+              transform: `rotate(${widget.rotation}deg)`,
+            }}
+            value={editValue}
+            autoFocus
+            onChange={(event) => setEditValue(event.currentTarget.value)}
+            onMouseDown={(event) => event.stopPropagation()}
+            onBlur={() => {
+              if (cancelEditRef.current) {
+                cancelEditRef.current = false;
+                return;
+              }
+              commitWidgetTextEdit();
+            }}
+            onKeyDown={(event) => {
+              if (event.key === "Escape") {
+                event.preventDefault();
+                cancelWidgetTextEdit();
+              } else if (event.key === "Enter" && !event.shiftKey) {
+                event.preventDefault();
+                commitWidgetTextEdit();
+              }
+            }}
+          />
+        );
+      })()}
       <div className="canvas-zoom-controls" role="group" aria-label="Canvas zoom controls">
         <button
           className="icon-button small-icon"

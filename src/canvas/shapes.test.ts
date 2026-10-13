@@ -16,6 +16,12 @@ describe("canvas shape registry", () => {
       "line",
       "arrow",
       "icon",
+      "button",
+      "input",
+      "image",
+      "checkbox",
+      "radio",
+      "toggle",
     ]);
     expect(SHAPE_TOOLS.map((tool) => getShapeDefinition(tool)?.label)).toEqual([
       "Rectangle",
@@ -24,6 +30,12 @@ describe("canvas shape registry", () => {
       "Line",
       "Arrow",
       "Icon",
+      "Button",
+      "Input",
+      "Image",
+      "Checkbox",
+      "Radio",
+      "Toggle",
     ]);
     expect(
       SHAPE_TOOLS.map((tool) => {
@@ -37,7 +49,41 @@ describe("canvas shape registry", () => {
       [200, 1],
       [200, 1],
       [32, 32],
+      [120, 40],
+      [240, 40],
+      [200, 200],
+      [160, 24],
+      [160, 24],
+      [60, 32],
     ]);
+  });
+
+  it("registers widget props and creates each visual widget with isolated defaults", () => {
+    expect(getShapeDefinition("button")?.props).toMatchObject({
+      label: "Button",
+      variant: "primary",
+      state: "default",
+    });
+    expect(getShapeDefinition("input")?.props).toMatchObject({
+      label: "",
+      placeholder: "Enter text…",
+      value: "",
+      type: "text",
+    });
+    expect(getShapeDefinition("checkbox")?.props).toEqual({
+      label: "Checkbox",
+      checked: false,
+    });
+    expect(getShapeDefinition("radio")?.props).toEqual({
+      label: "Radio",
+      selected: false,
+      groupName: "radio-group",
+    });
+    expect(getShapeDefinition("toggle")?.props).toEqual({ on: false, label: "" });
+
+    const firstButton = createShapeWidget("button", 0, 0);
+    firstButton.props.label = "Submit";
+    expect(createShapeWidget("button", 0, 0).props.label).toBe("Button");
   });
 
   it("creates UUID-backed unlocked widgets with isolated registry defaults", () => {

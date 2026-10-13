@@ -235,5 +235,17 @@ export function createEmptyProject(name = "Untitled project"): Project {
 export const createProject = createEmptyProject;
 
 export function serializeProject(project: Project): string {
-  return `${JSON.stringify(parseProject(project), null, 2)}\n`;
+  const serializableProject = {
+    ...project,
+    screens: project.screens.map((screen) => ({
+      ...screen,
+      widgets: screen.widgets.map((widget) => {
+        if (typeof widget.props.assetPath !== "string") return widget;
+        const props = { ...widget.props };
+        delete props.src;
+        return { ...widget, props };
+      }),
+    })),
+  };
+  return `${JSON.stringify(parseProject(serializableProject), null, 2)}\n`;
 }

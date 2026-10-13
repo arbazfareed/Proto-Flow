@@ -1,5 +1,6 @@
 import { invoke, isTauri } from "@tauri-apps/api/core";
-import { parseProject, serializeProject, type Project } from "./schema";
+import { IMAGE_ASSET_THRESHOLD, imageDataToBytes } from "../canvas/images";
+import { parseProject, serializeProject, type Project, type Widget } from "./schema";
 
 function requireDesktopRuntime(): void {
   if (!isTauri()) {
@@ -18,17 +19,52 @@ export async function saveProjectFile(
   project: Project,
   currentPath: string | null,
   saveAs = false,
-): Promise<string | null> {
+): Promise<{ path: string; project: Project } | null> {
   requireDesktopRuntime();
-  const content = serializeProject(project);
-  if (saveAs) {
-    return invoke<string | null>("save_project_as", {
+  let path = currentPath;
+  if (saveAs || !path) {
+    path = await invoke<string | null>("pick_project_save_path", {
       defaultFilename: project.name,
-      content,
     });
   }
-  return invoke<string | null>("save_project", {
-    path: currentPath,
-    content,
+  if (!path) return null;
+
+  const updatedScreens = await Promise.all(
+    project.screens.map(async (screen) => ({
+      ...screen,
+      widgets: await Promise.all(
+        screen.widgets.map(async (widget): Promise<Widget> => {
+          const src = widget.props.src;
+          const assetPath = widget.props.assetPath;
+          const mime = widget.props.mime;
+          if (
+            widget.type !== "image" ||
+            typeof src !== "string" ||
+            !src.startsWith("data:image/") ||
+            typeof mime !== "string" ||
+            typeof assetPath === "string"
+          ) {
+            return widget;
+          }
+          const bytes = imageDataToBytes(src);
+          if (bytes.byteLength < IMAGE_ASSET_THRESHOLD) return widget;
+          const savedAssetPath = await invoke<string>("save_image_asset", {
+            projectPath: path,
+            mime,
+            base64: src.slice(src.indexOf(",") + 1),
+          });
+          return {
+            ...widget,
+            props: { ...widget.props, assetPath: savedAssetPath },
+          };
+        }),
+      ),
+    })),
+  );
+  const projectWithAssets = { ...project, screens: updatedScreens };
+  const savedPath = await invoke<string | null>("save_project", {
+    path,
+    content: serializeProject(projectWithAssets),
   });
+  return savedPath ? { path: savedPath, project: projectWithAssets } : null;
 }

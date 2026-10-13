@@ -11,6 +11,10 @@ pub fn run() {
             commands::file_io::save_project,
             commands::file_io::open_project,
             commands::file_io::save_project_as,
+            commands::file_io::pick_project_save_path,
+            commands::file_io::save_image_asset,
+            commands::file_io::read_image_asset,
+            commands::file_io::read_dropped_image,
             commands::file_io::get_device_id
         ])
         .run(tauri::generate_context!())

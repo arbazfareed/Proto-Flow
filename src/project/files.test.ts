@@ -63,7 +63,10 @@ describe("native project file commands", () => {
     const project = createEmptyProject("Checkout flow");
     invokeMock.mockResolvedValue("checkout.pflow");
 
-    await expect(saveProjectFile(project, "checkout.pflow")).resolves.toBe("checkout.pflow");
+    await expect(saveProjectFile(project, "checkout.pflow")).resolves.toEqual({
+      path: "checkout.pflow",
+      project,
+    });
     expect(invokeMock).toHaveBeenCalledWith("save_project", {
       path: "checkout.pflow",
       content: serializeProject(project),
@@ -75,9 +78,62 @@ describe("native project file commands", () => {
     invokeMock.mockResolvedValue(null);
 
     await expect(saveProjectFile(project, "existing.pflow", true)).resolves.toBeNull();
-    expect(invokeMock).toHaveBeenCalledWith("save_project_as", {
+    expect(invokeMock).toHaveBeenCalledWith("pick_project_save_path", {
       defaultFilename: "Checkout flow",
-      content: serializeProject(project),
+    });
+  });
+
+  it("moves images of at least 500 KB into the project assets folder on save", async () => {
+    const project = createEmptyProject("Images");
+    const screen = project.screens[0];
+    const bytes = new Uint8Array(500 * 1024);
+    bytes.set([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
+    let binary = "";
+    for (const byte of bytes) binary += String.fromCharCode(byte);
+    const src = `data:image/png;base64,${btoa(binary)}`;
+    const image = {
+      id: crypto.randomUUID(),
+      type: "image",
+      x: 0,
+      y: 0,
+      width: 200,
+      height: 200,
+      rotation: 0,
+      opacity: 1,
+      visible: true,
+      locked: false,
+      zIndex: 0,
+      style: {},
+      props: { src, mime: "image/png", fileName: "large.png" },
+    };
+    const projectWithImage = {
+      ...project,
+      screens: [{ ...screen, widgets: [image] }],
+    };
+    invokeMock
+      .mockResolvedValueOnce("assets/generated.png")
+      .mockResolvedValueOnce("images.pflow");
+
+    const result = await saveProjectFile(projectWithImage, "images.pflow");
+
+    expect(result?.path).toBe("images.pflow");
+    expect(result?.project.screens[0].widgets[0].props).toMatchObject({
+      assetPath: "assets/generated.png",
+      src,
+    });
+    expect(invokeMock).toHaveBeenNthCalledWith(
+      1,
+      "save_image_asset",
+      expect.objectContaining({
+        projectPath: "images.pflow",
+        mime: "image/png",
+      }),
+    );
+    const savedContent = invokeMock.mock.calls[1][1] as { content: string };
+    expect(JSON.parse(savedContent.content).screens[0].widgets[0].props).toEqual({
+      mime: "image/png",
+      fileName: "large.png",
+      assetPath: "assets/generated.png",
     });
   });
 

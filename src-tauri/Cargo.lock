@@ -2514,6 +2514,7 @@ dependencies = [
 name = "proto-flow"
 version = "0.1.0"
 dependencies = [
+ "base64 0.22.1",
  "hostname",
  "serde",
  "serde_json",
