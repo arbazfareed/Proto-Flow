@@ -106,6 +106,46 @@ export const WidgetStyleSchema = z
   })
   .strict();
 
+export const BreakpointSchema = z.object({
+  id: z.string().trim().min(1).max(120),
+  name: z.string().trim().min(1).max(80),
+  minWidth: z.number().int().min(0).max(16_384),
+  maxWidth: z.number().int().min(1).max(16_384).optional(),
+  width: z.number().int().min(1).max(16_384),
+  height: z.number().int().min(1).max(16_384),
+}).strict().superRefine((breakpoint, context) => {
+  if (breakpoint.maxWidth !== undefined && breakpoint.maxWidth < breakpoint.minWidth) {
+    context.addIssue({
+      code: "custom",
+      path: ["maxWidth"],
+      message: "Maximum width must be greater than or equal to minimum width.",
+    });
+  }
+  if (
+    breakpoint.width < breakpoint.minWidth ||
+    (breakpoint.maxWidth !== undefined && breakpoint.width > breakpoint.maxWidth)
+  ) {
+    context.addIssue({
+      code: "custom",
+      path: ["width"],
+      message: "Canvas width must be within the breakpoint range.",
+    });
+  }
+});
+
+export const WidgetOverrideSchema = z.object({
+  x: z.number().finite().min(-COORDINATE_LIMIT).max(COORDINATE_LIMIT).optional(),
+  y: z.number().finite().min(-COORDINATE_LIMIT).max(COORDINATE_LIMIT).optional(),
+  width: z.number().finite().min(1).optional(),
+  height: z.number().finite().min(1).optional(),
+  rotation: z.number().finite().optional(),
+  visible: z.boolean().optional(),
+  style: WidgetStyleSchema.partial().optional(),
+  props: z.record(z.string(), z.unknown()).optional(),
+}).strict();
+
+export const WidgetCascadeModeSchema = z.enum(["absolute", "stack", "fluid", "hide"]);
+
 export const ProtoWidgetSchema = z
   .object({
     id: z.string().uuid(),
@@ -123,6 +163,8 @@ export const ProtoWidgetSchema = z
     zIndex: z.number().int(),
     style: WidgetStyleSchema,
     props: z.record(z.string(), z.unknown()),
+    cascadeMode: WidgetCascadeModeSchema.optional(),
+    overrides: z.record(z.string(), WidgetOverrideSchema).optional(),
   })
   .strict();
 
@@ -131,10 +173,48 @@ export const ProtoScreenSchema = z
     id: z.string().uuid(),
     name: z.string().trim().min(1).max(120),
     device: ScreenDeviceSchema.optional(),
+    breakpoints: z.array(BreakpointSchema).optional(),
     widgets: z.array(ProtoWidgetSchema),
     interactionRules: z.array(InteractionRuleSchema),
-  })
-  .strict();
+  }).strict().superRefine((screen, context) => {
+    const ids = new Set<string>();
+    for (const [index, breakpoint] of (screen.breakpoints ?? []).entries()) {
+      if (ids.has(breakpoint.id)) {
+        context.addIssue({
+          code: "custom",
+          path: ["breakpoints", index, "id"],
+          message: `Duplicate breakpoint ID: ${breakpoint.id}.`,
+        });
+      }
+      ids.add(breakpoint.id);
+      for (const [otherIndex, other] of (screen.breakpoints ?? []).entries()) {
+        if (
+          otherIndex <= index ||
+          (breakpoint.maxWidth !== undefined && breakpoint.maxWidth < other.minWidth) ||
+          (other.maxWidth !== undefined && other.maxWidth < breakpoint.minWidth)
+        ) {
+          continue;
+        }
+        context.addIssue({
+          code: "custom",
+          path: ["breakpoints", index, "minWidth"],
+          message: `Breakpoint range overlaps "${other.name}".`,
+        });
+      }
+    }
+    const breakpointIds = new Set((screen.breakpoints ?? []).map((item) => item.id));
+    for (const [widgetIndex, widget] of screen.widgets.entries()) {
+      for (const breakpointId of Object.keys(widget.overrides ?? {})) {
+        if (!breakpointIds.has(breakpointId)) {
+          context.addIssue({
+            code: "custom",
+            path: ["widgets", widgetIndex, "overrides", breakpointId],
+            message: "Widget override references an unknown breakpoint.",
+          });
+        }
+      }
+    }
+  });
 
 export const ProtoFlowProjectSchema = z
   .object({
@@ -167,6 +247,9 @@ export type InteractionRule = z.infer<typeof InteractionRuleSchema>;
 export type WidgetShadow = z.infer<typeof WidgetShadowSchema>;
 export type WidgetStyle = z.infer<typeof WidgetStyleSchema>;
 export type Widget = z.infer<typeof ProtoWidgetSchema>;
+export type WidgetOverride = z.infer<typeof WidgetOverrideSchema>;
+export type Breakpoint = z.infer<typeof BreakpointSchema>;
+export type WidgetCascadeMode = z.infer<typeof WidgetCascadeModeSchema>;
 export type { ScreenDevice };
 export type Screen = z.infer<typeof ProtoScreenSchema>;
 export type ProtoWidget = Widget;
@@ -252,6 +335,11 @@ export function createEmptyProject(name = "Untitled project"): Project {
         id: screenId,
         name: "Screen 1",
         device: toScreenDevice(DEFAULT_DEVICE_PRESET),
+        breakpoints: [
+          { id: "mobile", name: "Mobile", minWidth: 0, maxWidth: 767, width: 390, height: 844 },
+          { id: "tablet", name: "Tablet", minWidth: 768, maxWidth: 1023, width: 768, height: 1024 },
+          { id: "desktop", name: "Desktop", minWidth: 1024, width: 1440, height: 900 },
+        ],
         widgets: [],
         interactionRules: [],
       },

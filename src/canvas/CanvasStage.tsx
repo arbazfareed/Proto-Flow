@@ -7,6 +7,13 @@ import type { Layer as KonvaLayer } from "konva/lib/Layer";
 import { invoke, isTauri } from "@tauri-apps/api/core";
 import { getCurrentWebview } from "@tauri-apps/api/webview";
 import { useStore } from "../store";
+import {
+  getScreenBreakpoints,
+  getWidgetsOutsideBreakpointViewport,
+  resolveWidgetsForBreakpoint,
+  resolveActiveBreakpoint,
+  updateWidgetOverride,
+} from "../project/responsive";
 import { DEFAULT_DEVICE_PRESET, findDevicePreset, toScreenDevice } from "../devices/catalog";
 import { DeviceFrame } from "../devices/DeviceFrame";
 import {
@@ -15,7 +22,7 @@ import {
   getWidgetsOutsideSafeArea,
 } from "../devices/frame";
 import type { ScreenDevice } from "../devices/types";
-import type { Widget, Project } from "../project/schema";
+import type { Widget, Project, Screen } from "../project/schema";
 import {
   clampCanvasZoom,
   fitCanvasBounds,
@@ -86,6 +93,15 @@ type WidgetGeometryUpdate = Partial<
   Pick<Widget, "x" | "y" | "width" | "height" | "rotation">
 > & { id: string };
 
+function getEffectiveScreenWidgets(screen: Screen, breakpointId: string | null): Widget[] {
+  const breakpoint = resolveActiveBreakpoint(screen, breakpointId);
+  return resolveWidgetsForBreakpoint(
+    screen.widgets,
+    breakpoint,
+    screen.device?.width ?? DEFAULT_DEVICE_PRESET.viewport.width,
+  );
+}
+
 function commitWidgetGeometry(
   updates: readonly WidgetGeometryUpdate[],
   historySnapshot?: Project,
@@ -94,6 +110,17 @@ function commitWidgetGeometry(
   const updateById = new Map(updates.map((update) => [update.id, update]));
   const current = useStore.getState();
   const screenId = current.getActiveScreenId();
+  const activeScreen = current.project.screens.find((screen) => screen.id === screenId);
+  const activeBreakpointId = current.activeBreakpointId;
+  const overrideBreakpointId =
+    activeBreakpointId &&
+    activeScreen &&
+    getScreenBreakpoints(activeScreen).some((breakpoint) => breakpoint.id === activeBreakpointId)
+      ? activeBreakpointId
+      : null;
+  const effectiveWidgets = activeScreen
+    ? getEffectiveScreenWidgets(activeScreen, overrideBreakpointId)
+    : [];
   const project: Project = {
     ...current.project,
     updatedAt: new Date().toISOString(),
@@ -102,20 +129,26 @@ function commitWidgetGeometry(
         ? screen
         : {
             ...screen,
+            breakpoints: screen.id === screenId && overrideBreakpointId
+              ? screen.breakpoints ?? [...getScreenBreakpoints(screen)]
+              : screen.breakpoints,
             widgets: screen.widgets.map((widget) => {
               const update = updateById.get(widget.id);
               if (!update) return widget;
-              const next = { ...widget, ...update };
+              const { id, ...geometry } = update;
+              const previous = effectiveWidgets.find((item) => item.id === id) ?? widget;
               if (
-                next.x === widget.x &&
-                next.y === widget.y &&
-                next.width === widget.width &&
-                next.height === widget.height &&
-                next.rotation === widget.rotation
+                (geometry.x === undefined || geometry.x === previous.x) &&
+                (geometry.y === undefined || geometry.y === previous.y) &&
+                (geometry.width === undefined || geometry.width === previous.width) &&
+                (geometry.height === undefined || geometry.height === previous.height) &&
+                (geometry.rotation === undefined || geometry.rotation === previous.rotation)
               ) {
                 return widget;
               }
-              return next;
+              return overrideBreakpointId
+                ? updateWidgetOverride(widget, overrideBreakpointId, geometry)
+                : { ...widget, ...geometry };
             }),
           },
     ),
@@ -358,6 +391,13 @@ function updateWidgetProps(
 ): void {
   const current = useStore.getState();
   const screenId = current.getActiveScreenId();
+  const screen = current.project.screens.find((item) => item.id === screenId);
+  const breakpointId = current.activeBreakpointId;
+  const overrideBreakpointId =
+    screen &&
+    breakpointId &&
+    getScreenBreakpoints(screen).some((breakpoint) => breakpoint.id === breakpointId);
+  const resolvedOverrideBreakpointId = overrideBreakpointId ? breakpointId : null;
   const project: Project = {
     ...current.project,
     updatedAt: new Date().toISOString(),
@@ -366,9 +406,16 @@ function updateWidgetProps(
         ? screen
         : {
             ...screen,
+            breakpoints: resolvedOverrideBreakpointId
+              ? screen.breakpoints ?? [...getScreenBreakpoints(screen)]
+              : screen.breakpoints,
             widgets: screen.widgets.map((widget) =>
               widget.id === widgetId
-                ? { ...widget, props: { ...widget.props, ...patch } }
+                ? resolvedOverrideBreakpointId
+                  ? updateWidgetOverride(widget, resolvedOverrideBreakpointId, {
+                      props: { ...widget.props, ...patch },
+                    })
+                  : { ...widget, props: { ...widget.props, ...patch } }
                 : widget,
             ),
           },
@@ -441,18 +488,43 @@ export function CanvasStage({
   const activeScreen = useStore((state) =>
     state.project.screens.find((screen) => screen.id === state.getActiveScreenId()),
   );
+  const activeBreakpointId = useStore((state) => state.activeBreakpointId);
   const selectedIds = useStore((state) => state.selectedIds);
   useEffect(() => {
     activeToolRef.current = activeTool;
   }, [activeTool]);
-  const screenWidgets = activeScreen
-    ? [...activeScreen.widgets].sort((first, second) => first.zIndex - second.zIndex)
-    : [];
-  const activeDevice: ScreenDevice =
+  const activeBreakpoint = activeScreen
+    ? resolveActiveBreakpoint(activeScreen, activeBreakpointId)
+    : undefined;
+  const baseScreenWidgets = activeScreen?.widgets ?? [];
+  const screenWidgets = activeScreen && activeBreakpoint
+    ? resolveWidgetsForBreakpoint(
+        baseScreenWidgets,
+        activeBreakpoint,
+        activeScreen.device?.width ?? DEFAULT_DEVICE_PRESET.viewport.width,
+      )
+    : [...baseScreenWidgets].sort((first, second) => first.zIndex - second.zIndex);
+  const baseDevice: ScreenDevice =
     activeScreen?.device ?? toScreenDevice(DEFAULT_DEVICE_PRESET);
+  const activeDevice: ScreenDevice = activeBreakpoint
+    ? {
+        ...baseDevice,
+        width: activeBreakpoint.width,
+        height: activeBreakpoint.height,
+        insets: {
+          top: Math.min(baseDevice.insets.top, Math.max(0, activeBreakpoint.height - 1)),
+          bottom: Math.min(baseDevice.insets.bottom, Math.max(0, activeBreakpoint.height - 1)),
+          left: Math.min(baseDevice.insets.left, Math.max(0, activeBreakpoint.width - 1)),
+          right: Math.min(baseDevice.insets.right, Math.max(0, activeBreakpoint.width - 1)),
+        },
+      }
+    : baseDevice;
   const activeDevicePreset = findDevicePreset(activeDevice.presetId);
   const safeAreaBounds = getSafeAreaBounds(activeDevice);
   const widgetsOutsideSafeArea = getWidgetsOutsideSafeArea(screenWidgets, activeDevice);
+  const widgetsOutsideBreakpointViewport = activeBreakpoint
+    ? getWidgetsOutsideBreakpointViewport(screenWidgets, activeBreakpoint)
+    : [];
   const selectedWidgets = screenWidgets.filter((widget) =>
     selectedIds.includes(widget.id),
   );
@@ -969,9 +1041,13 @@ export function CanvasStage({
 
   const applySelectionOperation = useCallback((operation: SelectionOperation) => {
     const current = useStore.getState();
-    const selected = current.project.screens
-      .find((screen) => screen.id === current.getActiveScreenId())
-      ?.widgets.filter((widget) => current.selectedIds.includes(widget.id) && !widget.locked) ?? [];
+    const screen = current.project.screens.find(
+      (item) => item.id === current.getActiveScreenId(),
+    );
+    const selected = screen
+      ? getEffectiveScreenWidgets(screen, current.activeBreakpointId)
+          .filter((widget) => current.selectedIds.includes(widget.id) && !widget.locked)
+      : [];
     const updates = getSelectionUpdates(selected, operation);
     commitWidgetGeometry(updates);
   }, []);
@@ -1033,9 +1109,13 @@ export function CanvasStage({
         ["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown"].includes(event.key)
       ) {
         const current = useStore.getState();
-        const selected = current.project.screens
-          .find((screen) => screen.id === current.getActiveScreenId())
-          ?.widgets.filter((widget) => current.selectedIds.includes(widget.id) && !widget.locked) ?? [];
+        const screen = current.project.screens.find(
+          (item) => item.id === current.getActiveScreenId(),
+        );
+        const selected = screen
+          ? getEffectiveScreenWidgets(screen, current.activeBreakpointId)
+              .filter((widget) => current.selectedIds.includes(widget.id) && !widget.locked)
+          : [];
         if (selected.length === 0) return;
         const distance = event.shiftKey ? 10 : 1;
         const delta = {
@@ -1557,15 +1637,17 @@ export function CanvasStage({
               }}
               onTransform={() => {
                 const current = useStore.getState();
-                const widgets =
-                  current.project.screens
-                    .find((screen) => screen.id === current.getActiveScreenId())
-                    ?.widgets.filter(
+                const screen = current.project.screens.find(
+                  (item) => item.id === current.getActiveScreenId(),
+                );
+                const widgets = screen
+                  ? getEffectiveScreenWidgets(screen, current.activeBreakpointId).filter(
                       (item) =>
                         current.selectedIds.includes(item.id) &&
                         !item.locked &&
                         item.visible,
-                    ) ?? [];
+                    )
+                  : [];
                 const preview: Record<
                   string,
                   Pick<Widget, "x" | "y" | "width" | "height" | "rotation">
@@ -1586,11 +1668,14 @@ export function CanvasStage({
               onTransformEnd={() => {
                 const snapshot = transformHistorySnapshotRef.current ?? undefined;
                 const current = useStore.getState();
-                const selected = current.project.screens
-                  .find((screen) => screen.id === current.getActiveScreenId())
-                  ?.widgets.filter(
+                const screen = current.project.screens.find(
+                  (item) => item.id === current.getActiveScreenId(),
+                );
+                const selected = screen
+                  ? getEffectiveScreenWidgets(screen, current.activeBreakpointId).filter(
                     (item) => current.selectedIds.includes(item.id) && !item.locked && item.visible,
-                  ) ?? [];
+                  )
+                  : [];
                 const updates: WidgetGeometryUpdate[] = [];
                 for (const item of selected) {
                   const node = stageRef.current?.findOne(`#${item.id}`);
@@ -1645,10 +1730,20 @@ export function CanvasStage({
           <GuideLayer guides={guides} size={size} zoom={zoom} pan={pan} />
         </Stage>
       )}
-      {widgetsOutsideSafeArea.length > 0 && (
-        <div className="device-safe-area-warning" role="status" aria-live="polite">
-          {widgetsOutsideSafeArea.length}{" "}
-          {widgetsOutsideSafeArea.length === 1 ? "widget is" : "widgets are"} outside the safe area
+      {(widgetsOutsideBreakpointViewport.length > 0 || widgetsOutsideSafeArea.length > 0) && (
+        <div className="canvas-warnings" aria-live="polite">
+          {widgetsOutsideBreakpointViewport.length > 0 && (
+            <div className="responsive-viewport-warning" role="status">
+              {widgetsOutsideBreakpointViewport.length}{" "}
+              {widgetsOutsideBreakpointViewport.length === 1 ? "widget overflows" : "widgets overflow"} the {activeBreakpoint?.name} viewport
+            </div>
+          )}
+          {widgetsOutsideSafeArea.length > 0 && (
+            <div className="device-safe-area-warning" role="status">
+              {widgetsOutsideSafeArea.length}{" "}
+              {widgetsOutsideSafeArea.length === 1 ? "widget is" : "widgets are"} outside the safe area
+            </div>
+          )}
         </div>
       )}
       {selectionBounds && selectedWidgets.length > 1 && (

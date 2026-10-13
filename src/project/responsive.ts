@@ -1,0 +1,129 @@
+import type { Breakpoint, Screen, Widget, WidgetOverride } from "./schema";
+
+export const BREAKPOINT_PRESETS = [
+  { id: "mobile", name: "Mobile", minWidth: 0, maxWidth: 767, width: 390, height: 844 },
+  { id: "tablet", name: "Tablet", minWidth: 768, maxWidth: 1023, width: 768, height: 1024 },
+  { id: "desktop", name: "Desktop", minWidth: 1024, width: 1440, height: 900 },
+] as const satisfies readonly Breakpoint[];
+
+export function createDefaultBreakpoints(
+  baseWidth = 1440,
+  baseHeight = 900,
+): Breakpoint[] {
+  return BREAKPOINT_PRESETS.map((breakpoint) =>
+    breakpoint.id === "desktop"
+      ? { ...breakpoint, width: Math.max(1024, baseWidth), height: baseHeight }
+      : { ...breakpoint },
+  );
+}
+
+export function getScreenBreakpoints(screen: Screen): readonly Breakpoint[] {
+  return screen.breakpoints?.length
+    ? screen.breakpoints
+    : createDefaultBreakpoints(
+        screen.device?.width ?? 1440,
+        screen.device?.height ?? 900,
+      );
+}
+
+export function resolveActiveBreakpoint(
+  screen: Screen,
+  breakpointId: string | null,
+): Breakpoint {
+  const breakpoints = getScreenBreakpoints(screen);
+  return (
+    breakpoints.find((breakpoint) => breakpoint.id === breakpointId) ??
+    breakpoints.find((breakpoint) => breakpoint.id === "desktop") ??
+    breakpoints[breakpoints.length - 1]
+  );
+}
+
+function applyOverride(widget: Widget, override: WidgetOverride | undefined): Widget {
+  if (!override) return widget;
+  return {
+    ...widget,
+    ...override,
+    style: override.style ? { ...widget.style, ...override.style } : widget.style,
+    props: override.props ? { ...widget.props, ...override.props } : widget.props,
+  };
+}
+
+export function resolveWidgetsForBreakpoint(
+  widgets: readonly Widget[],
+  breakpoint: Breakpoint,
+  baseWidth: number,
+): Widget[] {
+  const ordered = [...widgets].sort((first, second) => first.zIndex - second.zIndex);
+  let nextStackY = 24;
+  return ordered.map((widget) => {
+    let responsiveWidget = widget;
+    if (widget.cascadeMode === "hide") {
+      responsiveWidget = { ...responsiveWidget, visible: false };
+    } else if (breakpoint.width < baseWidth && widget.cascadeMode === "fluid") {
+      responsiveWidget = {
+        ...responsiveWidget,
+        width: Math.max(1, Math.min(
+          breakpoint.width,
+          widget.width * breakpoint.width / baseWidth,
+        )),
+      };
+    } else if (breakpoint.width < baseWidth && widget.cascadeMode === "stack") {
+      responsiveWidget = {
+        ...responsiveWidget,
+        x: 0,
+        y: nextStackY,
+        width: Math.min(widget.width, breakpoint.width),
+      };
+      nextStackY += responsiveWidget.height + 16;
+    }
+    return applyOverride(
+      responsiveWidget,
+      widget.overrides?.[breakpoint.id],
+    );
+  });
+}
+
+export function getWidgetsOutsideBreakpointViewport(
+  widgets: readonly Widget[],
+  breakpoint: Breakpoint,
+): Widget[] {
+  return widgets.filter(
+    (widget) =>
+      widget.visible &&
+      (widget.x < 0 ||
+        widget.y < 0 ||
+        widget.x + widget.width > breakpoint.width ||
+        widget.y + widget.height > breakpoint.height),
+  );
+}
+
+export function getWidgetOverride(
+  widget: Widget,
+  breakpointId: string,
+): WidgetOverride | undefined {
+  return widget.overrides?.[breakpointId];
+}
+
+export function updateWidgetOverride(
+  widget: Widget,
+  breakpointId: string,
+  update: Partial<WidgetOverride>,
+): Widget {
+  const existing = widget.overrides?.[breakpointId] ?? {};
+  return {
+    ...widget,
+    overrides: {
+      ...widget.overrides,
+      [breakpointId]: {
+        ...existing,
+        ...update,
+        ...(update.style
+          ? { style: { ...existing.style, ...update.style } }
+          : {}),
+        ...(update.props
+          ? { props: { ...existing.props, ...update.props } }
+          : {}),
+      },
+    },
+  };
+}

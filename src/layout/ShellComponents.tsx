@@ -37,6 +37,7 @@ import {
 } from "../devices/frame";
 import type { ScreenDevice } from "../devices/types";
 import { ScreenLayerSidebar } from "./ScreenLayerSidebar";
+import { BreakpointToolbar, ResponsivePanel } from "./ResponsiveControls";
 import {
   evaluateGeometryExpression,
   getGeometryUpdates,
@@ -326,6 +327,7 @@ export function CanvasArea({
           {!leftPanelOpen && <button className="icon-button small-icon" aria-label="Show workspace panel" onClick={onToggleLeft}><PanelLeftClose size={15} /></button>}
           <span className="breadcrumb-muted">Workspace</span><ArrowRight size={13} /><span>{project.name}</span>
         </div>
+        <BreakpointToolbar />
         <div className="canvas-toolbar-actions">
           <div className="shape-tools" role="toolbar" aria-label="Canvas tools">
             {([["Shapes", PRIMITIVE_TOOLS], ["Widgets", WIDGET_TOOLS]] as const).map(
@@ -1434,17 +1436,22 @@ function GeometrySection({ widgets }: { widgets: Widget[] }) {
 }
 
 export function RightInspector({ onToggle, onUpdates, onRename }: RightInspectorProps) {
+  const [inspectorTab, setInspectorTab] = useState<"design" | "responsive">("design");
   const project = useStore((state) => state.project);
   const activeScreenId = useStore((state) => state.getActiveScreenId());
   const selectedIds = useStore((state) => state.selectedIds);
   const filePath = useStore((state) => state.filePath);
   const rightPanelOpen = useStore((state) => state.rightPanelOpen);
   const displayPath = filePath ? filePath.replaceAll("\\", "/").split("/").at(-1) : "Not saved yet";
+  const selectedScreen = project.screens.find((screen) => screen.id === activeScreenId);
   const selectedWidgets =
-    project.screens.find((screen) => screen.id === activeScreenId)?.widgets.filter(
+    selectedScreen?.widgets.filter(
       (widget) => selectedIds.includes(widget.id),
     ) ?? [];
   const selectedWidget = selectedWidgets.length === 1 ? selectedWidgets[0] : undefined;
+  useEffect(() => {
+    if (!selectedWidget || !selectedScreen) setInspectorTab("design");
+  }, [selectedScreen?.id, selectedWidget?.id]);
   const selectedDefinition = selectedWidget
     ? getShapeToolDefinition(selectedWidget.type)
     : undefined;
@@ -1482,8 +1489,39 @@ export function RightInspector({ onToggle, onUpdates, onRename }: RightInspector
         ) : (
           <div className="inspector-placeholder"><span className="inspector-placeholder-icon"><Layers2 size={17} /></span><span>Select an element on the canvas or in Layers to inspect it.</span></div>
         )}
-        <GeometrySection widgets={selectedWidgets} />
-        <StyleSection widgets={selectedWidgets} />
+        <div className="inspector-tabs" role="tablist" aria-label="Inspector panels">
+          <button
+            id="inspector-design-tab"
+            role="tab"
+            aria-selected={inspectorTab === "design"}
+            aria-controls="inspector-design-panel"
+            className={inspectorTab === "design" ? "inspector-tab is-active" : "inspector-tab"}
+            onClick={() => setInspectorTab("design")}
+          >
+            Design
+          </button>
+          <button
+            id="inspector-responsive-tab"
+            role="tab"
+            aria-selected={inspectorTab === "responsive"}
+            aria-controls="inspector-responsive-panel"
+            className={inspectorTab === "responsive" ? "inspector-tab is-active" : "inspector-tab"}
+            onClick={() => setInspectorTab("responsive")}
+            disabled={!selectedWidget}
+          >
+            Responsive
+          </button>
+        </div>
+        {inspectorTab === "design" ? (
+          <div id="inspector-design-panel" role="tabpanel" aria-labelledby="inspector-design-tab">
+            <GeometrySection widgets={selectedWidgets} />
+            <StyleSection widgets={selectedWidgets} />
+          </div>
+        ) : selectedWidget && selectedScreen ? (
+          <div id="inspector-responsive-panel" role="tabpanel" aria-labelledby="inspector-responsive-tab">
+            <ResponsivePanel screen={selectedScreen} widget={selectedWidget} />
+          </div>
+        ) : null}
         <div className="inspector-rule" />
         <div className="section-label inspector-project-label"><span>PROJECT DETAILS</span></div>
         <label className="field-label" htmlFor="project-name">Project name</label>

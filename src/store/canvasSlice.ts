@@ -3,6 +3,7 @@ import type { CanvasSlice, StoreState } from "./types";
 
 export const createCanvasSlice: StateCreator<StoreState, [], [], CanvasSlice> = (set, get) => ({
   activeScreenId: null,
+  activeBreakpointId: null,
   zoom: 1,
   pan: { x: 0, y: 0 },
   gridSize: 10,
@@ -25,8 +26,9 @@ export const createCanvasSlice: StateCreator<StoreState, [], [], CanvasSlice> = 
   clearSelection: () => set({ selectedIds: [], geometryPreview: null }),
   setActiveScreen: (screenId) => {
     if (!get().project.screens.some((screen) => screen.id === screenId)) return;
-    set({ activeScreenId: screenId, selectedIds: [], geometryPreview: null });
+    set({ activeScreenId: screenId, activeBreakpointId: null, selectedIds: [], geometryPreview: null });
   },
+  setActiveBreakpoint: (activeBreakpointId) => set({ activeBreakpointId }),
   getActiveScreenId: () => {
     const state = get();
     const activeScreenId = state.activeScreenId;
