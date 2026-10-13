@@ -13,6 +13,7 @@ import {
   MoreHorizontal,
   PanelTop,
   Plus,
+  Search,
   Unlock,
   X,
 } from "lucide-react";
@@ -24,7 +25,25 @@ import { reorderScreens, reorderWidgets } from "../project/layers";
 import { createDefaultBreakpoints } from "../project/responsive";
 import type { Project, Screen, Widget } from "../project/schema";
 import { useStore } from "../store";
+import { CategoryHeader } from "./CategoryHeader";
+import {
+  buildLayerGroups,
+  getLayerCategory,
+  LAYER_CATEGORIES,
+  LAYER_CATEGORY_DEFINITIONS,
+  LAYER_VIEW_MODES,
+} from "./layerGrouping";
+import type { LayerGroup, LayerViewMode } from "./layerGrouping";
 import { getVirtualizedRange } from "./layerVirtualization";
+import {
+  createDefaultLayerTreePreferences,
+  layerGroupCollapseKey,
+  layerGroupNameKey,
+  parseLayerTreePreferences,
+  reorderLayerGroupIds,
+  serializeLayerTreePreferences,
+} from "./layerTreePreferences";
+import type { LayerTreePreferences } from "./layerTreePreferences";
 import { WidgetThumbnail } from "./WidgetThumbnail";
 import { WidgetIcon } from "./widgetIcons";
 
@@ -34,12 +53,34 @@ type MenuState =
 
 type DropIndicator = { id: string; edge: "before" | "after" } | null;
 type LayerTreeEntry =
+  | { kind: "category"; group: LayerGroup; collapsed: boolean }
   | { kind: "group"; id: string; members: Widget[]; collapsed: boolean }
   | { kind: "widget"; widget: Widget; nested: boolean };
 const LAYER_ROW_HEIGHT = 30;
 
 function collapsedStorageKey(projectId: string): string {
   return `protoflow:collapsed-layer-groups:${projectId}`;
+}
+
+function preferencesStorageKey(projectId: string): string {
+  return `protoflow:layer-tree-view:${projectId}`;
+}
+
+function readLayerTreePreferences(projectId: string): LayerTreePreferences {
+  try {
+    return parseLayerTreePreferences(localStorage.getItem(preferencesStorageKey(projectId)));
+  } catch (error) {
+    console.error("Could not read the saved layer-tree view preferences.", error);
+    return createDefaultLayerTreePreferences();
+  }
+}
+
+function persistLayerTreePreferences(projectId: string, preferences: LayerTreePreferences): void {
+  try {
+    localStorage.setItem(preferencesStorageKey(projectId), serializeLayerTreePreferences(preferences));
+  } catch (error) {
+    console.error("Could not save the layer-tree view preferences.", error);
+  }
 }
 
 function readCollapsedGroups(projectId: string): Record<string, string[]> {
@@ -137,6 +178,15 @@ export function ScreenLayerSidebar() {
   const [collapsedByScreen, setCollapsedByScreen] = useState(() =>
     readCollapsedGroups(project.id),
   );
+  const [layerPreferences, setLayerPreferences] = useState(() =>
+    readLayerTreePreferences(project.id),
+  );
+  const [categorySearch, setCategorySearch] = useState("");
+  const [categoryMenu, setCategoryMenu] = useState<{ id: string; x: number; y: number } | null>(null);
+  const [draggedCategoryId, setDraggedCategoryId] = useState<string | null>(null);
+  const [categoryDropIndicator, setCategoryDropIndicator] = useState<DropIndicator>(null);
+  const [renamingGroupId, setRenamingGroupId] = useState<string | null>(null);
+  const [renameGroupDraft, setRenameGroupDraft] = useState("");
   const [layerScrollTop, setLayerScrollTop] = useState(0);
   const [layerViewportHeight, setLayerViewportHeight] = useState(300);
   const [recentWidgetIds, setRecentWidgetIds] = useState<Set<string>>(() => new Set());
@@ -191,6 +241,8 @@ export function ScreenLayerSidebar() {
 
   useEffect(() => {
     setCollapsedByScreen(readCollapsedGroups(project.id));
+    setLayerPreferences(readLayerTreePreferences(project.id));
+    setCategorySearch("");
   }, [project.id]);
 
   useEffect(() => {
@@ -210,6 +262,24 @@ export function ScreenLayerSidebar() {
       window.removeEventListener("keydown", closeOnEscape);
     };
   }, [menu]);
+
+  useEffect(() => {
+    if (!categoryMenu) return;
+    const closeMenu = (event: PointerEvent) => {
+      if (!(event.target instanceof Element) || !event.target.closest(".tree-context-menu")) {
+        setCategoryMenu(null);
+      }
+    };
+    const closeOnEscape = (event: globalThis.KeyboardEvent) => {
+      if (event.key === "Escape") setCategoryMenu(null);
+    };
+    window.addEventListener("pointerdown", closeMenu);
+    window.addEventListener("keydown", closeOnEscape);
+    return () => {
+      window.removeEventListener("pointerdown", closeMenu);
+      window.removeEventListener("keydown", closeOnEscape);
+    };
+  }, [categoryMenu]);
 
   useEffect(() => {
     const onKeyDown = (event: globalThis.KeyboardEvent) => {
@@ -264,40 +334,93 @@ export function ScreenLayerSidebar() {
   }, [activeScreen, selectedIds]);
 
   const collapsedGroups = collapsedByScreen[activeScreenId] ?? [];
-  const layerTree = useMemo(() => {
+  const updateLayerPreferences = (update: (preferences: LayerTreePreferences) => LayerTreePreferences) => {
+    setLayerPreferences((current) => {
+      const next = update(current);
+      persistLayerTreePreferences(project.id, next);
+      return next;
+    });
+  };
+  const layerMode = layerPreferences.mode;
+  const layerGroups = useMemo(() => {
+    const query = categorySearch.trim().toLowerCase();
     const widgets = activeScreen?.widgets ?? [];
-    const groups = new Map<string, Widget[]>();
-    for (const widget of widgets) {
-      if (!widget.groupId) continue;
-      const members = groups.get(widget.groupId) ?? [];
-      members.push(widget);
-      groups.set(widget.groupId, members);
-    }
-    for (const members of groups.values()) {
-      members.sort((first, second) => second.zIndex - first.zIndex);
-    }
-    const groupOrder = [...groups.entries()].sort(
-      (first, second) =>
-        Math.max(...second[1].map((widget) => widget.zIndex)) -
-        Math.max(...first[1].map((widget) => widget.zIndex)),
+    const filteredWidgets = query
+      ? widgets.filter((widget) => {
+          const definition = getShapeToolDefinition(widget.type);
+        const groupId = layerMode === "category" ? getLayerCategory(widget.type) : widget.type;
+        const groupName =
+          layerPreferences.groupNames[layerGroupNameKey(layerMode, groupId)] ??
+          (layerMode === "category"
+            ? LAYER_CATEGORY_DEFINITIONS[getLayerCategory(widget.type)].label
+            : definition?.label ?? widget.type);
+        const categoryLabel = layerMode === "category"
+          ? LAYER_CATEGORY_DEFINITIONS[getLayerCategory(widget.type)].label
+          : "";
+        return (
+          widgetLabel(widget).toLowerCase().includes(query) ||
+          widget.type.toLowerCase().includes(query) ||
+          (definition?.label ?? "").toLowerCase().includes(query) ||
+          groupName.toLowerCase().includes(query) ||
+          categoryLabel.toLowerCase().includes(query)
+        );
+        })
+      : widgets;
+    const savedOrder = layerPreferences.groupOrder[layerMode] ?? [];
+    const groups = buildLayerGroups(
+      filteredWidgets,
+      layerMode,
+      savedOrder,
+      (type) => getShapeToolDefinition(type)?.label ?? type,
     );
-    const ungrouped = widgets
-      .filter((widget) => !widget.groupId)
-      .sort((first, second) => second.zIndex - first.zIndex);
-    return { groups: groupOrder, ungrouped };
-  }, [activeScreen]);
+    return groups.map((group) => ({
+      ...group,
+      label: layerPreferences.groupNames[layerGroupNameKey(layerMode, group.id)] ?? group.label,
+    }));
+  }, [
+    activeScreen,
+    categorySearch,
+    layerMode,
+    layerPreferences.groupNames,
+    layerPreferences.groupOrder,
+  ]);
   const layerEntries = useMemo<LayerTreeEntry[]>(() => {
     const entries: LayerTreeEntry[] = [];
-    for (const [groupId, members] of layerTree.groups) {
-      const collapsed = collapsedGroups.includes(groupId);
-      entries.push({ kind: "group", id: groupId, members, collapsed });
+    for (const group of layerGroups) {
+      const collapsed = collapsedGroups.includes(layerGroupCollapseKey(layerMode, group.id));
+      if (layerMode !== "z-order") {
+        entries.push({ kind: "category", group, collapsed });
+      }
       if (!collapsed) {
-        entries.push(...members.map((widget) => ({ kind: "widget" as const, widget, nested: true })));
+        const visitedGroups = new Set<string>();
+        for (const widget of group.widgets) {
+          if (!widget.groupId || layerMode === "z-order") {
+            entries.push({ kind: "widget", widget, nested: layerMode !== "z-order" });
+            continue;
+          }
+          if (visitedGroups.has(widget.groupId)) continue;
+          visitedGroups.add(widget.groupId);
+          const members = group.widgets.filter((item) => item.groupId === widget.groupId);
+          const semanticCollapseKey = `semantic:${widget.groupId}`;
+          const groupCollapsed = collapsedGroups.includes(semanticCollapseKey);
+          entries.push({
+            kind: "group",
+            id: widget.groupId,
+            members,
+            collapsed: groupCollapsed,
+          });
+          if (!groupCollapsed) {
+            entries.push(...members.map((member) => ({
+              kind: "widget" as const,
+              widget: member,
+              nested: true,
+            })));
+          }
+        }
       }
     }
-    entries.push(...layerTree.ungrouped.map((widget) => ({ kind: "widget" as const, widget, nested: false })));
     return entries;
-  }, [collapsedGroups, layerTree]);
+  }, [collapsedGroups, layerGroups, layerMode]);
   const virtualizedRange = getVirtualizedRange(
     layerEntries.length,
     layerScrollTop,
@@ -441,10 +564,10 @@ export function ScreenLayerSidebar() {
     setMenu(null);
   };
 
-  const toggleGroup = (groupId: string) => {
-    const nextForScreen = collapsedGroups.includes(groupId)
-      ? collapsedGroups.filter((id) => id !== groupId)
-      : [...collapsedGroups, groupId];
+  const toggleGroup = (groupId: string, collapseKey = layerGroupCollapseKey(layerMode, groupId)) => {
+    const nextForScreen = collapsedGroups.includes(collapseKey)
+      ? collapsedGroups.filter((id) => id !== collapseKey)
+      : [...collapsedGroups, collapseKey];
     const next = { ...collapsedByScreen, [activeScreenId]: nextForScreen };
     setCollapsedByScreen(next);
     try {
@@ -452,6 +575,133 @@ export function ScreenLayerSidebar() {
     } catch (error) {
       console.error("Could not save the layer-tree collapse state.", error);
     }
+  };
+
+  const setAllGroupsCollapsed = (collapsed: boolean) => {
+    const activeKeys = new Set(
+      buildLayerGroups(
+        activeScreen?.widgets ?? [],
+        layerMode,
+        [],
+        (type) => getShapeToolDefinition(type)?.label ?? type,
+      ).map((group) => layerGroupCollapseKey(layerMode, group.id)),
+    );
+    const nextForScreen = collapsed
+      ? [...new Set([...collapsedGroups, ...activeKeys])]
+      : collapsedGroups.filter((id) => !activeKeys.has(id));
+    const next = { ...collapsedByScreen, [activeScreenId]: nextForScreen };
+    setCollapsedByScreen(next);
+    try {
+      localStorage.setItem(collapsedStorageKey(project.id), JSON.stringify(next));
+    } catch (error) {
+      console.error("Could not save the layer-tree collapse state.", error);
+    }
+  };
+
+  const setWidgetsProperty = (widgets: Widget[], patch: Partial<Widget>) => {
+    if (!activeScreen || widgets.length === 0) return;
+    const ids = new Set(widgets.map((widget) => widget.id));
+    editProject((current) => ({
+      ...current,
+      screens: current.screens.map((screen) =>
+        screen.id !== activeScreen.id
+          ? screen
+          : {
+              ...screen,
+              widgets: screen.widgets.map((widget) =>
+                ids.has(widget.id) ? { ...widget, ...patch } : widget,
+              ),
+            },
+      ),
+    }));
+    if (patch.visible === false || patch.locked === true) {
+      const current = useStore.getState();
+      current.select(current.selectedIds.filter((id) => !ids.has(id)));
+    }
+  };
+
+  const setAllVisibility = () => {
+    const widgets = activeScreen?.widgets ?? [];
+    setWidgetsProperty(widgets, { visible: widgets.some((widget) => !widget.visible) });
+  };
+
+  const setAllLockState = () => {
+    const widgets = activeScreen?.widgets ?? [];
+    setWidgetsProperty(widgets, { locked: !widgets.every((widget) => widget.locked) });
+  };
+
+  const reorderCategoryGroups = (
+    draggedId: string,
+    targetId: string,
+    edge: "before" | "after",
+  ) => {
+    const visibleIds = layerGroups.map((group) => group.id);
+    const defaultOrder = layerMode === "category"
+      ? [...LAYER_CATEGORIES]
+      : buildLayerGroups(
+          activeScreen?.widgets ?? [],
+          layerMode,
+          [],
+          (type) => getShapeToolDefinition(type)?.label ?? type,
+        ).map((group) => group.id);
+    updateLayerPreferences((current) => ({
+      ...current,
+      groupOrder: {
+        ...current.groupOrder,
+        [layerMode]: reorderLayerGroupIds(
+          current.groupOrder[layerMode] ?? defaultOrder,
+          visibleIds,
+          draggedId,
+          targetId,
+          edge,
+        ),
+      },
+    }));
+  };
+
+  const categoryDragOver = (event: DragEvent<HTMLDivElement>, groupId: string) => {
+    if (!draggedCategoryId || draggedCategoryId === groupId) return;
+    event.preventDefault();
+    event.dataTransfer.dropEffect = "move";
+    const bounds = event.currentTarget.getBoundingClientRect();
+    const edge = event.clientY < bounds.top + bounds.height / 2 ? "before" : "after";
+    setCategoryDropIndicator({ id: groupId, edge });
+    const tree = layerTreeRef.current;
+    if (tree) {
+      const treeBounds = tree.getBoundingClientRect();
+      if (event.clientY < treeBounds.top + 24) tree.scrollTop -= 12;
+      else if (event.clientY > treeBounds.bottom - 24) tree.scrollTop += 12;
+    }
+  };
+
+  const categoryDrop = (event: DragEvent<HTMLDivElement>, groupId: string) => {
+    event.preventDefault();
+    event.stopPropagation();
+    const edge = categoryDropIndicator?.id === groupId ? categoryDropIndicator.edge : "before";
+    if (draggedCategoryId) reorderCategoryGroups(draggedCategoryId, groupId, edge);
+    setDraggedCategoryId(null);
+    setCategoryDropIndicator(null);
+  };
+
+  const navigateLayerTree = (event: ReactKeyboardEvent<HTMLDivElement>) => {
+    if (event.key === "Enter" || event.key === " ") {
+      event.preventDefault();
+      const groupId = event.currentTarget.dataset.groupId;
+      if (groupId?.startsWith("semantic:")) {
+        toggleGroup(groupId.slice("semantic:".length), groupId);
+      } else if (groupId) {
+        toggleGroup(groupId);
+      }
+      return;
+    }
+    if (event.key !== "ArrowDown" && event.key !== "ArrowUp") return;
+    event.preventDefault();
+    const treeItems = [...(layerTreeRef.current?.querySelectorAll<HTMLElement>('[role="treeitem"]') ?? [])];
+    const currentIndex = treeItems.indexOf(event.currentTarget);
+    const nextIndex = event.key === "ArrowDown"
+      ? Math.min(treeItems.length - 1, currentIndex + 1)
+      : Math.max(0, currentIndex - 1);
+    treeItems[nextIndex]?.focus();
   };
 
   const updateScreenOrder = (draggedId: string, targetId: string, edge: "before" | "after") => {
@@ -550,6 +800,9 @@ export function ScreenLayerSidebar() {
       <div
         key={widget.id}
         className={`layer-row${nested ? " is-nested" : ""}${selected ? " is-selected" : ""}${widget.locked ? " is-locked" : ""}${!widget.visible ? " is-hidden" : ""}${["symbol", "symbol-instance", "symbolInstance"].includes(widget.type) ? " is-symbol" : ""}${recentWidgetIds.has(widget.id) ? " is-new" : ""}${dropIndicator?.id === widget.id ? ` drop-${dropIndicator.edge}` : ""}`}
+        role="treeitem"
+        tabIndex={-1}
+        aria-selected={selected}
         draggable={!renamingWidgetId}
         onDragStart={(event) => {
           setDraggedLayerId(widget.id);
@@ -643,6 +896,11 @@ export function ScreenLayerSidebar() {
     );
   };
 
+  const selectedGroup = categoryMenu
+    ? layerGroups.find((group) => group.id === categoryMenu.id)
+    : undefined;
+  const selectedGroupAllVisible = selectedGroup?.widgets.some((widget) => widget.visible) ?? false;
+
   return (
     <>
       <section className="sidebar-section pages-section" aria-label="Screens">
@@ -720,13 +978,70 @@ export function ScreenLayerSidebar() {
       </section>
 
       <section className="sidebar-section layers-section" aria-label="Layers">
-        <div className="section-label">
-          <span>LAYERS</span>
-          <span className="layer-count">{activeScreen?.widgets.length ?? 0}</span>
+        <div className="layer-tree-toolbar">
+          <div className="layer-tree-title">
+            <span>LAYERS</span>
+            <span className="layer-count">{activeScreen?.widgets.length ?? 0}</span>
+          </div>
+          <div className="layer-tree-controls">
+            <button
+              className="layer-tree-action"
+              disabled={!activeScreen?.widgets.length}
+              aria-label={activeScreen?.widgets.some((widget) => !widget.visible) ? "Show all layers" : "Hide all layers"}
+              title={activeScreen?.widgets.some((widget) => !widget.visible) ? "Show all layers" : "Hide all layers"}
+              onClick={setAllVisibility}
+            >
+              {activeScreen?.widgets.some((widget) => !widget.visible) ? <Eye size={13} /> : <EyeOff size={13} />}
+            </button>
+            <button
+              className="layer-tree-action"
+              disabled={!activeScreen?.widgets.length}
+              aria-label={activeScreen?.widgets.every((widget) => widget.locked) ? "Unlock all layers" : "Lock all layers"}
+              title={activeScreen?.widgets.every((widget) => widget.locked) ? "Unlock all layers" : "Lock all layers"}
+              onClick={setAllLockState}
+            >
+              {activeScreen?.widgets.every((widget) => widget.locked) ? <Unlock size={13} /> : <Lock size={13} />}
+            </button>
+            <select
+              className="layer-view-mode"
+              aria-label="Layer view mode"
+              value={layerMode}
+              onChange={(event) => updateLayerPreferences((current) => ({
+                ...current,
+                mode: event.target.value as LayerViewMode,
+              }))}
+            >
+              {LAYER_VIEW_MODES.map((mode) => (
+                <option key={mode} value={mode}>
+                  {mode === "category" ? "By Category" : mode === "z-order" ? "By Z-Order" : "By Type"}
+                </option>
+              ))}
+            </select>
+          </div>
         </div>
-        {activeScreen && activeScreen.widgets.length > 0 ? (
+        <label className="layer-search">
+          <Search size={13} aria-hidden="true" />
+          <input
+            aria-label="Search layers"
+            type="search"
+            placeholder="Search layers"
+            value={categorySearch}
+            onChange={(event) => setCategorySearch(event.target.value)}
+          />
+          {categorySearch && (
+            <button
+              className="layer-search-clear"
+              aria-label="Clear layer search"
+              onClick={() => setCategorySearch("")}
+            >
+              <X size={12} />
+            </button>
+          )}
+        </label>
+        {activeScreen && activeScreen.widgets.length > 0 && visibleLayerEntries.length > 0 ? (
           <div
             className="layer-list"
+            role="tree"
             aria-label="Widget layers"
             ref={layerTreeRef}
             onScroll={(event) => {
@@ -737,47 +1052,98 @@ export function ScreenLayerSidebar() {
             <div className="layer-virtual-spacer" style={{ height: virtualizedRange.topSpacerHeight }} aria-hidden="true" />
             {visibleLayerEntries.map((entry) => {
               if (entry.kind === "widget") return renderWidgetRow(entry.widget, entry.nested);
-              const { id: groupId, members, collapsed } = entry;
-              const groupSelected = members.some((widget) => selectedIds.includes(widget.id));
-              return (
-                <div
-                  className={`layer-group-row${dropIndicator?.id === groupId ? ` drop-${dropIndicator.edge}` : ""}`}
-                  key={groupId}
-                  onDragOver={(event) => layerDragOver(event, groupId, true)}
-                  onDrop={(event) => layerDrop(event, groupId, groupId)}
-                  onContextMenu={(event) => {
-                    event.preventDefault();
-                    setMenu({ kind: "group", id: groupId, x: event.clientX, y: event.clientY });
-                  }}
-                >
-                  <button
-                    className="layer-group-toggle"
-                    aria-expanded={!collapsed}
-                    aria-label={`${collapsed ? "Expand" : "Collapse"} layer group`}
-                    onClick={() => toggleGroup(groupId)}
+              if (entry.kind === "group") {
+                const collapseKey = `semantic:${entry.id}`;
+                return (
+                  <div
+                    key={`semantic-${entry.id}`}
+                    className={`layer-group-row${dropIndicator?.id === entry.id ? ` drop-${dropIndicator.edge}` : ""}`}
+                    role="treeitem"
+                    tabIndex={0}
+                    aria-expanded={!entry.collapsed}
+                    data-group-id={collapseKey}
+                    onKeyDown={navigateLayerTree}
+                    onClick={() => toggleGroup(entry.id, collapseKey)}
+                    onContextMenu={(event) => {
+                      event.preventDefault();
+                      setMenu({ kind: "group", id: entry.id, x: event.clientX, y: event.clientY });
+                    }}
+                    onDragOver={(event) => layerDragOver(event, entry.id, true)}
+                    onDrop={(event) => layerDrop(event, entry.id, entry.id)}
                   >
-                    {collapsed ? <ChevronRight size={13} /> : <ChevronDown size={13} />}
-                    <WidgetThumbnail widgets={members} />
-                    <WidgetIcon type="group" />
-                    <span className="layer-group-label">Group</span>
-                    <span className="layer-type">{members.length}</span>
-                  </button>
-                  {groupSelected && (
                     <button
-                      className="layer-group-select"
-                      aria-label="Select group layers"
-                      onClick={(event) =>
-                        useStore.getState().select(
-                          event.shiftKey
-                            ? [...new Set([...selectedIds, ...members.map((item) => item.id)])]
-                            : members.map((item) => item.id),
-                        )
-                      }
+                      className="layer-group-toggle"
+                      aria-label={`${entry.collapsed ? "Expand" : "Collapse"} group`}
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        toggleGroup(entry.id, collapseKey);
+                      }}
                     >
-                      <Layers2 size={13} />
+                      {entry.collapsed ? <ChevronRight size={13} /> : <ChevronDown size={13} />}
                     </button>
-                  )}
-                </div>
+                    <Folder size={14} aria-hidden="true" />
+                    <span className="layer-group-name">Group</span>
+                    <span className="layer-group-count">{entry.members.length}</span>
+                    <button
+                      className="layer-tree-action"
+                      aria-label="Group options"
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        setMenu({ kind: "group", id: entry.id, x: event.clientX, y: event.clientY });
+                      }}
+                    >
+                      <MoreHorizontal size={13} />
+                    </button>
+                  </div>
+                );
+              }
+              const { group, collapsed } = entry;
+              const { id: groupId, widgets } = group;
+              const category = LAYER_CATEGORY_DEFINITIONS[group.category];
+              const displayNameKey = layerGroupNameKey(layerMode, groupId);
+              const currentLabel = layerPreferences.groupNames[displayNameKey] ?? group.label;
+              const isRenaming = renamingGroupId === groupId;
+              return (
+                <CategoryHeader
+                  key={groupId}
+                  category={category}
+                  groupId={groupId}
+                  label={isRenaming ? renameGroupDraft : currentLabel}
+                  count={widgets.length}
+                  collapsed={collapsed}
+                  dropEdge={categoryDropIndicator?.id === groupId ? categoryDropIndicator.edge : undefined}
+                  onToggle={() => toggleGroup(groupId)}
+                  onMenu={(event) => setCategoryMenu({
+                    id: groupId,
+                    x: event.clientX,
+                    y: event.clientY,
+                  })}
+                  onDragStart={(event) => {
+                    setDraggedCategoryId(groupId);
+                    event.dataTransfer.effectAllowed = "move";
+                    event.dataTransfer.setData("text/plain", `layer-group:${groupId}`);
+                  }}
+                  onDragOver={(event) => categoryDragOver(event, groupId)}
+                  onDrop={(event) => categoryDrop(event, groupId)}
+                  onDragEnd={() => {
+                    setDraggedCategoryId(null);
+                    setCategoryDropIndicator(null);
+                  }}
+                  onKeyDown={navigateLayerTree}
+                  {...(isRenaming ? {
+                    onRename: setRenameGroupDraft,
+                    onRenameCommit: (name: string) => {
+                      const normalized = name.trim().slice(0, 60);
+                      if (normalized) {
+                        updateLayerPreferences((current) => ({
+                          ...current,
+                          groupNames: { ...current.groupNames, [displayNameKey]: normalized },
+                        }));
+                      }
+                      setRenamingGroupId(null);
+                    },
+                  } : {})}
+                />
               );
             })}
             <div className="layer-virtual-spacer" style={{ height: virtualizedRange.bottomSpacerHeight }} aria-hidden="true" />
@@ -785,10 +1151,49 @@ export function ScreenLayerSidebar() {
         ) : (
           <div className="sidebar-empty-state">
             <Layers2 size={16} />
-            <span>Widgets will appear here as you add them.</span>
+            <span>{categorySearch ? "No layers match your search." : "Empty screen — add a widget."}</span>
           </div>
         )}
       </section>
+
+      {categoryMenu && selectedGroup && (
+        <div
+          className="tree-context-menu"
+          role="menu"
+          style={{
+            left: Math.min(categoryMenu.x, window.innerWidth - 190),
+            top: Math.min(categoryMenu.y, window.innerHeight - 180),
+          }}
+        >
+          <button role="menuitem" onClick={() => {
+            const nameKey = layerGroupNameKey(layerMode, selectedGroup.id);
+            setRenameGroupDraft(layerPreferences.groupNames[nameKey] ?? selectedGroup.label);
+            setRenamingGroupId(selectedGroup.id);
+            setCategoryMenu(null);
+          }}>
+            <MoreHorizontal size={14} /> Rename
+          </button>
+          <button role="menuitem" onClick={() => {
+            setWidgetsProperty(selectedGroup.widgets, { visible: !selectedGroupAllVisible });
+            setCategoryMenu(null);
+          }}>
+            {selectedGroupAllVisible ? <EyeOff size={14} /> : <Eye size={14} />}
+            {selectedGroupAllVisible ? "Hide" : "Show"}
+          </button>
+          <button role="menuitem" onClick={() => {
+            setAllGroupsCollapsed(true);
+            setCategoryMenu(null);
+          }}>
+            <ChevronDown size={14} /> Collapse All
+          </button>
+          <button role="menuitem" onClick={() => {
+            setAllGroupsCollapsed(false);
+            setCategoryMenu(null);
+          }}>
+            <ChevronRight size={14} /> Expand All
+          </button>
+        </div>
+      )}
 
       {menu && (
         <div
