@@ -1,6 +1,6 @@
 import { memo, useCallback, useEffect, useRef, useState } from "react";
 import { Layer, Shape, Stage } from "react-konva";
-import { ArrowDownToLine, FolderOpen } from "lucide-react";
+import { ArrowDownToLine, FolderOpen, Minus, Plus } from "lucide-react";
 import type { Stage as KonvaStage } from "konva/lib/Stage";
 import { useStore } from "../store";
 import {
@@ -76,6 +76,7 @@ function GridLayer({
           context.beginPath();
           for (let x = firstX; x <= right; x += spacing) {
             for (let y = firstY; y <= bottom; y += spacing) {
+              context.moveTo(x - left + radius, y - top);
               context.arc(x - left, y - top, radius, 0, Math.PI * 2);
             }
           }
@@ -392,6 +393,45 @@ export function CanvasStage({
           <button className="button button-secondary" onClick={onOpen}><FolderOpen size={15} /> Open a project</button>
         </div>
         <div className="empty-shortcut"><span>Press</span> <button className="shortcut-link" onClick={onOpenPalette}>Ctrl K</button> <span>to see all actions</span></div>
+      </div>
+      <div className="canvas-zoom-controls" role="group" aria-label="Canvas zoom controls">
+        <button
+          className="icon-button small-icon"
+          title="Zoom out"
+          aria-label="Zoom out"
+          disabled={zoom <= 0.1}
+          onClick={() =>
+            applyView(
+              zoomAroundPointer(
+                currentViewRef.current,
+                { x: size.width / 2, y: size.height / 2 },
+                zoom - 0.1,
+              ),
+            )
+          }
+        >
+          <Minus size={14} />
+        </button>
+        <span className="canvas-zoom-value" aria-live="polite">
+          {Math.round(zoom * 100)}%
+        </span>
+        <button
+          className="icon-button small-icon"
+          title="Zoom in"
+          aria-label="Zoom in"
+          disabled={zoom >= 4}
+          onClick={() =>
+            applyView(
+              zoomAroundPointer(
+                currentViewRef.current,
+                { x: size.width / 2, y: size.height / 2 },
+                zoom + 0.1,
+              ),
+            )
+          }
+        >
+          <Plus size={14} />
+        </button>
       </div>
     </div>
   );

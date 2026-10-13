@@ -3,7 +3,6 @@ import {
   ArrowDownToLine,
   ArrowRight,
   Bell,
-  ChevronDown,
   CircleHelp,
   FilePlus2,
   FileText,
@@ -195,7 +194,6 @@ export function CanvasArea({
   const project = useStore((state) => state.project);
   const leftPanelOpen = useStore((state) => state.leftPanelOpen);
   const rightPanelOpen = useStore((state) => state.rightPanelOpen);
-  const zoom = useStore((state) => state.zoom);
 
   return (
     <main className="canvas-area">
@@ -218,9 +216,6 @@ export function CanvasArea({
             onOpenPalette={onOpenPalette}
           />
         </Suspense>
-        <div className="canvas-zoom" aria-label={`Canvas zoom ${Math.round(zoom * 100)} percent`}>
-          {Math.round(zoom * 100)}% <ChevronDown size={13} />
-        </div>
       </div>
     </main>
   );
