@@ -21,6 +21,7 @@ import { DEFAULT_DEVICE_PRESET, findDevicePreset, toScreenDevice } from "../devi
 import { DevicePicker } from "../devices/DevicePicker";
 import type { ScreenDevice } from "../devices/types";
 import { reorderScreens, reorderWidgets } from "../project/layers";
+import { createDefaultBreakpoints } from "../project/responsive";
 import type { Project, Screen, Widget } from "../project/schema";
 import { useStore } from "../store";
 
@@ -239,6 +240,7 @@ export function ScreenLayerSidebar() {
       id: crypto.randomUUID(),
       name,
       device,
+      breakpoints: createDefaultBreakpoints(device.width, device.height),
       widgets: [],
       interactionRules: [],
     };

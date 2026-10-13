@@ -10,6 +10,7 @@ function resetStore(): void {
     isDirty: false,
     lastSavedAt: null,
     activeScreenId: null,
+    activeBreakpointId: null,
     past: [],
     future: [],
     zoom: 1,
@@ -131,12 +132,14 @@ describe("composed Zustand store", () => {
       screens: [...project.screens, secondScreen],
     });
     useStore.getState().select(["widget-on-first-screen"]);
+    useStore.getState().setActiveBreakpoint("mobile");
 
     useStore.getState().setActiveScreen(secondScreen.id);
 
     expect(useStore.getState().getActiveScreenId()).toBe(secondScreen.id);
     expect(useStore.getState().project.startScreenId).toBe(project.startScreenId);
     expect(useStore.getState().selectedIds).toEqual([]);
+    expect(useStore.getState().activeBreakpointId).toBeNull();
   });
 
   it("falls back to the start screen if the active screen was removed", () => {
