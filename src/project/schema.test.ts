@@ -92,6 +92,40 @@ describe("ProtoFlow project schema", () => {
     expect(parseProject(serializeProject(project))).toEqual(project);
   });
 
+  it("accepts four independent rectangle corner radii", () => {
+    const project = createCompleteProject();
+    const screen = project.screens[0];
+    const widget = screen.widgets[0];
+    const rounded = {
+      ...project,
+      screens: [
+        {
+          ...screen,
+          widgets: [
+            { ...widget, style: { ...widget.style, cornerRadius: [2, 4, 6, 8] } },
+          ],
+        },
+      ],
+    };
+
+    expect(parseProject(rounded).screens[0].widgets[0].style.cornerRadius).toEqual([
+      2, 4, 6, 8,
+    ]);
+    expect(() =>
+      parseProject({
+        ...rounded,
+        screens: [
+          {
+            ...screen,
+            widgets: [
+              { ...widget, style: { ...widget.style, cornerRadius: [2, 4, 6] } },
+            ],
+          },
+        ],
+      }),
+    ).toThrow(SchemaValidationError);
+  });
+
   it("throws SchemaValidationError with the Zod issues for unsupported versions", () => {
     const project = createEmptyProject();
     const unsupported = { ...project, schemaVersion: "2.0.0" };
