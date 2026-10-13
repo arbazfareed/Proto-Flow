@@ -16,6 +16,7 @@ function createActions(): ShortcutActions {
     newProject: vi.fn(),
     openProject: vi.fn(),
     toggleGrid: vi.fn(),
+    toggleSnap: vi.fn(),
   };
 }
 
@@ -69,6 +70,17 @@ describe("global keyboard shortcuts", () => {
     expect(actions.toggleGrid).toHaveBeenCalledOnce();
     expect(actions.newProject).toHaveBeenCalledOnce();
     expect(actions.openProject).toHaveBeenCalledOnce();
+  });
+
+  it("toggles snap on Ctrl/Cmd+Shift+'", () => {
+    const actions = createActions();
+    const event = createEvent('"', { code: "Quote", shiftKey: true });
+
+    handleGlobalShortcut(event, actions);
+
+    expect(event.preventDefault).toHaveBeenCalledOnce();
+    expect(actions.toggleSnap).toHaveBeenCalledOnce();
+    expect(actions.toggleGrid).not.toHaveBeenCalled();
   });
 
   it("does not run editing shortcuts in text inputs", () => {

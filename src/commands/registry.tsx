@@ -125,8 +125,9 @@ export function createCoreCommands(actions: CoreCommandActions): AppCommand[] {
     },
     {
       id: "canvas.toggle-snap",
-      label: "Toggle Snap",
-      keywords: ["canvas", "grid"],
+      label: "Toggle Snap to Grid",
+      keywords: ["canvas", "grid", "alignment", "guides"],
+      shortcut: "Ctrl Shift '",
       icon: <Eye />,
       run: actions.toggleSnap,
     },

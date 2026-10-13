@@ -152,6 +152,7 @@ function AppShell() {
         newProject: createNewProject,
         openProject: () => void openFile(),
         toggleGrid,
+        toggleSnap,
       });
     };
     window.addEventListener("keydown", onKeyDown);
@@ -164,6 +165,7 @@ function AppShell() {
     save,
     setPaletteOpen,
     toggleGrid,
+    toggleSnap,
     togglePalette,
     undo,
   ]);

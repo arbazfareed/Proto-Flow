@@ -18,12 +18,14 @@ export interface CanvasSlice {
   zoom: number;
   pan: { x: number; y: number };
   gridSize: 5 | 10 | 20;
+  gridStyle: "dots" | "lines";
   gridVisible: boolean;
   snapEnabled: boolean;
   selectedIds: string[];
   setZoom: (zoom: number) => void;
   setPan: (x: number, y: number) => void;
   setGridSize: (size: 5 | 10 | 20) => void;
+  setGridStyle: (style: "dots" | "lines") => void;
   toggleGrid: () => void;
   toggleSnap: () => void;
   select: (ids: string[]) => void;

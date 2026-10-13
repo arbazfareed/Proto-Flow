@@ -1,8 +1,9 @@
-import { memo, useCallback, useEffect, useRef, useState } from "react";
-import { Layer, Shape, Stage } from "react-konva";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { Ellipse, Group, Layer, Line, Rect, Shape, Stage, Text } from "react-konva";
 import { ArrowDownToLine, FolderOpen, Minus, Plus } from "lucide-react";
 import type { Stage as KonvaStage } from "konva/lib/Stage";
 import { useStore } from "../store";
+import type { Widget } from "../project/schema";
 import {
   centerCanvasView,
   clampCanvasZoom,
@@ -10,6 +11,7 @@ import {
   getWidgetBounds,
   zoomAroundPointer,
 } from "./navigation";
+import { snapWidgetPosition, type CanvasGuide, type CanvasPoint } from "./snapping";
 
 interface CanvasSize {
   width: number;
@@ -40,12 +42,14 @@ function GridLayer({
   zoom,
   pan,
   gridSize,
+  gridStyle,
   visible,
 }: {
   size: CanvasSize;
   zoom: number;
   pan: { x: number; y: number };
   gridSize: number;
+  gridStyle: "dots" | "lines";
   visible: boolean;
 }) {
   if (!visible || size.width === 0 || size.height === 0) return null;
@@ -66,30 +70,168 @@ function GridLayer({
         y={top}
         width={right - left}
         height={bottom - top}
-        fill="#34353b"
+        fill={gridStyle === "dots" ? "#34353b" : undefined}
         perfectDrawEnabled={false}
         sceneFunc={(context, shape) => {
           const firstX = Math.ceil(left / spacing) * spacing;
           const firstY = Math.ceil(top / spacing) * spacing;
-          const radius = 0.7 / zoom;
+          const radius = 0.65 / zoom;
 
           context.beginPath();
-          for (let x = firstX; x <= right; x += spacing) {
+          if (gridStyle === "dots") {
+            for (let x = firstX; x <= right; x += spacing) {
+              for (let y = firstY; y <= bottom; y += spacing) {
+                context.moveTo(x - left + radius, y - top);
+                context.arc(x - left, y - top, radius, 0, Math.PI * 2);
+              }
+            }
+          } else {
+            for (let x = firstX; x <= right; x += spacing) {
+              context.moveTo(x - left, 0);
+              context.lineTo(x - left, bottom - top);
+            }
             for (let y = firstY; y <= bottom; y += spacing) {
-              context.moveTo(x - left + radius, y - top);
-              context.arc(x - left, y - top, radius, 0, Math.PI * 2);
+              context.moveTo(0, y - top);
+              context.lineTo(right - left, y - top);
             }
           }
           context.fillStrokeShape(shape);
         }}
+        stroke={gridStyle === "lines" ? "#34353b" : undefined}
+        strokeWidth={gridStyle === "lines" ? 0.45 / zoom : undefined}
       />
     </Layer>
   );
 }
 
-const ContentLayer = memo(function ContentLayer() {
-  return <Layer perfectDrawEnabled={false} />;
-});
+function GuideLayer({
+  guides,
+  size,
+  zoom,
+  pan,
+}: {
+  guides: CanvasGuide[];
+  size: CanvasSize;
+  zoom: number;
+  pan: CanvasPoint;
+}) {
+  if (guides.length === 0) return null;
+  const left = -pan.x / zoom;
+  const top = -pan.y / zoom;
+  const right = (size.width - pan.x) / zoom;
+  const bottom = (size.height - pan.y) / zoom;
+
+  return (
+    <Layer listening={false} perfectDrawEnabled={false}>
+      {guides.map((guide) => (
+        <Group key={`${guide.axis}-${guide.coordinate}`} listening={false}>
+          <Line
+            points={
+              guide.axis === "x"
+                ? [guide.coordinate, top, guide.coordinate, bottom]
+                : [left, guide.coordinate, right, guide.coordinate]
+            }
+            stroke="#f06ee8"
+            strokeWidth={1 / zoom}
+            perfectDrawEnabled={false}
+          />
+          <Text
+            x={guide.axis === "x" ? guide.coordinate + 4 / zoom : left + 4 / zoom}
+            y={guide.axis === "y" ? guide.coordinate + 4 / zoom : top + 4 / zoom}
+            text={`${Math.round(guide.distance)} px`}
+            fontSize={10 / zoom}
+            padding={3 / zoom}
+            fill="#ffffff"
+            background="#a34a9c"
+            perfectDrawEnabled={false}
+          />
+        </Group>
+      ))}
+    </Layer>
+  );
+}
+
+function WidgetNode({
+  widget,
+  selected,
+  position,
+  onSelect,
+  onDragMove,
+  onDragEnd,
+  onDragBound,
+}: {
+  widget: Widget;
+  selected: boolean;
+  position: CanvasPoint;
+  onSelect: (event: { evt: MouseEvent | TouchEvent }) => void;
+  onDragMove: (position: CanvasPoint, altKey: boolean) => void;
+  onDragEnd: (position: CanvasPoint) => void;
+  onDragBound: (position: CanvasPoint) => CanvasPoint;
+}) {
+  const fill = widget.style.fill ?? "#5c4a89";
+  const stroke = selected ? "#bba5ff" : widget.style.stroke ?? "#a78bfa";
+  const strokeWidth = selected
+    ? Math.max(widget.style.strokeWidth ?? 1, 1.5)
+    : widget.style.strokeWidth ?? 1;
+  const commonProps = {
+    width: widget.width,
+    height: widget.height,
+    fill: widget.type === "text" ? (widget.style.fill ?? "#e9e9ec") : fill,
+    stroke: widget.style.stroke === null && !selected ? undefined : stroke,
+    strokeWidth,
+    opacity: widget.opacity,
+    perfectDrawEnabled: false,
+  };
+
+  return (
+    <Group
+      id={widget.id}
+      x={position.x}
+      y={position.y}
+      rotation={widget.rotation}
+      visible={widget.visible}
+      draggable={!widget.locked}
+      dragBoundFunc={onDragBound}
+      onClick={(event) => onSelect(event)}
+      onTap={(event) => onSelect(event)}
+      onDragMove={(event) =>
+        onDragMove(
+          { x: event.target.x(), y: event.target.y() },
+          event.evt instanceof MouseEvent && event.evt.altKey,
+        )
+      }
+      onDragEnd={(event) =>
+        onDragEnd({ x: event.target.x(), y: event.target.y() })
+      }
+    >
+      {widget.type === "text" ? (
+        <Text
+          {...commonProps}
+          text={
+            typeof widget.props.text === "string"
+              ? widget.props.text
+              : "Text"
+          }
+          fontSize={Math.max(12, Math.min(widget.height, 24))}
+          verticalAlign="middle"
+        />
+      ) : widget.type === "ellipse" || widget.type === "circle" ? (
+        <Ellipse
+          {...commonProps}
+          radiusX={widget.width / 2}
+          radiusY={widget.height / 2}
+          x={widget.width / 2}
+          y={widget.height / 2}
+        />
+      ) : (
+        <Rect
+          {...commonProps}
+          cornerRadius={widget.style.cornerRadius ?? 0}
+        />
+      )}
+    </Group>
+  );
+}
 
 export function CanvasStage({
   onSaveAs,
@@ -111,10 +253,23 @@ export function CanvasStage({
   const [size, setSize] = useState<CanvasSize>({ width: 0, height: 0 });
   const [spacePressed, setSpacePressed] = useState(false);
   const [isPanning, setIsPanning] = useState(false);
+  const [previewPositions, setPreviewPositions] = useState<Record<string, CanvasPoint>>({});
+  const [guides, setGuides] = useState<CanvasGuide[]>([]);
+  const altHeldRef = useRef(false);
+  const pendingGuidesRef = useRef<CanvasGuide[]>([]);
   const zoom = useStore((state) => state.zoom);
   const pan = useStore((state) => state.pan);
   const gridSize = useStore((state) => state.gridSize);
+  const gridStyle = useStore((state) => state.gridStyle);
   const gridVisible = useStore((state) => state.gridVisible);
+  const snapEnabled = useStore((state) => state.snapEnabled);
+  const activeScreen = useStore((state) =>
+    state.project.screens.find((screen) => screen.id === state.project.startScreenId),
+  );
+  const selectedIds = useStore((state) => state.selectedIds);
+  const screenWidgets = activeScreen
+    ? [...activeScreen.widgets].sort((first, second) => first.zIndex - second.zIndex)
+    : [];
 
   const commitViewOnFrame = useCallback((view: PendingView) => {
     pendingViewRef.current = view;
@@ -168,6 +323,23 @@ export function CanvasStage({
 
     resizeObserver.observe(surface);
     return () => resizeObserver.disconnect();
+  }, []);
+
+  useEffect(() => {
+    const setAltHeld = (event: KeyboardEvent) => {
+      if (event.key === "Alt") altHeldRef.current = event.type === "keydown";
+    };
+    const clearAltHeld = () => {
+      altHeldRef.current = false;
+    };
+    window.addEventListener("keydown", setAltHeld);
+    window.addEventListener("keyup", setAltHeld);
+    window.addEventListener("blur", clearAltHeld);
+    return () => {
+      window.removeEventListener("keydown", setAltHeld);
+      window.removeEventListener("keyup", setAltHeld);
+      window.removeEventListener("blur", clearAltHeld);
+    };
   }, []);
 
   useEffect(() => {
@@ -378,22 +550,125 @@ export function CanvasStage({
             zoom={zoom}
             pan={pan}
             gridSize={gridSize}
+            gridStyle={gridStyle}
             visible={gridVisible}
           />
-          <ContentLayer />
+          <Layer perfectDrawEnabled={false}>
+            {screenWidgets.map((widget) => {
+              const siblings = screenWidgets.map((sibling) => ({
+                id: sibling.id,
+                x: sibling.x,
+                y: sibling.y,
+                width: sibling.width,
+                height: sibling.height,
+              }));
+              const snapPosition = (position: CanvasPoint, altKey = altHeldRef.current) =>
+                snapWidgetPosition(
+                  {
+                    id: widget.id,
+                    x: position.x,
+                    y: position.y,
+                    width: widget.width,
+                    height: widget.height,
+                  },
+                  siblings,
+                  gridSize,
+                  snapEnabled,
+                  altKey,
+                );
+              return (
+                <WidgetNode
+                  key={widget.id}
+                  widget={widget}
+                  selected={selectedIds.includes(widget.id)}
+                  position={
+                    previewPositions[widget.id] ?? { x: widget.x, y: widget.y }
+                  }
+                  onSelect={(event) => {
+                    const selected = useStore.getState().selectedIds;
+                    if (event.evt.shiftKey) {
+                      useStore.getState().select(
+                        selected.includes(widget.id)
+                          ? selected.filter((id) => id !== widget.id)
+                          : [...selected, widget.id],
+                      );
+                    } else {
+                      useStore.getState().select([widget.id]);
+                    }
+                  }}
+                  onDragBound={(position) => {
+                    const stageTransform = stageRef.current?.getAbsoluteTransform();
+                    if (!stageTransform) return position;
+                    const stagePosition = stageTransform
+                      .copy()
+                      .invert()
+                      .point(position);
+                    const result = snapPosition(stagePosition);
+                    pendingGuidesRef.current = result.guides;
+                    return stageTransform.point(result.position);
+                  }}
+                  onDragMove={(position, altKey) => {
+                    setPreviewPositions((current) => ({
+                      ...current,
+                      [widget.id]: position,
+                    }));
+                    setGuides(altKey ? [] : pendingGuidesRef.current);
+                  }}
+                  onDragEnd={(position) => {
+                    const result = snapPosition(position);
+                    const current = useStore.getState();
+                    if (
+                      result.position.x !== widget.x ||
+                      result.position.y !== widget.y
+                    ) {
+                      current.setProject({
+                        ...current.project,
+                        updatedAt: new Date().toISOString(),
+                        screens: current.project.screens.map((screen) =>
+                          screen.id !== activeScreen?.id
+                            ? screen
+                            : {
+                                ...screen,
+                                widgets: screen.widgets.map((item) =>
+                                  item.id === widget.id
+                                    ? {
+                                        ...item,
+                                        x: result.position.x,
+                                        y: result.position.y,
+                                      }
+                                    : item,
+                                ),
+                              },
+                        ),
+                      });
+                    }
+                    setPreviewPositions((currentPositions) => {
+                      const next = { ...currentPositions };
+                      delete next[widget.id];
+                      return next;
+                    });
+                    setGuides([]);
+                  }}
+                />
+              );
+            })}
+          </Layer>
+          <GuideLayer guides={guides} size={size} zoom={zoom} pan={pan} />
         </Stage>
       )}
-      <div className="canvas-empty-state">
-        <div className="empty-icon-wrap"><span className="empty-canvas-mark">PF</span></div>
-        <span className="eyebrow">YOUR CANVAS IS READY</span>
-        <h1>A little room to think.</h1>
-        <p>Save your project locally or open an existing prototype. Canvas tools for drawing and editing are coming next.</p>
-        <div className="canvas-empty-actions">
-          <button className="button button-primary" onClick={onSaveAs}><ArrowDownToLine size={15} /> Save your project</button>
-          <button className="button button-secondary" onClick={onOpen}><FolderOpen size={15} /> Open a project</button>
+      {screenWidgets.length === 0 && (
+        <div className="canvas-empty-state">
+          <div className="empty-icon-wrap"><span className="empty-canvas-mark">PF</span></div>
+          <span className="eyebrow">YOUR CANVAS IS READY</span>
+          <h1>A little room to think.</h1>
+          <p>Save your project locally or open an existing prototype. Canvas tools for drawing and editing are coming next.</p>
+          <div className="canvas-empty-actions">
+            <button className="button button-primary" onClick={onSaveAs}><ArrowDownToLine size={15} /> Save your project</button>
+            <button className="button button-secondary" onClick={onOpen}><FolderOpen size={15} /> Open a project</button>
+          </div>
+          <div className="empty-shortcut"><span>Press</span> <button className="shortcut-link" onClick={onOpenPalette}>Ctrl K</button> <span>to see all actions</span></div>
         </div>
-        <div className="empty-shortcut"><span>Press</span> <button className="shortcut-link" onClick={onOpenPalette}>Ctrl K</button> <span>to see all actions</span></div>
-      </div>
+      )}
       <div className="canvas-zoom-controls" role="group" aria-label="Canvas zoom controls">
         <button
           className="icon-button small-icon"

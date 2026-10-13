@@ -1,4 +1,4 @@
-import { lazy, Suspense } from "react";
+import { lazy, Suspense, useState } from "react";
 import {
   ArrowDownToLine,
   ArrowRight,
@@ -194,6 +194,15 @@ export function CanvasArea({
   const project = useStore((state) => state.project);
   const leftPanelOpen = useStore((state) => state.leftPanelOpen);
   const rightPanelOpen = useStore((state) => state.rightPanelOpen);
+  const gridSize = useStore((state) => state.gridSize);
+  const gridStyle = useStore((state) => state.gridStyle);
+  const gridVisible = useStore((state) => state.gridVisible);
+  const snapEnabled = useStore((state) => state.snapEnabled);
+  const setGridSize = useStore((state) => state.setGridSize);
+  const setGridStyle = useStore((state) => state.setGridStyle);
+  const toggleGrid = useStore((state) => state.toggleGrid);
+  const toggleSnap = useStore((state) => state.toggleSnap);
+  const [viewMenuOpen, setViewMenuOpen] = useState(false);
 
   return (
     <main className="canvas-area">
@@ -205,7 +214,74 @@ export function CanvasArea({
         <div className="canvas-toolbar-actions">
           <span className="canvas-mode"><span className="mode-dot" /> Canvas</span>
           {!rightPanelOpen && <button className="icon-button small-icon" aria-label="Show inspector panel" onClick={onToggleRight}><PanelRightClose size={15} /></button>}
-          <button className="icon-button small-icon" title="More canvas actions are coming later" aria-label="More canvas actions" disabled><MoreHorizontal size={17} /></button>
+          <div className="canvas-view-menu-anchor">
+            <button
+              className={`icon-button small-icon${viewMenuOpen ? " is-active" : ""}`}
+              title="Canvas view options"
+              aria-label="Canvas view options"
+              aria-haspopup="dialog"
+              aria-expanded={viewMenuOpen}
+              onClick={() => setViewMenuOpen((open) => !open)}
+            >
+              <MoreHorizontal size={17} />
+            </button>
+            {viewMenuOpen && (
+              <div
+                className="canvas-view-popover"
+                role="dialog"
+                aria-label="Canvas view options"
+                onKeyDown={(event) => {
+                  if (event.key === "Escape") setViewMenuOpen(false);
+                }}
+              >
+                <div className="view-popover-heading">VIEW</div>
+                <button
+                  className="view-popover-toggle"
+                  aria-pressed={gridVisible}
+                  onClick={toggleGrid}
+                >
+                  <span>Show grid</span><kbd>Ctrl '</kbd>
+                  <span className={`view-toggle-indicator${gridVisible ? " is-on" : ""}`} />
+                </button>
+                <button
+                  className="view-popover-toggle"
+                  aria-pressed={snapEnabled}
+                  onClick={toggleSnap}
+                >
+                  <span>Snap &amp; smart guides</span><kbd>Ctrl Shift '</kbd>
+                  <span className={`view-toggle-indicator${snapEnabled ? " is-on" : ""}`} />
+                </button>
+                <div className="view-popover-divider" />
+                <div className="view-popover-label">Grid spacing</div>
+                <div className="view-option-group" role="group" aria-label="Grid spacing">
+                  {([5, 10, 20] as const).map((size) => (
+                    <button
+                      key={size}
+                      className={`view-option${gridSize === size ? " is-selected" : ""}`}
+                      aria-pressed={gridSize === size}
+                      onClick={() => setGridSize(size)}
+                    >
+                      {size}px
+                    </button>
+                  ))}
+                </div>
+                <div className="view-popover-divider" />
+                <div className="view-popover-label">Grid style</div>
+                <div className="view-option-group" role="group" aria-label="Grid style">
+                  {(["dots", "lines"] as const).map((style) => (
+                    <button
+                      key={style}
+                      className={`view-option${gridStyle === style ? " is-selected" : ""}`}
+                      aria-pressed={gridStyle === style}
+                      onClick={() => setGridStyle(style)}
+                    >
+                      {style === "dots" ? "Dots" : "Lines"}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
         </div>
       </div>
       <div className="canvas-stage">
