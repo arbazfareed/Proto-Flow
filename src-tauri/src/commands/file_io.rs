@@ -4,6 +4,7 @@ use std::{
     path::{Path, PathBuf},
 };
 
+use base64::{Engine as _, engine::general_purpose::STANDARD as BASE64};
 use serde::Serialize;
 use sha2::{Digest, Sha256};
 use tauri::AppHandle;
@@ -13,11 +14,28 @@ use uuid::Uuid;
 const MAX_PROJECT_FILE_BYTES: u64 = 10 * 1024 * 1024;
 const PROJECT_EXTENSION: &str = "pflow";
 const PROJECT_FILTER_NAME: &str = "Proto Flow project";
+const MAX_IMAGE_FILE_BYTES: u64 = 25 * 1024 * 1024;
+const IMAGE_ASSET_DIRECTORY: &str = "assets";
 
 #[derive(Serialize)]
 pub struct OpenedProject {
     path: String,
     content: String,
+}
+
+#[derive(Serialize)]
+pub struct ImageAsset {
+    path: String,
+    mime: String,
+    base64: String,
+}
+
+#[derive(Serialize)]
+pub struct ImageFile {
+    name: String,
+    mime: String,
+    size: usize,
+    base64: String,
 }
 
 fn validate_project_path(path: &Path) -> Result<(), String> {
@@ -267,6 +285,180 @@ pub fn save_project_as(
 }
 
 #[tauri::command]
+pub fn pick_project_save_path(
+    app: AppHandle,
+    default_filename: String,
+) -> Result<Option<String>, String> {
+    let Some(path) = save_dialog(&app, &safe_default_filename(&default_filename))? else {
+        return Ok(None);
+    };
+    path_to_string(&with_project_extension(path)).map(Some)
+}
+
+fn project_assets_directory(project_path: &Path) -> Result<PathBuf, String> {
+    validate_project_path(project_path)?;
+    let parent = project_path
+        .parent()
+        .filter(|parent| !parent.as_os_str().is_empty())
+        .unwrap_or_else(|| Path::new("."));
+    Ok(parent.join(IMAGE_ASSET_DIRECTORY))
+}
+
+fn image_extension(mime: &str) -> Result<&'static str, String> {
+    match mime {
+        "image/png" => Ok("png"),
+        "image/jpeg" => Ok("jpg"),
+        "image/svg+xml" => Ok("svg"),
+        "image/webp" => Ok("webp"),
+        _ => Err("Unsupported image. Choose a PNG, JPG, SVG, or WebP file.".into()),
+    }
+}
+
+fn validate_image_bytes(mime: &str, bytes: &[u8]) -> Result<(), String> {
+    if bytes.is_empty() {
+        return Err("The selected image file is empty.".into());
+    }
+    if bytes.len() as u64 > MAX_IMAGE_FILE_BYTES {
+        return Err("Images must be 25 MB or smaller.".into());
+    }
+
+    let valid = match mime {
+        "image/png" => bytes.starts_with(b"\x89PNG\r\n\x1a\n"),
+        "image/jpeg" => bytes.starts_with(b"\xff\xd8\xff"),
+        "image/webp" => bytes.len() >= 12 && &bytes[..4] == b"RIFF" && &bytes[8..12] == b"WEBP",
+        "image/svg+xml" => {
+            let text = std::str::from_utf8(bytes)
+                .map_err(|_| "The SVG image is not valid UTF-8.".to_owned())?;
+            let normalized = text.to_ascii_lowercase();
+            let starts_with_svg = normalized.trim_start().starts_with("<svg")
+                || (normalized.trim_start().starts_with("<?xml") && normalized.contains("<svg"));
+            starts_with_svg
+                && !normalized.contains("<script")
+                && !normalized.contains("<foreignobject")
+                && !normalized.contains("javascript:")
+                && !normalized.contains("file:")
+                && !normalized.contains("http:")
+                && !normalized.contains("https:")
+                && !normalized.contains(" onload")
+                && !normalized.contains(" onclick")
+        }
+        _ => false,
+    };
+    if !valid {
+        return Err("The selected image format does not match its contents.".into());
+    }
+    Ok(())
+}
+
+#[tauri::command]
+pub fn save_image_asset(
+    project_path: String,
+    mime: String,
+    base64: String,
+) -> Result<String, String> {
+    let bytes = BASE64
+        .decode(base64)
+        .map_err(|error| format!("Could not decode the image data: {error}"))?;
+    validate_image_bytes(&mime, &bytes)?;
+    let extension = image_extension(&mime)?;
+    let directory = project_assets_directory(Path::new(&project_path))?;
+    fs::create_dir_all(&directory)
+        .map_err(|error| format!("Could not create the project assets folder: {error}"))?;
+    let file_name = format!("{}.{}", Uuid::new_v4(), extension);
+    let destination = directory.join(&file_name);
+    let mut file = OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .open(&destination)
+        .map_err(|error| format!("Could not create the image asset: {error}"))?;
+    write_and_sync(&mut file, &bytes)
+        .map_err(|error| format!("Could not save the image asset: {error}"))?;
+    Ok(format!("{IMAGE_ASSET_DIRECTORY}/{file_name}"))
+}
+
+#[tauri::command]
+pub fn read_image_asset(project_path: String, asset_path: String) -> Result<ImageAsset, String> {
+    let project_path = Path::new(&project_path);
+    let directory = project_assets_directory(project_path)?;
+    let relative = Path::new(&asset_path);
+    let mut components = relative.components();
+    if !matches!(components.next(), Some(std::path::Component::Normal(name)) if name == IMAGE_ASSET_DIRECTORY)
+        || !matches!(components.next(), Some(std::path::Component::Normal(_)))
+        || components.next().is_some()
+    {
+        return Err("The project image asset path is invalid.".into());
+    }
+
+    let directory_metadata = fs::symlink_metadata(&directory)
+        .map_err(|error| format!("Could not inspect the project assets folder: {error}"))?;
+    if !directory_metadata.is_dir() || directory_metadata.file_type().is_symlink() {
+        return Err("The project assets folder is not a regular directory.".into());
+    }
+    let path = directory.join(relative.file_name().unwrap_or_default());
+    let metadata = fs::symlink_metadata(&path)
+        .map_err(|error| format!("Could not inspect the project image asset: {error}"))?;
+    if !metadata.is_file() || metadata.file_type().is_symlink() {
+        return Err("The project image asset is not a regular file.".into());
+    }
+    if metadata.len() > MAX_IMAGE_FILE_BYTES {
+        return Err("The project image asset exceeds the 25 MB limit.".into());
+    }
+    let mime = match path.extension().and_then(|extension| extension.to_str()) {
+        Some("png") => "image/png",
+        Some("jpg") => "image/jpeg",
+        Some("svg") => "image/svg+xml",
+        Some("webp") => "image/webp",
+        _ => return Err("The project image asset has an unsupported format.".into()),
+    };
+    let bytes = fs::read(&path)
+        .map_err(|error| format!("Could not read the project image asset: {error}"))?;
+    validate_image_bytes(mime, &bytes)?;
+    Ok(ImageAsset {
+        path: asset_path,
+        mime: mime.to_owned(),
+        base64: BASE64.encode(bytes),
+    })
+}
+
+#[tauri::command]
+pub fn read_dropped_image(path: String) -> Result<ImageFile, String> {
+    let path = PathBuf::from(path);
+    let metadata = fs::metadata(&path)
+        .map_err(|error| format!("Could not inspect the dropped image: {error}"))?;
+    if !metadata.is_file() {
+        return Err("The dropped item is not a regular file.".into());
+    }
+    if metadata.len() > MAX_IMAGE_FILE_BYTES {
+        return Err("Images must be 25 MB or smaller.".into());
+    }
+    let mime = match path.extension().and_then(|extension| extension.to_str()) {
+        Some(extension) if extension.eq_ignore_ascii_case("png") => "image/png",
+        Some(extension)
+            if extension.eq_ignore_ascii_case("jpg") || extension.eq_ignore_ascii_case("jpeg") =>
+        {
+            "image/jpeg"
+        }
+        Some(extension) if extension.eq_ignore_ascii_case("svg") => "image/svg+xml",
+        Some(extension) if extension.eq_ignore_ascii_case("webp") => "image/webp",
+        _ => return Err("Unsupported image. Choose a PNG, JPG, SVG, or WebP file.".into()),
+    };
+    let bytes =
+        fs::read(&path).map_err(|error| format!("Could not read the dropped image: {error}"))?;
+    validate_image_bytes(mime, &bytes)?;
+    let name = path
+        .file_name()
+        .and_then(|name| name.to_str())
+        .ok_or_else(|| "The dropped image name is not valid Unicode.".to_owned())?
+        .to_owned();
+    Ok(ImageFile {
+        name,
+        mime: mime.to_owned(),
+        size: bytes.len(),
+        base64: BASE64.encode(bytes),
+    })
+}
+
+#[tauri::command]
 pub fn get_device_id() -> Result<String, String> {
     let hostname =
         hostname::get().map_err(|error| format!("Could not read the device hostname: {error}"))?;
@@ -363,6 +555,53 @@ mod tests {
 
         assert!(atomic_write_project(&target, &oversized).is_err());
         assert!(!target.exists());
+    }
+
+    #[test]
+    fn saves_and_reads_image_assets_next_to_the_project() {
+        let directory = tempfile::tempdir().unwrap();
+        let project_path = directory.path().join("project.pflow");
+        fs::write(&project_path, "{}").unwrap();
+        let png = b"\x89PNG\r\n\x1a\nsmall-test";
+
+        let asset_path = save_image_asset(
+            project_path.to_string_lossy().into_owned(),
+            "image/png".into(),
+            BASE64.encode(png),
+        )
+        .unwrap();
+        let asset = read_image_asset(
+            project_path.to_string_lossy().into_owned(),
+            asset_path.clone(),
+        )
+        .unwrap();
+
+        assert!(asset_path.starts_with("assets/"));
+        assert_eq!(asset.mime, "image/png");
+        assert_eq!(BASE64.decode(asset.base64).unwrap(), png);
+    }
+
+    #[test]
+    fn rejects_mismatched_and_unsafe_project_image_assets() {
+        let directory = tempfile::tempdir().unwrap();
+        let project_path = directory.path().join("project.pflow");
+        fs::write(&project_path, "{}").unwrap();
+        let invalid_image = BASE64.encode(b"not a png");
+        assert!(
+            save_image_asset(
+                project_path.to_string_lossy().into_owned(),
+                "image/png".into(),
+                invalid_image,
+            )
+            .is_err()
+        );
+        assert!(
+            read_image_asset(
+                project_path.to_string_lossy().into_owned(),
+                "assets/../../project.pflow".into(),
+            )
+            .is_err()
+        );
     }
 
     #[test]

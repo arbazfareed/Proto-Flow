@@ -80,8 +80,11 @@
 .breadcrumb svg { color:#62626b; }
 .breadcrumb-muted { color:#777780; }
 .canvas-toolbar-actions { gap:10px; }
-.shape-tools { display:flex; align-items:center; gap:2px; padding-right:8px; border-right:1px solid #303137; }
-.shape-tool-button { width:26px; height:26px; flex:0 0 26px; color:#9999a3; }
+.shape-tools { display:flex; align-items:center; gap:7px; padding-right:8px; border-right:1px solid #303137; }
+.shape-tool-group { display:flex; flex-direction:column; align-items:center; gap:1px; }
+.shape-tool-group-label { color:#777780; font-size:7px; font-weight:700; letter-spacing:.08em; line-height:10px; text-transform:uppercase; }
+.shape-tool-buttons { display:flex; align-items:center; gap:1px; }
+.shape-tool-button { width:24px; height:24px; flex:0 0 24px; color:#9999a3; }
 .shape-tool-button:hover,.shape-tool-button.is-active { color:#e8ddff; background:#292431; }
 .canvas-toolbar-actions .canvas-view-menu-anchor { flex:0 0 auto; }
 .canvas-mode { display:flex; align-items:center; gap:7px; padding:5px 8px; border:1px solid #303137; border-radius:5px; color:#a8a8b1; font-size:9px; }
@@ -106,6 +109,8 @@
 .canvas-stage-surface.is-panning { cursor:grabbing; }
 .canvas-stage-surface.is-drawing { cursor:crosshair; }
 .canvas-stage-surface canvas { cursor:inherit; }
+.canvas-image-file-input { display:none; }
+.canvas-inline-editor { position:absolute; z-index:3; resize:none; padding:4px 6px; border:1px solid var(--accent); border-radius:3px; outline:0; color:var(--text-primary); background:#19181feF; font:inherit; line-height:1.2; transform-origin:top left; }
 .canvas-empty-state { position:absolute; z-index:1; top:50%; left:50%; width:min(390px,80%); display:flex; align-items:center; flex-direction:column; transform:translate(-50%,-50%); text-align:center; pointer-events:none; }
 .canvas-empty-state button { pointer-events:auto; }
 .empty-icon-wrap { width:49px; height:49px; display:grid; place-items:center; margin-bottom:21px; border:1px solid #37333f; border-radius:14px; color:#b6a0f7; background:linear-gradient(145deg,#26222f,#1b1b20); box-shadow:0 8px 28px #0004; }
@@ -220,4 +225,6 @@
   .breadcrumb { display:none; }
   .canvas-toolbar-actions { gap:5px; }
   .shape-tools { padding-right:5px; }
+  .canvas-mode { display:none; }
+  .shape-tools { max-width:calc(100vw - 44px); overflow-x:auto; }
 }

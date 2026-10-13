@@ -92,6 +92,31 @@ describe("ProtoFlow project schema", () => {
     expect(parseProject(serializeProject(project))).toEqual(project);
   });
 
+  it("omits the transient image preview when the widget references a saved asset", () => {
+    const project = createCompleteProject();
+    const screen = project.screens[0];
+    const image = {
+      ...screen.widgets[0],
+      type: "image",
+      props: {
+        src: "data:image/png;base64,embedded-preview",
+        mime: "image/png",
+        assetPath: "assets/image.png",
+      },
+    };
+    const saved = parseProject(
+      serializeProject({
+        ...project,
+        screens: [{ ...screen, widgets: [image] }],
+      }),
+    );
+
+    expect(saved.screens[0].widgets[0].props).toEqual({
+      mime: "image/png",
+      assetPath: "assets/image.png",
+    });
+  });
+
   it("accepts four independent rectangle corner radii", () => {
     const project = createCompleteProject();
     const screen = project.screens[0];

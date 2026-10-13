@@ -57,13 +57,14 @@ function AppShell() {
   const save = useCallback(async (saveAs = false) => {
     const current = useStore.getState();
     try {
-      const path = await saveProjectFile(
+      const result = await saveProjectFile(
         current.project,
         saveAs ? null : current.filePath,
         saveAs,
       );
-      if (!path) return;
-      useStore.getState().markSaved(path);
+      if (!result) return;
+      useStore.setState({ project: result.project });
+      useStore.getState().markSaved(result.path);
       useStore.getState().markClean();
       try {
         clearAutosave();
@@ -218,6 +219,7 @@ function AppShell() {
           onSaveAs={() => void save(true)}
           onOpen={() => void openFile()}
           onOpenPalette={() => setPaletteOpen(true)}
+          onNotify={notify}
         />
         <RightInspector
           onToggle={toggleRightPanel}
