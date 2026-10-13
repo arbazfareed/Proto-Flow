@@ -32,6 +32,7 @@ export interface ScreenDevice {
   height: number;
   dpr: number;
   insets: DeviceInsets;
+  orientation?: DeviceOrientation;
 }
 
 export interface CustomDeviceInput extends ScreenDevice {

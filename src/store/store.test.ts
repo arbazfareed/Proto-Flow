@@ -23,6 +23,12 @@ function resetStore(): void {
     paletteOpen: false,
     leftPanelOpen: true,
     rightPanelOpen: true,
+    showDeviceFrame: true,
+    showSafeArea: true,
+    statusBarTheme: "dark",
+    statusBarTimeMode: "static",
+    showBattery: true,
+    showSignal: true,
   });
 }
 
@@ -153,10 +159,22 @@ describe("composed Zustand store", () => {
     store.togglePalette();
     store.toggleLeftPanel();
     store.toggleRightPanel();
+    store.toggleDeviceFrame();
+    store.toggleSafeArea();
+    store.setStatusBarTheme("light");
+    store.setStatusBarTimeMode("real");
+    store.toggleBattery();
+    store.toggleSignal();
     expect(useStore.getState()).toMatchObject({
       paletteOpen: true,
       leftPanelOpen: false,
       rightPanelOpen: false,
+      showDeviceFrame: false,
+      showSafeArea: false,
+      statusBarTheme: "light",
+      statusBarTimeMode: "real",
+      showBattery: false,
+      showSignal: false,
     });
     store.setPaletteOpen(false);
     expect(useStore.getState().paletteOpen).toBe(false);

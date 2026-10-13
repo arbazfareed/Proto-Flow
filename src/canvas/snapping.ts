@@ -48,6 +48,7 @@ export function snapWidgetPosition(
   gridSize: number,
   snapEnabled: boolean,
   altKey = false,
+  safeArea?: Omit<CanvasWidgetBounds, "id">,
 ): SnapResult {
   if (!snapEnabled || altKey) {
     return { position: { x: dragged.x, y: dragged.y }, guides: [] };
@@ -56,7 +57,10 @@ export function snapWidgetPosition(
     throw new RangeError("Grid size must be a finite value between 1 and 20 pixels.");
   }
 
-  const otherWidgets = siblings.filter((sibling) => sibling.id !== dragged.id);
+  const otherWidgets = [
+    ...siblings.filter((sibling) => sibling.id !== dragged.id),
+    ...(safeArea ? [{ id: "__safe-area__", ...safeArea }] : []),
+  ];
   const horizontal = nearestAlignment(
     [dragged.x, dragged.x + dragged.width / 2, dragged.x + dragged.width],
     otherWidgets.flatMap((widget) => [

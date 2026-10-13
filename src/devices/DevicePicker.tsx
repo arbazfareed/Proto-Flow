@@ -150,6 +150,9 @@ export function DevicePicker({
       width: Number(customDevice.width),
       height: Number(customDevice.height),
       dpr: Number(customDevice.dpr),
+      orientation: Number(customDevice.width) >= Number(customDevice.height)
+        ? "landscape"
+        : "portrait",
       insets: {
         top: Number(customDevice.top),
         bottom: Number(customDevice.bottom),

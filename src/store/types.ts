@@ -58,10 +58,22 @@ export interface UISlice {
   paletteOpen: boolean;
   leftPanelOpen: boolean;
   rightPanelOpen: boolean;
+  showDeviceFrame: boolean;
+  showSafeArea: boolean;
+  statusBarTheme: "light" | "dark";
+  statusBarTimeMode: "static" | "real";
+  showBattery: boolean;
+  showSignal: boolean;
   setPaletteOpen: (open: boolean) => void;
   togglePalette: () => void;
   toggleLeftPanel: () => void;
   toggleRightPanel: () => void;
+  toggleDeviceFrame: () => void;
+  toggleSafeArea: () => void;
+  setStatusBarTheme: (theme: "light" | "dark") => void;
+  setStatusBarTimeMode: (mode: "static" | "real") => void;
+  toggleBattery: () => void;
+  toggleSignal: () => void;
 }
 
 export type StoreState = DocumentSlice & CanvasSlice & HistorySlice & UISlice;
