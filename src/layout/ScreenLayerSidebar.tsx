@@ -24,12 +24,19 @@ import { reorderScreens, reorderWidgets } from "../project/layers";
 import { createDefaultBreakpoints } from "../project/responsive";
 import type { Project, Screen, Widget } from "../project/schema";
 import { useStore } from "../store";
+import { getVirtualizedRange } from "./layerVirtualization";
+import { WidgetThumbnail } from "./WidgetThumbnail";
+import { WidgetIcon } from "./widgetIcons";
 
 type MenuState =
   | { kind: "screen" | "layer" | "group"; id: string; x: number; y: number }
   | null;
 
 type DropIndicator = { id: string; edge: "before" | "after" } | null;
+type LayerTreeEntry =
+  | { kind: "group"; id: string; members: Widget[]; collapsed: boolean }
+  | { kind: "widget"; widget: Widget; nested: boolean };
+const LAYER_ROW_HEIGHT = 30;
 
 function collapsedStorageKey(projectId: string): string {
   return `protoflow:collapsed-layer-groups:${projectId}`;
@@ -130,9 +137,57 @@ export function ScreenLayerSidebar() {
   const [collapsedByScreen, setCollapsedByScreen] = useState(() =>
     readCollapsedGroups(project.id),
   );
+  const [layerScrollTop, setLayerScrollTop] = useState(0);
+  const [layerViewportHeight, setLayerViewportHeight] = useState(300);
+  const [recentWidgetIds, setRecentWidgetIds] = useState<Set<string>>(() => new Set());
   const cancelScreenRenameRef = useRef(false);
   const cancelWidgetRenameRef = useRef(false);
   const layerTreeRef = useRef<HTMLDivElement>(null);
+  const previousWidgetIdsRef = useRef<{ screenId: string; ids: Set<string> } | null>(null);
+  const recentWidgetTimersRef = useRef(new Map<string, number>());
+
+  useEffect(() => {
+    const previous = previousWidgetIdsRef.current;
+    const ids = new Set(activeScreen?.widgets.map((widget) => widget.id) ?? []);
+    if (previous?.screenId === activeScreenId) {
+      const added = [...ids].filter((id) => !previous.ids.has(id));
+      if (added.length > 0) {
+        setRecentWidgetIds((current) => new Set([...current, ...added]));
+        for (const id of added) {
+          const previousTimer = recentWidgetTimersRef.current.get(id);
+          if (previousTimer !== undefined) window.clearTimeout(previousTimer);
+          recentWidgetTimersRef.current.set(id, window.setTimeout(() => {
+            setRecentWidgetIds((current) => {
+              const next = new Set(current);
+              next.delete(id);
+              return next;
+            });
+            recentWidgetTimersRef.current.delete(id);
+          }, 200));
+        }
+      }
+    }
+    previousWidgetIdsRef.current = { screenId: activeScreenId, ids };
+  }, [activeScreen, activeScreenId]);
+
+  useEffect(() => () => {
+    for (const timer of recentWidgetTimersRef.current.values()) window.clearTimeout(timer);
+  }, []);
+
+  useEffect(() => {
+    setLayerScrollTop(0);
+    if (layerTreeRef.current) layerTreeRef.current.scrollTop = 0;
+  }, [activeScreenId]);
+
+  useEffect(() => {
+    const layerList = layerTreeRef.current;
+    if (!layerList) return;
+    const updateViewportHeight = () => setLayerViewportHeight(layerList.clientHeight);
+    updateViewportHeight();
+    const observer = new ResizeObserver(updateViewportHeight);
+    observer.observe(layerList);
+    return () => observer.disconnect();
+  }, [activeScreenId, Boolean(activeScreen?.widgets.length)]);
 
   useEffect(() => {
     setCollapsedByScreen(readCollapsedGroups(project.id));
@@ -231,6 +286,25 @@ export function ScreenLayerSidebar() {
       .sort((first, second) => second.zIndex - first.zIndex);
     return { groups: groupOrder, ungrouped };
   }, [activeScreen]);
+  const layerEntries = useMemo<LayerTreeEntry[]>(() => {
+    const entries: LayerTreeEntry[] = [];
+    for (const [groupId, members] of layerTree.groups) {
+      const collapsed = collapsedGroups.includes(groupId);
+      entries.push({ kind: "group", id: groupId, members, collapsed });
+      if (!collapsed) {
+        entries.push(...members.map((widget) => ({ kind: "widget" as const, widget, nested: true })));
+      }
+    }
+    entries.push(...layerTree.ungrouped.map((widget) => ({ kind: "widget" as const, widget, nested: false })));
+    return entries;
+  }, [collapsedGroups, layerTree]);
+  const virtualizedRange = getVirtualizedRange(
+    layerEntries.length,
+    layerScrollTop,
+    layerViewportHeight,
+    LAYER_ROW_HEIGHT,
+  );
+  const visibleLayerEntries = layerEntries.slice(virtualizedRange.start, virtualizedRange.end);
 
   const addScreen = (device: ScreenDevice) => {
     const name = device.presetId === "custom"
@@ -470,13 +544,12 @@ export function ScreenLayerSidebar() {
 
   const renderWidgetRow = (widget: Widget, nested = false) => {
     const definition = getShapeToolDefinition(widget.type);
-    const Icon = definition?.icon ?? Layers2;
     const selected = selectedIds.includes(widget.id);
     const label = widgetLabel(widget);
     return (
       <div
         key={widget.id}
-        className={`layer-row${nested ? " is-nested" : ""}${selected ? " is-selected" : ""}${widget.locked ? " is-locked" : ""}${dropIndicator?.id === widget.id ? ` drop-${dropIndicator.edge}` : ""}`}
+        className={`layer-row${nested ? " is-nested" : ""}${selected ? " is-selected" : ""}${widget.locked ? " is-locked" : ""}${!widget.visible ? " is-hidden" : ""}${["symbol", "symbol-instance", "symbolInstance"].includes(widget.type) ? " is-symbol" : ""}${recentWidgetIds.has(widget.id) ? " is-new" : ""}${dropIndicator?.id === widget.id ? ` drop-${dropIndicator.edge}` : ""}`}
         draggable={!renamingWidgetId}
         onDragStart={(event) => {
           setDraggedLayerId(widget.id);
@@ -529,7 +602,9 @@ export function ScreenLayerSidebar() {
               );
             }}
           >
-            <Icon size={14} aria-hidden="true" />
+            <span className="layer-chevron-spacer" aria-hidden="true" />
+            <WidgetThumbnail widget={widget} />
+            <WidgetIcon type={widget.type} />
             <span className="layer-copy">
               <span className="layer-name">{label}</span>
               <span className="layer-type">{definition?.label ?? widget.type}</span>
@@ -650,53 +725,62 @@ export function ScreenLayerSidebar() {
           <span className="layer-count">{activeScreen?.widgets.length ?? 0}</span>
         </div>
         {activeScreen && activeScreen.widgets.length > 0 ? (
-          <div className="layer-list" aria-label="Widget layers" ref={layerTreeRef}>
-            {layerTree.groups.map(([groupId, members]) => {
-              const collapsed = collapsedGroups.includes(groupId);
+          <div
+            className="layer-list"
+            aria-label="Widget layers"
+            ref={layerTreeRef}
+            onScroll={(event) => {
+              setLayerScrollTop(event.currentTarget.scrollTop);
+              setLayerViewportHeight(event.currentTarget.clientHeight);
+            }}
+          >
+            <div className="layer-virtual-spacer" style={{ height: virtualizedRange.topSpacerHeight }} aria-hidden="true" />
+            {visibleLayerEntries.map((entry) => {
+              if (entry.kind === "widget") return renderWidgetRow(entry.widget, entry.nested);
+              const { id: groupId, members, collapsed } = entry;
               const groupSelected = members.some((widget) => selectedIds.includes(widget.id));
               return (
-                <div className="layer-group" key={groupId}>
-                  <div
-                    className={`layer-group-row${dropIndicator?.id === groupId ? ` drop-${dropIndicator.edge}` : ""}`}
-                    onDragOver={(event) => layerDragOver(event, groupId, true)}
-                    onDrop={(event) => layerDrop(event, groupId, groupId)}
-                    onContextMenu={(event) => {
-                      event.preventDefault();
-                      setMenu({ kind: "group", id: groupId, x: event.clientX, y: event.clientY });
-                    }}
+                <div
+                  className={`layer-group-row${dropIndicator?.id === groupId ? ` drop-${dropIndicator.edge}` : ""}`}
+                  key={groupId}
+                  onDragOver={(event) => layerDragOver(event, groupId, true)}
+                  onDrop={(event) => layerDrop(event, groupId, groupId)}
+                  onContextMenu={(event) => {
+                    event.preventDefault();
+                    setMenu({ kind: "group", id: groupId, x: event.clientX, y: event.clientY });
+                  }}
+                >
+                  <button
+                    className="layer-group-toggle"
+                    aria-expanded={!collapsed}
+                    aria-label={`${collapsed ? "Expand" : "Collapse"} layer group`}
+                    onClick={() => toggleGroup(groupId)}
                   >
+                    {collapsed ? <ChevronRight size={13} /> : <ChevronDown size={13} />}
+                    <WidgetThumbnail widgets={members} />
+                    <WidgetIcon type="group" />
+                    <span className="layer-group-label">Group</span>
+                    <span className="layer-type">{members.length}</span>
+                  </button>
+                  {groupSelected && (
                     <button
-                      className="layer-group-toggle"
-                      aria-expanded={!collapsed}
-                      aria-label={`${collapsed ? "Expand" : "Collapse"} layer group`}
-                      onClick={() => toggleGroup(groupId)}
+                      className="layer-group-select"
+                      aria-label="Select group layers"
+                      onClick={(event) =>
+                        useStore.getState().select(
+                          event.shiftKey
+                            ? [...new Set([...selectedIds, ...members.map((item) => item.id)])]
+                            : members.map((item) => item.id),
+                        )
+                      }
                     >
-                      {collapsed ? <ChevronRight size={13} /> : <ChevronDown size={13} />}
-                      <Folder size={14} />
-                      <span>Group</span>
-                      <span className="layer-type">{members.length}</span>
+                      <Layers2 size={13} />
                     </button>
-                    {groupSelected && (
-                      <button
-                        className="layer-group-select"
-                        aria-label="Select group layers"
-                        onClick={(event) =>
-                          useStore.getState().select(
-                            event.shiftKey
-                              ? [...new Set([...selectedIds, ...members.map((item) => item.id)])]
-                              : members.map((item) => item.id),
-                          )
-                        }
-                      >
-                        <Layers2 size={13} />
-                      </button>
-                    )}
-                  </div>
-                  {!collapsed && members.map((widget) => renderWidgetRow(widget, true))}
+                  )}
                 </div>
               );
             })}
-            {layerTree.ungrouped.map((widget) => renderWidgetRow(widget))}
+            <div className="layer-virtual-spacer" style={{ height: virtualizedRange.bottomSpacerHeight }} aria-hidden="true" />
           </div>
         ) : (
           <div className="sidebar-empty-state">
