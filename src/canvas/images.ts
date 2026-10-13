@@ -1,5 +1,6 @@
 export const IMAGE_ASSET_THRESHOLD = 500 * 1024;
 export const MAX_IMAGE_FILE_SIZE = 25 * 1024 * 1024;
+export const MAX_INLINE_IMAGE_BYTES = 2 * 1024 * 1024;
 
 const MIME_BY_EXTENSION: Record<string, string> = {
   png: "image/png",
@@ -14,6 +15,24 @@ export interface ImportedImage {
   mime: string;
   size: number;
   src: string;
+}
+
+export function getImageDataByteSize(src: string): number {
+  const separator = src.indexOf(",");
+  if (!src.startsWith("data:image/") || separator < 0) return 0;
+  const payload = src.slice(separator + 1);
+  if (payload.length === 0 || payload.length % 4 !== 0) {
+    throw new Error("The image data is not a valid base64 data URL.");
+  }
+  const padding = payload.endsWith("==") ? 2 : payload.endsWith("=") ? 1 : 0;
+  if (!/^[A-Za-z\d+/]*={0,2}$/.test(payload)) {
+    throw new Error("The image data is not a valid base64 data URL.");
+  }
+  return (payload.length / 4) * 3 - padding;
+}
+
+export function getInlineImageBytes(sources: readonly string[]): number {
+  return sources.reduce((total, source) => total + getImageDataByteSize(source), 0);
 }
 
 function getExtension(name: string): string {
@@ -47,9 +66,15 @@ function detectImageMime(bytes: Uint8Array, fileName: string): string {
       document.querySelector("parsererror, script, foreignObject") ||
       [...document.querySelectorAll("*")].some((element) =>
         [...element.attributes].some(
-          (attribute) =>
-            /^on/i.test(attribute.name) ||
-            /(?:javascript:|https?:|file:|\/\/)/i.test(attribute.value),
+          (attribute) => {
+            if (/^on/i.test(attribute.name)) return true;
+            if (/^(?:href|xlink:href|src)$/i.test(attribute.name)) {
+              return /^(?:javascript:|https?:|file:|\/\/)/i.test(attribute.value.trim());
+            }
+            return /url\(\s*['"]?\s*(?:javascript:|https?:|file:|\/\/)/i.test(
+              attribute.value,
+            );
+          },
         ),
       )
     ) {

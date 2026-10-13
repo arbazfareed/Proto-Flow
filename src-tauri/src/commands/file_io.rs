@@ -329,7 +329,10 @@ fn validate_image_bytes(mime: &str, bytes: &[u8]) -> Result<(), String> {
         "image/svg+xml" => {
             let text = std::str::from_utf8(bytes)
                 .map_err(|_| "The SVG image is not valid UTF-8.".to_owned())?;
-            let normalized = text.to_ascii_lowercase();
+            let normalized = text
+                .to_ascii_lowercase()
+                .replace("http://www.w3.org/2000/svg", "")
+                .replace("http://www.w3.org/1999/xlink", "");
             let starts_with_svg = normalized.trim_start().starts_with("<svg")
                 || (normalized.trim_start().starts_with("<?xml") && normalized.contains("<svg"));
             starts_with_svg
@@ -602,6 +605,19 @@ mod tests {
             )
             .is_err()
         );
+    }
+
+    #[test]
+    fn accepts_standard_svg_namespaces_and_rejects_active_or_remote_content() {
+        let valid_svg = br#"<svg xmlns="http://www.w3.org/2000/svg"><path d="M0 0h10v10z"/></svg>"#;
+        assert!(validate_image_bytes("image/svg+xml", valid_svg).is_ok());
+
+        let script_svg =
+            br#"<svg xmlns="http://www.w3.org/2000/svg"><script>alert(1)</script></svg>"#;
+        assert!(validate_image_bytes("image/svg+xml", script_svg).is_err());
+
+        let remote_svg = br#"<svg xmlns="http://www.w3.org/2000/svg"><image href="https://example.com/a.png"/></svg>"#;
+        assert!(validate_image_bytes("image/svg+xml", remote_svg).is_err());
     }
 
     #[test]

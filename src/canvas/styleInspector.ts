@@ -1,5 +1,26 @@
 import type { Widget, WidgetStyle } from "../project/schema";
 
+export const SAFE_BLEND_MODES: NonNullable<WidgetStyle["blendMode"]>[] = [
+  "source-over",
+  "multiply",
+  "screen",
+  "overlay",
+  "darken",
+  "lighten",
+  "color-dodge",
+  "color-burn",
+  "hard-light",
+  "soft-light",
+];
+
+export function getSafeBlendMode(
+  blendMode: WidgetStyle["blendMode"],
+): NonNullable<WidgetStyle["blendMode"]> {
+  return blendMode && SAFE_BLEND_MODES.includes(blendMode)
+    ? blendMode
+    : "source-over";
+}
+
 export interface ParsedColor {
   hex: string;
   opacity: number;
@@ -40,6 +61,7 @@ export function parseStyleColor(input: string): ParsedColor | null {
     const alphaText = rgb[4];
     if (channels.some((channel) => !Number.isFinite(channel))) return null;
     const alpha = alphaText === undefined ? 1 : Number(alphaText) / (value.includes(`${alphaText}%`) ? 100 : 1);
+    if (!Number.isFinite(alpha)) return null;
     return {
       hex: `#${channels.map((channel) => clampByte(channel).toString(16).padStart(2, "0")).join("")}`,
       opacity: Math.min(1, Math.max(0, alpha)),

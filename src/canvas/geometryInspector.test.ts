@@ -21,12 +21,16 @@ function widget(
   };
 }
 
-describe("geometry inspector helpers", () => {
+describe("geometry inspector helpers | expression-eval", () => {
   it("evaluates arithmetic expressions without evaluating arbitrary code", () => {
     expect(evaluateGeometryExpression("100 + 20")).toBe(120);
     expect(evaluateGeometryExpression("(12.5 * 2) - -5")).toBe(30);
     expect(evaluateGeometryExpression("1 / 0")).toBeNull();
     expect(evaluateGeometryExpression("1 +")).toBeNull();
+    expect(evaluateGeometryExpression("12++5")).toBeNull();
+    expect(evaluateGeometryExpression("100/0")).toBeNull();
+    expect(evaluateGeometryExpression("Math.random()")).toBeNull();
+    expect(evaluateGeometryExpression("'); alert(1); ('")).toBeNull();
     expect(evaluateGeometryExpression("globalThis.alert(1)")).toBeNull();
   });
 

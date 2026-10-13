@@ -11,11 +11,45 @@ export interface CanvasViewport {
   height: number;
 }
 
+export function normalizeCanvasViewport(
+  viewport: CanvasViewport,
+): CanvasViewport {
+  return {
+    width: Math.max(1, Math.floor(viewport.width)),
+    height: Math.max(1, Math.floor(viewport.height)),
+  };
+}
+
+export function getVisibleGridSpacing(gridSize: number, zoom: number): number {
+  if (
+    !Number.isFinite(gridSize) ||
+    gridSize <= 0 ||
+    !Number.isFinite(zoom) ||
+    zoom <= 0
+  ) {
+    throw new RangeError("Grid size and zoom must be finite positive values.");
+  }
+  const screenSpacing = gridSize * zoom;
+  const multiplier =
+    screenSpacing >= 8 ? 1 : 2 ** Math.ceil(Math.log2(8 / screenSpacing));
+  return gridSize * multiplier;
+}
+
 export interface CanvasBounds {
   x: number;
   y: number;
   width: number;
   height: number;
+}
+
+export function worldToScreen(
+  point: { x: number; y: number },
+  view: CanvasView,
+): { x: number; y: number } {
+  return {
+    x: view.pan.x + point.x * view.zoom,
+    y: view.pan.y + point.y * view.zoom,
+  };
 }
 
 export function clampCanvasZoom(zoom: number): number {
@@ -30,12 +64,13 @@ export function zoomAroundPointer(
   const nextZoom = clampCanvasZoom(zoom);
   const worldX = (pointer.x - view.pan.x) / view.zoom;
   const worldY = (pointer.y - view.pan.y) / view.zoom;
+  const roundPan = (value: number) => Math.round(value * 10_000) / 10_000;
 
   return {
     zoom: nextZoom,
     pan: {
-      x: pointer.x - worldX * nextZoom,
-      y: pointer.y - worldY * nextZoom,
+      x: roundPan(pointer.x - worldX * nextZoom),
+      y: roundPan(pointer.y - worldY * nextZoom),
     },
   };
 }

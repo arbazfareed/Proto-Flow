@@ -21,6 +21,7 @@ export interface SnapResult {
 }
 
 const SMART_GUIDE_THRESHOLD = 5;
+const MAX_GRID_SIZE = 20;
 
 function nearestAlignment(
   features: number[],
@@ -50,6 +51,9 @@ export function snapWidgetPosition(
 ): SnapResult {
   if (!snapEnabled || altKey) {
     return { position: { x: dragged.x, y: dragged.y }, guides: [] };
+  }
+  if (!Number.isFinite(gridSize) || gridSize <= 0 || gridSize > MAX_GRID_SIZE) {
+    throw new RangeError("Grid size must be a finite value between 1 and 20 pixels.");
   }
 
   const otherWidgets = siblings.filter((sibling) => sibling.id !== dragged.id);

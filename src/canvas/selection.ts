@@ -8,6 +8,21 @@ export interface SelectionBounds {
   height: number;
 }
 
+export function constrainTransformerBounds(
+  oldBox: SelectionBounds,
+  newBox: SelectionBounds,
+  minimumSize = 4,
+): SelectionBounds {
+  if (
+    ![newBox.x, newBox.y, newBox.width, newBox.height].every(Number.isFinite) ||
+    newBox.width < minimumSize ||
+    newBox.height < minimumSize
+  ) {
+    return oldBox;
+  }
+  return newBox;
+}
+
 export type SelectionOperation =
   | "align-left"
   | "align-center"

@@ -68,6 +68,7 @@ export function evaluateGeometryExpression(expression: string): number | null {
 
   try {
     if (!expression.trim()) return null;
+    if (/\+\s*\+/.test(expression)) return null;
     const value = parseSum();
     skipWhitespace();
     return index === expression.length && Number.isFinite(value) ? value : null;

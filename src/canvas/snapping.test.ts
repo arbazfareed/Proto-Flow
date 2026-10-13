@@ -9,7 +9,7 @@ const dragged: CanvasWidgetBounds = {
   height: 20,
 };
 
-describe("widget snapping", () => {
+describe("widget snapping | snap-engine", () => {
   it("snaps both coordinates to the nearest grid multiple", () => {
     const result = snapWidgetPosition(dragged, [], 10, true);
 
@@ -39,7 +39,7 @@ describe("widget snapping", () => {
     ]);
   });
 
-  it("prefers the closest sibling alignment over grid snapping", () => {
+  it("TC-FAIL-202A prefers sibling guide snapping over grid snapping per axis", () => {
     const sibling: CanvasWidgetBounds = {
       id: "sibling",
       x: 61,
