@@ -81,7 +81,11 @@ const CATEGORY_TYPES: Record<Exclude<LayerCategoryId, "other">, ReadonlySet<stri
   containers: new Set(["group", "frame"]),
 };
 
-export function getLayerCategory(type: string): LayerCategoryId {
+export function getLayerCategory(
+  type: string,
+  categoryOverride?: LayerCategoryId,
+): LayerCategoryId {
+  if (categoryOverride) return categoryOverride;
   for (const category of LAYER_CATEGORIES) {
     if (category === "other") continue;
     if (CATEGORY_TYPES[category].has(type)) return category;
@@ -113,7 +117,9 @@ export function buildLayerGroups(
 
   const groupsById = new Map<string, LayerGroup>();
   for (const widget of widgets) {
-    const category = mode === "category" ? getLayerCategory(widget.type) : "other";
+    const category = mode === "category"
+      ? getLayerCategory(widget.type, widget.layerCategory)
+      : "other";
     const id = mode === "category" ? category : widget.type;
     const label = mode === "category" ? LAYER_CATEGORY_DEFINITIONS[category].label : labelForType(widget.type);
     const group = groupsById.get(id) ?? { id, label, category, widgets: [] };

@@ -54,6 +54,7 @@ export function CategoryHeader({
   onDragEnd,
   onKeyDown,
   dropEdge,
+  isDropTarget,
   onRename,
   onRenameCommit,
 }: {
@@ -70,13 +71,14 @@ export function CategoryHeader({
   onDragEnd: () => void;
   onKeyDown: (event: KeyboardEvent<HTMLDivElement>) => void;
   dropEdge?: "before" | "after";
+  isDropTarget?: boolean;
   onRename?: (value: string) => void;
   onRenameCommit?: (value: string) => void;
 }) {
   const cancelRenameRef = useRef(false);
   return (
     <div
-      className="layer-category-header"
+      className={`layer-category-header${isDropTarget ? " is-drop-target" : ""}`}
       data-drop-edge={dropEdge}
       role="treeitem"
       tabIndex={0}

@@ -33,6 +33,15 @@ describe("layer tree grouping", () => {
     expect(groups[0].widgets.map((item) => item.zIndex)).toEqual([5, 1]);
   });
 
+  it("honors a persisted layer category override", () => {
+    const groups = buildLayerGroups([
+      { ...widget("rectangle", 1), layerCategory: "widgets" },
+    ], "category");
+
+    expect(groups.map((group) => group.id)).toEqual(["widgets"]);
+    expect(getLayerCategory("rectangle", "widgets")).toBe("widgets");
+  });
+
   it("uses saved group order in category and type modes", () => {
     const widgets = [widget("rectangle", 1), widget("button", 2), widget("ellipse", 3)];
     expect(buildLayerGroups(widgets, "category", ["widgets", "shapes"]).map((group) => group.id))

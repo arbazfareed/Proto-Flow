@@ -3,6 +3,7 @@ import type { DragEvent, KeyboardEvent as ReactKeyboardEvent } from "react";
 import {
   ChevronDown,
   ChevronRight,
+  CircleX,
   Eye,
   EyeOff,
   FilePlus2,
@@ -21,9 +22,15 @@ import { getShapeToolDefinition } from "../canvas/shapeTools";
 import { DEFAULT_DEVICE_PRESET, findDevicePreset, toScreenDevice } from "../devices/catalog";
 import { DevicePicker } from "../devices/DevicePicker";
 import type { ScreenDevice } from "../devices/types";
-import { reorderScreens, reorderWidgets } from "../project/layers";
+import { reorderScreens } from "../project/layers";
 import { createDefaultBreakpoints } from "../project/responsive";
 import type { Project, Screen, Widget } from "../project/schema";
+import {
+  setActiveLayerDragPayload,
+  LAYER_DRAG_MIME,
+  reorderWidgetSet,
+  serializeLayerDragPayload,
+} from "../project/layerDrag";
 import { useStore } from "../store";
 import { CategoryHeader } from "./CategoryHeader";
 import {
@@ -33,7 +40,7 @@ import {
   LAYER_CATEGORY_DEFINITIONS,
   LAYER_VIEW_MODES,
 } from "./layerGrouping";
-import type { LayerGroup, LayerViewMode } from "./layerGrouping";
+import type { LayerCategoryId, LayerGroup, LayerViewMode } from "./layerGrouping";
 import { getVirtualizedRange } from "./layerVirtualization";
 import {
   createDefaultLayerTreePreferences,
@@ -108,6 +115,114 @@ function widgetLabel(widget: Widget): string {
   return getShapeToolDefinition(widget.type)?.label ?? widget.type;
 }
 
+function beginLayerDrag(
+  event: DragEvent<HTMLElement>,
+  widgets: Widget[],
+  label: string,
+): void {
+  if (widgets.length === 0) return;
+  const payload = {
+    version: 1 as const,
+    kind: "widgets" as const,
+    widgetIds: widgets.map((widget) => widget.id),
+  };
+  setActiveLayerDragPayload(payload);
+  event.dataTransfer.effectAllowed = "copyMove";
+  event.dataTransfer.setData(
+    LAYER_DRAG_MIME,
+    serializeLayerDragPayload(payload),
+  );
+  event.dataTransfer.setData("text/plain", label);
+
+  const ghost = document.createElement("div");
+  Object.assign(ghost.style, {
+    position: "fixed",
+    left: "-10000px",
+    top: "0",
+    display: "flex",
+    alignItems: "center",
+    gap: "8px",
+    minWidth: "120px",
+    padding: "8px",
+    border: "1px solid #625486",
+    borderRadius: "7px",
+    color: "#f0edf7",
+    background: "#24222c",
+    font: "12px sans-serif",
+    opacity: "0.6",
+    pointerEvents: "none",
+  });
+  const sourceThumbnail =
+    event.currentTarget.querySelector<HTMLImageElement>(".layer-thumbnail img") ??
+    event.currentTarget.closest(".layer-group")?.querySelector<HTMLImageElement>(".layer-thumbnail img");
+  if (sourceThumbnail) {
+    const thumbnail = sourceThumbnail.cloneNode() as HTMLImageElement;
+    Object.assign(thumbnail.style, { width: "64px", height: "64px", objectFit: "contain" });
+    ghost.append(thumbnail);
+  } else {
+    const placeholder = document.createElement("span");
+    Object.assign(placeholder.style, {
+      display: "grid",
+      width: "64px",
+      height: "64px",
+      placeItems: "center",
+      border: "1px solid #625486",
+      borderRadius: "4px",
+    });
+    placeholder.textContent = "PF";
+    ghost.append(placeholder);
+  }
+  const caption = document.createElement("span");
+  caption.textContent = `${label}${widgets.length > 1 ? `  +${widgets.length - 1}` : ""}`;
+  ghost.append(caption);
+  document.body.append(ghost);
+  event.dataTransfer.setDragImage(ghost, 34, 34);
+  window.setTimeout(() => ghost.remove(), 1200);
+}
+
+function beginScreenDrag(event: DragEvent<HTMLElement>, screen: Screen): void {
+  setActiveLayerDragPayload({ version: 1, kind: "screen", screenId: screen.id });
+  event.dataTransfer.effectAllowed = "copyMove";
+  event.dataTransfer.setData(
+    LAYER_DRAG_MIME,
+    serializeLayerDragPayload({ version: 1, kind: "screen", screenId: screen.id }),
+  );
+  event.dataTransfer.setData("text/plain", screen.name);
+  const ghost = document.createElement("div");
+  Object.assign(ghost.style, {
+    position: "fixed",
+    left: "-10000px",
+    top: "0",
+    display: "flex",
+    alignItems: "center",
+    gap: "8px",
+    padding: "8px",
+    border: "1px solid #625486",
+    borderRadius: "7px",
+    color: "#f0edf7",
+    background: "#24222c",
+    font: "12px sans-serif",
+    opacity: "0.6",
+    pointerEvents: "none",
+  });
+  const preview = document.createElement("span");
+  Object.assign(preview.style, {
+    display: "grid",
+    width: "64px",
+    height: "64px",
+    placeItems: "center",
+    border: "1px solid #625486",
+    borderRadius: "4px",
+    background: "#302a3c",
+    fontSize: "24px",
+  });
+  preview.textContent = "FRAME";
+  ghost.append(preview, document.createTextNode(screen.name));
+  document.body.append(ghost);
+  event.dataTransfer.setDragImage(ghost, 34, 34);
+  window.setTimeout(() => ghost.remove(), 1200);
+}
+
 function editProject(update: (project: Project) => Project): void {
   const current = useStore.getState();
   current.setProject({
@@ -173,7 +288,7 @@ export function ScreenLayerSidebar() {
   const [screenPickerOpen, setScreenPickerOpen] = useState(false);
   const [deviceTargetScreenId, setDeviceTargetScreenId] = useState<string | null>(null);
   const [draggedScreenId, setDraggedScreenId] = useState<string | null>(null);
-  const [draggedLayerId, setDraggedLayerId] = useState<string | null>(null);
+  const [draggedLayerIds, setDraggedLayerIds] = useState<string[]>([]);
   const [dropIndicator, setDropIndicator] = useState<DropIndicator>(null);
   const [collapsedByScreen, setCollapsedByScreen] = useState(() =>
     readCollapsedGroups(project.id),
@@ -187,6 +302,7 @@ export function ScreenLayerSidebar() {
   const [categoryDropIndicator, setCategoryDropIndicator] = useState<DropIndicator>(null);
   const [renamingGroupId, setRenamingGroupId] = useState<string | null>(null);
   const [renameGroupDraft, setRenameGroupDraft] = useState("");
+  const [movePickerOpen, setMovePickerOpen] = useState(false);
   const [layerScrollTop, setLayerScrollTop] = useState(0);
   const [layerViewportHeight, setLayerViewportHeight] = useState(300);
   const [recentWidgetIds, setRecentWidgetIds] = useState<Set<string>>(() => new Set());
@@ -283,6 +399,21 @@ export function ScreenLayerSidebar() {
 
   useEffect(() => {
     const onKeyDown = (event: globalThis.KeyboardEvent) => {
+      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "p") {
+        if (
+          event.target instanceof HTMLElement &&
+          (event.target.isContentEditable || ["INPUT", "TEXTAREA", "SELECT"].includes(event.target.tagName))
+        ) return;
+        if (selectedIds.length === 0) return;
+        event.preventDefault();
+        event.stopPropagation();
+        setMovePickerOpen(true);
+        return;
+      }
+      if (event.key === "Escape" && movePickerOpen) {
+        setMovePickerOpen(false);
+        return;
+      }
       if (!(event.metaKey || event.ctrlKey) || event.key.toLowerCase() !== "g") return;
       if (
         event.target instanceof HTMLElement &&
@@ -331,7 +462,7 @@ export function ScreenLayerSidebar() {
     };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [activeScreen, selectedIds]);
+  }, [activeScreen, movePickerOpen, selectedIds]);
 
   const collapsedGroups = collapsedByScreen[activeScreenId] ?? [];
   const updateLayerPreferences = (update: (preferences: LayerTreePreferences) => LayerTreePreferences) => {
@@ -348,14 +479,16 @@ export function ScreenLayerSidebar() {
     const filteredWidgets = query
       ? widgets.filter((widget) => {
           const definition = getShapeToolDefinition(widget.type);
-        const groupId = layerMode === "category" ? getLayerCategory(widget.type) : widget.type;
+        const groupId = layerMode === "category"
+          ? getLayerCategory(widget.type, widget.layerCategory)
+          : widget.type;
         const groupName =
           layerPreferences.groupNames[layerGroupNameKey(layerMode, groupId)] ??
           (layerMode === "category"
-            ? LAYER_CATEGORY_DEFINITIONS[getLayerCategory(widget.type)].label
+            ? LAYER_CATEGORY_DEFINITIONS[getLayerCategory(widget.type, widget.layerCategory)].label
             : definition?.label ?? widget.type);
         const categoryLabel = layerMode === "category"
-          ? LAYER_CATEGORY_DEFINITIONS[getLayerCategory(widget.type)].label
+          ? LAYER_CATEGORY_DEFINITIONS[getLayerCategory(widget.type, widget.layerCategory)].label
           : "";
         return (
           widgetLabel(widget).toLowerCase().includes(query) ||
@@ -367,12 +500,25 @@ export function ScreenLayerSidebar() {
         })
       : widgets;
     const savedOrder = layerPreferences.groupOrder[layerMode] ?? [];
-    const groups = buildLayerGroups(
+    let groups = buildLayerGroups(
       filteredWidgets,
       layerMode,
       savedOrder,
       (type) => getShapeToolDefinition(type)?.label ?? type,
     );
+    if (layerMode === "category" && draggedLayerIds.length > 0 && draggedCategoryId === null) {
+      const groupsById = new Map(groups.map((group) => [group.id, group]));
+      const order: LayerCategoryId[] = [
+        ...savedOrder.filter((id): id is LayerCategoryId => LAYER_CATEGORIES.includes(id as LayerCategoryId)),
+        ...LAYER_CATEGORIES.filter((id) => !savedOrder.includes(id)),
+      ];
+      groups = order.map((id) => groupsById.get(id) ?? ({
+        id,
+        label: LAYER_CATEGORY_DEFINITIONS[id].label,
+        category: id,
+        widgets: [],
+      }));
+    }
     return groups.map((group) => ({
       ...group,
       label: layerPreferences.groupNames[layerGroupNameKey(layerMode, group.id)] ?? group.label,
@@ -381,6 +527,8 @@ export function ScreenLayerSidebar() {
     activeScreen,
     categorySearch,
     layerMode,
+    draggedCategoryId,
+    draggedLayerIds,
     layerPreferences.groupNames,
     layerPreferences.groupOrder,
   ]);
@@ -394,7 +542,7 @@ export function ScreenLayerSidebar() {
       if (!collapsed) {
         const visitedGroups = new Set<string>();
         for (const widget of group.widgets) {
-          if (!widget.groupId || layerMode === "z-order") {
+          if (!widget.groupId) {
             entries.push({ kind: "widget", widget, nested: layerMode !== "z-order" });
             continue;
           }
@@ -660,7 +808,11 @@ export function ScreenLayerSidebar() {
   };
 
   const categoryDragOver = (event: DragEvent<HTMLDivElement>, groupId: string) => {
-    if (!draggedCategoryId || draggedCategoryId === groupId) return;
+    const isCategoryReorder = draggedCategoryId !== null && draggedCategoryId !== groupId;
+    const isWidgetMove = draggedCategoryId === null &&
+      draggedLayerIds.length > 0 &&
+      layerMode === "category";
+    if (!isCategoryReorder && !isWidgetMove) return;
     event.preventDefault();
     event.dataTransfer.dropEffect = "move";
     const bounds = event.currentTarget.getBoundingClientRect();
@@ -669,8 +821,10 @@ export function ScreenLayerSidebar() {
     const tree = layerTreeRef.current;
     if (tree) {
       const treeBounds = tree.getBoundingClientRect();
-      if (event.clientY < treeBounds.top + 24) tree.scrollTop -= 12;
-      else if (event.clientY > treeBounds.bottom - 24) tree.scrollTop += 12;
+      const topDistance = event.clientY - treeBounds.top;
+      const bottomDistance = treeBounds.bottom - event.clientY;
+      if (topDistance < 28) tree.scrollTop -= Math.max(1, Math.ceil((28 - topDistance) / 28 * 6));
+      else if (bottomDistance < 28) tree.scrollTop += Math.max(1, Math.ceil((28 - bottomDistance) / 28 * 6));
     }
   };
 
@@ -678,7 +832,29 @@ export function ScreenLayerSidebar() {
     event.preventDefault();
     event.stopPropagation();
     const edge = categoryDropIndicator?.id === groupId ? categoryDropIndicator.edge : "before";
-    if (draggedCategoryId) reorderCategoryGroups(draggedCategoryId, groupId, edge);
+    if (draggedCategoryId) {
+      reorderCategoryGroups(draggedCategoryId, groupId, edge);
+    } else if (layerMode === "category" && draggedLayerIds.length > 0) {
+      const category = LAYER_CATEGORIES.find((categoryId) => categoryId === groupId);
+      if (!category) return;
+      const ids = new Set(draggedLayerIds);
+      editProject((current) => ({
+        ...current,
+        screens: current.screens.map((screen) =>
+          screen.id !== activeScreenId
+            ? screen
+            : {
+                ...screen,
+                widgets: screen.widgets.map((widget) =>
+                  ids.has(widget.id)
+                    ? { ...widget, layerCategory: category }
+                    : widget,
+                ),
+              },
+        ),
+      }));
+    }
+    setDraggedLayerIds([]);
     setDraggedCategoryId(null);
     setCategoryDropIndicator(null);
   };
@@ -732,7 +908,7 @@ export function ScreenLayerSidebar() {
     targetId: string,
     canContain = false,
   ) => {
-    if (!draggedLayerId || draggedLayerId === targetId) return;
+    if (draggedLayerIds.length === 0 || draggedLayerIds.includes(targetId)) return;
     event.preventDefault();
     const bounds = event.currentTarget.getBoundingClientRect();
     const edge = event.clientY < bounds.top + bounds.height / 2 ? "before" : "after";
@@ -740,8 +916,10 @@ export function ScreenLayerSidebar() {
     const tree = layerTreeRef.current;
     if (tree) {
       const treeBounds = tree.getBoundingClientRect();
-      if (event.clientY < treeBounds.top + 24) tree.scrollTop -= 12;
-      else if (event.clientY > treeBounds.bottom - 24) tree.scrollTop += 12;
+      const topDistance = event.clientY - treeBounds.top;
+      const bottomDistance = treeBounds.bottom - event.clientY;
+      if (topDistance < 28) tree.scrollTop -= Math.max(1, Math.ceil((28 - topDistance) / 28 * 6));
+      else if (bottomDistance < 28) tree.scrollTop += Math.max(1, Math.ceil((28 - bottomDistance) / 28 * 6));
     }
     if (canContain && event.currentTarget.classList.contains("layer-group-row")) return;
   };
@@ -749,10 +927,20 @@ export function ScreenLayerSidebar() {
   const layerDrop = (event: DragEvent<HTMLElement>, targetId: string, groupId?: string) => {
     event.preventDefault();
     event.stopPropagation();
-    if (!activeScreen || !draggedLayerId) return;
+    if (!activeScreen || draggedLayerIds.length === 0) return;
+    if (draggedLayerIds.includes(targetId)) {
+      setDraggedLayerIds([]);
+      setDropIndicator(null);
+      return;
+    }
     if (groupId) {
-      setWidgetProperty(draggedLayerId, { groupId });
-    } else if (dropIndicator?.id === targetId) {
+      if (draggedLayerIds.every((id) =>
+        activeScreen.widgets.find((widget) => widget.id === id)?.groupId === groupId,
+      )) {
+        setDraggedLayerIds([]);
+        setDropIndicator(null);
+        return;
+      }
       editProject((current) => ({
         ...current,
         screens: current.screens.map((screen) =>
@@ -760,17 +948,39 @@ export function ScreenLayerSidebar() {
             ? screen
             : {
                 ...screen,
-                widgets: reorderWidgets(
-                  screen.widgets,
-                  draggedLayerId,
-                  targetId,
-                  dropIndicator.edge,
+                widgets: screen.widgets.map((widget) =>
+                  draggedLayerIds.includes(widget.id) ? { ...widget, groupId } : widget,
                 ),
               },
         ),
       }));
+    } else if (dropIndicator?.id === targetId) {
+      editProject((current) => ({
+        ...current,
+        screens: current.screens.map((screen) =>
+          screen.id !== activeScreen.id
+            ? screen
+            : (() => {
+                const target = screen.widgets.find((widget) => widget.id === targetId);
+                const reordered = reorderWidgetSet(
+                  screen.widgets,
+                  draggedLayerIds,
+                  targetId,
+                  dropIndicator.edge,
+                );
+                return {
+                  ...screen,
+                  widgets: reordered.map((widget) =>
+                    draggedLayerIds.includes(widget.id)
+                      ? { ...widget, groupId: target?.groupId }
+                      : widget,
+                  ),
+                };
+              })(),
+        ),
+      }));
     }
-    setDraggedLayerId(null);
+    setDraggedLayerIds([]);
     setDropIndicator(null);
   };
 
@@ -805,14 +1015,18 @@ export function ScreenLayerSidebar() {
         aria-selected={selected}
         draggable={!renamingWidgetId}
         onDragStart={(event) => {
-          setDraggedLayerId(widget.id);
-          event.dataTransfer.effectAllowed = "move";
-          event.dataTransfer.setData("text/plain", widget.id);
+          const sourceIds = selectedIds.includes(widget.id) ? selectedIds : [widget.id];
+          const sourceWidgets = (activeScreen?.widgets ?? []).filter((item) =>
+            sourceIds.includes(item.id),
+          );
+          setDraggedLayerIds(sourceWidgets.map((item) => item.id));
+          beginLayerDrag(event, sourceWidgets, label);
         }}
         onDragOver={(event) => layerDragOver(event, widget.id)}
         onDrop={(event) => layerDrop(event, widget.id)}
         onDragEnd={() => {
-          setDraggedLayerId(null);
+          setActiveLayerDragPayload(null);
+          setDraggedLayerIds([]);
           setDropIndicator(null);
         }}
         onContextMenu={(event) => {
@@ -900,6 +1114,85 @@ export function ScreenLayerSidebar() {
     ? layerGroups.find((group) => group.id === categoryMenu.id)
     : undefined;
   const selectedGroupAllVisible = selectedGroup?.widgets.some((widget) => widget.visible) ?? false;
+  const semanticGroups = [...new Set(
+    activeScreen?.widgets.map((widget) => widget.groupId).filter((id): id is string => Boolean(id)) ?? [],
+  )];
+
+  const moveSelectedIntoGroup = (groupId: string | undefined) => {
+    if (!activeScreen || selectedIds.length === 0) return;
+    const selected = new Set(selectedIds);
+    editProject((current) => ({
+      ...current,
+      screens: current.screens.map((screen) =>
+        screen.id !== activeScreen.id
+          ? screen
+          : {
+              ...screen,
+              widgets: screen.widgets.map((widget) =>
+                selected.has(widget.id) ? { ...widget, groupId } : widget,
+              ),
+            },
+      ),
+    }));
+    setMovePickerOpen(false);
+  };
+
+  const moveSelectedToCategory = (category: LayerCategoryId) => {
+    if (!activeScreen || selectedIds.length === 0) return;
+    const selected = new Set(selectedIds);
+    editProject((current) => ({
+      ...current,
+      screens: current.screens.map((screen) =>
+        screen.id !== activeScreen.id
+          ? screen
+          : {
+              ...screen,
+              widgets: screen.widgets.map((widget) =>
+                selected.has(widget.id)
+                  ? {
+                      ...widget,
+                      layerCategory: getLayerCategory(widget.type) === category
+                        ? undefined
+                        : category,
+                    }
+                  : widget,
+              ),
+            },
+      ),
+    }));
+    setMovePickerOpen(false);
+  };
+
+  const moveSelectedToCanvasCenter = () => {
+    if (!activeScreen || selectedIds.length === 0) return;
+    const selected = activeScreen.widgets.filter((widget) => selectedIds.includes(widget.id));
+    if (selected.length === 0) return;
+    const left = Math.min(...selected.map((widget) => widget.x));
+    const top = Math.min(...selected.map((widget) => widget.y));
+    const right = Math.max(...selected.map((widget) => widget.x + widget.width));
+    const bottom = Math.max(...selected.map((widget) => widget.y + widget.height));
+    const targetX = ((activeScreen.device?.width ?? DEFAULT_DEVICE_PRESET.viewport.width) - (right - left)) / 2;
+    const targetY = ((activeScreen.device?.height ?? DEFAULT_DEVICE_PRESET.viewport.height) - (bottom - top)) / 2;
+    const dx = targetX - left;
+    const dy = targetY - top;
+    const ids = new Set(selectedIds);
+    editProject((current) => ({
+      ...current,
+      screens: current.screens.map((screen) =>
+        screen.id !== activeScreen.id
+          ? screen
+          : {
+              ...screen,
+              widgets: screen.widgets.map((widget) =>
+                ids.has(widget.id)
+                  ? { ...widget, x: widget.x + dx, y: widget.y + dy }
+                  : widget,
+              ),
+            },
+      ),
+    }));
+    setMovePickerOpen(false);
+  };
 
   return (
     <>
@@ -929,12 +1222,14 @@ export function ScreenLayerSidebar() {
             }}
             onDragStart={(event) => {
               setDraggedScreenId(screen.id);
-              event.dataTransfer.effectAllowed = "move";
-              event.dataTransfer.setData("text/plain", screen.id);
+              beginScreenDrag(event, screen);
+              event.dataTransfer.effectAllowed = "copyMove";
+              event.dataTransfer.dropEffect = "move";
             }}
             onDragOver={(event) => screenDragOver(event, screen.id)}
             onDrop={(event) => screenDrop(event, screen.id)}
             onDragEnd={(event) => {
+              setActiveLayerDragPayload(null);
               setDraggedScreenId(null);
               delete event.currentTarget.dataset.dropEdge;
             }}
@@ -1048,16 +1343,48 @@ export function ScreenLayerSidebar() {
               setLayerScrollTop(event.currentTarget.scrollTop);
               setLayerViewportHeight(event.currentTarget.clientHeight);
             }}
+            onDragOver={(event) => {
+              if (event.target === event.currentTarget && draggedLayerIds.length > 0) {
+                event.preventDefault();
+              }
+            }}
+            onDrop={(event) => {
+              if (
+                event.target !== event.currentTarget ||
+                !activeScreen ||
+                draggedLayerIds.length === 0
+              ) return;
+              event.preventDefault();
+              const groupId = crypto.randomUUID();
+              const ids = new Set(draggedLayerIds);
+              editProject((current) => ({
+                ...current,
+                screens: current.screens.map((screen) =>
+                  screen.id !== activeScreen.id
+                    ? screen
+                    : {
+                        ...screen,
+                        widgets: screen.widgets.map((widget) =>
+                          ids.has(widget.id) ? { ...widget, groupId } : widget,
+                        ),
+                      },
+                ),
+              }));
+              setDraggedLayerIds([]);
+              setDropIndicator(null);
+            }}
           >
             <div className="layer-virtual-spacer" style={{ height: virtualizedRange.topSpacerHeight }} aria-hidden="true" />
             {visibleLayerEntries.map((entry) => {
               if (entry.kind === "widget") return renderWidgetRow(entry.widget, entry.nested);
               if (entry.kind === "group") {
                 const collapseKey = `semantic:${entry.id}`;
+                const invalidDrop = draggedLayerIds.length > 0 &&
+                  entry.members.some((member) => draggedLayerIds.includes(member.id));
                 return (
                   <div
                     key={`semantic-${entry.id}`}
-                    className={`layer-group-row${dropIndicator?.id === entry.id ? ` drop-${dropIndicator.edge}` : ""}`}
+                    className={`layer-group-row${dropIndicator?.id === entry.id ? ` drop-${dropIndicator.edge}` : ""}${dropIndicator?.id === entry.id && draggedLayerIds.length > 0 ? invalidDrop ? " is-invalid-drop" : " is-drop-target" : ""}`}
                     role="treeitem"
                     tabIndex={0}
                     aria-expanded={!entry.collapsed}
@@ -1067,6 +1394,16 @@ export function ScreenLayerSidebar() {
                     onContextMenu={(event) => {
                       event.preventDefault();
                       setMenu({ kind: "group", id: entry.id, x: event.clientX, y: event.clientY });
+                    }}
+                    draggable
+                    onDragStart={(event) => {
+                      setDraggedLayerIds(entry.members.map((member) => member.id));
+                      beginLayerDrag(event, entry.members, "Group");
+                    }}
+                    onDragEnd={() => {
+                      setActiveLayerDragPayload(null);
+                      setDraggedLayerIds([]);
+                      setDropIndicator(null);
                     }}
                     onDragOver={(event) => layerDragOver(event, entry.id, true)}
                     onDrop={(event) => layerDrop(event, entry.id, entry.id)}
@@ -1084,6 +1421,7 @@ export function ScreenLayerSidebar() {
                     <Folder size={14} aria-hidden="true" />
                     <span className="layer-group-name">Group</span>
                     <span className="layer-group-count">{entry.members.length}</span>
+                    {invalidDrop && <CircleX className="layer-invalid-drop-icon" size={14} aria-label="Invalid drop target" />}
                     <button
                       className="layer-tree-action"
                       aria-label="Group options"
@@ -1112,6 +1450,12 @@ export function ScreenLayerSidebar() {
                   count={widgets.length}
                   collapsed={collapsed}
                   dropEdge={categoryDropIndicator?.id === groupId ? categoryDropIndicator.edge : undefined}
+                  isDropTarget={
+                    layerMode === "category" &&
+                    draggedCategoryId === null &&
+                    draggedLayerIds.length > 0 &&
+                    categoryDropIndicator?.id === groupId
+                  }
                   onToggle={() => toggleGroup(groupId)}
                   onMenu={(event) => setCategoryMenu({
                     id: groupId,
@@ -1120,13 +1464,16 @@ export function ScreenLayerSidebar() {
                   })}
                   onDragStart={(event) => {
                     setDraggedCategoryId(groupId);
-                    event.dataTransfer.effectAllowed = "move";
+                    setDraggedLayerIds(widgets.map((widget) => widget.id));
+                    beginLayerDrag(event, widgets, group.label);
                     event.dataTransfer.setData("text/plain", `layer-group:${groupId}`);
                   }}
                   onDragOver={(event) => categoryDragOver(event, groupId)}
                   onDrop={(event) => categoryDrop(event, groupId)}
                   onDragEnd={() => {
+                    setActiveLayerDragPayload(null);
                     setDraggedCategoryId(null);
+                    setDraggedLayerIds([]);
                     setCategoryDropIndicator(null);
                   }}
                   onKeyDown={navigateLayerTree}
@@ -1280,6 +1627,55 @@ export function ScreenLayerSidebar() {
               </button>
             </>
           )}
+        </div>
+      )}
+
+      {movePickerOpen && (
+        <div
+          className="move-picker-backdrop"
+          onMouseDown={(event) => {
+            if (event.target === event.currentTarget) setMovePickerOpen(false);
+          }}
+        >
+          <section
+            className="move-picker"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="move-picker-title"
+          >
+            <div className="move-picker-heading">
+              <div>
+                <h2 id="move-picker-title">Move to…</h2>
+                <p>{selectedIds.length} selected layer{selectedIds.length === 1 ? "" : "s"}</p>
+              </div>
+              <button aria-label="Close move picker" onClick={() => setMovePickerOpen(false)}>
+                <X size={15} />
+              </button>
+            </div>
+            <div className="move-picker-options">
+              <button onClick={moveSelectedToCanvasCenter}>
+                <Monitor size={15} />
+                <span>Canvas center</span>
+                <kbd>Enter</kbd>
+              </button>
+              {semanticGroups.map((groupId, index) => (
+                <button key={groupId} onClick={() => moveSelectedIntoGroup(groupId)}>
+                  <Folder size={15} />
+                  <span>Group {index + 1}</span>
+                </button>
+              ))}
+              {LAYER_CATEGORIES.map((categoryId) => (
+                <button key={categoryId} onClick={() => moveSelectedToCategory(categoryId)}>
+                  <Layers2 size={15} />
+                  <span>{LAYER_CATEGORY_DEFINITIONS[categoryId].label}</span>
+                </button>
+              ))}
+              <button onClick={() => moveSelectedIntoGroup(undefined)}>
+                <Layers2 size={15} />
+                <span>Ungroup / root</span>
+              </button>
+            </div>
+          </section>
         </div>
       )}
 
