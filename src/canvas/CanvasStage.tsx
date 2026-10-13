@@ -277,6 +277,7 @@ function WidgetNode({
       x={position.x}
       y={position.y}
       rotation={widget.rotation}
+      opacity={widget.opacity}
       visible={widget.visible}
       listening={!widget.locked}
       draggable={!widget.locked && activeTool === null}
@@ -1451,8 +1452,37 @@ export function CanvasStage({
               }
               onTransformStart={() => {
                 const current = useStore.getState();
+                current.clearGeometryPreview();
                 transformHistorySnapshotRef.current = current.project;
                 current.pushHistory(current.project);
+              }}
+              onTransform={() => {
+                const current = useStore.getState();
+                const widgets =
+                  current.project.screens
+                    .find((screen) => screen.id === current.project.startScreenId)
+                    ?.widgets.filter(
+                      (item) =>
+                        current.selectedIds.includes(item.id) &&
+                        !item.locked &&
+                        item.visible,
+                    ) ?? [];
+                const preview: Record<
+                  string,
+                  Pick<Widget, "x" | "y" | "width" | "height" | "rotation">
+                > = {};
+                for (const item of widgets) {
+                  const node = stageRef.current?.findOne(`#${item.id}`);
+                  if (!node) continue;
+                  preview[item.id] = {
+                    x: node.x(),
+                    y: node.y(),
+                    width: Math.max(4, item.width * Math.abs(node.scaleX())),
+                    height: Math.max(4, item.height * Math.abs(node.scaleY())),
+                    rotation: node.rotation(),
+                  };
+                }
+                current.setGeometryPreview(preview);
               }}
               onTransformEnd={() => {
                 const snapshot = transformHistorySnapshotRef.current ?? undefined;
@@ -1479,6 +1509,7 @@ export function CanvasStage({
                   node.scale({ x: 1, y: 1 });
                 }
                 commitWidgetGeometry(updates, snapshot);
+                current.clearGeometryPreview();
                 transformHistorySnapshotRef.current = null;
               }}
               perfectDrawEnabled={false}

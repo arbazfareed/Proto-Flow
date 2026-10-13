@@ -1,4 +1,9 @@
-import type { Project } from "../project/schema";
+import type { Project, Widget } from "../project/schema";
+
+export type CanvasGeometryPreview = Record<
+  string,
+  Partial<Pick<Widget, "x" | "y" | "width" | "height" | "rotation" | "opacity">>
+>;
 
 export interface DocumentSlice {
   project: Project;
@@ -22,6 +27,7 @@ export interface CanvasSlice {
   gridVisible: boolean;
   snapEnabled: boolean;
   selectedIds: string[];
+  geometryPreview: CanvasGeometryPreview | null;
   setZoom: (zoom: number) => void;
   setPan: (x: number, y: number) => void;
   setGridSize: (size: 5 | 10 | 20) => void;
@@ -30,6 +36,8 @@ export interface CanvasSlice {
   toggleSnap: () => void;
   select: (ids: string[]) => void;
   clearSelection: () => void;
+  setGeometryPreview: (preview: CanvasGeometryPreview) => void;
+  clearGeometryPreview: () => void;
 }
 
 export interface HistorySlice {
