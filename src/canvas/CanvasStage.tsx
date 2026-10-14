@@ -39,7 +39,8 @@ import {
   LAYER_DRAG_MIME,
   parseLayerDragPayload,
 } from "../project/layerDrag";
-import { getSelectedContainingParentId } from "../project/layers";
+import { ELEMENT_DRAG_MIME, parseElementDragPayload } from "./elementDrag";
+import { getSelectedContainingParentId, isWidgetContainer } from "../project/layers";
 import {
   clampCanvasZoom,
   fitCanvasBounds,
@@ -58,6 +59,7 @@ import {
   MAX_WIDGET_TEXT_LENGTH,
   type ShapeTool,
 } from "./shapes";
+import { getShapeToolDefinition } from "./shapeTools";
 import {
   constrainTransformerBounds,
   getSelectedParentWidgetIds,
@@ -119,6 +121,7 @@ interface CanvasDropFeedback {
   targetType?: string;
   itemCount: number;
   label: string;
+  elementTool?: ShapeTool;
 }
 
 function duplicateScreenForCanvas(screen: Screen): Screen {
@@ -1005,20 +1008,29 @@ export function CanvasStage({
   const updateCanvasDropFeedback = useCallback((event: ReactDragEvent<HTMLDivElement>) => {
     const bounds = surfaceRef.current?.getBoundingClientRect();
     if (!bounds) return;
+    const elementTool = event.dataTransfer.types.includes(ELEMENT_DRAG_MIME)
+      ? parseElementDragPayload(event.dataTransfer.getData(ELEMENT_DRAG_MIME))
+      : null;
     const payload = getActiveLayerDragPayload() ??
       parseLayerDragPayload(event.dataTransfer.getData(LAYER_DRAG_MIME));
     const targetId = getCanvasDropTarget(event.clientX, event.clientY);
+    const targetWidget = screenWidgets.find((widget) => widget.id === targetId);
+    const nestedElementDrop = !!elementTool && !!targetWidget && isWidgetContainer(targetWidget);
+    const definition = elementTool ? getShapeToolDefinition(elementTool) : undefined;
     const screenDrop = payload?.kind === "screen";
     pendingDragFeedbackRef.current = {
       x: event.clientX - bounds.left,
       y: event.clientY - bounds.top,
-      targetId: screenDrop ? null : targetId,
-      targetType: screenDrop ? undefined : screenWidgets.find((widget) => widget.id === targetId)?.type,
-      itemCount: payload?.kind === "widgets" ? payload.widgetIds.length : 1,
-      label: payload?.kind === "widgets"
+      targetId: elementTool && !nestedElementDrop ? null : screenDrop ? null : targetId,
+      targetType: screenDrop || (elementTool && !nestedElementDrop)
+        ? undefined
+        : targetWidget?.type,
+      itemCount: elementTool ? 1 : payload?.kind === "widgets" ? payload.widgetIds.length : 1,
+      label: definition?.label ?? (payload?.kind === "widgets"
         ? screenWidgets.find((widget) => widget.id === payload.widgetIds[0])?.name ??
           screenWidgets.find((widget) => widget.id === payload.widgetIds[0])?.type ?? "Layer"
-        : "Screen",
+        : "Screen"),
+      elementTool: elementTool ?? undefined,
     };
     if (dragFeedbackFrameRef.current !== null) return;
     dragFeedbackFrameRef.current = window.requestAnimationFrame(() => {
@@ -1123,6 +1135,19 @@ export function CanvasStage({
     useStore.getState().select(selected.map((widget) => widget.id));
     return true;
   }, [clearCanvasDropFeedback, getCanvasDropTarget, getWorldPositionFromClient, onNotify]);
+
+  const handleElementDrop = useCallback((event: ReactDragEvent<HTMLDivElement>) => {
+    if (!event.dataTransfer.types.includes(ELEMENT_DRAG_MIME)) return false;
+    event.preventDefault();
+    clearCanvasDropFeedback();
+    const tool = parseElementDragPayload(event.dataTransfer.getData(ELEMENT_DRAG_MIME));
+    if (!tool) return true;
+    const position = getWorldPositionFromClient(event.clientX, event.clientY);
+    lastPointerWorldRef.current = position;
+    createWidgetAt(tool, position);
+    onToolChange(null);
+    return true;
+  }, [clearCanvasDropFeedback, createWidgetAt, getWorldPositionFromClient, onToolChange]);
 
   useEffect(() => {
     const cancelDropFeedback = (event: KeyboardEvent) => {
@@ -1691,9 +1716,15 @@ export function CanvasStage({
         if (event.button === 1) event.preventDefault();
       }}
       onDragOver={(event) => {
-        if (event.dataTransfer.types.includes(LAYER_DRAG_MIME)) {
+        if (
+          event.dataTransfer.types.includes(LAYER_DRAG_MIME) ||
+          event.dataTransfer.types.includes(ELEMENT_DRAG_MIME)
+        ) {
           event.preventDefault();
-          event.dataTransfer.dropEffect = event.ctrlKey || event.metaKey ? "none" : "copy";
+          event.dataTransfer.dropEffect = event.dataTransfer.types.includes(LAYER_DRAG_MIME) &&
+            (event.ctrlKey || event.metaKey)
+            ? "none"
+            : "copy";
           updateCanvasDropFeedback(event);
           return;
         }
@@ -1703,6 +1734,7 @@ export function CanvasStage({
       }}
       onDrop={(event) => {
         if (handleLayerDrop(event)) return;
+        if (handleElementDrop(event)) return;
         clearCanvasDropFeedback();
         if (isTauri() || event.dataTransfer.files.length === 0) return;
         event.preventDefault();
@@ -1826,10 +1858,25 @@ export function CanvasStage({
             style={{ left: canvasDropFeedback.x + 12, top: canvasDropFeedback.y + 12 }}
           >
             <span className="canvas-drop-thumbnail">
-              {canvasDropFeedback.itemCount > 1 ? `+${canvasDropFeedback.itemCount}` : <FolderOpen size={18} />}
+              {canvasDropFeedback.elementTool ? (
+                (() => {
+                  const DropIcon = getShapeToolDefinition(canvasDropFeedback.elementTool)?.icon;
+                  return DropIcon ? <DropIcon size={18} /> : <FolderOpen size={18} />;
+                })()
+              ) : canvasDropFeedback.itemCount > 1 ? (
+                `+${canvasDropFeedback.itemCount}`
+              ) : (
+                <FolderOpen size={18} />
+              )}
             </span>
             <span>
-              {canvasDropFeedback.targetType &&
+              {canvasDropFeedback.elementTool && canvasDropFeedback.targetId &&
+              canvasDropFeedback.targetType &&
+              isWidgetContainer({ type: canvasDropFeedback.targetType })
+                ? `Add ${canvasDropFeedback.label} to ${canvasDropFeedback.targetType}`
+                : canvasDropFeedback.elementTool
+                ? `Create ${canvasDropFeedback.label}`
+                : canvasDropFeedback.targetType &&
               ["group", "frame", "panel", "dynamic-panel", "dynamicPanel", "repeater", "card", "modal", "overlay"].includes(canvasDropFeedback.targetType)
                 ? `Add to ${canvasDropFeedback.targetType}`
                 : canvasDropFeedback.targetId

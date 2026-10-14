@@ -137,18 +137,43 @@ describe("layer hierarchy", () => {
     expect(roots[0].children.map((node) => node.id)).toEqual(["timeline"]);
   });
 
-  it("keeps the frontmost layer first when z-order changes or indices tie", () => {
+  it("orders siblings by top-to-bottom, then left-to-right position", () => {
     const firstState = buildLayerHierarchy([
-      widget("calendar", "calendar", 1),
-      widget("timeline", "timeline", 1),
-    ], (item) => item.id);
-    const reorderedState = buildLayerHierarchy([
-      widget("calendar", "calendar", 2),
-      widget("timeline", "timeline", 1),
+      { ...widget("lower-left", "calendar", 10), x: 0, y: 100 },
+      { ...widget("upper-right", "timeline", 1), x: 100, y: 0 },
+      { ...widget("upper-left", "rectangle", 0), x: 0, y: 0 },
     ], (item) => item.id);
 
-    expect(firstState.map((node) => node.id)).toEqual(["timeline", "calendar"]);
-    expect(reorderedState.map((node) => node.id)).toEqual(["calendar", "timeline"]);
+    expect(firstState.map((node) => node.id)).toEqual([
+      "upper-left",
+      "upper-right",
+      "lower-left",
+    ]);
+  });
+
+  it("uses z-order only to break ties at the same screen position", () => {
+    const roots = buildLayerHierarchy([
+      { ...widget("back", "rectangle", 0), x: 20, y: 20 },
+      { ...widget("front", "ellipse", 1), x: 20, y: 20 },
+    ], (item) => item.id);
+
+    expect(roots.map((node) => node.id)).toEqual(["front", "back"]);
+  });
+
+  it("matches the requested screen-root hierarchy and visual order", () => {
+    const roots = buildLayerHierarchy([
+      { ...widget("root-rectangle", "rectangle", 1), x: 20, y: 20, width: 240, height: 140 },
+      { ...widget("nested-text", "text", 4, "root-rectangle"), x: 40, y: 40, width: 80, height: 24 },
+      { ...widget("screen-rectangle", "rectangle", 3), x: 20, y: 190 },
+      { ...widget("screen-text", "text", 2), x: 20, y: 250 },
+    ], (item) => item.id);
+
+    expect(roots.map((node) => node.id)).toEqual([
+      "root-rectangle",
+      "screen-rectangle",
+      "screen-text",
+    ]);
+    expect(roots[0].children.map((node) => node.id)).toEqual(["nested-text"]);
   });
 
   it("keeps an explicitly nested child below its parent while ordering siblings by canvas stack", () => {

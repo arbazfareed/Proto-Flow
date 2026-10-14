@@ -18,6 +18,7 @@ import {
   getShapeToolDefinition,
   type ShapeTool,
 } from "../canvas/shapeTools";
+import { ELEMENT_DRAG_MIME } from "../canvas/elementDrag";
 import {
   getScreenIconDefinition,
   getWidgetIconDefinition,
@@ -97,6 +98,7 @@ function ElementLibraryContents({
 }: ElementLibrarySectionProps) {
   const popoverRef = useRef<HTMLDivElement>(null);
   const searchRef = useRef<HTMLInputElement>(null);
+  const suppressClickAfterDragRef = useRef(false);
   const [query, setQuery] = useState("");
   const matchingToolTypes = ELEMENT_LIBRARY_TOOL_TYPES.filter((tool) =>
     `${tool} ${getShapeToolDefinition(tool)?.label ?? tool}`
@@ -155,8 +157,8 @@ function ElementLibraryContents({
           <strong>{mode === "sidebar" ? "ELEMENTS" : "Element library"}</strong>
           <span>
             {mode === "sidebar"
-              ? "To nest an element, select its parent and place it fully inside the parent. Items outside remain on the screen."
-              : "Choose a tool, then drag on the canvas to place it."}
+              ? "Drag an element onto the canvas or select it to draw. To nest it, place it fully inside a container."
+              : "Drag an element onto the canvas to place it, or click it then drag to draw."}
           </span>
         </div>
         {mode === "popover" && (
@@ -228,10 +230,27 @@ function ElementLibraryContents({
                     className={`element-library-item${activeTool === tool ? " is-active" : ""}`}
                     key={tool}
                     type="button"
-                    title={`${definition.label} — click, then drag to place`}
+                    draggable
+                    title={`${definition.label} — drag onto the canvas or click, then drag to draw`}
                     aria-label={`Add ${definition.label}`}
                     aria-pressed={activeTool === tool}
-                    onClick={() => {
+                    onDragStart={(event) => {
+                      suppressClickAfterDragRef.current = true;
+                      event.dataTransfer.effectAllowed = "copy";
+                      event.dataTransfer.setData(ELEMENT_DRAG_MIME, tool);
+                      event.dataTransfer.setData("text/plain", definition.label);
+                    }}
+                    onDragEnd={() => {
+                      window.setTimeout(() => {
+                        suppressClickAfterDragRef.current = false;
+                      }, 0);
+                    }}
+                    onClick={(event) => {
+                      if (suppressClickAfterDragRef.current) {
+                        suppressClickAfterDragRef.current = false;
+                        event.preventDefault();
+                        return;
+                      }
                       onSelectTool(tool);
                       if (mode === "popover") onClose();
                     }}

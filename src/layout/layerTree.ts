@@ -36,6 +36,8 @@ function widgetOrder(
   stackingOrderById: ReadonlyMap<string, number>,
 ): number {
   return (
+    first.y - second.y ||
+    first.x - second.x ||
     second.zIndex - first.zIndex ||
     (stackingOrderById.get(second.id) ?? 0) - (stackingOrderById.get(first.id) ?? 0) ||
     first.id.localeCompare(second.id)
@@ -43,7 +45,11 @@ function widgetOrder(
 }
 
 function nodeOrder(first: LayerTreeNode, second: LayerTreeNode): number {
+  const firstWidget = first.widget ?? first.children[0]?.widget;
+  const secondWidget = second.widget ?? second.children[0]?.widget;
   return (
+    (firstWidget?.y ?? 0) - (secondWidget?.y ?? 0) ||
+    (firstWidget?.x ?? 0) - (secondWidget?.x ?? 0) ||
     second.maxZIndex - first.maxZIndex ||
     second.maxStackingOrder - first.maxStackingOrder ||
     first.id.localeCompare(second.id)

@@ -50,6 +50,52 @@ describe("layer and screen ordering", () => {
     expect(getSelectedContainingParentId([parent], ["parent", "another"], inside)).toBeUndefined();
   });
 
+  it("keeps new widgets at screen level when the selected widget is already nested", () => {
+    const parent = {
+      ...widget("parent", 1),
+      x: 10,
+      y: 10,
+      width: 100,
+      height: 60,
+    };
+    const selectedChild = {
+      ...widget("selected-child", 2),
+      groupId: "parent",
+      x: 20,
+      y: 20,
+      width: 80,
+      height: 40,
+    };
+    const newWidget = {
+      ...widget("new-widget", 3),
+      x: 25,
+      y: 25,
+      width: 20,
+      height: 10,
+    };
+
+    expect(
+      getSelectedContainingParentId(
+        [parent, selectedChild],
+        ["selected-child"],
+        newWidget,
+      ),
+    ).toBeUndefined();
+  });
+
+  it("keeps new containers as siblings unless nesting is explicitly established", () => {
+    const parent = { ...widget("parent", 1), x: 10, y: 10, width: 100, height: 60 };
+    const newContainer = {
+      ...widget("new-container", 2),
+      type: "panel",
+      x: 20,
+      y: 20,
+    };
+
+    expect(getSelectedContainingParentId([parent], ["parent"], newContainer))
+      .toBeUndefined();
+  });
+
   it("moves a layer to the top-list target position and assigns descending z-index", () => {
     const result = reorderWidgets(
       [widget("a", 1), widget("b", 2), widget("c", 3)],

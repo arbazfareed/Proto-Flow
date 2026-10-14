@@ -107,7 +107,12 @@ export function getSelectedContainingParentId(
 ): string | undefined {
   if (selectedIds.length !== 1) return undefined;
   const parent = widgets.find((widget) => widget.id === selectedIds[0]);
-  return parent && parent.id !== child.id && isWidgetContainedBy(child, parent)
+  const parentByWidgetId = getWidgetParentIdMap(widgets);
+  return parent &&
+    parent.id !== child.id &&
+    !parentByWidgetId.has(parent.id) &&
+    !isWidgetContainer(child) &&
+    isWidgetContainedBy(child, parent)
     ? parent.id
     : undefined;
 }
