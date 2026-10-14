@@ -403,6 +403,8 @@ export function ScreenLayerSidebar() {
   const [collapsedByScreen, setCollapsedByScreen] = useState(() =>
     readCollapsedGroups(project.id),
   );
+  const collapsedByScreenRef = useRef(collapsedByScreen);
+  collapsedByScreenRef.current = collapsedByScreen;
   const [layerPreferences, setLayerPreferences] = useState(() =>
     readLayerTreePreferences(project.id),
   );
@@ -427,6 +429,9 @@ export function ScreenLayerSidebar() {
   const recentWidgetTimersRef = useRef(new Map<string, number>());
   const autoExpandTimerRef = useRef<number | null>(null);
   const autoExpandTargetRef = useRef<string | null>(null);
+  const collapseAnimationsRef = useRef(
+    new Map<string, { timer: number; animations: Animation[] }>(),
+  );
 
   useEffect(() => {
     const list = screenListRef.current;
@@ -465,6 +470,11 @@ export function ScreenLayerSidebar() {
   useEffect(() => () => {
     for (const timer of recentWidgetTimersRef.current.values()) window.clearTimeout(timer);
     if (autoExpandTimerRef.current !== null) window.clearTimeout(autoExpandTimerRef.current);
+    for (const { timer, animations } of collapseAnimationsRef.current.values()) {
+      window.clearTimeout(timer);
+      animations.forEach((animation) => animation.cancel());
+    }
+    collapseAnimationsRef.current.clear();
   }, []);
 
   useEffect(() => {
@@ -1029,17 +1039,93 @@ export function ScreenLayerSidebar() {
     setMenu(null);
   };
 
-  const toggleGroup = (groupId: string, collapseKey = layerGroupCollapseKey(layerMode, groupId)) => {
-    const nextForScreen = collapsedGroups.includes(collapseKey)
-      ? collapsedGroups.filter((id) => id !== collapseKey)
-      : [...collapsedGroups, collapseKey];
-    const next = { ...collapsedByScreen, [activeScreenId]: nextForScreen };
+  const updateScreenCollapseState = (update: (current: string[]) => string[]) => {
+    const next = {
+      ...collapsedByScreenRef.current,
+      [activeScreenId]: update(collapsedByScreenRef.current[activeScreenId] ?? []),
+    };
+    collapsedByScreenRef.current = next;
     setCollapsedByScreen(next);
     try {
       localStorage.setItem(collapsedStorageKey(project.id), JSON.stringify(next));
     } catch (error) {
       console.error("Could not save the layer-tree collapse state.", error);
     }
+  };
+
+  const cancelCollapseAnimation = (collapseKey: string) => {
+    const pending = collapseAnimationsRef.current.get(collapseKey);
+    if (!pending) return false;
+    window.clearTimeout(pending.timer);
+    pending.animations.forEach((animation) => animation.cancel());
+    collapseAnimationsRef.current.delete(collapseKey);
+    return true;
+  };
+
+  const animateLayerCollapse = (collapseKey: string, complete: () => void) => {
+    cancelCollapseAnimation(collapseKey);
+    const tree = layerTreeRef.current;
+    const root = [...(tree?.querySelectorAll<HTMLElement>("[data-collapse-key]") ?? [])]
+      .find((row) => row.dataset.collapseKey === collapseKey);
+    const rootIndex = Number(root?.dataset.entryIndex);
+    const rootDepth = Number(root?.dataset.depth);
+    if (
+      !tree ||
+      !root ||
+      !Number.isFinite(rootIndex) ||
+      !Number.isFinite(rootDepth) ||
+      window.matchMedia("(prefers-reduced-motion: reduce)").matches
+    ) {
+      complete();
+      return;
+    }
+
+    const descendants: HTMLElement[] = [];
+    if (rootIndex < 0) {
+      descendants.push(
+        ...tree.querySelectorAll<HTMLElement>("[data-entry-index]:not([data-entry-index='-1'])"),
+      );
+    } else {
+      for (let index = rootIndex + 1; index < layerEntries.length; index += 1) {
+        const entry = layerEntries[index];
+        const depth = entry?.kind === "node" ? entry.depth + 1 : 0;
+        if (depth <= rootDepth) break;
+        const row = tree.querySelector<HTMLElement>(`[data-entry-index="${index}"]`);
+        if (row) descendants.push(row);
+      }
+    }
+    if (descendants.length === 0) {
+      complete();
+      return;
+    }
+
+    const animations = descendants.map((row) =>
+      row.animate(
+        [
+          { opacity: 1, transform: "translateY(0)" },
+          { opacity: 0, transform: "translateY(-2px)" },
+        ],
+        { duration: 150, easing: "ease-out", fill: "forwards" },
+      ),
+    );
+    const timer = window.setTimeout(() => {
+      collapseAnimationsRef.current.delete(collapseKey);
+      complete();
+    }, 150);
+    collapseAnimationsRef.current.set(collapseKey, { timer, animations });
+  };
+
+  const toggleGroup = (groupId: string, collapseKey = layerGroupCollapseKey(layerMode, groupId)) => {
+    if (cancelCollapseAnimation(collapseKey)) return;
+    if (collapsedGroups.includes(collapseKey)) {
+      updateScreenCollapseState((current) => current.filter((id) => id !== collapseKey));
+      return;
+    }
+    animateLayerCollapse(collapseKey, () =>
+      updateScreenCollapseState((current) =>
+        current.includes(collapseKey) ? current : [...current, collapseKey],
+      ),
+    );
   };
 
   const setTreeCollapsed = (root: LayerTreeNode, collapsed: boolean) => {
@@ -1050,32 +1136,25 @@ export function ScreenLayerSidebar() {
       node.children.forEach(visit);
     };
     visit(root);
-    const nextForScreen = collapsed
-      ? [...new Set([...collapsedGroups, ...keys])]
-      : collapsedGroups.filter((key) => !keys.has(key));
-    const next = { ...collapsedByScreen, [activeScreenId]: nextForScreen };
-    setCollapsedByScreen(next);
-    try {
-      localStorage.setItem(collapsedStorageKey(project.id), JSON.stringify(next));
-    } catch (error) {
-      console.error("Could not save the layer-tree collapse state.", error);
-    }
+    const rootKey = getLayerTreeCollapseKey(root) ?? root.id;
+    for (const key of keys) cancelCollapseAnimation(key);
+    const update = () => updateScreenCollapseState((current) =>
+      collapsed
+        ? [...new Set([...current, ...keys])]
+        : current.filter((key) => !keys.has(key)),
+    );
+    if (collapsed) animateLayerCollapse(rootKey, update);
+    else update();
   };
 
   const setTreeExpandedToDepth = (root: LayerTreeNode, expandedDepth: number) => {
     const { expandedKeys, collapsedKeys } = getLayerTreeCollapseStateAtDepth(root, expandedDepth);
     const keys = new Set([...expandedKeys, ...collapsedKeys]);
-    const nextForScreen = [
-      ...collapsedGroups.filter((key) => !keys.has(key)),
+    for (const key of keys) cancelCollapseAnimation(key);
+    updateScreenCollapseState((current) => [
+      ...current.filter((key) => !keys.has(key)),
       ...collapsedKeys,
-    ];
-    const next = { ...collapsedByScreen, [activeScreenId]: nextForScreen };
-    setCollapsedByScreen(next);
-    try {
-      localStorage.setItem(collapsedStorageKey(project.id), JSON.stringify(next));
-    } catch (error) {
-      console.error("Could not save the layer-tree collapse state.", error);
-    }
+    ]);
   };
 
   const setAllGroupsCollapsed = (collapsed: boolean) => {
@@ -2163,6 +2242,9 @@ export function ScreenLayerSidebar() {
               aria-expanded={!screenTreeCollapsed}
               title={`Screen parent. New items are added directly to ${activeScreen.name}.`}
               data-screen-id={activeScreen.id}
+              data-collapse-key={screenTreeCollapseKey}
+              data-entry-index="-1"
+              data-depth="0"
               onKeyDown={(event) => {
                 if (event.target !== event.currentTarget) return;
                 if (event.key === "Enter" || event.key === " ") {
