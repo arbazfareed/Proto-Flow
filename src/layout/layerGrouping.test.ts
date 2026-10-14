@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { createShapeWidget } from "../canvas/shapes";
+import { ELEMENT_LIBRARY_TOOL_TYPES } from "../canvas/shapeTools";
 import {
   buildLayerGroups,
   getLayerCategory,
@@ -28,6 +29,12 @@ describe("layer tree grouping", () => {
     expect(getLayerCategory("component-master")).toBe("symbols");
     expect(getLayerCategory("plugin-widget")).toBe("other");
     expect(LAYER_CATEGORIES).toHaveLength(6);
+  });
+
+  it("assigns every element-library tool to a meaningful layer category", () => {
+    for (const type of ELEMENT_LIBRARY_TOOL_TYPES) {
+      expect(getLayerCategory(type), `unexpected Other category for ${type}`).not.toBe("other");
+    }
   });
 
   it("hides empty categories and orders category members by descending z-index", () => {

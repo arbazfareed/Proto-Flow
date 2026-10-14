@@ -573,6 +573,47 @@ function ImageShape({ widget, fill, stroke, strokeWidth, onThumbnailReady }: Sha
   );
 }
 
+function GenericElementShape({
+  widget,
+  fill,
+  stroke,
+  strokeWidth,
+}: ShapeComponentProps) {
+  const fallbackLabel = getShapeDefinition(widget.type)?.label ?? widget.type;
+  const label =
+    typeof widget.props.label === "string"
+      ? widget.props.label
+      : fallbackLabel;
+  return (
+    <Group>
+      <Rect
+        width={widget.width}
+        height={widget.height}
+        fill={fill}
+        stroke={stroke}
+        strokeWidth={strokeWidth}
+        cornerRadius={widget.style.cornerRadius ?? 5}
+        perfectDrawEnabled={false}
+      />
+      <KonvaText
+        x={8}
+        y={4}
+        width={Math.max(1, widget.width - 16)}
+        height={Math.max(1, widget.height - 8)}
+        text={label}
+        fontSize={Math.min(14, Math.max(10, widget.height * 0.32))}
+        fontFamily="Arial"
+        fill={stroke ?? "#d7d7de"}
+        align="center"
+        verticalAlign="middle"
+        ellipsis
+        wrap="none"
+        perfectDrawEnabled={false}
+      />
+    </Group>
+  );
+}
+
 const SHAPE_COMPONENTS: Record<PrimitiveTool, ComponentType<ShapeComponentProps>> = {
   rectangle: RectangleShape,
   ellipse: EllipseShape,
@@ -598,7 +639,11 @@ const SHAPE_REGISTRY = Object.fromEntries(
       component:
         type in WIDGET_COMPONENTS
           ? WIDGET_COMPONENTS[type as WidgetTool]
-          : SHAPE_COMPONENTS[type as PrimitiveTool],
+          : type in SHAPE_COMPONENTS
+            ? SHAPE_COMPONENTS[type as PrimitiveTool]
+            : ["heading", "paragraph", "link", "label"].includes(type)
+              ? TextShape
+              : GenericElementShape,
     },
   ]),
 ) as Record<ShapeTool, ShapeDefinition>;

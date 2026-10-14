@@ -22,8 +22,10 @@ export const LAYER_CONTAINER_TYPES = new Set([
   "navbar",
   "sidebar",
   "tabs",
+  "menu",
   "dropdown-menu",
   "dropdownMenu",
+  "footer",
   "component-master",
   "componentMaster",
 ]);

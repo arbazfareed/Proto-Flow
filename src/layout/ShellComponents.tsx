@@ -28,8 +28,14 @@ import {
 } from "lucide-react";
 import { isTauri } from "@tauri-apps/api/core";
 import { useStore } from "../store";
-import type { Project, Widget, WidgetStyle } from "../project/schema";
-import { DEFAULT_DEVICE_PRESET, toScreenDevice } from "../devices/catalog";
+import type { Project, Screen, Widget, WidgetStyle } from "../project/schema";
+import { createDefaultBreakpoints } from "../project/responsive";
+import {
+  DEFAULT_DEVICE_PRESET,
+  DEVICE_PRESETS,
+  toScreenDevice,
+} from "../devices/catalog";
+import type { DeviceCategory } from "../devices/types";
 import {
   rotateDevice,
   rotateWidgetForDevice,
@@ -37,6 +43,7 @@ import {
 } from "../devices/frame";
 import type { ScreenDevice } from "../devices/types";
 import { ScreenLayerSidebar } from "./ScreenLayerSidebar";
+import { WidgetIcon } from "./widgetIcons";
 import { BreakpointToolbar, ResponsivePanel } from "./ResponsiveControls";
 import {
   evaluateGeometryExpression,
@@ -57,6 +64,7 @@ import {
   getShapeToolDefinition,
   type ShapeTool,
 } from "../canvas/shapeTools";
+import { ElementLibrary } from "./ElementLibrary";
 
 const CanvasStage = lazy(() =>
   import("../canvas/CanvasStage").then((module) => ({
@@ -246,6 +254,8 @@ export function CanvasArea({
   const toggleBattery = useStore((state) => state.toggleBattery);
   const toggleSignal = useStore((state) => state.toggleSignal);
   const [viewMenuOpen, setViewMenuOpen] = useState(false);
+  const [elementLibraryOpen, setElementLibraryOpen] = useState(false);
+  const elementLibraryAnchorRef = useRef<HTMLDivElement>(null);
   const [activeTool, setActiveTool] = useState<ShapeTool | null>(null);
   const [orientationRequest, setOrientationRequest] = useState<{
     screenId: string;
@@ -293,6 +303,31 @@ export function CanvasArea({
     setOrientationRequest(null);
   };
 
+  const addLibraryScreen = (category: DeviceCategory) => {
+    const preset = DEVICE_PRESETS.find((device) => device.category === category);
+    if (!preset) {
+      onNotify(`No ${category} device preset is available.`, true);
+      return;
+    }
+    const device = toScreenDevice(preset);
+    const screen: Screen = {
+      id: crypto.randomUUID(),
+      name: preset.name,
+      device,
+      breakpoints: createDefaultBreakpoints(device.width, device.height),
+      widgets: [],
+      interactionRules: [],
+    };
+    const current = useStore.getState();
+    current.setProject({
+      ...current.project,
+      updatedAt: new Date().toISOString(),
+      screens: [...current.project.screens, screen],
+    });
+    current.setActiveScreen(screen.id);
+    setElementLibraryOpen(false);
+  };
+
   const requestOrientationChange = () => {
     if (!activeScreen) return;
     const currentDevice = activeScreen.device ?? toScreenDevice(DEFAULT_DEVICE_PRESET);
@@ -338,7 +373,6 @@ export function CanvasArea({
                     {tools.map((tool) => {
                       const definition = getShapeToolDefinition(tool);
                       if (!definition) return null;
-                      const ToolIcon = definition.icon;
                       return (
                         <button
                           key={tool}
@@ -351,7 +385,7 @@ export function CanvasArea({
                             setActiveTool((current) => (current === tool ? null : tool))
                           }
                         >
-                          <ToolIcon size={14} strokeWidth={1.8} />
+                          <WidgetIcon type={tool} size={16} />
                         </button>
                       );
                     })}
@@ -360,6 +394,48 @@ export function CanvasArea({
               ),
             )}
           </div>
+          <div className="element-library-anchor" ref={elementLibraryAnchorRef}>
+            <button
+              className={`icon-button small-icon element-library-trigger${elementLibraryOpen ? " is-active" : ""}`}
+              type="button"
+              aria-label="Browse all elements"
+              title="Browse all elements"
+              aria-haspopup="dialog"
+              aria-expanded={elementLibraryOpen}
+              onClick={() => setElementLibraryOpen((open) => !open)}
+            >
+              <Layers2 size={15} />
+            </button>
+            {elementLibraryOpen && (
+              <ElementLibrary
+                activeTool={activeTool}
+                anchorRef={elementLibraryAnchorRef}
+                onSelectTool={(tool) => {
+                  setActiveTool(tool);
+                  setElementLibraryOpen(false);
+                }}
+                onAddScreen={addLibraryScreen}
+                onClose={() => setElementLibraryOpen(false)}
+              />
+            )}
+          </div>
+          {activeTool && (
+            <span
+              className="active-element-tool"
+              title="Drag on the canvas to place this element"
+              aria-label={`Active tool: ${getShapeToolDefinition(activeTool)?.label ?? activeTool}`}
+            >
+              <WidgetIcon type={activeTool} size={16} />
+              <span>{getShapeToolDefinition(activeTool)?.label ?? activeTool}</span>
+              <button
+                type="button"
+                aria-label={`Cancel ${getShapeToolDefinition(activeTool)?.label ?? activeTool} tool`}
+                onClick={() => setActiveTool(null)}
+              >
+                <X size={12} />
+              </button>
+            </span>
+          )}
           <span className="canvas-mode"><span className="mode-dot" /> Canvas</span>
           {!rightPanelOpen && <button className="icon-button small-icon" aria-label="Show inspector panel" onClick={onToggleRight}><PanelRightClose size={15} /></button>}
           <div className="canvas-view-menu-anchor">
@@ -1455,7 +1531,6 @@ export function RightInspector({ onToggle, onUpdates, onRename }: RightInspector
   const selectedDefinition = selectedWidget
     ? getShapeToolDefinition(selectedWidget.type)
     : undefined;
-  const SelectedIcon = selectedDefinition?.icon ?? Layers2;
   const selectedLabelValue =
     selectedWidget?.props.label ?? selectedWidget?.props.text ?? selectedWidget?.props.fileName;
   const selectedLabel =
@@ -1474,7 +1549,9 @@ export function RightInspector({ onToggle, onUpdates, onRename }: RightInspector
       <div className="inspector-body">
         {selectedWidget ? (
           <div className="inspector-selection" aria-label="Selected element identity">
-            <span className="inspector-placeholder-icon"><SelectedIcon size={17} /></span>
+            <span className="inspector-placeholder-icon">
+              <WidgetIcon type={selectedWidget.type} size={17} />
+            </span>
             <span className="inspector-selection-copy">
               <strong>{selectedDefinition?.label ?? selectedWidget.type}</strong>
               <code>{selectedWidget.type}</code>

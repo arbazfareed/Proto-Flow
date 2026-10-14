@@ -13,6 +13,7 @@ import {
   TextCursorInput,
 } from "lucide-react";
 import type { WidgetStyle } from "../project/schema";
+import { getWidgetIconDefinition } from "../layout/widgetIcons";
 
 export const PRIMITIVE_TOOLS = [
   "rectangle",
@@ -32,7 +33,73 @@ export const WIDGET_TOOLS = [
 ] as const;
 export type PrimitiveTool = (typeof PRIMITIVE_TOOLS)[number];
 export type WidgetTool = (typeof WIDGET_TOOLS)[number];
-export type ShapeTool = PrimitiveTool | WidgetTool;
+
+export const GENERIC_ELEMENT_TOOL_LABELS = {
+  polygon: "Polygon",
+  star: "Star",
+  divider: "Divider",
+  vector: "Vector",
+  path: "Path",
+  "custom-icon": "Custom icon",
+  heading: "Heading",
+  paragraph: "Paragraph",
+  link: "Link",
+  label: "Label",
+  frame: "Frame",
+  group: "Group",
+  card: "Card",
+  modal: "Modal",
+  overlay: "Overlay",
+  drawer: "Drawer",
+  section: "Section",
+  panel: "Panel",
+  "dynamic-panel": "Dynamic panel",
+  repeater: "Repeater",
+  accordion: "Accordion",
+  carousel: "Carousel",
+  "tabs-container": "Tabs container",
+  "icon-button": "Icon button",
+  textarea: "Textarea",
+  select: "Select",
+  slider: "Slider",
+  stepper: "Stepper",
+  "date-picker": "Date picker",
+  "file-upload": "File upload",
+  search: "Search",
+  form: "Form",
+  avatar: "Avatar",
+  video: "Video",
+  badge: "Badge",
+  chip: "Chip",
+  tooltip: "Tooltip",
+  popover: "Popover",
+  alert: "Alert",
+  banner: "Banner",
+  "progress-bar": "Progress bar",
+  spinner: "Spinner",
+  skeleton: "Skeleton",
+  rating: "Rating",
+  navbar: "Navbar",
+  sidebar: "Sidebar",
+  tabs: "Tabs",
+  breadcrumb: "Breadcrumb",
+  pagination: "Pagination",
+  menu: "Menu",
+  "dropdown-menu": "Dropdown menu",
+  footer: "Footer",
+  table: "Table",
+  list: "List",
+  grid: "Grid",
+  chart: "Chart",
+  stat: "Stat",
+  timeline: "Timeline",
+  calendar: "Calendar",
+  "symbol-instance": "Symbol instance",
+  "component-master": "Component master",
+} as const;
+
+export type GenericElementTool = keyof typeof GENERIC_ELEMENT_TOOL_LABELS;
+export type ShapeTool = PrimitiveTool | WidgetTool | GenericElementTool;
 
 export interface ShapeToolDefinition {
   label: string;
@@ -46,7 +113,10 @@ export interface ShapeToolDefinition {
 
 const DEFAULT_STROKE = "#a78bfa";
 
-export const SHAPE_TOOL_DEFINITIONS: Record<ShapeTool, ShapeToolDefinition> = {
+const CORE_SHAPE_TOOL_DEFINITIONS: Record<
+  PrimitiveTool | WidgetTool,
+  ShapeToolDefinition
+> = {
   rectangle: {
     label: "Rectangle",
     shortcut: "R",
@@ -166,7 +236,96 @@ export const SHAPE_TOOL_DEFINITIONS: Record<ShapeTool, ShapeToolDefinition> = {
   },
 };
 
+const TEXT_ELEMENT_TOOLS = new Set<GenericElementTool>([
+  "heading",
+  "paragraph",
+  "link",
+  "label",
+]);
+const CONTAINER_ELEMENT_TOOLS = new Set<GenericElementTool>([
+  "frame",
+  "group",
+  "card",
+  "modal",
+  "overlay",
+  "drawer",
+  "section",
+  "panel",
+  "dynamic-panel",
+  "repeater",
+  "accordion",
+  "carousel",
+  "tabs-container",
+  "form",
+  "navbar",
+  "sidebar",
+  "tabs",
+  "menu",
+  "dropdown-menu",
+  "footer",
+]);
+
+function genericElementDimensions(type: GenericElementTool): [number, number] {
+  if (CONTAINER_ELEMENT_TOOLS.has(type)) return [240, 140];
+  if (type === "avatar") return [56, 56];
+  if (type === "video" || type === "chart" || type === "table" || type === "grid") {
+    return [200, 120];
+  }
+  return [160, 48];
+}
+
+function genericElementDefinition(
+  type: GenericElementTool,
+  label: string,
+): ShapeToolDefinition {
+  const { color } = getWidgetIconDefinition(type);
+  const [width, height] = genericElementDimensions(type);
+  const isText = TEXT_ELEMENT_TOOLS.has(type);
+  const style: WidgetStyle = {
+    fill: color,
+    fillOpacity: isText ? 1 : 0.1,
+    stroke: isText ? null : color,
+    strokeWidth: isText ? 0 : 1,
+    cornerRadius: isText ? 0 : CONTAINER_ELEMENT_TOOLS.has(type) ? 8 : 5,
+  };
+  const props = TEXT_ELEMENT_TOOLS.has(type)
+    ? {
+        text: label,
+        fontFamily: "Arial",
+        fontSize: type === "heading" ? 28 : 16,
+        fontWeight: type === "heading" ? "bold" : "normal",
+        align: "left",
+        lineHeight: 1.2,
+      }
+    : { label };
+  return {
+    label,
+    shortcut: "",
+    width,
+    height,
+    style,
+    props,
+    icon: getWidgetIconDefinition(type).icon,
+  };
+}
+
+const GENERIC_ELEMENT_TOOL_DEFINITIONS = Object.fromEntries(
+  Object.entries(GENERIC_ELEMENT_TOOL_LABELS).map(([type, label]) => [
+    type,
+    genericElementDefinition(type as GenericElementTool, label),
+  ]),
+) as Record<GenericElementTool, ShapeToolDefinition>;
+
+export const SHAPE_TOOL_DEFINITIONS: Record<ShapeTool, ShapeToolDefinition> = {
+  ...CORE_SHAPE_TOOL_DEFINITIONS,
+  ...GENERIC_ELEMENT_TOOL_DEFINITIONS,
+};
+
 export const SHAPE_TOOLS = [...PRIMITIVE_TOOLS, ...WIDGET_TOOLS];
+export const ELEMENT_LIBRARY_TOOL_TYPES = [
+  ...SHAPE_TOOLS,
+  ...Object.keys(GENERIC_ELEMENT_TOOL_LABELS),
+] as ShapeTool[];
 
 export function getShapeToolDefinition(
   type: string,

@@ -5,6 +5,7 @@ import {
   UNKNOWN_WIDGET_ICON,
   WIDGET_ICON_REGISTRY,
 } from "./widgetIcons";
+import { ELEMENT_LIBRARY_TOOL_TYPES } from "../canvas/shapeTools";
 
 describe("widget icon registry", () => {
   it("maps each supported widget type to its category icon and tint", () => {
@@ -18,24 +19,12 @@ describe("widget icon registry", () => {
   });
 
   it("provides distinct Lucide icons for the supported web and app elements", () => {
-    const elementTypes = [
-      "rectangle", "ellipse", "polygon", "star", "line", "arrow", "divider", "vector", "icon",
-      "text", "heading", "paragraph", "link", "label",
-      "frame", "group", "card", "modal", "overlay", "drawer", "section",
-      "panel", "repeater", "accordion", "carousel", "tabs-container",
-      "button", "icon-button", "input", "textarea", "select", "checkbox", "radio", "toggle",
-      "slider", "stepper", "date-picker", "file-upload", "search", "form",
-      "image", "avatar", "video", "badge", "chip", "tooltip", "popover", "alert", "progress",
-      "spinner", "skeleton", "rating",
-      "navbar", "sidebar", "tabs", "breadcrumb", "pagination", "menu", "dropdown-menu", "footer",
-      "table", "list", "grid", "chart", "stat", "timeline", "calendar",
-      "symbol", "component-master",
-    ];
-    const icons = elementTypes.map((type) => {
+    const icons = ELEMENT_LIBRARY_TOOL_TYPES.map((type) => {
       expect(WIDGET_ICON_REGISTRY[type], `missing icon for ${type}`).toBeDefined();
       return WIDGET_ICON_REGISTRY[type].icon;
     });
-    expect(new Set(icons).size).toBe(elementTypes.length);
+    expect(new Set(icons).size).toBe(ELEMENT_LIBRARY_TOOL_TYPES.length);
+    expect(ELEMENT_LIBRARY_TOOL_TYPES.length).toBeGreaterThanOrEqual(65);
   });
 
   it("uses an indigo icon for each screen device category", () => {
