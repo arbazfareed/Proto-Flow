@@ -12,6 +12,20 @@ export const LAYER_CONTAINER_TYPES = new Set([
   "card",
   "modal",
   "overlay",
+  "drawer",
+  "section",
+  "accordion",
+  "carousel",
+  "tabs-container",
+  "tabsContainer",
+  "form",
+  "navbar",
+  "sidebar",
+  "tabs",
+  "dropdown-menu",
+  "dropdownMenu",
+  "component-master",
+  "componentMaster",
 ]);
 
 export interface LayerTreeNode {

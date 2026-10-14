@@ -20,6 +20,12 @@ describe("layer tree grouping", () => {
     expect(getLayerCategory("card")).toBe("containers");
     expect(getLayerCategory("modal")).toBe("containers");
     expect(getLayerCategory("overlay")).toBe("containers");
+    expect(getLayerCategory("drawer")).toBe("containers");
+    expect(getLayerCategory("section")).toBe("containers");
+    expect(getLayerCategory("form")).toBe("containers");
+    expect(getLayerCategory("accordion")).toBe("advanced");
+    expect(getLayerCategory("carousel")).toBe("advanced");
+    expect(getLayerCategory("component-master")).toBe("symbols");
     expect(getLayerCategory("plugin-widget")).toBe("other");
     expect(LAYER_CATEGORIES).toHaveLength(6);
   });

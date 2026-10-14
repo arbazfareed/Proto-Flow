@@ -87,6 +87,10 @@ function preferencesStorageKey(projectId: string): string {
   return `protoflow:layer-tree-view:${projectId}`;
 }
 
+function screenCollapseKey(screenId: string): string {
+  return `screen:${screenId}`;
+}
+
 function readLayerTreePreferences(projectId: string): LayerTreePreferences {
   try {
     return parseLayerTreePreferences(localStorage.getItem(preferencesStorageKey(projectId)));
@@ -387,6 +391,7 @@ export function ScreenLayerSidebar() {
   const layerTreeRef = useRef<HTMLDivElement>(null);
   const screenListRef = useRef<HTMLDivElement>(null);
   const previousWidgetIdsRef = useRef<{ screenId: string; ids: Set<string> } | null>(null);
+  const previousFocusWidgetRef = useRef<{ screenId: string; widgetId: string | null } | null>(null);
   const recentWidgetTimersRef = useRef(new Map<string, number>());
   const autoExpandTimerRef = useRef<number | null>(null);
   const autoExpandTargetRef = useRef<string | null>(null);
@@ -555,6 +560,8 @@ export function ScreenLayerSidebar() {
   }, [activeScreen, movePickerOpen, selectedIds]);
 
   const collapsedGroups = collapsedByScreen[activeScreenId] ?? [];
+  const screenTreeCollapseKey = screenCollapseKey(activeScreenId);
+  const screenTreeCollapsed = collapsedGroups.includes(screenTreeCollapseKey);
   const updateLayerPreferences = (update: (preferences: LayerTreePreferences) => LayerTreePreferences) => {
     setLayerPreferences((current) => {
       const next = update(current);
@@ -633,6 +640,17 @@ export function ScreenLayerSidebar() {
         )
       : roots;
   }, [activeScreen, categorySearch]);
+  const hierarchyParentLabels = useMemo(() => {
+    const parents = new Map<string, string>();
+    const visit = (nodes: readonly LayerTreeNode[], parentLabel: string) => {
+      for (const node of nodes) {
+        if (node.widget) parents.set(node.widget.id, parentLabel);
+        visit(node.children, node.label);
+      }
+    };
+    visit(hierarchyRoots, `Screen: ${activeScreen?.name ?? "Screen"}`);
+    return parents;
+  }, [activeScreen?.name, hierarchyRoots]);
   const layerEntries = useMemo<LayerTreeEntry[]>(() => {
     const entries: LayerTreeEntry[] = [];
     const collapsedIds = new Set(collapsedGroups);
@@ -678,7 +696,7 @@ export function ScreenLayerSidebar() {
     return entries;
   }, [categorySearch, collapsedGroups, hierarchyRoots, layerGroups, layerMode]);
   const virtualizedRange = getVirtualizedRange(
-    layerEntries.length,
+    screenTreeCollapsed ? 0 : layerEntries.length,
     Math.max(0, layerScrollTop - SCREEN_TREE_ROW_HEIGHT),
     Math.max(0, layerViewportHeight - SCREEN_TREE_ROW_HEIGHT),
     LAYER_ROW_HEIGHT,
@@ -698,6 +716,12 @@ export function ScreenLayerSidebar() {
   );
   useEffect(() => {
     const focusWidgetId = hoveredWidgetId ?? selectedIds[0];
+    const previousFocus = previousFocusWidgetRef.current;
+    const focusChanged =
+      !previousFocus ||
+      previousFocus.screenId !== activeScreenId ||
+      previousFocus.widgetId !== focusWidgetId;
+    previousFocusWidgetRef.current = { screenId: activeScreenId, widgetId: focusWidgetId };
     if (!focusWidgetId) return;
     const findAncestors = (
       nodes: readonly LayerTreeNode[],
@@ -723,8 +747,15 @@ export function ScreenLayerSidebar() {
       : layerGroups
           .filter((group) => group.widgets.some((widget) => widget.id === focusWidgetId))
           .map((group) => layerGroupCollapseKey(layerMode, group.id));
-    const collapsedPath = [...(ancestors ?? []), ...categoryKeys];
-    if (collapsedPath.some((key) => collapsedGroups.includes(key))) {
+    const collapsedPath = [
+      screenCollapseKey(activeScreenId),
+      ...(ancestors ?? []),
+      ...categoryKeys,
+    ];
+    if (
+      focusChanged &&
+      collapsedPath.some((key) => collapsedGroups.includes(key))
+    ) {
       const nextCollapsed = collapsedGroups.filter((key) => !collapsedPath.includes(key));
       const next = { ...collapsedByScreen, [activeScreenId]: nextCollapsed };
       setCollapsedByScreen(next);
@@ -1338,6 +1369,7 @@ export function ScreenLayerSidebar() {
     const label = widgetLabel(widget);
     const container = isLayerContainer(widget);
     const hasChildren = entry.node.children.length > 0;
+    const parentLabel = hierarchyParentLabels.get(widget.id) ?? "Screen";
     const collapseKey = getLayerTreeCollapseKey(entry.node);
     const indentation = Math.min(entry.depth + 1, 5) * 16;
     const childBadge = getContainerBadge(widget, entry.node.children.length);
@@ -1357,6 +1389,7 @@ export function ScreenLayerSidebar() {
         className={`layer-row${entry.depth > 0 ? " is-nested" : ""}${container ? " is-container" : ""}${selected ? " is-selected" : ""}${hoveredWidgetId === widget.id ? " is-canvas-hovered" : ""}${widget.locked ? " is-locked" : ""}${!widget.visible ? " is-hidden" : ""}${invalidDrop ? " is-invalid-drop" : ""}${["symbol", "symbol-instance", "symbolInstance"].includes(widget.type) ? " is-symbol" : ""}${recentWidgetIds.has(widget.id) ? " is-new" : ""}${dropIndicator?.id === widget.id ? ` drop-${dropIndicator.edge}` : ""}`}
         role="treeitem"
         tabIndex={selected || hoveredWidgetId === widget.id || entry.depth === 0 ? 0 : -1}
+        aria-label={`${label}, ${container && hasChildren ? "parent container" : entry.depth === 0 ? "screen child" : "child of " + parentLabel}`}
         aria-level={entry.depth + 2}
         aria-selected={selected}
         aria-posinset={entry.position}
@@ -1426,23 +1459,7 @@ export function ScreenLayerSidebar() {
             }}
           />
         ) : (
-          <button
-            className="layer-select"
-            aria-label={`Select ${label}`}
-            aria-pressed={selected}
-            onDoubleClick={() => beginWidgetRename(widget)}
-            onClick={(event) => {
-              if (widget.locked) return;
-              const current = useStore.getState().selectedIds;
-              useStore.getState().select(
-                event.shiftKey
-                  ? current.includes(widget.id)
-                    ? current.filter((id) => id !== widget.id)
-                    : [...current, widget.id]
-                  : [widget.id],
-              );
-            }}
-          >
+          <>
             <span
               className={`layer-tree-guide layer-tree-screen-guide${entry.node.id === lastLayerNodeId ? " is-last-path" : ""}`}
               style={{ left: "8px" }}
@@ -1501,23 +1518,53 @@ export function ScreenLayerSidebar() {
             ) : (
               <span className="layer-chevron-spacer" aria-hidden="true" />
             )}
-            <WidgetIcon type={widget.type} />
-            <span className="layer-name">{label}</span>
-            {container && (
+            <button
+              className="layer-select"
+              aria-label={`Select ${label}`}
+              aria-pressed={selected}
+              onDoubleClick={() => beginWidgetRename(widget)}
+              onClick={(event) => {
+                if (widget.locked) return;
+                const current = useStore.getState().selectedIds;
+                useStore.getState().select(
+                  event.shiftKey
+                    ? current.includes(widget.id)
+                      ? current.filter((id) => id !== widget.id)
+                      : [...current, widget.id]
+                    : [widget.id],
+                );
+              }}
+            >
+              <WidgetIcon type={widget.type} />
               <span
-                className="layer-child-count"
-                aria-label={childBadge}
+                className={`layer-hierarchy-badge${container && hasChildren ? " is-parent" : entry.depth === 0 ? " is-screen-child" : ""}`}
+                title={
+                  container && hasChildren
+                    ? `Parent of ${entry.node.children.length} direct ${entry.node.children.length === 1 ? "child" : "children"}`
+                    : entry.depth === 0
+                      ? `Direct child of Screen: ${activeScreen?.name ?? "Screen"}. New items are added to the screen unless dropped into a container.`
+                      : `Child of ${parentLabel}`
+                }
               >
-                {entry.collapsed ? `(${childBadge})` : childBadge}
+                {container && hasChildren ? "Parent" : entry.depth === 0 ? "Screen child" : "Child"}
               </span>
-            )}
-            {recentWidgetIds.has(widget.id) && (
-              <Sparkles className="layer-new-icon" size={13} aria-label="Just created" />
-            )}
-            {invalidDrop && (
-              <AlertTriangle className="layer-invalid-drop-icon" size={16} aria-label="Invalid drop target" />
-            )}
-          </button>
+              <span className="layer-name">{label}</span>
+              {container && (
+                <span
+                  className="layer-child-count"
+                  aria-label={childBadge}
+                >
+                  {entry.collapsed ? `(${childBadge})` : childBadge}
+                </span>
+              )}
+              {recentWidgetIds.has(widget.id) && (
+                <Sparkles className="layer-new-icon" size={13} aria-label="Just created" />
+              )}
+              {invalidDrop && (
+                <AlertTriangle className="layer-invalid-drop-icon" size={16} aria-label="Invalid drop target" />
+              )}
+            </button>
+          </>
         )}
         <button
           className="layer-visibility"
@@ -1869,7 +1916,9 @@ export function ScreenLayerSidebar() {
           )}
         </label>
         {activeScreen && (
-          activeScreen.widgets.length === 0 || visibleLayerEntries.length > 0
+          activeScreen.widgets.length === 0 ||
+          screenTreeCollapsed ||
+          visibleLayerEntries.length > 0
         ) ? (
           <div
             className="layer-list"
@@ -1914,24 +1963,54 @@ export function ScreenLayerSidebar() {
             <div
               className="layer-screen-root"
               role="treeitem"
-              tabIndex={-1}
+              tabIndex={0}
               aria-level={1}
-              aria-label={`Screen: ${activeScreen.name}`}
+              aria-label={`Screen: ${activeScreen.name}, parent of ${hierarchyRoots.length} items`}
+              aria-expanded={!screenTreeCollapsed}
+              title={`Screen parent. New items are added directly to ${activeScreen.name}.`}
               data-screen-id={activeScreen.id}
+              onKeyDown={(event) => {
+                if (event.target !== event.currentTarget) return;
+                if (event.key === "Enter" || event.key === " ") {
+                  event.preventDefault();
+                  toggleGroup(activeScreen.id, screenTreeCollapseKey);
+                } else if (event.key === "ArrowRight" && screenTreeCollapsed) {
+                  event.preventDefault();
+                  toggleGroup(activeScreen.id, screenTreeCollapseKey);
+                } else if (event.key === "ArrowLeft" && !screenTreeCollapsed) {
+                  event.preventDefault();
+                  toggleGroup(activeScreen.id, screenTreeCollapseKey);
+                }
+              }}
             >
+              <button
+                className="layer-screen-expand-toggle"
+                aria-label={`${screenTreeCollapsed ? "Expand" : "Collapse"} ${activeScreen.name}`}
+                aria-expanded={!screenTreeCollapsed}
+                aria-controls={`screen-tree-${activeScreen.id}`}
+                onClick={() => toggleGroup(activeScreen.id, screenTreeCollapseKey)}
+              >
+                {screenTreeCollapsed ? <ChevronRight size={14} /> : <ChevronDown size={14} />}
+              </button>
               <ScreenIcon category={screenIconCategory(activeScreen.device)} size={16} />
               <span className="layer-screen-name">{activeScreen.name}</span>
               <span className="layer-child-count">
-                {activeScreen.widgets.length} items
+                {hierarchyRoots.length} {hierarchyRoots.length === 1 ? "child" : "children"}
               </span>
-              <span className="layer-screen-kind">Screen</span>
+              <span className="layer-screen-kind">Parent</span>
             </div>
-            {activeScreen.widgets.length === 0 && (
+            {!screenTreeCollapsed && activeScreen.widgets.length === 0 && (
               <div className="sidebar-empty-state layer-tree-empty">
                 <Layers2 size={16} />
                 <span>Empty screen — add a widget.</span>
               </div>
             )}
+            <div
+              id={`screen-tree-${activeScreen.id}`}
+              className="layer-tree-children"
+              role="group"
+              hidden={screenTreeCollapsed}
+            >
             <div className="layer-virtual-spacer" style={{ height: virtualizedRange.topSpacerHeight }} aria-hidden="true" />
             {visibleLayerEntries.map((entry, visibleIndex) => {
               const entryIndex = virtualizedRange.start + visibleIndex;
@@ -2044,6 +2123,12 @@ export function ScreenLayerSidebar() {
                     </button>
                     <Folder size={14} aria-hidden="true" />
                     <span className="layer-group-name">{node.label}</span>
+                    <span
+                      className="layer-hierarchy-badge is-parent"
+                      title={`Parent of ${node.descendantCount} layers`}
+                    >
+                      Parent
+                    </span>
                     <span className="layer-group-count" aria-label={`${node.descendantCount} children`}>
                       {node.descendantCount} {node.descendantCount === 1 ? "child" : "children"}
                     </span>
@@ -2145,6 +2230,7 @@ export function ScreenLayerSidebar() {
               );
             })}
             <div className="layer-virtual-spacer" style={{ height: virtualizedRange.bottomSpacerHeight }} aria-hidden="true" />
+            </div>
           </div>
         ) : (
           <div className="sidebar-empty-state">

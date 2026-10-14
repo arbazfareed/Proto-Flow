@@ -76,9 +76,32 @@ export const LAYER_CATEGORY_DEFINITIONS: Record<LayerCategoryId, LayerCategoryDe
 const CATEGORY_TYPES: Record<Exclude<LayerCategoryId, "other">, ReadonlySet<string>> = {
   shapes: new Set(["rectangle", "ellipse", "circle", "text", "line", "arrow", "icon"]),
   widgets: new Set(["button", "input", "image", "checkbox", "radio", "toggle"]),
-  advanced: new Set(["panel", "dynamic-panel", "dynamicPanel", "repeater"]),
-  symbols: new Set(["symbol", "symbol-instance", "symbolInstance"]),
-  containers: new Set(["group", "frame", "card", "modal", "overlay"]),
+  advanced: new Set([
+    "panel",
+    "dynamic-panel",
+    "dynamicPanel",
+    "repeater",
+    "accordion",
+    "carousel",
+    "tabs-container",
+    "tabsContainer",
+  ]),
+  symbols: new Set(["symbol", "symbol-instance", "symbolInstance", "component-master", "componentMaster"]),
+  containers: new Set([
+    "group",
+    "frame",
+    "card",
+    "modal",
+    "overlay",
+    "drawer",
+    "section",
+    "form",
+    "navbar",
+    "sidebar",
+    "tabs",
+    "dropdown-menu",
+    "dropdownMenu",
+  ]),
 };
 
 export function getLayerCategory(

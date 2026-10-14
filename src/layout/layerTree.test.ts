@@ -148,6 +148,13 @@ describe("layer hierarchy", () => {
     expect(isLayerContainer(widget("card", "card", 0))).toBe(true);
     expect(isLayerContainer(widget("modal", "modal", 0))).toBe(true);
     expect(isLayerContainer(widget("overlay", "overlay", 0))).toBe(true);
+    expect(isLayerContainer(widget("drawer", "drawer", 0))).toBe(true);
+    expect(isLayerContainer(widget("section", "section", 0))).toBe(true);
+    expect(isLayerContainer(widget("accordion", "accordion", 0))).toBe(true);
+    expect(isLayerContainer(widget("carousel", "carousel", 0))).toBe(true);
+    expect(isLayerContainer(widget("tabs", "tabs", 0))).toBe(true);
+    expect(isLayerContainer(widget("form", "form", 0))).toBe(true);
+    expect(isLayerContainer(widget("master", "component-master", 0))).toBe(true);
     expect(isLayerContainer(widget("button", "button", 0))).toBe(false);
     expect(getContainerBadge(frame, 0)).toBe("empty");
     expect(getContainerBadge(frame, 1)).toBe("1 child");
