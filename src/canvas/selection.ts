@@ -1,11 +1,36 @@
 import type { Widget } from "../project/schema";
 import type { CanvasPoint } from "./snapping";
+import { isWidgetContainedBy } from "../project/layers";
 
 export interface SelectionBounds {
   x: number;
   y: number;
   width: number;
   height: number;
+}
+
+export function getSelectedParentWidgetIds(
+  widgets: readonly Pick<Widget, "id" | "groupId" | "x" | "y" | "width" | "height">[],
+  selectedIds: readonly string[],
+): Set<string> {
+  const widgetsById = new Map(widgets.map((widget) => [widget.id, widget]));
+  const parentIds = new Set<string>();
+
+  for (const selectedId of selectedIds) {
+    const visited = new Set([selectedId]);
+    let child = widgetsById.get(selectedId);
+    let parentId = child?.groupId;
+    while (parentId && !visited.has(parentId)) {
+      const parent = widgetsById.get(parentId);
+      if (!parent || !child || !isWidgetContainedBy(child, parent)) break;
+      visited.add(parentId);
+      parentIds.add(parentId);
+      child = parent;
+      parentId = parent.groupId;
+    }
+  }
+
+  return parentIds;
 }
 
 export function constrainTransformerBounds(

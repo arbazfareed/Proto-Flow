@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { createShapeWidget } from "./shapes";
 import {
   getSelectionBounds,
+  getSelectedParentWidgetIds,
   getSelectionUpdates,
   getWidgetsInsideBounds,
   offsetSelection,
@@ -22,6 +23,25 @@ function widget(
 }
 
 describe("selection geometry", () => {
+  it("finds selected widgets' parent containers and ancestors without looping on cycles", () => {
+    const widgets = [
+      { id: "screen", groupId: undefined, x: 0, y: 0, width: 500, height: 500 },
+      { id: "card", groupId: "screen", x: 10, y: 10, width: 200, height: 200 },
+      { id: "image", groupId: "card", x: 20, y: 20, width: 50, height: 50 },
+      { id: "cycle-a", groupId: "cycle-b", x: 0, y: 0, width: 500, height: 500 },
+      { id: "cycle-b", groupId: "cycle-a", x: 0, y: 0, width: 500, height: 500 },
+    ];
+
+    expect([...getSelectedParentWidgetIds(widgets, ["image"])].sort())
+      .toEqual(["card", "screen"]);
+    expect([...getSelectedParentWidgetIds(widgets, ["cycle-a"])]).toEqual(["cycle-b"]);
+    expect([...getSelectedParentWidgetIds(widgets, ["missing"])]).toEqual([]);
+    expect([...getSelectedParentWidgetIds([
+      { id: "panel", groupId: undefined, x: 0, y: 0, width: 100, height: 100 },
+      { id: "outside", groupId: "panel", x: 150, y: 0, width: 20, height: 20 },
+    ], ["outside"])]).toEqual([]);
+  });
+
   it("transformer-inversion rejects inverted, undersized, and non-finite bounds", () => {
     const oldBox = { x: 0, y: 0, width: 20, height: 20 };
     expect(constrainTransformerBounds(oldBox, { x: 10, y: 10, width: -2, height: 20 }))

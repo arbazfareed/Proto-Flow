@@ -11,7 +11,7 @@ export interface LayerTreePreferences {
 }
 
 export function createDefaultLayerTreePreferences(): LayerTreePreferences {
-  return { mode: "category", groupOrder: {}, groupNames: {} };
+  return { mode: "z-order", groupOrder: {}, groupNames: {} };
 }
 
 export function parseLayerTreePreferences(
@@ -25,7 +25,7 @@ export function parseLayerTreePreferences(
   const value = parsed as Record<string, unknown>;
   const mode = LAYER_VIEW_MODES.includes(value.mode as LayerViewMode)
     ? value.mode as LayerViewMode
-    : "category";
+    : "z-order";
   const groupOrder: Partial<Record<LayerViewMode, string[]>> = {};
   if (value.groupOrder && typeof value.groupOrder === "object" && !Array.isArray(value.groupOrder)) {
     for (const viewMode of LAYER_VIEW_MODES) {

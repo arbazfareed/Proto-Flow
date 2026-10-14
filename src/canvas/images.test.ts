@@ -1,11 +1,13 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   IMAGE_ASSET_THRESHOLD,
+  MAX_IMAGE_FILE_SIZE,
   MAX_INLINE_IMAGE_BYTES,
   getImageDataByteSize,
   getInlineImageBytes,
   imageDataToBytes,
   readImageFile,
+  readImageUrl,
 } from "./images";
 
 describe("canvas image validation", () => {
@@ -21,6 +23,55 @@ describe("canvas image validation", () => {
     expect(image.mime).toBe("image/png");
     expect(image.size).toBe(pngHeader.length);
     expect([...imageDataToBytes(image.src)]).toEqual([...pngHeader]);
+  });
+
+  it("converts TIFF images to PNG for canvas rendering", async () => {
+    const UTIF = await import("utif");
+    const tiff = UTIF.encodeImage(new Uint8Array([255, 0, 0, 255]), 1, 1);
+    const pngHeader = new Uint8Array([
+      0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a,
+    ]);
+    const canvas = {
+      width: 0,
+      height: 0,
+      getContext: () => ({ putImageData: vi.fn() }),
+      toBlob: (callback: BlobCallback) =>
+        callback(new Blob([pngHeader], { type: "image/png" })),
+    };
+    vi.stubGlobal("document", { createElement: () => canvas });
+    vi.stubGlobal(
+      "ImageData",
+      class {
+        constructor(
+          readonly data: Uint8ClampedArray,
+          readonly width: number,
+          readonly height: number,
+        ) {}
+      },
+    );
+
+    const image = await readImageFile(new File([tiff], "photo.tiff", { type: "image/tiff" }));
+
+    expect(image.name).toBe("photo.png");
+    expect(image.mime).toBe("image/png");
+    expect([...imageDataToBytes(image.src)]).toEqual([...pngHeader]);
+  });
+
+  it.each([
+    ["GIF", "image/gif", [0x47, 0x49, 0x46, 0x38, 0x39, 0x61]],
+    ["BMP", "image/bmp", [0x42, 0x4d]],
+    ["AVIF", "image/avif", [0, 0, 0, 0, 0x66, 0x74, 0x79, 0x70, 0x61, 0x76, 0x69, 0x66]],
+    ["HEIC", "image/heic", [0, 0, 0, 0, 0x66, 0x74, 0x79, 0x70, 0x68, 0x65, 0x69, 0x63]],
+  ])("recognizes %s device images", async (name, mime, signature) => {
+    const bytes = new Uint8Array([...signature, 0, 0, 0]);
+    const file = new File([bytes], `photo.${name.toLowerCase()}`, { type: mime });
+    if (mime === "image/heic") {
+      await expect(readImageFile(file)).rejects.toThrow("Could not decode this HEIC/HEIF image");
+    } else {
+      const image = await readImageFile(file);
+      expect(image.mime).toBe(mime);
+      expect(image.size).toBe(bytes.length);
+    }
   });
 
   it("rejects unsupported extensions and mismatched file contents", async () => {
@@ -83,5 +134,72 @@ describe("canvas image validation", () => {
     await expect(
       readImageFile(new File([externalSvg], "external.svg", { type: "image/svg+xml" })),
     ).rejects.toThrow("must not contain scripts or external resources");
+  });
+
+  it("parses complete SVG documents larger than 4 KB", async () => {
+    let parsedLength = 0;
+    vi.stubGlobal(
+      "DOMParser",
+      class {
+        parseFromString(source: string) {
+          parsedLength = source.length;
+          return {
+            querySelector: () => null,
+            querySelectorAll: () => [],
+          };
+        }
+      },
+    );
+    const svg = `<svg xmlns="http://www.w3.org/2000/svg">${" ".repeat(5000)}<rect width="1" height="1"/></svg>`;
+    const image = await readImageFile(
+      new File([svg], "large.svg", { type: "image/svg+xml" }),
+    );
+
+    expect(image.mime).toBe("image/svg+xml");
+    expect(parsedLength).toBe(svg.length);
+  });
+
+  it("fetches and validates HTTP image URLs under the per-image limit", async () => {
+    const pngHeader = new Uint8Array([
+      0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a,
+    ]);
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(
+        new Response(new Blob([pngHeader], { type: "image/png" }), {
+          status: 200,
+          headers: { "content-length": String(pngHeader.length) },
+        }),
+      ),
+    );
+
+    const image = await readImageUrl("https://example.com/assets/photo.png");
+
+    expect(image.name).toBe("photo.png");
+    expect(image.mime).toBe("image/png");
+    expect(image.size).toBe(pngHeader.length);
+    expect(fetch).toHaveBeenCalledWith(
+      new URL("https://example.com/assets/photo.png"),
+      { credentials: "omit" },
+    );
+  });
+
+  it("rejects unsafe, failed, and oversized image URLs", async () => {
+    await expect(readImageUrl("file:///private/photo.png")).rejects.toThrow("HTTP or HTTPS");
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(new Response(null, { status: 404 })),
+    );
+    await expect(readImageUrl("https://example.com/missing.png")).rejects.toThrow("HTTP 404");
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(
+        new Response(null, {
+          status: 200,
+          headers: { "content-length": String(MAX_IMAGE_FILE_SIZE + 1) },
+        }),
+      ),
+    );
+    await expect(readImageUrl("https://example.com/large.png")).rejects.toThrow("25 MB");
   });
 });

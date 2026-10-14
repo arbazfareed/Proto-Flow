@@ -11,6 +11,9 @@ export const createCanvasSlice: StateCreator<StoreState, [], [], CanvasSlice> = 
   gridVisible: true,
   snapEnabled: true,
   selectedIds: [],
+  hoveredWidgetId: null,
+  hoveredCanvasWidgetId: null,
+  hoveredLayerWidgetId: null,
   geometryPreview: null,
   setZoom: (zoom) =>
     set((state) => ({
@@ -24,9 +27,27 @@ export const createCanvasSlice: StateCreator<StoreState, [], [], CanvasSlice> = 
   select: (selectedIds) =>
     set({ selectedIds: [...new Set(selectedIds)], geometryPreview: null }),
   clearSelection: () => set({ selectedIds: [], geometryPreview: null }),
+  setCanvasHoveredWidget: (hoveredCanvasWidgetId) =>
+    set((state) => ({
+      hoveredCanvasWidgetId,
+      hoveredWidgetId: state.hoveredLayerWidgetId ?? hoveredCanvasWidgetId,
+    })),
+  setLayerHoveredWidget: (hoveredLayerWidgetId) =>
+    set((state) => ({
+      hoveredLayerWidgetId,
+      hoveredWidgetId: hoveredLayerWidgetId ?? state.hoveredCanvasWidgetId,
+    })),
   setActiveScreen: (screenId) => {
     if (!get().project.screens.some((screen) => screen.id === screenId)) return;
-    set({ activeScreenId: screenId, activeBreakpointId: null, selectedIds: [], geometryPreview: null });
+    set({
+      activeScreenId: screenId,
+      activeBreakpointId: null,
+      selectedIds: [],
+      hoveredWidgetId: null,
+      hoveredCanvasWidgetId: null,
+      hoveredLayerWidgetId: null,
+      geometryPreview: null,
+    });
   },
   setActiveBreakpoint: (activeBreakpointId) => set({ activeBreakpointId }),
   getActiveScreenId: () => {

@@ -29,7 +29,11 @@ import {
 import { isTauri } from "@tauri-apps/api/core";
 import { useStore } from "../store";
 import type { Project, Widget, WidgetStyle } from "../project/schema";
-import { DEFAULT_DEVICE_PRESET, toScreenDevice } from "../devices/catalog";
+import {
+  DEFAULT_DEVICE_PRESET,
+  toScreenDevice,
+} from "../devices/catalog";
+import type { DeviceCategory } from "../devices/types";
 import {
   rotateDevice,
   rotateWidgetForDevice,
@@ -37,6 +41,7 @@ import {
 } from "../devices/frame";
 import type { ScreenDevice } from "../devices/types";
 import { ScreenLayerSidebar } from "./ScreenLayerSidebar";
+import { WidgetIcon } from "./widgetIcons";
 import { BreakpointToolbar, ResponsivePanel } from "./ResponsiveControls";
 import {
   evaluateGeometryExpression,
@@ -52,11 +57,10 @@ import {
   parseStyleColor,
 } from "../canvas/styleInspector";
 import {
-  PRIMITIVE_TOOLS,
-  WIDGET_TOOLS,
   getShapeToolDefinition,
   type ShapeTool,
 } from "../canvas/shapeTools";
+import { ElementLibrary } from "./ElementLibrary";
 
 const CanvasStage = lazy(() =>
   import("../canvas/CanvasStage").then((module) => ({
@@ -160,9 +164,21 @@ interface LeftSidebarProps {
   onToggle: () => void;
   onOpenPalette: () => void;
   onUpdates: () => void;
+  activeTool: ShapeTool | null;
+  onSelectTool: (tool: ShapeTool) => void;
+  onAddScreen: (category: DeviceCategory) => void;
 }
 
-export function LeftSidebar({ onNew, onOpen, onToggle, onOpenPalette, onUpdates }: LeftSidebarProps) {
+export function LeftSidebar({
+  onNew,
+  onOpen,
+  onToggle,
+  onOpenPalette,
+  onUpdates,
+  activeTool,
+  onSelectTool,
+  onAddScreen,
+}: LeftSidebarProps) {
   const project = useStore((state) => state.project);
   const isDirty = useStore((state) => state.isDirty);
   const leftPanelOpen = useStore((state) => state.leftPanelOpen);
@@ -187,7 +203,12 @@ export function LeftSidebar({ onNew, onOpen, onToggle, onOpenPalette, onUpdates 
         <div className="nav-item active" aria-current="page"><FileText size={16} /><span>{project.name}</span><span className="nav-unsaved">{isDirty ? "•" : ""}</span></div>
         <button className="nav-item" onClick={onOpen}><FolderOpen size={16} /><span>Open project…</span><kbd>Ctrl O</kbd></button>
       </div>
-      <ScreenLayerSidebar />
+      <ElementLibrary
+        activeTool={activeTool}
+        mode="sidebar"
+        onSelectTool={onSelectTool}
+        onAddScreen={onAddScreen}
+      />
       <div className="sidebar-footer">
         <button className="nav-item" onClick={onOpenPalette}><Keyboard size={16} /><span>Keyboard shortcuts</span></button>
         <button className="nav-item" onClick={onUpdates}><CircleHelp size={16} /><span>Help & updates</span></button>
@@ -204,6 +225,8 @@ interface CanvasAreaProps {
   onOpen: () => void;
   onOpenPalette: () => void;
   onNotify: (message: string, isError?: boolean) => void;
+  activeTool: ShapeTool | null;
+  setActiveTool: (update: ShapeTool | null | ((current: ShapeTool | null) => ShapeTool | null)) => void;
 }
 
 export function CanvasArea({
@@ -213,6 +236,8 @@ export function CanvasArea({
   onOpen,
   onOpenPalette,
   onNotify,
+  activeTool,
+  setActiveTool,
 }: CanvasAreaProps) {
   const project = useStore((state) => state.project);
   const leftPanelOpen = useStore((state) => state.leftPanelOpen);
@@ -246,7 +271,6 @@ export function CanvasArea({
   const toggleBattery = useStore((state) => state.toggleBattery);
   const toggleSignal = useStore((state) => state.toggleSignal);
   const [viewMenuOpen, setViewMenuOpen] = useState(false);
-  const [activeTool, setActiveTool] = useState<ShapeTool | null>(null);
   const [orientationRequest, setOrientationRequest] = useState<{
     screenId: string;
     device: ScreenDevice;
@@ -329,37 +353,23 @@ export function CanvasArea({
         </div>
         <BreakpointToolbar />
         <div className="canvas-toolbar-actions">
-          <div className="shape-tools" role="toolbar" aria-label="Canvas tools">
-            {([["Shapes", PRIMITIVE_TOOLS], ["Widgets", WIDGET_TOOLS]] as const).map(
-              ([groupName, tools]) => (
-                <div className="shape-tool-group" key={groupName} role="group" aria-label={groupName}>
-                  <span className="shape-tool-group-label">{groupName}</span>
-                  <div className="shape-tool-buttons">
-                    {tools.map((tool) => {
-                      const definition = getShapeToolDefinition(tool);
-                      if (!definition) return null;
-                      const ToolIcon = definition.icon;
-                      return (
-                        <button
-                          key={tool}
-                          className={`icon-button small-icon shape-tool-button${activeTool === tool ? " is-active" : ""}`}
-                          type="button"
-                          aria-label={`Draw ${definition.label}`}
-                          aria-pressed={activeTool === tool}
-                          title={`${definition.label}${definition.shortcut ? ` (${definition.shortcut})` : ""}`}
-                          onClick={() =>
-                            setActiveTool((current) => (current === tool ? null : tool))
-                          }
-                        >
-                          <ToolIcon size={14} strokeWidth={1.8} />
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
-              ),
-            )}
-          </div>
+          {activeTool && (
+            <span
+              className="active-element-tool"
+              title="Drag on the canvas to place this element"
+              aria-label={`Active tool: ${getShapeToolDefinition(activeTool)?.label ?? activeTool}`}
+            >
+              <WidgetIcon type={activeTool} size={16} />
+              <span>{getShapeToolDefinition(activeTool)?.label ?? activeTool}</span>
+              <button
+                type="button"
+                aria-label={`Cancel ${getShapeToolDefinition(activeTool)?.label ?? activeTool} tool`}
+                onClick={() => setActiveTool(null)}
+              >
+                <X size={12} />
+              </button>
+            </span>
+          )}
           <span className="canvas-mode"><span className="mode-dot" /> Canvas</span>
           {!rightPanelOpen && <button className="icon-button small-icon" aria-label="Show inspector panel" onClick={onToggleRight}><PanelRightClose size={15} /></button>}
           <div className="canvas-view-menu-anchor">
@@ -1455,7 +1465,6 @@ export function RightInspector({ onToggle, onUpdates, onRename }: RightInspector
   const selectedDefinition = selectedWidget
     ? getShapeToolDefinition(selectedWidget.type)
     : undefined;
-  const SelectedIcon = selectedDefinition?.icon ?? Layers2;
   const selectedLabelValue =
     selectedWidget?.props.label ?? selectedWidget?.props.text ?? selectedWidget?.props.fileName;
   const selectedLabel =
@@ -1466,15 +1475,21 @@ export function RightInspector({ onToggle, onUpdates, onRename }: RightInspector
   if (!rightPanelOpen) return null;
 
   return (
-    <aside className="sidebar inspector">
+    <aside className="sidebar inspector right-dock">
+      <div className="right-dock-header">
+        <span className="right-dock-title">LAYERS &amp; INSPECTOR</span>
+        <button className="icon-button small-icon" aria-label="Close right sidebar" onClick={onToggle}><PanelRightClose size={15} /></button>
+      </div>
+      <section className="right-inspector-panel" aria-label="Inspector">
       <div className="inspector-top">
         <div><span className="inspector-overline">INSPECTOR</span><h2>{selectedWidget ? selectedLabel : selectedWidgets.length > 1 ? `${selectedWidgets.length} items selected` : "Select an element"}</h2></div>
-        <button className="icon-button small-icon" aria-label="Close inspector" onClick={onToggle}><PanelRightClose size={15} /></button>
       </div>
       <div className="inspector-body">
         {selectedWidget ? (
           <div className="inspector-selection" aria-label="Selected element identity">
-            <span className="inspector-placeholder-icon"><SelectedIcon size={17} /></span>
+            <span className="inspector-placeholder-icon">
+              <WidgetIcon type={selectedWidget.type} size={17} />
+            </span>
             <span className="inspector-selection-copy">
               <strong>{selectedDefinition?.label ?? selectedWidget.type}</strong>
               <code>{selectedWidget.type}</code>
@@ -1543,6 +1558,10 @@ export function RightInspector({ onToggle, onUpdates, onRename }: RightInspector
         <div className="recovery-note"><span>Unsaved projects are autosaved on this device every 30 seconds.</span></div>
       </div>
       <div className="inspector-footer"><span>Project schema</span><span className="schema-version">{project.schemaVersion}</span></div>
+      </section>
+      <div className="layers-dock-body" aria-label="Screens and layers">
+        <ScreenLayerSidebar />
+      </div>
     </aside>
   );
 }

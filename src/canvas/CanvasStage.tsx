@@ -1,8 +1,16 @@
-import { useCallback, useEffect, useRef, useState } from "react";
-import type { DragEvent as ReactDragEvent } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import type { DragEvent as ReactDragEvent, FormEvent } from "react";
 import { Group, Layer, Line, Rect, Shape, Stage, Text, Transformer } from "react-konva";
 import type Konva from "konva";
-import { ArrowDownToLine, FolderOpen, Minus, Plus } from "lucide-react";
+import {
+  ArrowDownToLine,
+  FolderOpen,
+  Link2,
+  LoaderCircle,
+  Minus,
+  Plus,
+  X,
+} from "lucide-react";
 import type { Stage as KonvaStage } from "konva/lib/Stage";
 import type { Layer as KonvaLayer } from "konva/lib/Layer";
 import { invoke, isTauri } from "@tauri-apps/api/core";
@@ -31,6 +39,7 @@ import {
   LAYER_DRAG_MIME,
   parseLayerDragPayload,
 } from "../project/layerDrag";
+import { getSelectedContainingParentId } from "../project/layers";
 import {
   clampCanvasZoom,
   fitCanvasBounds,
@@ -51,6 +60,7 @@ import {
 } from "./shapes";
 import {
   constrainTransformerBounds,
+  getSelectedParentWidgetIds,
   getSelectionBounds,
   getSelectionUpdates,
   getWidgetsInsideBounds,
@@ -62,6 +72,7 @@ import {
   getImageDataByteSize,
   getInlineImageBytes,
   readImageFile,
+  readImageUrl,
   type ImportedImage,
 } from "./images";
 
@@ -340,6 +351,7 @@ function WidgetNode({
   widget,
   selected,
   hovered,
+  parentHighlighted,
   zoom,
   activeTool,
   position,
@@ -354,6 +366,7 @@ function WidgetNode({
   widget: Widget;
   selected: boolean;
   hovered: boolean;
+  parentHighlighted: boolean;
   zoom: number;
   activeTool: ShapeTool | null;
   position: CanvasPoint;
@@ -396,14 +409,14 @@ function WidgetNode({
       }
     >
       {renderWidgetShape(widget, selected)}
-      {(selected || hovered) && (
+      {(selected || hovered || parentHighlighted) && (
         <Rect
           x={-2 / zoom}
           y={-2 / zoom}
           width={widget.width + 4 / zoom}
           height={widget.height + 4 / zoom}
           fillEnabled={false}
-          stroke={selected ? "#bba5ff" : "#68a7ff"}
+          stroke={selected ? "#bba5ff" : parentHighlighted ? "#63cf9c" : "#68a7ff"}
           strokeWidth={1 / zoom}
           dash={selected ? undefined : [4 / zoom, 3 / zoom]}
           listening={false}
@@ -508,7 +521,9 @@ export function CanvasStage({
   const [shapeDraft, setShapeDraft] = useState<ShapeDraft | null>(null);
   const [selectionDraft, setSelectionDraft] = useState<SelectionDraft | null>(null);
   const [canvasDropFeedback, setCanvasDropFeedback] = useState<CanvasDropFeedback | null>(null);
-  const [hoveredWidgetId, setHoveredWidgetId] = useState<string | null>(null);
+  const [imageUrlDialogOpen, setImageUrlDialogOpen] = useState(false);
+  const [imageUrlDraft, setImageUrlDraft] = useState("");
+  const [imageUrlLoading, setImageUrlLoading] = useState(false);
   const [editing, setEditing] = useState<{
     widgetId: string;
     key: EditableWidgetText["key"];
@@ -542,6 +557,7 @@ export function CanvasStage({
   );
   const activeBreakpointId = useStore((state) => state.activeBreakpointId);
   const selectedIds = useStore((state) => state.selectedIds);
+  const hoveredWidgetId = useStore((state) => state.hoveredWidgetId);
   useEffect(() => {
     activeToolRef.current = activeTool;
   }, [activeTool]);
@@ -557,6 +573,10 @@ export function CanvasStage({
         activeScreen.device?.height ?? DEFAULT_DEVICE_PRESET.viewport.height,
       )
     : [...baseScreenWidgets].sort((first, second) => first.zIndex - second.zIndex);
+  const selectedParentWidgetIds = useMemo(
+    () => getSelectedParentWidgetIds(screenWidgets, selectedIds),
+    [screenWidgets, selectedIds],
+  );
   const baseDevice: ScreenDevice =
     activeScreen?.device ?? toScreenDevice(DEFAULT_DEVICE_PRESET);
   const activeDevice: ScreenDevice = activeBreakpoint
@@ -743,6 +763,12 @@ export function CanvasStage({
       );
       widget.x = snap.position.x;
       widget.y = snap.position.y;
+      const selectedParentId = getSelectedContainingParentId(
+        screen.widgets,
+        current.selectedIds,
+        widget,
+      );
+      if (selectedParentId) widget.groupId = selectedParentId;
       widget.zIndex = screen.widgets.reduce(
         (highest, item) => Math.max(highest, item.zIndex),
         -1,
@@ -777,7 +803,8 @@ export function CanvasStage({
       image: ImportedImage,
       position: CanvasPoint,
       targetWidgetId: string | null = null,
-    ) => {
+      notifySuccess = true,
+    ): Promise<boolean> => {
       if (targetWidgetId) {
         const target = useStore
           .getState()
@@ -788,7 +815,7 @@ export function CanvasStage({
           );
         if (!target) {
           onNotify("Select an image widget before replacing its image.", true);
-          return;
+          return false;
         }
       }
       const current = useStore.getState();
@@ -804,13 +831,6 @@ export function CanvasStage({
       const needsExternalAsset =
         imageBytes >= IMAGE_ASSET_THRESHOLD ||
         inlineBytes + imageBytes > MAX_INLINE_IMAGE_BYTES;
-      if (needsExternalAsset && !(current.filePath && isTauri())) {
-        onNotify(
-          "Save the project in the desktop app before adding images that exceed the 2 MB inline image budget.",
-          true,
-        );
-        return;
-      }
       if (needsExternalAsset && current.filePath && isTauri()) {
         try {
           assetPath = await invoke<string>("save_image_asset", {
@@ -823,13 +843,13 @@ export function CanvasStage({
             error instanceof Error ? error.message : "Could not save the image asset.",
             true,
           );
-          return;
+          return false;
         }
       }
 
       const imageWidgetId =
         targetWidgetId ?? createWidgetAt("image", position);
-      if (!imageWidgetId) return;
+      if (!imageWidgetId) return false;
       updateWidgetProps(imageWidgetId, {
         src: assetPath ? undefined : image.src,
         mime: image.mime,
@@ -837,30 +857,86 @@ export function CanvasStage({
         assetPath,
       });
       useStore.getState().select([imageWidgetId]);
-      onNotify(
-        assetPath ? "Image added to the project assets." : "Image added.",
-      );
+      if (notifySuccess) {
+        onNotify(
+          assetPath ? "Image added to the project assets." : "Image added.",
+        );
+      }
+      return true;
     },
     [createWidgetAt, onNotify],
   );
 
-  const handleImageFile = useCallback(
+  const importImageFromUrl = useCallback(
+    async (event: FormEvent<HTMLFormElement>) => {
+      event.preventDefault();
+      if (imageUrlLoading) return;
+      setImageUrlLoading(true);
+      try {
+        const image = await readImageUrl(imageUrlDraft);
+        const target = selectedIds.length === 1
+          ? screenWidgets.find(
+              (widget) => widget.id === selectedIds[0] && widget.type === "image",
+            )
+          : undefined;
+        const position = target
+          ? { x: target.x, y: target.y }
+          : {
+              x: Math.max(0, activeDevice.width / 2 - 100),
+              y: Math.max(0, activeDevice.height / 2 - 100),
+            };
+        const imported = await applyImportedImage(image, position, target?.id ?? null);
+        if (imported) {
+          setImageUrlDialogOpen(false);
+          setImageUrlDraft("");
+        }
+      } catch (error) {
+        onNotify(
+          error instanceof Error ? error.message : "Could not import the image URL.",
+          true,
+        );
+      } finally {
+        setImageUrlLoading(false);
+      }
+    },
+    [
+      activeDevice.height,
+      activeDevice.width,
+      applyImportedImage,
+      imageUrlDraft,
+      imageUrlLoading,
+      onNotify,
+      screenWidgets,
+      selectedIds,
+    ],
+  );
+
+  const handleImageFiles = useCallback(
     async (
-      file: File,
+      files: File[],
       position: CanvasPoint,
       targetWidgetId: string | null = null,
     ) => {
-      try {
-        const image = await readImageFile(file);
-        await applyImportedImage(image, position, targetWidgetId);
-      } catch (error) {
-        onNotify(
-          error instanceof Error ? error.message : "Could not load the selected image.",
-          true,
-        );
+      for (const [index, file] of files.entries()) {
+        try {
+          const image = await readImageFile(file);
+          await applyImportedImage(
+            image,
+            {
+              x: Math.max(0, Math.min(activeDevice.width - 200, position.x + index * 24)),
+              y: Math.max(0, Math.min(activeDevice.height - 200, position.y + index * 24)),
+            },
+            index === 0 ? targetWidgetId : null,
+          );
+        } catch (error) {
+          onNotify(
+            `${file.name}: ${error instanceof Error ? error.message : "Could not load the selected image."}`,
+            true,
+          );
+        }
       }
     },
-    [applyImportedImage, onNotify],
+    [activeDevice.height, activeDevice.width, applyImportedImage, onNotify],
   );
 
   const openImagePicker = useCallback((widgetId: string) => {
@@ -1008,7 +1084,7 @@ export function CanvasStage({
     if (targetId && !sourceWidgets.some((widget) => widget.id === targetId)) {
       const target = screen.widgets.find((widget) => widget.id === targetId);
       if (target) {
-        if (["group", "frame", "panel", "dynamic-panel", "dynamicPanel", "repeater"].includes(target.type)) {
+        if (["group", "frame", "panel", "dynamic-panel", "dynamicPanel", "repeater", "card", "modal", "overlay"].includes(target.type)) {
           copies = copies.map((widget) => ({ ...widget, groupId: target.id }));
           selected = copies;
           nextWidgets = [...screen.widgets, ...copies];
@@ -1067,27 +1143,37 @@ export function CanvasStage({
   const handleDroppedImagePaths = useCallback(
     async (paths: string[], position: CanvasPoint) => {
       if (paths.length === 0) return;
-      try {
-        const image = await invoke<{
-          name: string;
-          mime: string;
-          size: number;
-          base64: string;
-        }>("read_dropped_image", { path: paths[0] });
-        await applyImportedImage(
-          {
-            name: image.name,
-            mime: image.mime,
-            size: image.size,
-            src: `data:${image.mime};base64,${image.base64}`,
-          },
-          position,
-        );
-      } catch (error) {
-        onNotify(
-          error instanceof Error ? error.message : "Could not import the dropped image.",
-          true,
-        );
+      let importedCount = 0;
+      for (const [index, path] of paths.entries()) {
+        try {
+          const image = await invoke<{
+            name: string;
+            mime: string;
+            size: number;
+            base64: string;
+          }>("read_dropped_image", { path });
+          const binary = atob(image.base64);
+          const bytes = Uint8Array.from(binary, (character) => character.charCodeAt(0));
+          const importedImage = await readImageFile(
+            new File([bytes], image.name, { type: image.mime }),
+          );
+          const imported = await applyImportedImage(
+            importedImage,
+            { x: position.x + index * 24, y: position.y + index * 24 },
+            null,
+            false,
+          );
+          if (imported) importedCount += 1;
+        } catch (error) {
+          const name = path.split(/[\\/]/).at(-1) ?? path;
+          onNotify(
+            `${name}: ${error instanceof Error ? error.message : "Could not import the dropped image."}`,
+            true,
+          );
+        }
+      }
+      if (importedCount > 0) {
+        onNotify(`${importedCount} image${importedCount === 1 ? "" : "s"} added.`);
       }
     },
     [applyImportedImage, onNotify],
@@ -1622,9 +1708,94 @@ export function CanvasStage({
         event.preventDefault();
         const position = getWorldPositionFromClient(event.clientX, event.clientY);
         lastPointerWorldRef.current = position;
-        void handleImageFile(event.dataTransfer.files[0], position);
+        void handleImageFiles(Array.from(event.dataTransfer.files), position);
       }}
     >
+      <button
+        className="image-url-trigger"
+        type="button"
+        aria-label="Add image from URL"
+        title="Add image from URL"
+        onClick={() => setImageUrlDialogOpen(true)}
+      >
+        <Link2 size={14} />
+        <span>Image URL</span>
+      </button>
+      {imageUrlDialogOpen && (
+        <div
+          className="image-url-backdrop"
+          onPointerDown={(event) => event.stopPropagation()}
+          onMouseDown={(event) => {
+            if (event.target === event.currentTarget && !imageUrlLoading) {
+              setImageUrlDialogOpen(false);
+            }
+          }}
+        >
+          <form
+            className="image-url-dialog"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="image-url-title"
+            onKeyDown={(event) => {
+              if (event.key === "Escape" && !imageUrlLoading) {
+                setImageUrlDialogOpen(false);
+              }
+            }}
+            onSubmit={(event) => void importImageFromUrl(event)}
+          >
+            <div className="image-url-dialog-heading">
+              <div>
+                <span className="image-url-overline">IMAGE SOURCE</span>
+                <h2 id="image-url-title">Add image from URL</h2>
+              </div>
+              <button
+                className="icon-button small-icon"
+                type="button"
+                aria-label="Close image URL dialog"
+                disabled={imageUrlLoading}
+                onClick={() => setImageUrlDialogOpen(false)}
+              >
+                <X size={15} />
+              </button>
+            </div>
+            <label className="field-label" htmlFor="image-source-url">
+              Image URL
+            </label>
+            <input
+              id="image-source-url"
+              className="text-field"
+              type="url"
+              required
+              autoFocus
+              value={imageUrlDraft}
+              placeholder="https://example.com/image.jpg"
+              onChange={(event) => setImageUrlDraft(event.currentTarget.value)}
+            />
+            <p className="field-hint">
+              The image is imported into this project; its URL must allow cross-origin access.
+              You can resize it after adding.
+            </p>
+            <div className="image-url-dialog-actions">
+              <button
+                className="button button-quiet"
+                type="button"
+                disabled={imageUrlLoading}
+                onClick={() => setImageUrlDialogOpen(false)}
+              >
+                Cancel
+              </button>
+              <button
+                className="button button-primary"
+                type="submit"
+                disabled={imageUrlLoading || !imageUrlDraft.trim()}
+              >
+                {imageUrlLoading ? <LoaderCircle className="is-spinning" size={14} /> : <Link2 size={14} />}
+                {imageUrlLoading ? "Importing…" : "Import image"}
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
       {canvasDropFeedback && (
         <>
           {(() => {
@@ -1659,7 +1830,7 @@ export function CanvasStage({
             </span>
             <span>
               {canvasDropFeedback.targetType &&
-              ["group", "frame", "panel", "dynamic-panel", "dynamicPanel", "repeater"].includes(canvasDropFeedback.targetType)
+              ["group", "frame", "panel", "dynamic-panel", "dynamicPanel", "repeater", "card", "modal", "overlay"].includes(canvasDropFeedback.targetType)
                 ? `Add to ${canvasDropFeedback.targetType}`
                 : canvasDropFeedback.targetId
                   ? "Replace widget"
@@ -1673,20 +1844,24 @@ export function CanvasStage({
         ref={imageInputRef}
         className="canvas-image-file-input"
         type="file"
-        accept=".png,.jpg,.jpeg,.svg,.webp,image/png,image/jpeg,image/svg+xml,image/webp"
+        accept="image/*,.svg"
+        multiple
         aria-label="Choose an image file"
         onChange={(event) => {
-          const file = event.currentTarget.files?.[0];
+          const files = Array.from(event.currentTarget.files ?? []);
           const targetId = imageTargetRef.current;
           imageTargetRef.current = null;
-          if (!file) return;
+          if (files.length === 0) return;
           const target = targetId
             ? screenWidgets.find((widget) => widget.id === targetId)
             : undefined;
           const position = target
             ? { x: target.x, y: target.y }
-            : lastPointerWorldRef.current;
-          void handleImageFile(file, position, targetId);
+            : {
+                x: Math.max(0, (activeDevice.width - 200) / 2),
+                y: Math.max(0, (activeDevice.height - 200) / 2),
+              };
+          void handleImageFiles(files, position, targetId);
         }}
       />
       {size.width > 0 && size.height > 0 && (
@@ -1763,6 +1938,7 @@ export function CanvasStage({
                   widget={widget}
                   selected={selectedIds.includes(widget.id)}
                   hovered={hoveredWidgetId === widget.id}
+                  parentHighlighted={selectedParentWidgetIds.has(widget.id)}
                   zoom={zoom}
                   activeTool={activeTool}
                   position={
@@ -1770,7 +1946,7 @@ export function CanvasStage({
                   }
                   onEdit={() => beginWidgetTextEdit(widget)}
                   onHover={(hovered) =>
-                    setHoveredWidgetId(hovered ? widget.id : null)
+                    useStore.getState().setCanvasHoveredWidget(hovered ? widget.id : null)
                   }
                   onSelect={(event) => {
                     if (widget.locked) return;

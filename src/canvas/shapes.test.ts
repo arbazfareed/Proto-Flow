@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { createEmptyProject } from "../project/schema";
+import { ELEMENT_LIBRARY_TOOL_TYPES } from "./shapeTools";
 import {
   createShapeWidget,
   getShapeDefinition,
@@ -85,6 +86,22 @@ describe("canvas shape registry", () => {
     const firstButton = createShapeWidget("button", 0, 0);
     firstButton.props.label = "Submit";
     expect(createShapeWidget("button", 0, 0).props.label).toBe("Button");
+  });
+
+  it("creates a visible, editable canvas definition for every library tool", () => {
+    expect(ELEMENT_LIBRARY_TOOL_TYPES.length).toBeGreaterThanOrEqual(65);
+    for (const type of ELEMENT_LIBRARY_TOOL_TYPES) {
+      const definition = getShapeDefinition(type);
+      expect(definition, `missing canvas definition for ${type}`).toBeDefined();
+      expect(definition?.component, `missing canvas renderer for ${type}`).toBeDefined();
+      expect(createShapeWidget(type, 12, 24)).toMatchObject({
+        type,
+        x: 12,
+        y: 24,
+        visible: true,
+        locked: false,
+      });
+    }
   });
 
   it("creates UUID-backed unlocked widgets with isolated registry defaults", () => {

@@ -468,14 +468,16 @@ function ToggleShape({ widget, fill, stroke, strokeWidth }: ShapeComponentProps)
 function ImageShape({ widget, fill, stroke, strokeWidth, onThumbnailReady }: ShapeComponentProps) {
   const filePath = useStore((state) => state.filePath);
   const [image, setImage] = useState<HTMLImageElement | null>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const imageNodeRef = useRef<Konva.Image>(null);
-  const source = getWidgetProp(widget, "src");
+  const source = typeof widget.props.src === "string" ? widget.props.src : "";
   const assetPath = getWidgetProp(widget, "assetPath");
   const mime = getWidgetProp(widget, "mime");
 
   useEffect(() => {
     let active = true;
     setImage(null);
+    setLoadError(null);
     const load = async () => {
       let sourceData = source;
       if (!sourceData && assetPath && filePath && isTauri()) {
@@ -486,6 +488,7 @@ function ImageShape({ widget, fill, stroke, strokeWidth, onThumbnailReady }: Sha
         sourceData = `data:${asset.mime};base64,${asset.base64}`;
       }
       if (!sourceData) {
+        setLoadError("No image data or project asset is linked.");
         onThumbnailReady?.();
         return;
       }
@@ -496,6 +499,7 @@ function ImageShape({ widget, fill, stroke, strokeWidth, onThumbnailReady }: Sha
       element.onerror = () => {
         if (active) {
           setImage(null);
+          setLoadError("This image format could not be decoded by the current device.");
           onThumbnailReady?.();
         }
       };
@@ -505,6 +509,11 @@ function ImageShape({ widget, fill, stroke, strokeWidth, onThumbnailReady }: Sha
     };
     void load().catch((error: unknown) => {
       console.error("Could not load the project image asset.", error);
+      if (active) {
+        setLoadError(
+          error instanceof Error ? error.message : "Could not load the project image asset.",
+        );
+      }
       onThumbnailReady?.();
     });
     return () => {
@@ -513,8 +522,9 @@ function ImageShape({ widget, fill, stroke, strokeWidth, onThumbnailReady }: Sha
   }, [assetPath, filePath, mime, onThumbnailReady, source]);
 
   useEffect(() => {
+    if (!image) return;
     const node = imageNodeRef.current;
-    if (!image || !node) return;
+    if (!node) return;
     node.clearCache();
     node.cache({ pixelRatio: 1 });
     node.getLayer()?.batchDraw();
@@ -539,8 +549,8 @@ function ImageShape({ widget, fill, stroke, strokeWidth, onThumbnailReady }: Sha
       <Rect
         width={widget.width}
         height={widget.height}
-        fill={fill}
-        stroke={stroke ?? "#56515f"}
+        fill={loadError ? "#211d22" : fill}
+        stroke={loadError ? "#c76c76" : stroke ?? "#56515f"}
         strokeWidth={strokeWidth}
         dash={[6, 4]}
         cornerRadius={4}
@@ -549,14 +559,55 @@ function ImageShape({ widget, fill, stroke, strokeWidth, onThumbnailReady }: Sha
       <KonvaText
         width={widget.width}
         height={widget.height}
-        text="Drop image or double-click to choose"
+        text={loadError ? "Image unavailable — replace it" : "Drop image or double-click to choose"}
         fontSize={Math.max(9, Math.min(13, widget.width / 15))}
         fontFamily="Arial"
         align="center"
         verticalAlign="middle"
-        fill="#a2a2aa"
+        fill={loadError ? "#f2a2aa" : "#a2a2aa"}
         padding={8}
         wrap="word"
+        perfectDrawEnabled={false}
+      />
+    </Group>
+  );
+}
+
+function GenericElementShape({
+  widget,
+  fill,
+  stroke,
+  strokeWidth,
+}: ShapeComponentProps) {
+  const fallbackLabel = getShapeDefinition(widget.type)?.label ?? widget.type;
+  const label =
+    typeof widget.props.label === "string"
+      ? widget.props.label
+      : fallbackLabel;
+  return (
+    <Group>
+      <Rect
+        width={widget.width}
+        height={widget.height}
+        fill={fill}
+        stroke={stroke}
+        strokeWidth={strokeWidth}
+        cornerRadius={widget.style.cornerRadius ?? 5}
+        perfectDrawEnabled={false}
+      />
+      <KonvaText
+        x={8}
+        y={4}
+        width={Math.max(1, widget.width - 16)}
+        height={Math.max(1, widget.height - 8)}
+        text={label}
+        fontSize={Math.min(14, Math.max(10, widget.height * 0.32))}
+        fontFamily="Arial"
+        fill={stroke ?? "#d7d7de"}
+        align="center"
+        verticalAlign="middle"
+        ellipsis
+        wrap="none"
         perfectDrawEnabled={false}
       />
     </Group>
@@ -588,7 +639,11 @@ const SHAPE_REGISTRY = Object.fromEntries(
       component:
         type in WIDGET_COMPONENTS
           ? WIDGET_COMPONENTS[type as WidgetTool]
-          : SHAPE_COMPONENTS[type as PrimitiveTool],
+          : type in SHAPE_COMPONENTS
+            ? SHAPE_COMPONENTS[type as PrimitiveTool]
+            : ["heading", "paragraph", "link", "label"].includes(type)
+              ? TextShape
+              : GenericElementShape,
     },
   ]),
 ) as Record<ShapeTool, ShapeDefinition>;

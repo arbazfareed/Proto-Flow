@@ -42,6 +42,27 @@ export async function saveProjectFile(
       const assetPath = widget.props.assetPath;
       const mime = widget.props.mime;
       if (
+        widget.type === "image" &&
+        typeof assetPath === "string" &&
+        currentPath &&
+        currentPath !== path
+      ) {
+        const asset = await invoke<{ mime: string; base64: string }>("read_image_asset", {
+          projectPath: currentPath,
+          assetPath,
+        });
+        const copiedAssetPath = await invoke<string>("save_image_asset", {
+          projectPath: path,
+          mime: asset.mime,
+          base64: asset.base64,
+        });
+        widgets.push({
+          ...widget,
+          props: { ...widget.props, assetPath: copiedAssetPath },
+        });
+        continue;
+      }
+      if (
         widget.type !== "image" ||
         typeof src !== "string" ||
         !src.startsWith("data:image/") ||

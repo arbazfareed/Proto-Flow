@@ -1,5 +1,29 @@
 import type { Widget } from "./schema";
 
+export function isWidgetContainedBy(
+  widget: Pick<Widget, "x" | "y" | "width" | "height">,
+  parent: Pick<Widget, "x" | "y" | "width" | "height">,
+): boolean {
+  return (
+    widget.x >= parent.x &&
+    widget.y >= parent.y &&
+    widget.x + widget.width <= parent.x + parent.width &&
+    widget.y + widget.height <= parent.y + parent.height
+  );
+}
+
+export function getSelectedContainingParentId(
+  widgets: readonly Widget[],
+  selectedIds: readonly string[],
+  child: Widget,
+): string | undefined {
+  if (selectedIds.length !== 1) return undefined;
+  const parent = widgets.find((widget) => widget.id === selectedIds[0]);
+  return parent && parent.id !== child.id && isWidgetContainedBy(child, parent)
+    ? parent.id
+    : undefined;
+}
+
 export function reorderWidgets(
   widgets: readonly Widget[],
   draggedId: string,

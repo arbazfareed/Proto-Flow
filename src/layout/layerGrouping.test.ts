@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { createShapeWidget } from "../canvas/shapes";
+import { ELEMENT_LIBRARY_TOOL_TYPES } from "../canvas/shapeTools";
 import {
   buildLayerGroups,
   getLayerCategory,
@@ -17,8 +18,23 @@ describe("layer tree grouping", () => {
     expect(getLayerCategory("dynamic-panel")).toBe("advanced");
     expect(getLayerCategory("symbol-instance")).toBe("symbols");
     expect(getLayerCategory("frame")).toBe("containers");
+    expect(getLayerCategory("card")).toBe("containers");
+    expect(getLayerCategory("modal")).toBe("containers");
+    expect(getLayerCategory("overlay")).toBe("containers");
+    expect(getLayerCategory("drawer")).toBe("containers");
+    expect(getLayerCategory("section")).toBe("containers");
+    expect(getLayerCategory("form")).toBe("containers");
+    expect(getLayerCategory("accordion")).toBe("advanced");
+    expect(getLayerCategory("carousel")).toBe("advanced");
+    expect(getLayerCategory("component-master")).toBe("symbols");
     expect(getLayerCategory("plugin-widget")).toBe("other");
     expect(LAYER_CATEGORIES).toHaveLength(6);
+  });
+
+  it("assigns every element-library tool to a meaningful layer category", () => {
+    for (const type of ELEMENT_LIBRARY_TOOL_TYPES) {
+      expect(getLayerCategory(type), `unexpected Other category for ${type}`).not.toBe("other");
+    }
   });
 
   it("hides empty categories and orders category members by descending z-index", () => {

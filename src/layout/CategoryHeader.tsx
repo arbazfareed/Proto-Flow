@@ -43,6 +43,7 @@ export function CategoryIcon({
 export function CategoryHeader({
   category,
   groupId,
+  entryIndex,
   label,
   count,
   collapsed,
@@ -60,6 +61,7 @@ export function CategoryHeader({
 }: {
   category: LayerCategoryDefinition;
   groupId: string;
+  entryIndex?: number;
   label: string;
   count: number;
   collapsed: boolean;
@@ -79,12 +81,13 @@ export function CategoryHeader({
   return (
     <div
       className={`layer-category-header${isDropTarget ? " is-drop-target" : ""}`}
+      style={{ backgroundColor: `${category.badge}18` }}
       data-drop-edge={dropEdge}
-      role="treeitem"
-      tabIndex={0}
+      data-entry-index={entryIndex}
+      id={`layer-category-${groupId}`}
+      role="presentation"
+      tabIndex={-1}
       data-group-id={groupId}
-      aria-expanded={!collapsed}
-      aria-label={`${label}, ${count} ${count === 1 ? "layer" : "layers"}`}
       draggable={!onRename}
       onDragStart={onDragStart}
       onDragOver={onDragOver}
@@ -94,7 +97,7 @@ export function CategoryHeader({
     >
       <button
         className="layer-category-toggle"
-        aria-label={`${collapsed ? "Expand" : "Collapse"} ${label}`}
+        aria-label={`${collapsed ? "Expand" : "Collapse"} ${label}, ${count} ${count === 1 ? "layer" : "layers"}`}
         aria-expanded={!collapsed}
         onClick={onToggle}
       >
