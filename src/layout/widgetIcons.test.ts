@@ -1,15 +1,51 @@
 import { describe, expect, it } from "vitest";
-import { getWidgetIconDefinition, UNKNOWN_WIDGET_ICON } from "./widgetIcons";
+import {
+  getScreenIconDefinition,
+  getWidgetIconDefinition,
+  UNKNOWN_WIDGET_ICON,
+  WIDGET_ICON_REGISTRY,
+} from "./widgetIcons";
 
 describe("widget icon registry", () => {
   it("maps each supported widget type to its category icon and tint", () => {
-    expect(getWidgetIconDefinition("rectangle")).toMatchObject({ category: "shape", color: "#6b7280" });
-    expect(getWidgetIconDefinition("button")).toMatchObject({ category: "widget", color: "#2563eb" });
-    expect(getWidgetIconDefinition("repeater")).toMatchObject({ category: "advanced", color: "#ea580c" });
-    expect(getWidgetIconDefinition("symbol-instance")).toMatchObject({ category: "symbol", color: "#7c3aed" });
-    expect(getWidgetIconDefinition("frame")).toMatchObject({ category: "container", color: "#ca8a04" });
+    expect(getWidgetIconDefinition("rectangle")).toMatchObject({ category: "shape", color: "#64748b" });
+    expect(getWidgetIconDefinition("button")).toMatchObject({ category: "widget", color: "#3b82f6" });
+    expect(getWidgetIconDefinition("repeater")).toMatchObject({ category: "advanced", color: "#f97316" });
+    expect(getWidgetIconDefinition("symbol-instance")).toMatchObject({ category: "symbol", color: "#8b5cf6" });
+    expect(getWidgetIconDefinition("frame")).toMatchObject({ category: "container", color: "#f59e0b" });
     expect(getWidgetIconDefinition("rectangle").icon).not.toBe(getWidgetIconDefinition("ellipse").icon);
     expect(getWidgetIconDefinition("button").icon).not.toBe(getWidgetIconDefinition("input").icon);
+  });
+
+  it("provides distinct Lucide icons for the supported web and app elements", () => {
+    const elementTypes = [
+      "rectangle", "ellipse", "polygon", "star", "line", "arrow", "divider", "vector", "icon",
+      "text", "heading", "paragraph", "link", "label",
+      "frame", "group", "card", "modal", "overlay", "drawer", "section",
+      "panel", "repeater", "accordion", "carousel", "tabs-container",
+      "button", "icon-button", "input", "textarea", "select", "checkbox", "radio", "toggle",
+      "slider", "stepper", "date-picker", "file-upload", "search", "form",
+      "image", "avatar", "video", "badge", "chip", "tooltip", "popover", "alert", "progress",
+      "spinner", "skeleton", "rating",
+      "navbar", "sidebar", "tabs", "breadcrumb", "pagination", "menu", "dropdown-menu", "footer",
+      "table", "list", "grid", "chart", "stat", "timeline", "calendar",
+      "symbol", "component-master",
+    ];
+    const icons = elementTypes.map((type) => {
+      expect(WIDGET_ICON_REGISTRY[type], `missing icon for ${type}`).toBeDefined();
+      return WIDGET_ICON_REGISTRY[type].icon;
+    });
+    expect(new Set(icons).size).toBe(elementTypes.length);
+  });
+
+  it("uses an indigo icon for each screen device category", () => {
+    const categories = ["desktop", "laptop", "tablet", "phone", "watch"] as const;
+    const icons = categories.map((category) => {
+      const definition = getScreenIconDefinition(category);
+      expect(definition.color).toBe("#6366f1");
+      return definition.icon;
+    });
+    expect(new Set(icons).size).toBe(categories.length);
   });
 
   it("uses the gray square fallback for unknown types", () => {

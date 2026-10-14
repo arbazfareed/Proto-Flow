@@ -4,7 +4,8 @@ import {
   ChevronDown,
   ChevronRight,
   Check,
-  CircleX,
+  CircleSlash,
+  AlertTriangle,
   Eye,
   EyeOff,
   FilePlus2,
@@ -16,13 +17,14 @@ import {
   PanelTop,
   Plus,
   Search,
+  Sparkles,
   Unlock,
   X,
 } from "lucide-react";
 import { getShapeToolDefinition } from "../canvas/shapeTools";
 import { DEFAULT_DEVICE_PRESET, findDevicePreset, toScreenDevice } from "../devices/catalog";
 import { DevicePicker } from "../devices/DevicePicker";
-import type { ScreenDevice } from "../devices/types";
+import type { DeviceCategory, ScreenDevice } from "../devices/types";
 import { reorderScreens } from "../project/layers";
 import { createDefaultBreakpoints } from "../project/responsive";
 import type { Project, Screen, Widget } from "../project/schema";
@@ -52,7 +54,7 @@ import {
   serializeLayerTreePreferences,
 } from "./layerTreePreferences";
 import type { LayerTreePreferences } from "./layerTreePreferences";
-import { WidgetIcon } from "./widgetIcons";
+import { ScreenIcon, WidgetIcon } from "./widgetIcons";
 import { ScreenThumbnail } from "./ScreenThumbnail";
 import {
   buildLayerHierarchy,
@@ -122,9 +124,24 @@ function readCollapsedGroups(projectId: string): Record<string, string[]> {
 
 function widgetLabel(widget: Widget): string {
   if (widget.name) return widget.name;
-  const value = widget.props.label ?? widget.props.text ?? widget.props.fileName;
-  if (typeof value === "string" && value.trim()) return value.trim();
+  const values = widget.type === "image"
+    ? [widget.props.fileName, widget.props.alt, widget.props.text]
+    : [widget.props.label, widget.props.text, widget.props.fileName];
+  for (const value of values) {
+    if (typeof value === "string" && value.trim()) return value.trim();
+  }
+  if (widget.type === "image") return "Untitled asset";
   return getShapeToolDefinition(widget.type)?.label ?? widget.type;
+}
+
+function screenIconCategory(device: ScreenDevice | undefined): DeviceCategory {
+  if (!device) return DEFAULT_DEVICE_PRESET.category;
+  const preset = findDevicePreset(device.presetId);
+  if (preset) return preset.category;
+  if (device.height > device.width * 1.2) {
+    return device.width >= 600 ? "tablet" : "phone";
+  }
+  return "desktop";
 }
 
 function categoryAccent(widget: Widget): string {
@@ -1475,9 +1492,11 @@ export function ScreenLayerSidebar() {
                   setMenu({ kind: "layer", id: widget.id, x: event.clientX, y: event.clientY });
                 }}
               >
-                {!hasChildren || entry.collapsed
-                  ? <ChevronRight size={13} />
-                  : <ChevronDown size={13} />}
+                {!hasChildren
+                  ? <CircleSlash size={14} aria-label="Empty container" />
+                  : entry.collapsed
+                    ? <ChevronRight size={13} />
+                    : <ChevronDown size={13} />}
               </button>
             ) : (
               <span className="layer-chevron-spacer" aria-hidden="true" />
@@ -1492,8 +1511,11 @@ export function ScreenLayerSidebar() {
                 {entry.collapsed ? `(${childBadge})` : childBadge}
               </span>
             )}
+            {recentWidgetIds.has(widget.id) && (
+              <Sparkles className="layer-new-icon" size={13} aria-label="Just created" />
+            )}
             {invalidDrop && (
-              <CircleX className="layer-invalid-drop-icon" size={14} aria-label="Invalid drop target" />
+              <AlertTriangle className="layer-invalid-drop-icon" size={16} aria-label="Invalid drop target" />
             )}
           </button>
         )}
@@ -1735,6 +1757,7 @@ export function ScreenLayerSidebar() {
                 }}
               >
                 <div className="page-item-heading">
+                  <ScreenIcon category={screenIconCategory(screen.device)} size={16} />
                   {renamingScreenId === screen.id ? (
                     <input
                       className="screen-rename-input"
@@ -1896,7 +1919,7 @@ export function ScreenLayerSidebar() {
               aria-label={`Screen: ${activeScreen.name}`}
               data-screen-id={activeScreen.id}
             >
-              <Monitor size={14} aria-hidden="true" />
+              <ScreenIcon category={screenIconCategory(activeScreen.device)} size={16} />
               <span className="layer-screen-name">{activeScreen.name}</span>
               <span className="layer-child-count">
                 {activeScreen.widgets.length} items
@@ -2048,7 +2071,7 @@ export function ScreenLayerSidebar() {
                     >
                       {allLocked ? <Lock size={13} /> : <Unlock size={13} />}
                     </button>
-                    {invalidDrop && <CircleX className="layer-invalid-drop-icon" size={14} aria-label="Invalid drop target" />}
+                    {invalidDrop && <AlertTriangle className="layer-invalid-drop-icon" size={16} aria-label="Invalid drop target" />}
                     <button
                       className="layer-tree-action"
                       aria-label="Group options"
