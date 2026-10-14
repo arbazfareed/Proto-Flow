@@ -28,6 +28,7 @@ export const LAYER_CONTAINER_TYPES = new Set([
   "componentMaster",
   "calendar",
   "rectangle",
+  "ellipse",
 ]);
 
 const LAYER_CONTAINMENT_TOLERANCE = 8; // Keep near-edge canvas alignment in the same hierarchy.
@@ -71,24 +72,38 @@ export function getWidgetParentIdMap(
 
   const parents = new Map<string, string>();
   for (const widget of widgets) {
-    const referencedParent = widget.groupId ? widgetsById.get(widget.groupId) : undefined;
-    if (
+    const referencedParent = widget.groupId
+      ? widgetsById.get(widget.groupId)
+      : undefined;
+    const validReferencedParent =
       referencedParent &&
       referencedParent.id !== widget.id &&
-      isWidgetContainedBy(widget, referencedParent)
-    ) {
-      parents.set(widget.id, referencedParent.id);
-      continue;
-    }
-    if (widget.groupId && !widgetsById.has(widget.groupId)) continue;
-
+      isWidgetContainedBy(widget, referencedParent);
     const widgetArea = widget.width * widget.height;
     const containingParents = candidateParents.filter((candidate) =>
       candidate.id !== widget.id &&
-      candidateParentIds.has(candidate.id) &&
       candidate.width * candidate.height > widgetArea &&
       isWidgetContainedBy(widget, candidate),
     );
+
+    if (validReferencedParent) {
+      const moreSpecificParent = containingParents
+        .filter((candidate) =>
+          candidate.id !== referencedParent.id &&
+          candidate.width * candidate.height <
+            referencedParent.width * referencedParent.height,
+        )
+        .sort((first, second) =>
+          first.width * first.height - second.width * second.height ||
+          first.zIndex - second.zIndex ||
+          first.id.localeCompare(second.id),
+        )[0];
+      parents.set(widget.id, moreSpecificParent?.id ?? referencedParent.id);
+      continue;
+    }
+
+    if (widget.groupId && !widgetsById.has(widget.groupId)) continue;
+
     containingParents.sort((first, second) =>
       first.width * first.height - second.width * second.height ||
       first.zIndex - second.zIndex ||
@@ -125,12 +140,16 @@ export function getSelectedContainingParentId(
   if (selectedIds.length !== 1) return undefined;
   const parent = widgets.find((widget) => widget.id === selectedIds[0]);
   const parentByWidgetId = getWidgetParentIdMap(widgets);
+  const nearestContainingParentId = getWidgetParentIdMap([
+    ...widgets,
+    child,
+  ]).get(child.id);
   return parent &&
     parent.id !== child.id &&
     !parentByWidgetId.has(parent.id) &&
     !isWidgetContainer(child) &&
     isWidgetContainedBy(child, parent)
-    ? parent.id
+    ? nearestContainingParentId ?? parent.id
     : undefined;
 }
 

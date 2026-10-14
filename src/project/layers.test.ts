@@ -72,6 +72,40 @@ describe("layer and screen ordering", () => {
     expect(getSelectedContainingParentId([parent], ["parent", "another"], inside)).toBeUndefined();
   });
 
+  it("chooses the nearest containing container when the outer parent is selected", () => {
+    const rectangle = {
+      ...widget("rectangle", 1),
+      x: 10,
+      y: 10,
+      width: 500,
+      height: 300,
+    };
+    const ellipse = {
+      ...widget("ellipse", 2),
+      type: "ellipse",
+      groupId: rectangle.id,
+      x: 50,
+      y: 40,
+      width: 140,
+      height: 60,
+    };
+    const icon = {
+      ...widget("icon", 3),
+      type: "icon",
+      groupId: rectangle.id,
+      x: 100,
+      y: 55,
+      width: 20,
+      height: 20,
+    };
+
+    expect(getSelectedContainingParentId(
+      [rectangle, ellipse],
+      [rectangle.id],
+      icon,
+    )).toBe(ellipse.id);
+  });
+
   it("keeps new widgets at screen level when the selected widget is already nested", () => {
     const parent = {
       ...widget("parent", 1),
