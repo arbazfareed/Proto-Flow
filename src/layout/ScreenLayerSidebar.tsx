@@ -1535,7 +1535,6 @@ export function ScreenLayerSidebar() {
                 );
               }}
             >
-              <WidgetIcon type={widget.type} />
               <span
                 className={`layer-hierarchy-badge${container && hasChildren ? " is-parent" : entry.depth === 0 ? " is-screen-child" : ""}`}
                 title={
@@ -1548,6 +1547,7 @@ export function ScreenLayerSidebar() {
               >
                 {container && hasChildren ? "Parent" : entry.depth === 0 ? "Screen child" : "Child"}
               </span>
+              <WidgetIcon type={widget.type} />
               <span className="layer-name">{label}</span>
               {container && (
                 <span
@@ -1983,6 +1983,7 @@ export function ScreenLayerSidebar() {
                 }
               }}
             >
+              <span className="layer-screen-kind">Parent</span>
               <button
                 className="layer-screen-expand-toggle"
                 aria-label={`${screenTreeCollapsed ? "Expand" : "Collapse"} ${activeScreen.name}`}
@@ -1997,7 +1998,6 @@ export function ScreenLayerSidebar() {
               <span className="layer-child-count">
                 {hierarchyRoots.length} {hierarchyRoots.length === 1 ? "child" : "children"}
               </span>
-              <span className="layer-screen-kind">Parent</span>
             </div>
             {!screenTreeCollapsed && activeScreen.widgets.length === 0 && (
               <div className="sidebar-empty-state layer-tree-empty">
@@ -2121,14 +2121,14 @@ export function ScreenLayerSidebar() {
                     >
                       {entry.collapsed ? <ChevronRight size={13} /> : <ChevronDown size={13} />}
                     </button>
-                    <Folder size={14} aria-hidden="true" />
-                    <span className="layer-group-name">{node.label}</span>
                     <span
                       className="layer-hierarchy-badge is-parent"
                       title={`Parent of ${node.descendantCount} layers`}
                     >
                       Parent
                     </span>
+                    <Folder size={14} aria-hidden="true" />
+                    <span className="layer-group-name">{node.label}</span>
                     <span className="layer-group-count" aria-label={`${node.descendantCount} children`}>
                       {node.descendantCount} {node.descendantCount === 1 ? "child" : "children"}
                     </span>
