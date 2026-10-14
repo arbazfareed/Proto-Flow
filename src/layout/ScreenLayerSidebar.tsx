@@ -29,6 +29,13 @@ import { DevicePicker } from "../devices/DevicePicker";
 import type { DeviceCategory, ScreenDevice } from "../devices/types";
 import { reorderScreens } from "../project/layers";
 import {
+  createSymbolDefinition,
+  createSymbolInstance,
+  expandSymbolInstance,
+  replaceWidgetsWithSymbolInstance,
+  swapSymbolReference,
+} from "../project/symbols";
+import {
   createDefaultBreakpoints,
   resolveActiveBreakpoint,
   resolveWidgetsForBreakpoint,
@@ -63,6 +70,7 @@ import {
 import type { LayerTreePreferences } from "./layerTreePreferences";
 import { ScreenIcon, WidgetIcon } from "./widgetIcons";
 import { ScreenThumbnail } from "./ScreenThumbnail";
+import { SymbolNameDialog } from "./SymbolNameDialog";
 import {
   buildLayerHierarchy,
   filterLayerHierarchy,
@@ -390,6 +398,11 @@ export function ScreenLayerSidebar() {
     return overflows;
   }, [activeBreakpoint, hierarchyWidgets]);
   const [menu, setMenu] = useState<MenuState>(null);
+  const [symbolNameDialog, setSymbolNameDialog] = useState<{
+    widgetId: string;
+    defaultName: string;
+  } | null>(null);
+  const [symbolNameError, setSymbolNameError] = useState("");
   const [renamingScreenId, setRenamingScreenId] = useState<string | null>(null);
   const [renamingWidgetId, setRenamingWidgetId] = useState<string | null>(null);
   const [renameDraft, setRenameDraft] = useState("");
@@ -1036,6 +1049,97 @@ export function ScreenLayerSidebar() {
       ),
     }));
     useStore.getState().select([duplicate.id]);
+    setMenu(null);
+  };
+
+  const createSymbolFromLayer = (widgetId: string) => {
+    if (!activeScreen) return;
+    const current = useStore.getState();
+    const selectedIds = current.selectedIds.includes(widgetId)
+      ? current.selectedIds
+      : [widgetId];
+    const selected = activeScreen.widgets.filter((widget) => selectedIds.includes(widget.id));
+    if (selected.length === 0) return;
+    const defaultName = selected.length === 1
+      ? selected[0].name ?? selected[0].type
+      : `${selected.length} layers`;
+    setSymbolNameError("");
+    setSymbolNameDialog({ widgetId, defaultName });
+    setMenu(null);
+  };
+
+  const saveSymbolFromLayer = (name: string, widgetId: string) => {
+    const current = useStore.getState();
+    const screenId = current.getActiveScreenId();
+    const screen = current.project.screens.find((item) => item.id === screenId);
+    if (!screen) return;
+    const selectedIds = current.selectedIds.includes(widgetId)
+      ? current.selectedIds
+      : [widgetId];
+    const selected = screen.widgets.filter((widget) => selectedIds.includes(widget.id));
+    if (selected.length === 0) return;
+    try {
+      const symbol = createSymbolDefinition(name, selected);
+      const ids = new Set(selected.map((widget) => widget.id));
+      const instance = createSymbolInstance(
+        symbol,
+        Math.min(...selected.map((widget) => widget.x)),
+        Math.min(...selected.map((widget) => widget.y)),
+        0,
+      );
+      const parentId = selected[0].groupId;
+      if (parentId && !ids.has(parentId) &&
+        selected.every((widget) => widget.groupId === parentId)) {
+        instance.groupId = parentId;
+      }
+      const replacementWidgets = replaceWidgetsWithSymbolInstance(
+        screen.widgets,
+        ids,
+        instance,
+      );
+      current.setProject({
+        ...current.project,
+        updatedAt: new Date().toISOString(),
+        symbols: [...current.project.symbols, symbol],
+        screens: current.project.screens.map((item) =>
+          item.id === screen.id
+            ? {
+                ...item,
+                widgets: replacementWidgets,
+              }
+            : item,
+        ),
+      });
+      useStore.getState().select([instance.id]);
+      setSymbolNameDialog(null);
+      setSymbolNameError("");
+    } catch (error) {
+      setSymbolNameError(error instanceof Error ? error.message : "Could not create symbol.");
+    }
+  };
+
+  const detachSymbolFromLayer = (widgetId: string) => {
+    if (!activeScreen) return;
+    const instance = activeScreen.widgets.find((widget) => widget.id === widgetId);
+    const symbol = instance?.symbolId
+      ? project.symbols.find((item) => item.id === instance.symbolId)
+      : undefined;
+    if (!instance || !symbol) return;
+    const detached = expandSymbolInstance(instance, symbol);
+    editProject((current) => ({
+      ...current,
+      screens: current.screens.map((screen) =>
+        screen.id === activeScreen.id
+          ? {
+              ...screen,
+              widgets: screen.widgets.flatMap((widget) =>
+                widget.id === instance.id ? detached : [widget],
+              ),
+            }
+          : screen,
+      ),
+    }));
+    useStore.getState().select(detached.map((widget) => widget.id));
     setMenu(null);
   };
 
@@ -2665,6 +2769,48 @@ export function ScreenLayerSidebar() {
               <button role="menuitem" onClick={() => duplicateWidget(menu.id)}>
                 <FilePlus2 size={14} /> Duplicate layer
               </button>
+              <button
+                role="menuitem"
+                disabled={menuLayerWidget?.type === "symbol-instance"}
+                onClick={() => createSymbolFromLayer(menu.id)}
+              >
+                <Sparkles size={14} /> Create Symbol
+              </button>
+              {menuLayerWidget?.type === "symbol-instance" && (
+                <>
+                  <button role="menuitem" onClick={() => detachSymbolFromLayer(menu.id)}>
+                    <X size={14} /> Detach from Symbol
+                  </button>
+                  {project.symbols
+                    .filter((symbol) => symbol.id !== menuLayerWidget.symbolId)
+                    .map((symbol) => (
+                      <button
+                        key={symbol.id}
+                        role="menuitem"
+                        onClick={() => {
+                          editProject((current) => ({
+                            ...current,
+                            screens: current.screens.map((screen) =>
+                              screen.id !== activeScreen?.id
+                                ? screen
+                                : {
+                                    ...screen,
+                                    widgets: screen.widgets.map((widget) =>
+                                      widget.id === menu.id && widget.type === "symbol-instance"
+                                        ? swapSymbolReference(widget, symbol)
+                                        : widget,
+                                    ),
+                                  },
+                            ),
+                          }));
+                          setMenu(null);
+                        }}
+                      >
+                        <Sparkles size={14} /> Swap to {symbol.name}
+                      </button>
+                    ))}
+                </>
+              )}
               <button role="menuitem" onClick={() => deleteWidgets([menu.id])}>
                 <X size={14} /> Delete layer
               </button>
@@ -2748,6 +2894,18 @@ export function ScreenLayerSidebar() {
             </div>
           </section>
         </div>
+      )}
+
+      {symbolNameDialog && (
+        <SymbolNameDialog
+          defaultName={symbolNameDialog.defaultName}
+          error={symbolNameError}
+          onCancel={() => {
+            setSymbolNameDialog(null);
+            setSymbolNameError("");
+          }}
+          onSubmit={(name) => saveSymbolFromLayer(name, symbolNameDialog.widgetId)}
+        />
       )}
 
       <DevicePicker
