@@ -121,11 +121,20 @@ export function widgetOverflowsDevice(
   widget: Pick<Widget, "x" | "y" | "width" | "height"> & Partial<Pick<Widget, "rotation">>,
   device: Pick<ScreenDevice, "width" | "height">,
 ): boolean {
+  return getWidgetViewportOverflow(widget, device) > 0;
+}
+
+export function getWidgetViewportOverflow(
+  widget: Pick<Widget, "x" | "y" | "width" | "height"> & Partial<Pick<Widget, "rotation">>,
+  viewport: Pick<ScreenDevice, "width" | "height">,
+): number {
   const bounds = getRotatedWidgetBounds(widget);
-  return (
-    bounds.x < 0 ||
-    bounds.y < 0 ||
-    bounds.x + bounds.width > device.width ||
-    bounds.y + bounds.height > device.height
+  const overflow = Math.max(
+    0,
+    -bounds.x,
+    -bounds.y,
+    bounds.x + bounds.width - viewport.width,
+    bounds.y + bounds.height - viewport.height,
   );
+  return overflow < 0.01 ? 0 : Math.ceil(overflow);
 }

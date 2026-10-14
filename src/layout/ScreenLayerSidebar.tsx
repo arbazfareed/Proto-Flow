@@ -24,6 +24,7 @@ import {
 } from "lucide-react";
 import { getShapeToolDefinition } from "../canvas/shapeTools";
 import { DEFAULT_DEVICE_PRESET, findDevicePreset, toScreenDevice } from "../devices/catalog";
+import { getWidgetViewportOverflow } from "../devices/frame";
 import { DevicePicker } from "../devices/DevicePicker";
 import type { DeviceCategory, ScreenDevice } from "../devices/types";
 import { reorderScreens } from "../project/layers";
@@ -365,16 +366,29 @@ export function ScreenLayerSidebar() {
   const selectedIds = useStore((state) => state.selectedIds);
   const hoveredWidgetId = useStore((state) => state.hoveredWidgetId);
   const activeScreen = project.screens.find((screen) => screen.id === activeScreenId);
+  const activeBreakpoint = useMemo(
+    () => activeScreen ? resolveActiveBreakpoint(activeScreen, activeBreakpointId) : undefined,
+    [activeScreen, activeBreakpointId],
+  );
   const hierarchyWidgets = useMemo(() => {
-    if (!activeScreen) return [];
-    const breakpoint = resolveActiveBreakpoint(activeScreen, activeBreakpointId);
+    if (!activeScreen || !activeBreakpoint) return [];
     return resolveWidgetsForBreakpoint(
       activeScreen.widgets,
-      breakpoint,
+      activeBreakpoint,
       activeScreen.device?.width ?? DEFAULT_DEVICE_PRESET.viewport.width,
       activeScreen.device?.height ?? DEFAULT_DEVICE_PRESET.viewport.height,
     );
-  }, [activeScreen, activeBreakpointId]);
+  }, [activeScreen, activeBreakpoint]);
+  const overflowByWidgetId = useMemo(() => {
+    const overflows = new Map<string, number>();
+    if (!activeBreakpoint) return overflows;
+    for (const widget of hierarchyWidgets) {
+      if (!widget.visible) continue;
+      const overflow = getWidgetViewportOverflow(widget, activeBreakpoint);
+      if (overflow > 0) overflows.set(widget.id, overflow);
+    }
+    return overflows;
+  }, [activeBreakpoint, hierarchyWidgets]);
   const [menu, setMenu] = useState<MenuState>(null);
   const [renamingScreenId, setRenamingScreenId] = useState<string | null>(null);
   const [renamingWidgetId, setRenamingWidgetId] = useState<string | null>(null);
@@ -385,6 +399,7 @@ export function ScreenLayerSidebar() {
   const [showAllScreens, setShowAllScreens] = useState(false);
   const [draggedLayerIds, setDraggedLayerIds] = useState<string[]>([]);
   const [dropIndicator, setDropIndicator] = useState<LayerDropIndicator>(null);
+  const [draggingOutsideTree, setDraggingOutsideTree] = useState(false);
   const [collapsedByScreen, setCollapsedByScreen] = useState(() =>
     readCollapsedGroups(project.id),
   );
@@ -526,6 +541,20 @@ export function ScreenLayerSidebar() {
         setMovePickerOpen(false);
         return;
       }
+      if (event.key === "Escape" && draggedLayerIds.length > 0) {
+        setActiveLayerDragPayload(null);
+        setDraggedLayerIds([]);
+        setDraggedCategoryId(null);
+        setDropIndicator(null);
+        setCategoryDropIndicator(null);
+        setDraggingOutsideTree(false);
+        if (autoExpandTimerRef.current !== null) {
+          window.clearTimeout(autoExpandTimerRef.current);
+          autoExpandTimerRef.current = null;
+          autoExpandTargetRef.current = null;
+        }
+        return;
+      }
       if (!(event.metaKey || event.ctrlKey) || event.key.toLowerCase() !== "g") return;
       if (
         event.target instanceof HTMLElement &&
@@ -574,7 +603,39 @@ export function ScreenLayerSidebar() {
     };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [activeScreen, movePickerOpen, selectedIds]);
+  }, [activeScreen, draggedLayerIds.length, movePickerOpen, selectedIds]);
+
+  useEffect(() => {
+    if (draggedLayerIds.length === 0) {
+      setDraggingOutsideTree(false);
+      return;
+    }
+    const updateOutsideTreeState = (event: globalThis.DragEvent) => {
+      const bounds = layerTreeRef.current?.getBoundingClientRect();
+      const insideTree = Boolean(
+        bounds &&
+        event.clientX >= bounds.left &&
+        event.clientX <= bounds.right &&
+        event.clientY >= bounds.top &&
+        event.clientY <= bounds.bottom,
+      );
+      setDraggingOutsideTree(!insideTree);
+      if (
+        !insideTree &&
+        event.dataTransfer &&
+        event.dataTransfer.types.includes(LAYER_DRAG_MIME)
+      ) {
+        event.dataTransfer.dropEffect = "none";
+      }
+    };
+    const finishDrag = () => setDraggingOutsideTree(false);
+    window.addEventListener("dragover", updateOutsideTreeState);
+    window.addEventListener("drop", finishDrag);
+    return () => {
+      window.removeEventListener("dragover", updateOutsideTreeState);
+      window.removeEventListener("drop", finishDrag);
+    };
+  }, [draggedLayerIds.length]);
 
   const collapsedGroups = collapsedByScreen[activeScreenId] ?? [];
   const screenTreeCollapseKey = screenCollapseKey(activeScreenId);
@@ -1192,13 +1253,14 @@ export function ScreenLayerSidebar() {
     };
     if (event.key === "Enter") {
       consumeTreeKey();
-      const groupId = event.currentTarget.dataset.groupId;
-      if (collapseKey) {
-        toggleGroup(widgetId ?? groupId?.replace(/^semantic:/, "") ?? collapseKey, collapseKey);
-      } else if (groupId) {
-        toggleGroup(groupId);
-      } else if (widget) {
+      if (widget) {
         beginWidgetRename(widget);
+      } else if (collapseKey) {
+        const groupId = event.currentTarget.dataset.groupId;
+        toggleGroup(widgetId ?? groupId?.replace(/^semantic:/, "") ?? collapseKey, collapseKey);
+      } else if (event.currentTarget.dataset.groupId) {
+        const groupId = event.currentTarget.dataset.groupId;
+        toggleGroup(groupId);
       }
       return;
     }
@@ -1209,6 +1271,22 @@ export function ScreenLayerSidebar() {
         useStore.getState().select(selectedIds.filter((id) => id !== widget.id));
       }
       return;
+    }
+    if (event.key === " " && currentIndex >= 0) {
+      const entry = layerEntries[currentIndex];
+      if (entry?.kind === "node" && entry.node.kind === "group") {
+        consumeTreeKey();
+        const members: Widget[] = [];
+        const collectMembers = (node: LayerTreeNode) => {
+          if (node.widget) members.push(node.widget);
+          node.children.forEach(collectMembers);
+        };
+        entry.node.children.forEach(collectMembers);
+        if (members.length > 0) {
+          setWidgetsProperty(members, { visible: !members.every((member) => member.visible) });
+        }
+        return;
+      }
     }
     if (event.key === "ArrowRight" && collapseKey) {
       consumeTreeKey();
@@ -1413,6 +1491,8 @@ export function ScreenLayerSidebar() {
     const collapseKey = getLayerTreeCollapseKey(entry.node);
     const indentation = Math.min(entry.depth + 1, 5) * 16;
     const childBadge = getContainerBadge(widget, entry.node.children.length);
+    const overflowPixels = overflowByWidgetId.get(widget.id);
+    const overflowDeviceName = activeBreakpoint?.name ?? "Screen";
     const ownedChildIds = entry.node.children
       .filter((child) => visibleLayerNodeIds.has(child.id))
       .map(layerNodeDomId)
@@ -1426,7 +1506,7 @@ export function ScreenLayerSidebar() {
         id={`layer-row-${widget.id}`}
         data-widget-id={widget.id}
         data-entry-index={entryIndex}
-        className={`layer-row${entry.depth > 0 ? " is-nested" : ""}${container ? " is-container" : ""}${selected ? " is-selected" : ""}${hoveredWidgetId === widget.id ? " is-canvas-hovered" : ""}${widget.locked ? " is-locked" : ""}${!widget.visible ? " is-hidden" : ""}${invalidDrop ? " is-invalid-drop" : ""}${["symbol", "symbol-instance", "symbolInstance"].includes(widget.type) ? " is-symbol" : ""}${recentWidgetIds.has(widget.id) ? " is-new" : ""}${dropIndicator?.id === widget.id ? ` drop-${dropIndicator.edge}` : ""}`}
+        className={`layer-row${entry.depth > 0 ? " is-nested" : ""}${container ? " is-container" : ""}${selected ? " is-selected" : ""}${hoveredWidgetId === widget.id ? " is-canvas-hovered" : ""}${widget.locked ? " is-locked" : ""}${!widget.visible ? " is-hidden" : ""}${invalidDrop ? " is-invalid-drop" : ""}${overflowPixels ? " is-overflowing" : ""}${["symbol", "symbol-instance", "symbolInstance"].includes(widget.type) ? " is-symbol" : ""}${recentWidgetIds.has(widget.id) ? " is-new" : ""}${dropIndicator?.id === widget.id ? ` drop-${dropIndicator.edge}` : ""}`}
         role="treeitem"
         tabIndex={selected || hoveredWidgetId === widget.id || entry.depth === 0 ? 0 : -1}
         aria-label={`${label}, ${container && hasChildren ? "parent container" : entry.depth === 0 ? "screen child" : "child of " + parentLabel}`}
@@ -1434,13 +1514,13 @@ export function ScreenLayerSidebar() {
         aria-selected={selected}
         aria-posinset={entry.position}
         aria-setsize={entry.siblingCount}
-        aria-owns={ownedChildIds || undefined}
+        aria-owns={ownedChildIds ? `layer-child-group-${widget.id}` : undefined}
         aria-expanded={container ? (hasChildren ? !entry.collapsed : false) : undefined}
         data-collapse-key={collapseKey ?? undefined}
         data-depth={entry.depth + 1}
         style={{
           paddingLeft: `${indentation}px`,
-          "--layer-accent": invalidDrop ? "#EF4444" : categoryAccent(widget),
+          "--layer-accent": invalidDrop || overflowPixels ? "#EF4444" : categoryAccent(widget),
         } as CSSProperties & { "--layer-accent": string }}
         draggable={!renamingWidgetId}
         onKeyDown={navigateLayerTree}
@@ -1568,7 +1648,7 @@ export function ScreenLayerSidebar() {
             )}
             <button
               className="layer-select"
-              aria-label={`Select ${label}`}
+              aria-label={`${overflowPixels ? `Overflows the ${overflowDeviceName} viewport by ${overflowPixels}px. ` : ""}Select ${label}`}
               aria-pressed={selected}
               onDoubleClick={() => beginWidgetRename(widget)}
               onClick={(event) => {
@@ -1597,6 +1677,15 @@ export function ScreenLayerSidebar() {
               </span>
               <WidgetIcon type={widget.type} />
               <span className="layer-name">{label}</span>
+              {overflowPixels && (
+                <AlertTriangle
+                  className="layer-overflow-warning"
+                  size={14}
+                  aria-label="Overflows viewport"
+                >
+                  <title>{`Overflows the ${overflowDeviceName} viewport by ${overflowPixels}px`}</title>
+                </AlertTriangle>
+              )}
               {container && (
                 <span
                   className={`layer-child-count${childBadge === "empty" ? " is-empty" : ""}${entry.collapsed ? " is-collapsed" : ""}`}
@@ -1616,7 +1705,7 @@ export function ScreenLayerSidebar() {
         )}
         <button
           className="layer-visibility"
-          aria-label={`${widget.visible ? "Hide" : "Show"} ${label}`}
+          aria-label={`Toggle visibility for ${label}`}
           aria-pressed={!widget.visible}
           title={widget.visible ? "Hide layer" : "Show layer"}
           onClick={() => {
@@ -1630,7 +1719,7 @@ export function ScreenLayerSidebar() {
         </button>
         <button
           className="layer-lock"
-          aria-label={`${widget.locked ? "Unlock" : "Lock"} ${label}`}
+          aria-label={`Toggle lock for ${label}`}
           aria-pressed={widget.locked}
           title={widget.locked ? "Unlock layer" : "Lock layer"}
           onClick={() => {
@@ -1642,6 +1731,15 @@ export function ScreenLayerSidebar() {
         >
           {widget.locked ? <Lock size={13} /> : <Unlock size={13} />}
         </button>
+        {ownedChildIds && (
+          <div
+            id={`layer-child-group-${widget.id}`}
+            className="layer-a11y-child-group"
+            role="group"
+            aria-label={`${label} children`}
+            aria-owns={ownedChildIds}
+          />
+        )}
       </div>
     );
   };
@@ -2049,12 +2147,19 @@ export function ScreenLayerSidebar() {
               setDropIndicator(null);
             }}
           >
+            {draggingOutsideTree && (
+              <div className="layer-drag-cancel-hint" role="status" aria-live="polite">
+                <CircleSlash size={15} />
+                Release outside the layer tree to cancel
+              </div>
+            )}
             <div
               className="layer-screen-root"
               role="treeitem"
               tabIndex={0}
               aria-level={1}
               aria-label={`Screen: ${activeScreen.name}, parent of ${hierarchyRoots.length} items`}
+              aria-selected={true}
               aria-expanded={!screenTreeCollapsed}
               title={`Screen parent. New items are added directly to ${activeScreen.name}.`}
               data-screen-id={activeScreen.id}
@@ -2119,6 +2224,10 @@ export function ScreenLayerSidebar() {
                 const allVisible = allMembers.length > 0 && allMembers.every((member) => member.visible);
                 const allLocked = allMembers.length > 0 && allMembers.every((member) => member.locked);
                 const collapseKey = getLayerTreeCollapseKey(node) ?? `semantic:${groupId}`;
+                const ownedChildIds = node.children
+                  .filter((child) => visibleLayerNodeIds.has(child.id))
+                  .map(layerNodeDomId)
+                  .join(" ");
                 const invalidDrop = draggedLayerIds.length > 0 &&
                   members.some((member) => draggedLayerIds.includes(member.id));
                 const indentation = Math.min(entry.depth + 1, 5) * 16;
@@ -2132,15 +2241,11 @@ export function ScreenLayerSidebar() {
                     id={`layer-group-${groupId}`}
                     aria-level={entry.depth + 2}
                     aria-label={`Group, ${node.descendantCount} children`}
+                    aria-selected={false}
                     aria-expanded={!entry.collapsed}
                     aria-posinset={entry.position}
                     aria-setsize={entry.siblingCount}
-                    aria-owns={
-                      node.children
-                        .filter((child) => visibleLayerNodeIds.has(child.id))
-                        .map(layerNodeDomId)
-                        .join(" ") || undefined
-                    }
+                    aria-owns={ownedChildIds ? `layer-group-children-${groupId}` : undefined}
                     data-group-id={groupId}
                     data-collapse-key={collapseKey}
                     data-depth={entry.depth + 1}
@@ -2233,7 +2338,7 @@ export function ScreenLayerSidebar() {
                     </span>
                     <button
                       className="layer-visibility"
-                      aria-label={`${allVisible ? "Hide" : "Show"} ${node.label}`}
+                      aria-label={`Toggle visibility for ${node.label}`}
                       aria-pressed={!allVisible}
                       title={allVisible ? "Hide group" : "Show group"}
                       onClick={(event) => {
@@ -2245,7 +2350,7 @@ export function ScreenLayerSidebar() {
                     </button>
                     <button
                       className="layer-lock"
-                      aria-label={`${allLocked ? "Unlock" : "Lock"} ${node.label}`}
+                      aria-label={`Toggle lock for ${node.label}`}
                       aria-pressed={allLocked}
                       title={allLocked ? "Unlock group" : "Lock group"}
                       onClick={(event) => {
@@ -2266,6 +2371,15 @@ export function ScreenLayerSidebar() {
                     >
                       <MoreHorizontal size={13} />
                     </button>
+                    {ownedChildIds && (
+                      <div
+                        id={`layer-group-children-${groupId}`}
+                        className="layer-a11y-child-group"
+                        role="group"
+                        aria-label={`${node.label} children`}
+                        aria-owns={ownedChildIds}
+                      />
+                    )}
                   </div>
                 );
               }

@@ -31,6 +31,7 @@ import { DeviceFrame } from "../devices/DeviceFrame";
 import {
   getDeviceFrameBounds,
   getSafeAreaBounds,
+  getWidgetViewportOverflow,
   getWidgetsOutsideSafeArea,
 } from "../devices/frame";
 import type { ScreenDevice } from "../devices/types";
@@ -376,6 +377,7 @@ function WidgetNode({
   selected,
   hovered,
   hoverAccent,
+  overflowed,
   parentHighlighted,
   zoom,
   activeTool,
@@ -392,6 +394,7 @@ function WidgetNode({
   selected: boolean;
   hovered: boolean;
   hoverAccent: string;
+  overflowed: boolean;
   parentHighlighted: boolean;
   zoom: number;
   activeTool: ShapeTool | null;
@@ -442,7 +445,7 @@ function WidgetNode({
           width={widget.width + 4 / zoom}
           height={widget.height + 4 / zoom}
           fillEnabled={false}
-          stroke={hovered ? hoverAccent : selected ? "#bba5ff" : parentHighlighted ? "#63cf9c" : "#68a7ff"}
+          stroke={hovered ? overflowed ? "#ef4444" : hoverAccent : selected ? "#bba5ff" : parentHighlighted ? "#63cf9c" : "#68a7ff"}
           strokeWidth={1 / zoom}
           dash={selected || hovered ? undefined : [4 / zoom, 3 / zoom]}
           listening={false}
@@ -2036,6 +2039,7 @@ export function CanvasStage({
                   selected={selectedIds.includes(widget.id)}
                   hovered={hoveredWidgetId === widget.id}
                   hoverAccent={getLayerAccentColor(widget)}
+                  overflowed={getWidgetViewportOverflow(widget, activeDevice) > 0}
                   parentHighlighted={selectedParentWidgetIds.has(widget.id)}
                   zoom={zoom}
                   activeTool={activeTool}

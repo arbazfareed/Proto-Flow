@@ -56,6 +56,8 @@ Within each parent, hierarchy siblings are listed top-to-bottom by canvas `y`, t
 
 The hierarchy is a view over widget data, not a separate persisted tree. Existing `groupId` values are preserved; inferred containment is derived from geometry. Core implementation is in `src/project/layers.ts`, `src/layout/layerTree.ts`, and `src/layout/ScreenLayerSidebar.tsx`; regression coverage for nesting, movement, ordering, and parent highlighting is in the corresponding `*.test.ts` files.
 
+Layer rows flag visible widgets that extend beyond the active responsive viewport with a red accent, warning icon, and pixel-distance tooltip. Hovering an overflowing row uses a red canvas outline. The layer tree exposes treeitem levels, expansion, selection, child groups, and labeled visibility/lock controls to assistive technology. Dragging outside the tree shows a cancel hint and disables the drop effect; Escape cancels an active layer drag. The virtualized tree remains bounded when hundreds of layers are expanded.
+
 The expected screen-root hierarchy is:
 
 ```text

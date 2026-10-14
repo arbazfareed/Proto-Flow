@@ -4,6 +4,7 @@ import { createEmptyProject } from "../project/schema";
 import {
   getDeviceFrameBounds,
   getSafeAreaBounds,
+  getWidgetViewportOverflow,
   getWidgetsOutsideSafeArea,
   rotateDevice,
   rotateWidgetForDevice,
@@ -87,6 +88,15 @@ describe("device frame geometry", () => {
   it("detects geometry extending past the viewport", () => {
     expect(widgetOverflowsDevice({ x: 0, y: 0, width: 393, height: 852 }, device)).toBe(false);
     expect(widgetOverflowsDevice({ x: 370, y: 0, width: 40, height: 20 }, device)).toBe(true);
+  });
+
+  it("measures maximum viewport overflow in whole pixels, including rotated bounds", () => {
+    expect(getWidgetViewportOverflow({ x: 0, y: 0, width: 393, height: 852 }, device)).toBe(0);
+    expect(getWidgetViewportOverflow({ x: 370, y: 0, width: 40, height: 20 }, device)).toBe(17);
+    expect(getWidgetViewportOverflow({ x: -8.2, y: 0, width: 40, height: 20 }, device)).toBe(9);
+
+    const rotated = { x: 375, y: 0, width: 40, height: 20, rotation: 45 };
+    expect(getWidgetViewportOverflow(rotated, device)).toBe(24);
   });
 
   it("keeps editor frame chrome out of persisted project data", () => {
