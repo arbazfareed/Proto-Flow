@@ -75,6 +75,7 @@ type LayerTreeEntry =
   | { kind: "category"; group: LayerGroup; collapsed: boolean; visibleCount: number }
   | ({ kind: "node" } & FlattenedLayerTreeEntry);
 const LAYER_ROW_HEIGHT = 30;
+const SCREEN_TREE_ROW_HEIGHT = 30;
 const SCREEN_ROW_HEIGHT = 152;
 
 function collapsedStorageKey(projectId: string): string {
@@ -662,11 +663,18 @@ export function ScreenLayerSidebar() {
   }, [categorySearch, collapsedGroups, hierarchyRoots, layerGroups, layerMode]);
   const virtualizedRange = getVirtualizedRange(
     layerEntries.length,
-    layerScrollTop,
-    layerViewportHeight,
+    Math.max(0, layerScrollTop - SCREEN_TREE_ROW_HEIGHT),
+    Math.max(0, layerViewportHeight - SCREEN_TREE_ROW_HEIGHT),
     LAYER_ROW_HEIGHT,
   );
   const visibleLayerEntries = layerEntries.slice(virtualizedRange.start, virtualizedRange.end);
+  const lastLayerNodeId = useMemo(() => {
+    for (let index = layerEntries.length - 1; index >= 0; index -= 1) {
+      const entry = layerEntries[index];
+      if (entry.kind === "node") return entry.node.id;
+    }
+    return undefined;
+  }, [layerEntries]);
   const visibleLayerNodeIds = new Set(
     visibleLayerEntries
       .filter((entry): entry is Extract<LayerTreeEntry, { kind: "node" }> => entry.kind === "node")
@@ -1316,7 +1324,7 @@ export function ScreenLayerSidebar() {
     const container = isLayerContainer(widget);
     const hasChildren = entry.node.children.length > 0;
     const collapseKey = getLayerTreeCollapseKey(entry.node);
-    const indentation = Math.min(entry.depth, 5) * 16;
+    const indentation = Math.min(entry.depth + 1, 5) * 16;
     const childBadge = getContainerBadge(widget, entry.node.children.length);
     const ownedChildIds = entry.node.children
       .filter((child) => visibleLayerNodeIds.has(child.id))
@@ -1334,14 +1342,14 @@ export function ScreenLayerSidebar() {
         className={`layer-row${entry.depth > 0 ? " is-nested" : ""}${container ? " is-container" : ""}${selected ? " is-selected" : ""}${hoveredWidgetId === widget.id ? " is-canvas-hovered" : ""}${widget.locked ? " is-locked" : ""}${!widget.visible ? " is-hidden" : ""}${invalidDrop ? " is-invalid-drop" : ""}${["symbol", "symbol-instance", "symbolInstance"].includes(widget.type) ? " is-symbol" : ""}${recentWidgetIds.has(widget.id) ? " is-new" : ""}${dropIndicator?.id === widget.id ? ` drop-${dropIndicator.edge}` : ""}`}
         role="treeitem"
         tabIndex={selected || hoveredWidgetId === widget.id || entry.depth === 0 ? 0 : -1}
-        aria-level={entry.depth + 1}
+        aria-level={entry.depth + 2}
         aria-selected={selected}
         aria-posinset={entry.position}
         aria-setsize={entry.siblingCount}
         aria-owns={ownedChildIds || undefined}
         aria-expanded={container ? (hasChildren ? !entry.collapsed : false) : undefined}
         data-collapse-key={collapseKey ?? undefined}
-        data-depth={entry.depth}
+        data-depth={entry.depth + 1}
         style={{
           paddingLeft: `${indentation}px`,
           "--layer-accent": categoryAccent(widget),
@@ -1420,21 +1428,24 @@ export function ScreenLayerSidebar() {
               );
             }}
           >
+            <span
+              className={`layer-tree-guide layer-tree-screen-guide${entry.node.id === lastLayerNodeId ? " is-last-path" : ""}`}
+              style={{ left: "8px" }}
+              aria-hidden="true"
+            />
             {entry.ancestorContinues.map((continues, index) => (
               <span
                 key={index}
                 className={`layer-tree-guide${continues ? "" : " is-last-path"}`}
-                style={{ left: `${index * 16 + 8}px` }}
+                style={{ left: `${Math.min(index + 1, 4) * 16 + 8}px` }}
                 aria-hidden="true"
               />
             ))}
-            {entry.depth > 0 && (
-              <span
-                className={`layer-tree-branch${entry.isLastChild ? " is-last" : ""}`}
-                style={{ left: `${(entry.depth - 1) * 16 + 8}px` }}
-                aria-hidden="true"
-              />
-            )}
+            <span
+              className={`layer-tree-branch${entry.isLastChild ? " is-last" : ""}`}
+              style={{ left: `${Math.min(entry.depth, 4) * 16 + 8}px` }}
+              aria-hidden="true"
+            />
             {container && collapseKey ? (
               <button
                 className="layer-expand-toggle"
@@ -1831,7 +1842,9 @@ export function ScreenLayerSidebar() {
             </button>
           )}
         </label>
-        {activeScreen && activeScreen.widgets.length > 0 && visibleLayerEntries.length > 0 ? (
+        {activeScreen && (
+          activeScreen.widgets.length === 0 || visibleLayerEntries.length > 0
+        ) ? (
           <div
             className="layer-list"
             role="tree"
@@ -1872,6 +1885,24 @@ export function ScreenLayerSidebar() {
               setDropIndicator(null);
             }}
           >
+            <div
+              className="layer-screen-root"
+              role="treeitem"
+              tabIndex={-1}
+              aria-level={1}
+              aria-label={`Screen: ${activeScreen.name}`}
+              data-screen-id={activeScreen.id}
+            >
+              <Monitor size={14} aria-hidden="true" />
+              <span className="layer-screen-name">{activeScreen.name}</span>
+              <span className="layer-screen-kind">Screen</span>
+            </div>
+            {activeScreen.widgets.length === 0 && (
+              <div className="sidebar-empty-state layer-tree-empty">
+                <Layers2 size={16} />
+                <span>Empty screen — add a widget.</span>
+              </div>
+            )}
             <div className="layer-virtual-spacer" style={{ height: virtualizedRange.topSpacerHeight }} aria-hidden="true" />
             {visibleLayerEntries.map((entry, visibleIndex) => {
               const entryIndex = virtualizedRange.start + visibleIndex;
@@ -1893,7 +1924,7 @@ export function ScreenLayerSidebar() {
                 const collapseKey = getLayerTreeCollapseKey(node) ?? `semantic:${groupId}`;
                 const invalidDrop = draggedLayerIds.length > 0 &&
                   members.some((member) => draggedLayerIds.includes(member.id));
-                const indentation = Math.min(entry.depth, 5) * 16;
+                const indentation = Math.min(entry.depth + 1, 5) * 16;
                 return (
                   <div
                     key={node.id}
@@ -1902,7 +1933,7 @@ export function ScreenLayerSidebar() {
                     tabIndex={entry.depth === 0 ? 0 : -1}
                     data-entry-index={entryIndex}
                     id={`layer-group-${groupId}`}
-                    aria-level={entry.depth + 1}
+                    aria-level={entry.depth + 2}
                     aria-label={`Group, ${node.descendantCount} children`}
                     aria-expanded={!entry.collapsed}
                     aria-posinset={entry.position}
@@ -1915,7 +1946,7 @@ export function ScreenLayerSidebar() {
                     }
                     data-group-id={groupId}
                     data-collapse-key={collapseKey}
-                    data-depth={entry.depth}
+                    data-depth={entry.depth + 1}
                     style={{
                       paddingLeft: `${indentation}px`,
                       "--layer-accent": node.children[0]?.widget
@@ -1953,21 +1984,24 @@ export function ScreenLayerSidebar() {
                     }}
                     onDrop={(event) => layerDrop(event, groupId, groupId)}
                   >
+                    <span
+                      className={`layer-tree-guide layer-tree-screen-guide${node.id === lastLayerNodeId ? " is-last-path" : ""}`}
+                      style={{ left: "8px" }}
+                      aria-hidden="true"
+                    />
                     {entry.ancestorContinues.map((continues, index) => (
                       <span
                         key={index}
                         className={`layer-tree-guide${continues ? "" : " is-last-path"}`}
-                        style={{ left: `${index * 16 + 8}px` }}
+                        style={{ left: `${Math.min(index + 1, 4) * 16 + 8}px` }}
                         aria-hidden="true"
                       />
                     ))}
-                    {entry.depth > 0 && (
-                      <span
-                        className={`layer-tree-branch${entry.isLastChild ? " is-last" : ""}`}
-                        style={{ left: `${(entry.depth - 1) * 16 + 8}px` }}
-                        aria-hidden="true"
-                      />
-                    )}
+                    <span
+                      className={`layer-tree-branch${entry.isLastChild ? " is-last" : ""}`}
+                      style={{ left: `${Math.min(entry.depth, 4) * 16 + 8}px` }}
+                      aria-hidden="true"
+                    />
                     <button
                       className="layer-group-toggle"
                       aria-label={`${entry.collapsed ? "Expand" : "Collapse"} ${node.label}`}

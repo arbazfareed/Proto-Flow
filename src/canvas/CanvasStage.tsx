@@ -1008,7 +1008,7 @@ export function CanvasStage({
     if (targetId && !sourceWidgets.some((widget) => widget.id === targetId)) {
       const target = screen.widgets.find((widget) => widget.id === targetId);
       if (target) {
-        if (["group", "frame", "panel", "dynamic-panel", "dynamicPanel", "repeater"].includes(target.type)) {
+        if (["group", "frame", "panel", "dynamic-panel", "dynamicPanel", "repeater", "card", "modal", "overlay"].includes(target.type)) {
           copies = copies.map((widget) => ({ ...widget, groupId: target.id }));
           selected = copies;
           nextWidgets = [...screen.widgets, ...copies];
@@ -1659,7 +1659,7 @@ export function CanvasStage({
             </span>
             <span>
               {canvasDropFeedback.targetType &&
-              ["group", "frame", "panel", "dynamic-panel", "dynamicPanel", "repeater"].includes(canvasDropFeedback.targetType)
+              ["group", "frame", "panel", "dynamic-panel", "dynamicPanel", "repeater", "card", "modal", "overlay"].includes(canvasDropFeedback.targetType)
                 ? `Add to ${canvasDropFeedback.targetType}`
                 : canvasDropFeedback.targetId
                   ? "Replace widget"

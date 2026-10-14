@@ -83,6 +83,24 @@ describe("layer hierarchy", () => {
       .toEqual(["frame", "last"]);
   });
 
+  it("keeps container brackets open through descendants and closes them at the last child", () => {
+    const roots = buildLayerHierarchy([
+      widget("frame", "frame", 3),
+      widget("first", "text", 2, "frame"),
+      widget("nested-frame", "frame", 1, "frame"),
+      widget("grandchild", "text", 0, "nested-frame"),
+    ], (item) => item.id);
+    const entries = flattenLayerHierarchy(roots, new Set());
+
+    expect(entries.map(({ node, ancestorContinues }) => [node.id, ancestorContinues]))
+      .toEqual([
+        ["frame", []],
+        ["first", [true]],
+        ["nested-frame", [true]],
+        ["grandchild", [false, false]],
+      ]);
+  });
+
   it("retains matching descendants and only the ancestors needed to show their hierarchy", () => {
     const roots = buildLayerHierarchy([
       widget("frame", "frame", 5),
@@ -127,6 +145,9 @@ describe("layer hierarchy", () => {
     const panel = { ...widget("panel", "panel", 0), props: { states: ["default", "open"] } };
 
     expect(isLayerContainer(frame)).toBe(true);
+    expect(isLayerContainer(widget("card", "card", 0))).toBe(true);
+    expect(isLayerContainer(widget("modal", "modal", 0))).toBe(true);
+    expect(isLayerContainer(widget("overlay", "overlay", 0))).toBe(true);
     expect(isLayerContainer(widget("button", "button", 0))).toBe(false);
     expect(getContainerBadge(frame, 0)).toBe("empty");
     expect(getContainerBadge(frame, 1)).toBe("1 child");

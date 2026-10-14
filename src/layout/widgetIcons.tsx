@@ -8,6 +8,7 @@ import {
   Image,
   Layers,
   Minus,
+  PanelTop,
   Puzzle,
   RectangleHorizontal,
   Repeat,
@@ -64,6 +65,9 @@ export const WIDGET_ICON_REGISTRY: Record<string, WidgetIconDefinition> = {
   symbolInstance: definition(Puzzle, SYMBOL_COLOR, "symbol"),
   group: definition(Folder, CONTAINER_COLOR, "container"),
   frame: definition(Frame, CONTAINER_COLOR, "container"),
+  card: definition(RectangleHorizontal, CONTAINER_COLOR, "container"),
+  modal: definition(PanelTop, CONTAINER_COLOR, "container"),
+  overlay: definition(Layers, CONTAINER_COLOR, "container"),
 };
 
 export const UNKNOWN_WIDGET_ICON = definition(Square, "#9ca3af", "shape");

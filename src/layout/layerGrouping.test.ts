@@ -17,6 +17,9 @@ describe("layer tree grouping", () => {
     expect(getLayerCategory("dynamic-panel")).toBe("advanced");
     expect(getLayerCategory("symbol-instance")).toBe("symbols");
     expect(getLayerCategory("frame")).toBe("containers");
+    expect(getLayerCategory("card")).toBe("containers");
+    expect(getLayerCategory("modal")).toBe("containers");
+    expect(getLayerCategory("overlay")).toBe("containers");
     expect(getLayerCategory("plugin-widget")).toBe("other");
     expect(LAYER_CATEGORIES).toHaveLength(6);
   });

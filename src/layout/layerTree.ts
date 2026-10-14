@@ -9,6 +9,9 @@ export const LAYER_CONTAINER_TYPES = new Set([
   "dynamic-panel",
   "dynamicPanel",
   "repeater",
+  "card",
+  "modal",
+  "overlay",
 ]);
 
 export interface LayerTreeNode {
@@ -57,10 +60,22 @@ export function flattenLayerHierarchy(
   collapsedIds: ReadonlySet<string>,
 ): FlattenedLayerTreeEntry[] {
   const entries: FlattenedLayerTreeEntry[] = [];
+  const lastVisibleNodeIds = new WeakMap<LayerTreeNode, string>();
+  const getLastVisibleNodeId = (node: LayerTreeNode): string => {
+    const cached = lastVisibleNodeIds.get(node);
+    if (cached) return cached;
+    const collapseKey = getLayerTreeCollapseKey(node);
+    const lastChild = collapseKey && collapsedIds.has(collapseKey)
+      ? undefined
+      : node.children[node.children.length - 1];
+    const id = lastChild ? getLastVisibleNodeId(lastChild) : node.id;
+    lastVisibleNodeIds.set(node, id);
+    return id;
+  };
   const visit = (
     nodes: readonly LayerTreeNode[],
     depth: number,
-    ancestorContinues: boolean[],
+    ancestors: { hasNextSibling: boolean; lastVisibleNodeId: string }[],
   ) => {
     nodes.forEach((node, index) => {
       const isLastChild = index === nodes.length - 1;
@@ -70,13 +85,19 @@ export function flattenLayerHierarchy(
         node,
         depth,
         isLastChild,
-        ancestorContinues,
+        ancestorContinues: ancestors.map(
+          ({ hasNextSibling, lastVisibleNodeId }) =>
+            hasNextSibling || node.id !== lastVisibleNodeId,
+        ),
         collapsed,
         position: index + 1,
         siblingCount: nodes.length,
       });
       if (!collapsed && node.children.length > 0) {
-        visit(node.children, depth + 1, [...ancestorContinues, !isLastChild]);
+        visit(node.children, depth + 1, [
+          ...ancestors,
+          { hasNextSibling: !isLastChild, lastVisibleNodeId: getLastVisibleNodeId(node) },
+        ]);
       }
     });
   };

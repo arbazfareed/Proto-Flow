@@ -78,7 +78,7 @@ const CATEGORY_TYPES: Record<Exclude<LayerCategoryId, "other">, ReadonlySet<stri
   widgets: new Set(["button", "input", "image", "checkbox", "radio", "toggle"]),
   advanced: new Set(["panel", "dynamic-panel", "dynamicPanel", "repeater"]),
   symbols: new Set(["symbol", "symbol-instance", "symbolInstance"]),
-  containers: new Set(["group", "frame"]),
+  containers: new Set(["group", "frame", "card", "modal", "overlay"]),
 };
 
 export function getLayerCategory(
