@@ -494,7 +494,7 @@ function ToggleShape({ widget, fill, stroke, strokeWidth }: ShapeComponentProps)
   );
 }
 
-function ImageShape({ widget, fill, stroke, strokeWidth, onThumbnailReady }: ShapeComponentProps) {
+function ImageShape({ widget, stroke, strokeWidth, onThumbnailReady }: ShapeComponentProps) {
   const filePath = useStore((state) => state.filePath);
   const [image, setImage] = useState<HTMLImageElement | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -517,7 +517,9 @@ function ImageShape({ widget, fill, stroke, strokeWidth, onThumbnailReady }: Sha
         sourceData = `data:${asset.mime};base64,${asset.base64}`;
       }
       if (!sourceData) {
-        setLoadError("No image data or project asset is linked.");
+        if (assetPath) {
+          setLoadError("The linked image asset is not available in this project.");
+        }
         onThumbnailReady?.();
         return;
       }
@@ -573,31 +575,90 @@ function ImageShape({ widget, fill, stroke, strokeWidth, onThumbnailReady }: Sha
       />
     );
   }
+  const iconWidth = Math.min(38, Math.max(24, widget.width * 0.16));
+  const iconHeight = iconWidth * 0.72;
+  const iconX = (widget.width - iconWidth) / 2;
+  const showHint = widget.height > 110 && widget.width > 150;
+  const headingHeight = Math.max(18, Math.min(24, widget.height * 0.2));
+  const hintHeight = showHint ? 22 : 0;
+  const contentHeight = iconHeight + 8 + headingHeight + (showHint ? 3 + hintHeight : 0);
+  const iconY = Math.max(4, (widget.height - contentHeight) / 2);
+  const heading = loadError ? "Couldn't load this image" : "Add an image";
+  const hint = loadError ? "Double-click to choose a replacement" : "Drop an image here or double-click to browse";
   return (
     <Group>
       <Rect
         width={widget.width}
         height={widget.height}
-        fill={loadError ? "#211d22" : fill}
-        stroke={loadError ? "#c76c76" : stroke ?? "#56515f"}
-        strokeWidth={strokeWidth}
-        dash={[6, 4]}
+        fill={loadError ? "#fff5f5" : "#f4f7fb"}
+        stroke={loadError ? "#e7a7a7" : "#c9d4e2"}
+        strokeWidth={loadError ? Math.max(1, Math.min(3, strokeWidth)) : 1}
+        dash={loadError ? [5, 4] : [7, 5]}
+        cornerRadius={8}
+        perfectDrawEnabled={false}
+      />
+      <Rect
+        x={iconX}
+        y={iconY}
+        width={iconWidth}
+        height={iconHeight}
         cornerRadius={4}
+        stroke={loadError ? "#cc7272" : "#7e9ac2"}
+        strokeWidth={1.5}
+        perfectDrawEnabled={false}
+      />
+      <Circle
+        x={iconX + iconWidth * 0.72}
+        y={iconY + iconHeight * 0.28}
+        radius={Math.max(1.5, iconWidth * 0.07)}
+        fill={loadError ? "#cc7272" : "#7e9ac2"}
+        perfectDrawEnabled={false}
+      />
+      <Line
+        points={[
+          iconX + iconWidth * 0.12, iconY + iconHeight * 0.82,
+          iconX + iconWidth * 0.38, iconY + iconHeight * 0.48,
+          iconX + iconWidth * 0.56, iconY + iconHeight * 0.69,
+          iconX + iconWidth * 0.72, iconY + iconHeight * 0.52,
+          iconX + iconWidth * 0.9, iconY + iconHeight * 0.82,
+        ]}
+        stroke={loadError ? "#cc7272" : "#7e9ac2"}
+        strokeWidth={1.5}
+        lineCap="round"
+        lineJoin="round"
         perfectDrawEnabled={false}
       />
       <KonvaText
+        y={iconY + iconHeight + 8}
         width={widget.width}
-        height={widget.height}
-        text={loadError ? "Image unavailable — replace it" : "Drop image or double-click to choose"}
-        fontSize={Math.max(9, Math.min(13, widget.width / 15))}
+        height={headingHeight}
+        text={heading}
+        fontSize={Math.max(11, Math.min(15, widget.width / 20))}
         fontFamily="Arial"
         align="center"
         verticalAlign="middle"
-        fill={loadError ? "#f2a2aa" : "#a2a2aa"}
+        fontStyle="bold"
+        fill={loadError ? "#a95050" : "#46566d"}
         padding={8}
         wrap="word"
         perfectDrawEnabled={false}
       />
+      {showHint && (
+        <KonvaText
+          y={iconY + iconHeight + 8 + headingHeight + 3}
+          width={widget.width}
+          height={hintHeight}
+          text={hint}
+          fontSize={Math.max(9, Math.min(11, widget.width / 24))}
+          fontFamily="Arial"
+          align="center"
+          verticalAlign="top"
+          fill={loadError ? "#aa7373" : "#7b8798"}
+          padding={6}
+          wrap="word"
+          perfectDrawEnabled={false}
+        />
+      )}
     </Group>
   );
 }
