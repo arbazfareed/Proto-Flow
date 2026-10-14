@@ -119,9 +119,41 @@ export function getTextPropertyUpdates(
     .filter(
       (widget) =>
         !widget.locked &&
-        ["text", "button", "input", "checkbox", "radio", "toggle"].includes(widget.type),
+        isTextStyleWidget(widget),
     )
     .map((widget) => ({ id: widget.id, props: { ...widget.props, ...patch } }));
+}
+
+export function isTextStyleWidget(widget: Widget): boolean {
+  return (
+    typeof widget.props.text === "string" ||
+    typeof widget.props.label === "string" ||
+    typeof widget.props.placeholder === "string" ||
+    typeof widget.props.value === "string" ||
+    Array.isArray(widget.props.items)
+  );
+}
+
+export function normalizeListItems(value: unknown): string[] {
+  if (Array.isArray(value)) {
+    return value
+      .map((item) => {
+        if (typeof item === "string") return item.trim();
+        if (typeof item !== "object" || item === null) return "";
+        const record = item as Record<string, unknown>;
+        return typeof record.text === "string"
+          ? record.text.trim()
+          : typeof record.label === "string"
+            ? record.label.trim()
+            : "";
+      })
+      .filter(Boolean)
+      .slice(0, 100);
+  }
+  if (typeof value === "string") {
+    return value.split(/\r?\n/).map((item) => item.trim()).filter(Boolean).slice(0, 100);
+  }
+  return [];
 }
 
 export function getDefaultTextProperties(
@@ -142,7 +174,7 @@ export function getDefaultTextProperties(
   }
   return {
     fontFamily: "Arial",
-    fontSize: 14,
+    fontSize: widget.type === "list" ? 16 : 14,
     fontWeight: widget.type === "button" ? "bold" : "normal",
     fontStyle: "normal",
     underline: false,

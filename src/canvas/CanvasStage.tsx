@@ -35,7 +35,7 @@ import {
   getWidgetsOutsideSafeArea,
 } from "../devices/frame";
 import type { ScreenDevice } from "../devices/types";
-import type { Widget, Project, Screen } from "../project/schema";
+import type { SymbolDefinition, Widget, Project, Screen } from "../project/schema";
 import {
   createDraggedWidgetCopies,
   getActiveLayerDragPayload,
@@ -54,12 +54,23 @@ import {
   syncWidgetGroupIdsToContainment,
 } from "../project/layers";
 import {
+  copyWidgetStyle,
   copyWidgetsToClipboard,
   createWidgetCopies,
+  getCopiedWidgetStyle,
+  pasteWidgetStyle,
   readWidgetClipboard,
   reorderWidgetSelection,
 } from "../project/widgetClipboard";
+import {
+  createSymbolDefinition,
+  createSymbolInstance,
+  expandSymbolInstance,
+  replaceWidgetsWithSymbolInstance,
+  swapSymbolReference,
+} from "../project/symbols";
 import { getLayerAccentColor } from "../layout/layerGrouping";
+import { SymbolNameDialog } from "../layout/SymbolNameDialog";
 import {
   clampCanvasZoom,
   fitCanvasBounds,
@@ -74,10 +85,11 @@ import {
   createShapeWidget,
   getShapeDefinition,
   measureTextBounds,
-  renderWidgetShape,
   MAX_WIDGET_TEXT_LENGTH,
+  renderWidgetShape,
   type ShapeTool,
 } from "./shapes";
+import { normalizeListItems } from "./styleInspector";
 import { getShapeToolDefinition } from "./shapeTools";
 import {
   constrainTransformerBounds,
@@ -396,6 +408,7 @@ function WidgetNode({
   onDragBound,
   onEdit,
   onContextMenu,
+  symbolDefinition,
 }: {
   widget: Widget;
   selected: boolean;
@@ -414,6 +427,7 @@ function WidgetNode({
   onDragBound: (position: CanvasPoint) => CanvasPoint;
   onEdit: () => void;
   onContextMenu: (event: Konva.KonvaEventObject<MouseEvent>) => void;
+  symbolDefinition?: SymbolDefinition;
 }) {
   return (
     <Group
@@ -446,7 +460,72 @@ function WidgetNode({
         onDragEnd({ x: event.target.x(), y: event.target.y() })
       }
     >
-      {renderWidgetShape(widget, selected)}
+      {symbolDefinition ? (
+        <>
+          <Rect
+            width={widget.width}
+            height={widget.height}
+            fill="#000000"
+            opacity={0.001}
+            stroke="#a78bfa"
+            strokeWidth={1 / zoom}
+            perfectDrawEnabled={false}
+          />
+          <Group
+            scaleX={widget.width / symbolDefinition.width}
+            scaleY={widget.height / symbolDefinition.height}
+            listening={false}
+          >
+            {symbolDefinition.widgets
+              .slice()
+              .sort((first, second) => first.zIndex - second.zIndex)
+              .map((masterWidget) => {
+                const symbolOverrides = widget.props.symbolOverrides;
+                const overrides: Record<string, unknown> =
+                  typeof symbolOverrides === "object" && symbolOverrides !== null &&
+                    !Array.isArray(symbolOverrides)
+                    ? symbolOverrides as Record<string, unknown>
+                    : {};
+                const override = overrides[masterWidget.id];
+                const overrideRecord: Record<string, unknown> =
+                  typeof override === "object" && override !== null && !Array.isArray(override)
+                    ? override as Record<string, unknown>
+                    : {};
+                const overrideProps: Record<string, unknown> =
+                  typeof overrideRecord.props === "object" && overrideRecord.props !== null &&
+                    !Array.isArray(overrideRecord.props)
+                    ? overrideRecord.props as Record<string, unknown>
+                    : {};
+                const overrideStyle: Record<string, unknown> =
+                  typeof overrideRecord.style === "object" && overrideRecord.style !== null &&
+                    !Array.isArray(overrideRecord.style)
+                    ? overrideRecord.style as Record<string, unknown>
+                    : {};
+                const renderedWidget =
+                  Object.keys(overrideProps).length > 0 || Object.keys(overrideStyle).length > 0
+                  ? {
+                      ...masterWidget,
+                      props: { ...masterWidget.props, ...overrideProps },
+                      style: { ...masterWidget.style, ...overrideStyle },
+                    }
+                  : masterWidget;
+                return (
+                  <Group
+                    key={masterWidget.id}
+                    x={masterWidget.x}
+                    y={masterWidget.y}
+                    rotation={masterWidget.rotation}
+                    opacity={masterWidget.opacity}
+                    visible={masterWidget.visible}
+                    listening={false}
+                  >
+                    {renderWidgetShape(renderedWidget, false)}
+                  </Group>
+                );
+              })}
+          </Group>
+        </>
+      ) : renderWidgetShape(widget, selected)}
       {(selected || hovered || parentHighlighted) && (
         <Rect
           x={-2 / zoom}
@@ -466,13 +545,14 @@ function WidgetNode({
 }
 
 type EditableWidgetText = {
-  key: "text" | "label" | "placeholder" | "value";
+  key: "text" | "label" | "placeholder" | "value" | "items";
   value: string;
 };
 
 function getEditableWidgetText(widget: Widget): EditableWidgetText | null {
-  const keys =
-    widget.type === "text"
+  const keys = widget.type === "list"
+    ? ["items"]
+    : ["text", "heading", "paragraph", "link", "label"].includes(widget.type)
       ? ["text"]
       : widget.type === "input"
         ? [widget.props.value ? "value" : "placeholder"]
@@ -481,6 +561,9 @@ function getEditableWidgetText(widget: Widget): EditableWidgetText | null {
           : [];
   const key = keys[0] as EditableWidgetText["key"] | undefined;
   if (!key) return null;
+  if (key === "items") {
+    return { key, value: normalizeListItems(widget.props.items).join("\n") };
+  }
   const value = widget.props[key];
   return { key, value: typeof value === "string" ? value : "" };
 }
@@ -509,15 +592,35 @@ function updateWidgetProps(
             breakpoints: resolvedOverrideBreakpointId
               ? screen.breakpoints ?? [...getScreenBreakpoints(screen)]
               : screen.breakpoints,
-            widgets: screen.widgets.map((widget) =>
-              widget.id === widgetId
-                ? resolvedOverrideBreakpointId
-                  ? updateWidgetOverride(widget, resolvedOverrideBreakpointId, {
-                      props: { ...widget.props, ...patch },
-                    })
-                  : { ...widget, props: { ...widget.props, ...patch } }
-                : widget,
-            ),
+            widgets: screen.widgets.map((widget) => {
+              if (widget.id !== widgetId) return widget;
+              const props: Record<string, unknown> = {
+                ...widget.props,
+                ...patch,
+                ...(patch.items !== undefined
+                  ? { items: normalizeListItems(patch.items) }
+                  : {}),
+              };
+              const text = widget.type === "list"
+                ? normalizeListItems(props.items).join("\n")
+                : typeof props.text === "string" ? props.text : "";
+              const measured = props.autoSize === true
+                ? measureTextBounds(
+                    text,
+                    typeof props.fontFamily === "string" ? props.fontFamily : "Arial",
+                    typeof props.fontSize === "number" ? props.fontSize : 24,
+                    typeof props.fontWeight === "string" ? props.fontWeight : "normal",
+                    typeof props.lineHeight === "number" ? props.lineHeight : 1.2,
+                  )
+                : null;
+              const widgetPatch = {
+                props,
+                ...(measured ? { width: measured.width, height: measured.height } : {}),
+              };
+              return resolvedOverrideBreakpointId
+                ? updateWidgetOverride(widget, resolvedOverrideBreakpointId, widgetPatch)
+                : { ...widget, ...widgetPatch };
+            }),
           },
     ),
   };
@@ -561,6 +664,12 @@ export function CanvasStage({
   const [selectionDraft, setSelectionDraft] = useState<SelectionDraft | null>(null);
   const [canvasDropFeedback, setCanvasDropFeedback] = useState<CanvasDropFeedback | null>(null);
   const [canvasContextMenu, setCanvasContextMenu] = useState<{ x: number; y: number } | null>(null);
+  const [symbolNameDialog, setSymbolNameDialog] = useState<string | null>(null);
+  const [symbolTextOverrideDialog, setSymbolTextOverrideDialog] = useState<{
+    instance: Widget;
+    masterWidget: Widget;
+    property: "text" | "label";
+  } | null>(null);
   const [imageUrlDialogOpen, setImageUrlDialogOpen] = useState(false);
   const [imageUrlDraft, setImageUrlDraft] = useState("");
   const [imageUrlLoading, setImageUrlLoading] = useState(false);
@@ -596,6 +705,7 @@ export function CanvasStage({
   const activeScreen = useStore((state) =>
     state.project.screens.find((screen) => screen.id === state.getActiveScreenId()),
   );
+  const symbols = useStore((state) => state.project.symbols);
   const activeBreakpointId = useStore((state) => state.activeBreakpointId);
   const selectedIds = useStore((state) => state.selectedIds);
   const hoveredWidgetId = useStore((state) => state.hoveredWidgetId);
@@ -1023,7 +1133,12 @@ export function CanvasStage({
 
   const commitWidgetTextEdit = useCallback(() => {
     if (!editing) return;
-    updateWidgetProps(editing.widgetId, { [editing.key]: editValue });
+    updateWidgetProps(
+      editing.widgetId,
+      editing.key === "items"
+        ? { items: normalizeListItems(editValue) }
+        : { [editing.key]: editValue },
+    );
     setEditing(null);
   }, [editValue, editing]);
 
@@ -1133,15 +1248,6 @@ export function CanvasStage({
     if (!screen) return true;
     const sourceWidgets = screen.widgets.filter((widget) => payload.widgetIds.includes(widget.id));
     if (sourceWidgets.length !== payload.widgetIds.length) return true;
-    if (
-      event.altKey &&
-      sourceWidgets.some((widget) =>
-        ["symbol", "symbol-instance", "symbolInstance"].includes(widget.type),
-      )
-    ) {
-      onNotify("Linked symbol instances are not supported by the current project schema.", true);
-      return true;
-    }
     const position = getWorldPositionFromClient(event.clientX, event.clientY);
     let copies = createDraggedWidgetCopies(
       sourceWidgets,
@@ -1489,6 +1595,37 @@ export function CanvasStage({
     }
   }, [onNotify, updateActiveScreenWidgets]);
 
+  const copyStyleSelection = useCallback(() => {
+    const current = useStore.getState();
+    const screen = current.project.screens.find(
+      (item) => item.id === current.getActiveScreenId(),
+    );
+    const selected = screen?.widgets.filter((widget) =>
+      current.selectedIds.includes(widget.id),
+    ) ?? [];
+    if (selected.length !== 1) return;
+    copyWidgetStyle(selected[0]);
+    onNotify("Style copied. Select one or more widgets and paste the style.");
+  }, [onNotify]);
+
+  const pasteStyleSelection = useCallback(() => {
+    const copiedStyle = getCopiedWidgetStyle();
+    if (!copiedStyle) return;
+    const current = useStore.getState();
+    const screen = current.project.screens.find(
+      (item) => item.id === current.getActiveScreenId(),
+    );
+    if (!screen) return;
+    const selected = screen.widgets.filter((widget) =>
+      current.selectedIds.includes(widget.id),
+    );
+    if (selected.length === 0) return;
+    const updated = new Map(
+      pasteWidgetStyle(copiedStyle, selected).map((widget) => [widget.id, widget]),
+    );
+    updateActiveScreenWidgets(screen.widgets.map((widget) => updated.get(widget.id) ?? widget));
+  }, [updateActiveScreenWidgets]);
+
   const pasteSelection = useCallback(async () => {
     try {
       const source = await readWidgetClipboard();
@@ -1602,6 +1739,159 @@ export function CanvasStage({
     ));
   }, [updateActiveScreenWidgets]);
 
+  const requestCreateSymbolFromSelection = useCallback(() => {
+    const current = useStore.getState();
+    const screen = current.project.screens.find(
+      (item) => item.id === current.getActiveScreenId(),
+    );
+    if (!screen) return;
+    const selected = screen.widgets.filter((widget) =>
+      current.selectedIds.includes(widget.id),
+    );
+    if (selected.length === 0) return;
+    const defaultName = selected.length === 1
+      ? selected[0].name ?? selected[0].type
+      : `${selected.length} layers`;
+    setSymbolNameDialog(defaultName);
+    setCanvasContextMenu(null);
+  }, []);
+
+  const createSymbolFromSelection = useCallback((name: string) => {
+    const current = useStore.getState();
+    const screen = current.project.screens.find(
+      (item) => item.id === current.getActiveScreenId(),
+    );
+    if (!screen) return;
+    const selected = screen.widgets.filter((widget) =>
+      current.selectedIds.includes(widget.id),
+    );
+    if (selected.length === 0) return;
+    try {
+      const symbol = createSymbolDefinition(name, selected);
+      const selectedIds = new Set(selected.map((widget) => widget.id));
+      const instance = createSymbolInstance(
+        symbol,
+        Math.min(...selected.map((widget) => widget.x)),
+        Math.min(...selected.map((widget) => widget.y)),
+        0,
+      );
+      const parentId = selected[0].groupId;
+      if (parentId && !selectedIds.has(parentId) &&
+        selected.every((widget) => widget.groupId === parentId)) {
+        instance.groupId = parentId;
+      }
+      const replacementWidgets = replaceWidgetsWithSymbolInstance(
+        screen.widgets,
+        selectedIds,
+        instance,
+      );
+      current.setProject({
+        ...current.project,
+        updatedAt: new Date().toISOString(),
+        symbols: [...current.project.symbols, symbol],
+        screens: current.project.screens.map((item) =>
+          item.id === screen.id
+            ? {
+                ...item,
+                widgets: replacementWidgets.map((widget, index) => ({
+                  ...widget,
+                  zIndex: index,
+                })),
+              }
+            : item,
+        ),
+      });
+      useStore.getState().select([instance.id]);
+      onNotify(`Created symbol "${symbol.name}".`);
+      setSymbolNameDialog(null);
+    } catch (error) {
+      onNotify(error instanceof Error ? error.message : "Could not create symbol.", true);
+    }
+  }, [onNotify]);
+
+  const detachSymbolInstance = useCallback((widgetId: string) => {
+    const current = useStore.getState();
+    const screen = current.project.screens.find(
+      (item) => item.id === current.getActiveScreenId(),
+    );
+    const instance = screen?.widgets.find((widget) => widget.id === widgetId);
+    const symbol = instance?.symbolId
+      ? current.project.symbols.find((item) => item.id === instance.symbolId)
+      : undefined;
+    if (!screen || !instance || !symbol) return;
+    const detached = expandSymbolInstance(instance, symbol);
+    current.setProject({
+      ...current.project,
+      updatedAt: new Date().toISOString(),
+      screens: current.project.screens.map((item) =>
+        item.id !== screen.id
+          ? item
+          : {
+              ...item,
+              widgets: item.widgets.flatMap((widget) =>
+                widget.id === instance.id ? detached : [widget],
+              ),
+            },
+      ),
+    });
+    useStore.getState().select(detached.map((widget) => widget.id));
+  }, []);
+
+  const swapSymbolInstance = useCallback((widgetId: string, symbolId: string) => {
+    const current = useStore.getState();
+    const screenId = current.getActiveScreenId();
+    const symbol = current.project.symbols.find((item) => item.id === symbolId);
+    if (!symbol) return;
+    const screen = current.project.screens.find((item) => item.id === screenId);
+    if (!screen) return;
+    updateActiveScreenWidgets(screen.widgets.map((widget) =>
+      widget.id === widgetId && widget.type === "symbol-instance"
+        ? swapSymbolReference(widget, symbol)
+        : widget,
+    ));
+  }, [updateActiveScreenWidgets]);
+
+  const setSymbolTextOverride = useCallback((
+    instance: Widget,
+    masterWidget: Widget,
+    property: "text" | "label",
+    value: string,
+  ) => {
+    const previous = instance.props.symbolOverrides;
+    const previousOverrides: Record<string, unknown> =
+      typeof previous === "object" && previous !== null && !Array.isArray(previous)
+        ? previous as Record<string, unknown>
+        : {};
+    const previousEntry = previousOverrides[masterWidget.id];
+    const entry: Record<string, unknown> =
+      typeof previousEntry === "object" && previousEntry !== null && !Array.isArray(previousEntry)
+        ? previousEntry as Record<string, unknown>
+        : {};
+    const previousProps =
+      typeof entry.props === "object" && entry.props !== null && !Array.isArray(entry.props)
+        ? entry.props
+        : {};
+    updateActiveScreenWidgets((useStore.getState().project.screens.find(
+      (screen) => screen.id === useStore.getState().getActiveScreenId(),
+    )?.widgets ?? []).map((widget) =>
+      widget.id === instance.id
+        ? {
+            ...widget,
+            props: {
+              ...widget.props,
+              symbolOverrides: {
+                ...previousOverrides,
+                [masterWidget.id]: {
+                  ...entry,
+                  props: { ...previousProps, [property]: value },
+                },
+              },
+            },
+          }
+        : widget,
+    ));
+  }, [updateActiveScreenWidgets]);
+
   const handleCanvasWidgetContextMenu = useCallback((
     widgetId: string,
     event: Konva.KonvaEventObject<MouseEvent>,
@@ -1628,6 +1918,28 @@ export function CanvasStage({
     const onKeyDown = (event: KeyboardEvent) => {
       if (isEditingTarget(event.target)) {
         return;
+      }
+      if (
+        (event.ctrlKey || event.metaKey) &&
+        event.altKey &&
+        event.key.toLowerCase() === "k"
+      ) {
+        event.preventDefault();
+        requestCreateSymbolFromSelection();
+        return;
+      }
+      if ((event.ctrlKey || event.metaKey) && event.altKey) {
+        const key = event.key.toLowerCase();
+        if (key === "c") {
+          event.preventDefault();
+          copyStyleSelection();
+          return;
+        }
+        if (key === "v") {
+          event.preventDefault();
+          pasteStyleSelection();
+          return;
+        }
       }
       if (event.altKey) return;
       if (event.ctrlKey || event.metaKey) {
@@ -1713,11 +2025,14 @@ export function CanvasStage({
   }, [
     canvasContextMenu,
     copySelection,
+    copyStyleSelection,
     createWidgetAt,
+    requestCreateSymbolFromSelection,
     deleteSelection,
     duplicateSelection,
     onToolChange,
     pasteSelection,
+    pasteStyleSelection,
   ]);
 
   useEffect(
@@ -2261,6 +2576,7 @@ export function CanvasStage({
                     previewPositions[widget.id] ?? { x: widget.x, y: widget.y }
                   }
                   onEdit={() => beginWidgetTextEdit(widget)}
+                  symbolDefinition={symbols.find((symbol) => symbol.id === widget.symbolId)}
                   onContextMenu={(event) =>
                     handleCanvasWidgetContextMenu(widget.id, event)
                   }
@@ -2695,6 +3011,34 @@ export function CanvasStage({
           <Maximize2 size={14} />
         </button>
       </div>
+      {symbolNameDialog !== null && (
+        <SymbolNameDialog
+          defaultName={symbolNameDialog}
+          onCancel={() => setSymbolNameDialog(null)}
+          onSubmit={createSymbolFromSelection}
+        />
+      )}
+      {symbolTextOverrideDialog && (
+        <SymbolNameDialog
+          defaultName={String(
+            symbolTextOverrideDialog.masterWidget.props[symbolTextOverrideDialog.property] ?? "",
+          )}
+          eyebrow="SYMBOL INSTANCE"
+          title="Override text"
+          fieldLabel="Text content"
+          submitLabel="Apply override"
+          onCancel={() => setSymbolTextOverrideDialog(null)}
+          onSubmit={(value) => {
+            setSymbolTextOverride(
+              symbolTextOverrideDialog.instance,
+              symbolTextOverrideDialog.masterWidget,
+              symbolTextOverrideDialog.property,
+              value,
+            );
+            setSymbolTextOverrideDialog(null);
+          }}
+        />
+      )}
       {canvasContextMenu && (
         <div
           className="tree-context-menu canvas-context-menu"
@@ -2709,11 +3053,25 @@ export function CanvasStage({
           <button role="menuitem" disabled={selectedWidgets.length === 0} onClick={() => { void copySelection(); setCanvasContextMenu(null); }}>
             Copy
           </button>
+          <button
+            role="menuitem"
+            disabled={selectedWidgets.length !== 1}
+            onClick={() => { copyStyleSelection(); setCanvasContextMenu(null); }}
+          >
+            Copy Style
+          </button>
           <button role="menuitem" disabled={!selectedHasUnlockedWidget} onClick={() => { void copySelection(true); setCanvasContextMenu(null); }}>
             Cut
           </button>
           <button role="menuitem" onClick={() => { void pasteSelection(); setCanvasContextMenu(null); }}>
             Paste
+          </button>
+          <button
+            role="menuitem"
+            disabled={!getCopiedWidgetStyle() || selectedWidgets.length === 0}
+            onClick={() => { pasteStyleSelection(); setCanvasContextMenu(null); }}
+          >
+            Paste Style
           </button>
           <button role="menuitem" disabled={selectedWidgets.length === 0} onClick={() => { duplicateSelection(); setCanvasContextMenu(null); }}>
             Duplicate
@@ -2748,9 +3106,71 @@ export function CanvasStage({
           <button role="menuitem" disabled={!selectedHasUnlockedWidget} onClick={() => { deleteSelection(); setCanvasContextMenu(null); }}>
             Delete
           </button>
-          <button role="menuitem" disabled title="Available in Task 210">
-            Save as Symbol
+          <button
+            role="menuitem"
+            disabled={selectedWidgets.length === 0 || selectedWidgets.some((widget) => widget.type === "symbol-instance")}
+            onClick={requestCreateSymbolFromSelection}
+          >
+            Create Symbol
           </button>
+          {selectedWidgets.length === 1 && selectedWidgets[0].type === "symbol-instance" && (
+            <>
+              <button
+                role="menuitem"
+                onClick={() => {
+                  detachSymbolInstance(selectedWidgets[0].id);
+                  setCanvasContextMenu(null);
+                }}
+              >
+                Detach from Symbol
+              </button>
+              {symbols.length > 1 && (
+                <div className="tree-context-menu-levels" role="group" aria-label="Swap symbol">
+                  <span>Swap Symbol</span>
+                  {symbols
+                    .filter((symbol) => symbol.id !== selectedWidgets[0].symbolId)
+                    .map((symbol) => (
+                      <button
+                        key={symbol.id}
+                        role="menuitem"
+                        onClick={() => {
+                          swapSymbolInstance(selectedWidgets[0].id, symbol.id);
+                          setCanvasContextMenu(null);
+                        }}
+                      >
+                        {symbol.name}
+                      </button>
+                    ))}
+                </div>
+              )}
+              {symbols
+                .find((symbol) => symbol.id === selectedWidgets[0].symbolId)
+                ?.widgets.flatMap((masterWidget) => {
+                  const textProperty = masterWidget.type === "text"
+                    ? "text"
+                    : ["button", "checkbox", "radio", "toggle"].includes(masterWidget.type)
+                      ? "label"
+                      : null;
+                  if (!textProperty || typeof masterWidget.props[textProperty] !== "string") return [];
+                  return (
+                    <button
+                      key={`symbol-text-${masterWidget.id}`}
+                      role="menuitem"
+                      onClick={() => {
+                        setSymbolTextOverrideDialog({
+                          instance: selectedWidgets[0],
+                          masterWidget,
+                          property: textProperty,
+                        });
+                        setCanvasContextMenu(null);
+                      }}
+                    >
+                      Edit {masterWidget.name ?? masterWidget.type} text
+                    </button>
+                  );
+                })}
+            </>
+          )}
         </div>
       )}
     </div>

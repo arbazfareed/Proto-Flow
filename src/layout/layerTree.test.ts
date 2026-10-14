@@ -40,6 +40,69 @@ function widget(
 }
 
 describe("layer hierarchy", () => {
+  it("nests children of an Ellipse under it instead of its enclosing Rectangle", () => {
+    const rectangle = {
+      ...widget("rectangle", "rectangle", 0),
+      x: 10,
+      y: 10,
+      width: 500,
+      height: 300,
+    };
+    const ellipse = {
+      ...widget("ellipse", "ellipse", 1, rectangle.id),
+      x: 50,
+      y: 40,
+      width: 140,
+      height: 60,
+    };
+    const iconInsideEllipse = {
+      ...widget("icon-inside-ellipse", "icon", 2, rectangle.id),
+      x: 100,
+      y: 55,
+      width: 20,
+      height: 20,
+    };
+    const iconOutsideEllipse = {
+      ...widget("icon-outside-ellipse", "icon", 3),
+      x: 100,
+      y: 150,
+      width: 20,
+      height: 20,
+    };
+    const widgets = syncWidgetGroupIdsToContainment([
+      rectangle,
+      ellipse,
+      iconInsideEllipse,
+      iconOutsideEllipse,
+    ]);
+    const roots = buildLayerHierarchy(widgets, (item) => item.id);
+
+    expect(widgets.find((item) => item.id === iconInsideEllipse.id)?.groupId)
+      .toBe(ellipse.id);
+    expect(roots).toHaveLength(1);
+    expect(roots[0].children.map((node) => node.id)).toEqual([
+      ellipse.id,
+      iconOutsideEllipse.id,
+    ]);
+    expect(roots[0].children[0].children.map((node) => node.id))
+      .toEqual([iconInsideEllipse.id]);
+    expect(getContainerBadge(roots[0].widget!, roots[0].children.length))
+      .toBe("2 children");
+    expect(getContainerBadge(
+      roots[0].children[0].widget!,
+      roots[0].children[0].children.length,
+    )).toBe("1 child");
+    expect(flattenLayerHierarchy(roots, new Set()).map(({ node, depth }) => [
+      node.id,
+      depth,
+    ])).toEqual([
+      [rectangle.id, 0],
+      [ellipse.id, 1],
+      [iconInsideEllipse.id, 2],
+      [iconOutsideEllipse.id, 1],
+    ]);
+  });
+
   it("uses semantic category accents for layer rows", () => {
     expect(getLayerAccentColor(widget("screen-shape", "star", 0))).toBe("#94A3B8");
     expect(getLayerAccentColor(widget("container", "rectangle", 0))).toBe("#F59E0B");

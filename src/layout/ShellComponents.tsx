@@ -41,6 +41,7 @@ import {
 } from "../devices/frame";
 import type { ScreenDevice } from "../devices/types";
 import { ScreenLayerSidebar } from "./ScreenLayerSidebar";
+import { SymbolLibrary } from "./SymbolLibrary";
 import { WidgetIcon } from "./widgetIcons";
 import { BreakpointToolbar, ResponsivePanel } from "./ResponsiveControls";
 import {
@@ -54,8 +55,11 @@ import {
   getDefaultTextProperties,
   getStyleUpdates,
   getTextPropertyUpdates,
+  isTextStyleWidget,
+  normalizeListItems,
   parseStyleColor,
 } from "../canvas/styleInspector";
+import { measureTextBounds } from "../canvas/textMeasurement";
 import {
   getShapeToolDefinition,
   type ShapeTool,
@@ -209,6 +213,7 @@ export function LeftSidebar({
         onSelectTool={onSelectTool}
         onAddScreen={onAddScreen}
       />
+      <SymbolLibrary />
       <div className="sidebar-footer">
         <button className="nav-item" onClick={onOpenPalette}><Keyboard size={16} /><span>Keyboard shortcuts</span></button>
         <button className="nav-item" onClick={onUpdates}><CircleHelp size={16} /><span>Help & updates</span></button>
@@ -692,11 +697,24 @@ function StyleSection({ widgets }: { widgets: Widget[] }) {
             ? item
             : {
                 ...item,
-                widgets: item.widgets.map((widget) =>
-                  updates.has(widget.id)
-                    ? { ...widget, props: updates.get(widget.id)! }
-                    : widget,
-                ),
+                widgets: item.widgets.map((widget) => {
+                  const props = updates.get(widget.id);
+                  if (!props) return widget;
+                  const measured = props.autoSize === true
+                    ? measureTextBounds(
+                        typeof props.text === "string" ? props.text : "",
+                        typeof props.fontFamily === "string" ? props.fontFamily : "Arial",
+                        typeof props.fontSize === "number" ? props.fontSize : 24,
+                        typeof props.fontWeight === "string" ? props.fontWeight : "normal",
+                        typeof props.lineHeight === "number" ? props.lineHeight : 1.2,
+                      )
+                    : null;
+                  return {
+                    ...widget,
+                    props,
+                    ...(measured ? { width: measured.width, height: measured.height } : {}),
+                  };
+                }),
               },
         ),
       };
@@ -756,9 +774,7 @@ function StyleSection({ widgets }: { widgets: Widget[] }) {
 
   const resetSection = (section: "fill" | "stroke" | "radius" | "shadow" | "blend" | "text") => {
     if (section === "text") {
-      const textWidgets = editableWidgets.filter((widget) =>
-        ["text", "button", "input", "checkbox", "radio", "toggle"].includes(widget.type),
-      );
+      const textWidgets = editableWidgets.filter(isTextStyleWidget);
       const defaults = textWidgets[0] ? getDefaultTextProperties(textWidgets[0]) : {};
       applyText(defaults);
       return;
@@ -796,12 +812,10 @@ function StyleSection({ widgets }: { widgets: Widget[] }) {
   const radiusMixed = mixed(valuesFor("cornerRadius"));
   const commonShadow = commonStyleValue("shadow", undefined);
   const shadowMixed = mixed(valuesFor("shadow"));
-  const hasText = editableWidgets.some((widget) =>
-    ["text", "button", "input", "checkbox", "radio", "toggle"].includes(widget.type),
-  );
+  const hasText = editableWidgets.some(isTextStyleWidget);
   const textProperty = (key: string, fallback: unknown): unknown[] =>
     editableWidgets
-      .filter((widget) => ["text", "button", "input", "checkbox", "radio", "toggle"].includes(widget.type))
+      .filter(isTextStyleWidget)
       .map((widget) => widget.props[key] ?? getDefaultTextProperties(widget)[key] ?? fallback);
   const textValue = (key: string, fallback: unknown): unknown => {
     const values = textProperty(key, fallback);
@@ -949,7 +963,6 @@ function StyleSection({ widgets }: { widgets: Widget[] }) {
         <button type="button" className="icon-button small-icon style-details-reset" aria-label="Reset text style" onClick={() => resetSection("text")}><RotateCcw size={11} /></button>
         <div className="style-control-grid">
           <label className="style-control"><span>Font family</span><select aria-label="Font family" value={String(textValue("fontFamily", "Arial"))} onChange={(event) => applyText({ fontFamily: event.currentTarget.value })}>{textMixed("fontFamily") && <option value="Mixed" disabled>Mixed</option>}{["Arial", "Inter", "Georgia", "Times New Roman", "Verdana", "Trebuchet MS", "Courier New", "system-ui"].map((family) => <option key={family}>{family}</option>)}</select></label>
-          <label className="style-control"><span>Font size</span><input type="number" min="1" max="500" aria-label="Font size" value={textMixed("fontSize") ? "" : String(textValue("fontSize", 14))} placeholder={textMixed("fontSize") ? "Mixed" : undefined} onChange={(event) => applyText({ fontSize: Math.min(500, Math.max(1, Number(event.currentTarget.value))) })} onBlur={finishEditSession} /></label>
           <label className="style-control"><span>Weight</span><select aria-label="Font weight" value={String(textValue("fontWeight", "normal"))} onChange={(event) => applyText({ fontWeight: event.currentTarget.value })}>{textMixed("fontWeight") && <option value="Mixed" disabled>Mixed</option>}<option value="normal">Regular</option><option value="bold">Bold</option></select></label>
           <label className="style-control"><span>Style</span><select aria-label="Font style" value={String(textValue("fontStyle", "normal"))} onChange={(event) => applyText({ fontStyle: event.currentTarget.value })}>{textMixed("fontStyle") && <option value="Mixed" disabled>Mixed</option>}<option value="normal">Normal</option><option value="italic">Italic</option></select></label>
           <label className="style-control"><span>Underline {textMixed("underline") ? "(Mixed)" : ""}</span><input type="checkbox" aria-label="Underline text" checked={textValue("underline", false) === true} onChange={(event) => applyText({ underline: event.currentTarget.checked })} /></label>
@@ -1128,7 +1141,15 @@ function GeometrySection({ widgets }: { widgets: Widget[] }) {
                 ...screen,
                 widgets: screen.widgets.map((widget) => {
                   const update = updateById.get(widget.id);
-                  return update ? { ...widget, ...update } : widget;
+                  return update
+                    ? {
+                        ...widget,
+                        ...update,
+                        ...(isTextStyleWidget(widget) && (field === "width" || field === "height")
+                          ? { props: { ...widget.props, autoSize: false } }
+                          : {}),
+                      }
+                    : widget;
                 }),
               },
         ),
@@ -1445,6 +1466,173 @@ function GeometrySection({ widgets }: { widgets: Widget[] }) {
   );
 }
 
+function TextSizeControl({ widgets }: { widgets: Widget[] }) {
+  const eligibleWidgets = widgets.filter(
+    (widget) => !widget.locked && isTextStyleWidget(widget),
+  );
+  const sessionRef = useRef<{
+    snapshot: Project;
+    screenId: string;
+    widgetIds: string[];
+    timer: number | null;
+  } | null>(null);
+  const [draft, setDraft] = useState("");
+  const selectionKey = eligibleWidgets.map((widget) => widget.id).join("\u0000");
+  const readFontSize = (widget: Widget): number =>
+    typeof widget.props.fontSize === "number"
+      ? widget.props.fontSize
+      : Number(getDefaultTextProperties(widget).fontSize ?? 14);
+  const values = eligibleWidgets.map(readFontSize);
+  const mixedSize = values.some((value) => value !== values[0]);
+  const currentSize = values.length > 0 && !mixedSize ? values[0] : null;
+
+  const finishEdit = useCallback(() => {
+    const session = sessionRef.current;
+    if (!session) return;
+    if (session.timer !== null) window.clearTimeout(session.timer);
+    sessionRef.current = null;
+    const current = useStore.getState();
+    const beforeWidgets =
+      session.snapshot.screens.find((screen) => screen.id === session.screenId)?.widgets ?? [];
+    const afterWidgets =
+      current.project.screens.find((screen) => screen.id === session.screenId)?.widgets ?? [];
+    const changed = session.widgetIds.some((id) => {
+      const before = beforeWidgets.find((widget) => widget.id === id);
+      const after = afterWidgets.find((widget) => widget.id === id);
+      return Boolean(
+        before &&
+        after &&
+        (before.props.fontSize !== after.props.fontSize ||
+          before.width !== after.width ||
+          before.height !== after.height),
+      );
+    });
+    if (changed) current.pushHistory(session.snapshot);
+  }, []);
+
+  useEffect(() => {
+    finishEdit();
+    setDraft("");
+  }, [finishEdit, selectionKey]);
+
+  useEffect(() => () => finishEdit(), [finishEdit]);
+
+  const applySize = (rawValue: string) => {
+    if (!rawValue.trim()) {
+      setDraft(rawValue);
+      return;
+    }
+    const parsedValue = Number(rawValue);
+    if (!Number.isFinite(parsedValue)) {
+      setDraft(rawValue);
+      return;
+    }
+    const fontSize = Math.min(500, Math.max(1, parsedValue));
+    setDraft(String(fontSize));
+    if (eligibleWidgets.length === 0) return;
+    let session = sessionRef.current;
+    if (!session) {
+      const current = useStore.getState();
+      session = {
+        snapshot: current.project,
+        screenId: current.getActiveScreenId(),
+        widgetIds: eligibleWidgets.map((widget) => widget.id),
+        timer: null,
+      };
+      sessionRef.current = session;
+    }
+    const current = useStore.getState();
+    const project: Project = {
+      ...current.project,
+      updatedAt: new Date().toISOString(),
+      screens: current.project.screens.map((screen) =>
+        screen.id !== session!.screenId
+          ? screen
+          : {
+              ...screen,
+              widgets: screen.widgets.map((widget) => {
+                if (!session!.widgetIds.includes(widget.id)) return widget;
+                const props: Record<string, unknown> = {
+                  ...widget.props,
+                  fontSize,
+                };
+                if (props.autoSize !== true) return { ...widget, props };
+                const text = widget.type === "list"
+                  ? normalizeListItems(props.items).join("\n")
+                  : typeof props.text === "string" ? props.text : "";
+                const measured = measureTextBounds(
+                  text,
+                  typeof props.fontFamily === "string" ? props.fontFamily : "Arial",
+                  fontSize,
+                  typeof props.fontWeight === "string" ? props.fontWeight : "normal",
+                  typeof props.lineHeight === "number" ? props.lineHeight : 1.2,
+                );
+                return { ...widget, props, width: measured.width, height: measured.height };
+              }),
+            },
+      ),
+    };
+    useStore.setState({ project, isDirty: true });
+    if (session.timer !== null) window.clearTimeout(session.timer);
+    session.timer = window.setTimeout(finishEdit, 500);
+  };
+
+  const stepSize = (direction: -1 | 1) => {
+    const base = draft && Number.isFinite(Number(draft))
+      ? Number(draft)
+      : currentSize ?? values[0] ?? 14;
+    applySize(String(Math.min(500, Math.max(1, base + direction))));
+  };
+
+  if (!widgets.some(isTextStyleWidget)) return null;
+
+  return (
+    <section className="inspector-font-size" aria-label="Text size">
+      <span className="inspector-font-size-label">TEXT SIZE</span>
+      <div className="inspector-font-size-stepper">
+        <button
+          type="button"
+          aria-label="Decrease font size"
+          title="Decrease font size"
+          disabled={!eligibleWidgets.length}
+          onClick={() => stepSize(-1)}
+        >
+          <Minus size={13} />
+        </button>
+        <input
+          type="number"
+          min="1"
+          max="500"
+          step="1"
+          aria-label="Font size"
+          value={draft || (currentSize === null ? "" : String(currentSize))}
+          placeholder={mixedSize ? "Mixed" : "14"}
+          disabled={!eligibleWidgets.length}
+          onChange={(event) => applySize(event.currentTarget.value)}
+          onBlur={finishEdit}
+          onKeyDown={(event) => {
+            if (event.key === "Enter") {
+              event.preventDefault();
+              finishEdit();
+              event.currentTarget.blur();
+            }
+          }}
+        />
+        <span>px</span>
+        <button
+          type="button"
+          aria-label="Increase font size"
+          title="Increase font size"
+          disabled={!eligibleWidgets.length}
+          onClick={() => stepSize(1)}
+        >
+          <Plus size={13} />
+        </button>
+      </div>
+    </section>
+  );
+}
+
 export function RightInspector({ onToggle, onUpdates, onRename }: RightInspectorProps) {
   const [inspectorTab, setInspectorTab] = useState<"design" | "responsive">("design");
   const project = useStore((state) => state.project);
@@ -1480,6 +1668,7 @@ export function RightInspector({ onToggle, onUpdates, onRename }: RightInspector
         <span className="right-dock-title">LAYERS &amp; INSPECTOR</span>
         <button className="icon-button small-icon" aria-label="Close right sidebar" onClick={onToggle}><PanelRightClose size={15} /></button>
       </div>
+      <TextSizeControl widgets={selectedWidgets} />
       <section className="right-inspector-panel" aria-label="Inspector">
       <div className="inspector-top">
         <div><span className="inspector-overline">INSPECTOR</span><h2>{selectedWidget ? selectedLabel : selectedWidgets.length > 1 ? `${selectedWidgets.length} items selected` : "Select an element"}</h2></div>

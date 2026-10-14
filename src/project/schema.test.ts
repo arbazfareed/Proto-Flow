@@ -75,7 +75,7 @@ describe("ProtoFlow project schema", () => {
   it("creates a valid starter project with a UUID start screen", () => {
     const project = createEmptyProject("Checkout flow");
 
-    expect(project.schemaVersion).toBe("1.0.0");
+    expect(project.schemaVersion).toBe("1.1.0");
     expect(project.name).toBe("Checkout flow");
     expect(project.screens).toHaveLength(1);
     expect(project.screens[0].id).toBe(project.startScreenId);
@@ -90,6 +90,62 @@ describe("ProtoFlow project schema", () => {
 
     expect(parseProject(project)).toEqual(project);
     expect(parseProject(serializeProject(project))).toEqual(project);
+  });
+
+  it("migrates version 1.0 projects to the symbol-aware 1.1 schema", () => {
+    const project = createCompleteProject();
+    const { symbols: _symbols, ...legacy } = project;
+    const migrated = parseProject({ ...legacy, schemaVersion: "1.0.0" });
+    expect(migrated.schemaVersion).toBe("1.1.0");
+    expect(migrated.symbols).toEqual([]);
+  });
+
+  it("validates symbol-instance references", () => {
+    const project = createCompleteProject();
+    const [screen] = project.screens;
+    const instance = {
+      ...screen.widgets[0],
+      type: "symbol-instance",
+      symbolId: crypto.randomUUID(),
+    };
+    expect(() =>
+      parseProject({
+        ...project,
+        screens: [{ ...screen, widgets: [instance] }],
+      }),
+    ).toThrow(/Symbol instance must reference an existing symbol/);
+  });
+
+  it("round-trips symbol masters and instance references", () => {
+    const project = createCompleteProject();
+    const source = project.screens[0].widgets[0];
+    const master = { ...source, id: crypto.randomUUID() };
+    const symbol = {
+      id: crypto.randomUUID(),
+      name: "Checkout button",
+      width: source.width,
+      height: source.height,
+      widgets: [master],
+    };
+    const instance = {
+      ...source,
+      id: crypto.randomUUID(),
+      type: "symbol-instance",
+      name: symbol.name,
+      symbolId: symbol.id,
+    };
+    const withSymbol: Project = {
+      ...project,
+      symbols: [symbol],
+      screens: [
+        {
+          ...project.screens[0],
+          widgets: [instance],
+        },
+      ],
+    };
+
+    expect(parseProject(serializeProject(withSymbol))).toEqual(withSymbol);
   });
 
   it("omits the transient image preview when the widget references a saved asset", () => {

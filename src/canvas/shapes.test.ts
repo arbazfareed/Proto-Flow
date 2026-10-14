@@ -104,6 +104,23 @@ describe("canvas shape registry", () => {
     }
   });
 
+  it("creates list elements with visible bullet-list defaults", () => {
+    expect(getShapeDefinition("list")).toMatchObject({
+      width: 220,
+      height: 96,
+      props: {
+        items: ["List item 1", "List item 2", "List item 3"],
+        listStyle: "bullet",
+        fontSize: 16,
+      },
+    });
+    expect(createShapeWidget("list", 12, 24).props.items).toEqual([
+      "List item 1",
+      "List item 2",
+      "List item 3",
+    ]);
+  });
+
   it("creates UUID-backed unlocked widgets with isolated registry defaults", () => {
     const rectangle = createShapeWidget("rectangle", 12, 24);
     const icon = createShapeWidget("icon", 40, 50);
