@@ -470,7 +470,7 @@ function ImageShape({ widget, fill, stroke, strokeWidth, onThumbnailReady }: Sha
   const [image, setImage] = useState<HTMLImageElement | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const imageNodeRef = useRef<Konva.Image>(null);
-  const source = getWidgetProp(widget, "src");
+  const source = typeof widget.props.src === "string" ? widget.props.src : "";
   const assetPath = getWidgetProp(widget, "assetPath");
   const mime = getWidgetProp(widget, "mime");
 
@@ -522,8 +522,9 @@ function ImageShape({ widget, fill, stroke, strokeWidth, onThumbnailReady }: Sha
   }, [assetPath, filePath, mime, onThumbnailReady, source]);
 
   useEffect(() => {
+    if (!image) return;
     const node = imageNodeRef.current;
-    if (!image || !node) return;
+    if (!node) return;
     node.clearCache();
     node.cache({ pixelRatio: 1 });
     node.getLayer()?.batchDraw();

@@ -915,7 +915,10 @@ export function CanvasStage({
           const image = await readImageFile(file);
           await applyImportedImage(
             image,
-            { x: position.x + index * 24, y: position.y + index * 24 },
+            {
+              x: Math.max(0, Math.min(activeDevice.width - 200, position.x + index * 24)),
+              y: Math.max(0, Math.min(activeDevice.height - 200, position.y + index * 24)),
+            },
             index === 0 ? targetWidgetId : null,
           );
         } catch (error) {
@@ -926,7 +929,7 @@ export function CanvasStage({
         }
       }
     },
-    [applyImportedImage, onNotify],
+    [activeDevice.height, activeDevice.width, applyImportedImage, onNotify],
   );
 
   const openImagePicker = useCallback((widgetId: string) => {
@@ -1847,7 +1850,10 @@ export function CanvasStage({
             : undefined;
           const position = target
             ? { x: target.x, y: target.y }
-            : lastPointerWorldRef.current;
+            : {
+                x: Math.max(0, (activeDevice.width - 200) / 2),
+                y: Math.max(0, (activeDevice.height - 200) / 2),
+              };
           void handleImageFiles(files, position, targetId);
         }}
       />
