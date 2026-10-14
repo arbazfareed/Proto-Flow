@@ -155,7 +155,7 @@ function ElementLibraryContents({
           <strong>{mode === "sidebar" ? "ELEMENTS" : "Element library"}</strong>
           <span>
             {mode === "sidebar"
-              ? "Select exactly one layer to nest the next element inside it. Otherwise it stays on the screen."
+              ? "To nest an element, select its parent and place it fully inside the parent. Items outside remain on the screen."
               : "Choose a tool, then drag on the canvas to place it."}
           </span>
         </div>

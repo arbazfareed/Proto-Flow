@@ -1,6 +1,11 @@
 import { describe, expect, it } from "vitest";
 import { createEmptyProject, parseProject } from "./schema";
-import { reorderScreens, reorderWidgets } from "./layers";
+import {
+  getSelectedContainingParentId,
+  isWidgetContainedBy,
+  reorderScreens,
+  reorderWidgets,
+} from "./layers";
 
 function widget(id: string, zIndex: number) {
   return {
@@ -21,6 +26,24 @@ function widget(id: string, zIndex: number) {
 }
 
 describe("layer and screen ordering", () => {
+  it("checks whether a widget is fully inside a parent widget", () => {
+    const parent = { x: 10, y: 20, width: 100, height: 60 };
+    expect(isWidgetContainedBy({ x: 10, y: 20, width: 100, height: 60 }, parent)).toBe(true);
+    expect(isWidgetContainedBy({ x: 20, y: 30, width: 20, height: 10 }, parent)).toBe(true);
+    expect(isWidgetContainedBy({ x: 100, y: 30, width: 20, height: 10 }, parent)).toBe(false);
+    expect(isWidgetContainedBy({ x: 20, y: 70, width: 20, height: 20 }, parent)).toBe(false);
+  });
+
+  it("nests a new widget only when it is placed inside the single selected parent", () => {
+    const parent = { ...widget("parent", 1), x: 10, y: 10, width: 100, height: 60 };
+    const inside = { ...widget("inside", 2), x: 20, y: 20 };
+    const outside = { ...widget("outside", 3), x: 200, y: 20 };
+
+    expect(getSelectedContainingParentId([parent], ["parent"], inside)).toBe("parent");
+    expect(getSelectedContainingParentId([parent], ["parent"], outside)).toBeUndefined();
+    expect(getSelectedContainingParentId([parent], ["parent", "another"], inside)).toBeUndefined();
+  });
+
   it("moves a layer to the top-list target position and assigns descending z-index", () => {
     const result = reorderWidgets(
       [widget("a", 1), widget("b", 2), widget("c", 3)],

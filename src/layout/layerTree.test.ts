@@ -66,6 +66,16 @@ describe("layer hierarchy", () => {
       .toEqual(["rectangle-parent", "text-child", "image-grandchild"]);
   });
 
+  it("keeps a widget outside its referenced parent's bounds at the screen root", () => {
+    const parent = { ...widget("panel", "panel", 3), x: 20, y: 20, width: 200, height: 120 };
+    const child = { ...widget("progress", "progress-bar", 2, "panel"), x: 400, y: 20 };
+    const containedChild = { ...widget("label", "text", 1, "panel"), x: 40, y: 40 };
+    const roots = buildLayerHierarchy([parent, child, containedChild], (item) => item.id);
+
+    expect(roots.map((node) => node.id)).toEqual(["panel", "progress"]);
+    expect(roots[0].children.map((node) => node.id)).toEqual(["label"]);
+  });
+
   it("represents Ctrl+G groups as expandable virtual containers", () => {
     const roots = buildLayerHierarchy(
       [widget("one", "text", 5, "semantic-id"), widget("two", "image", 4, "semantic-id")],

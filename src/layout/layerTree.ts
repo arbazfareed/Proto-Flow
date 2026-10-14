@@ -1,4 +1,5 @@
 import type { Widget } from "../project/schema";
+import { isWidgetContainedBy } from "../project/layers";
 import { getLayerCategory } from "./layerGrouping";
 import type { LayerCategoryId } from "./layerGrouping";
 
@@ -167,12 +168,15 @@ export function buildLayerHierarchy(
   labelForWidget: (widget: Widget) => string,
 ): LayerTreeNode[] {
   const orderedWidgets = [...widgets].sort(widgetOrder);
-  const widgetIds = new Set(orderedWidgets.map((widget) => widget.id));
-  const referencedWidgetParents = new Set(
-    orderedWidgets
-      .map((widget) => widget.groupId)
-      .filter((groupId): groupId is string => Boolean(groupId && widgetIds.has(groupId))),
-  );
+  const widgetsById = new Map(orderedWidgets.map((widget) => [widget.id, widget]));
+  const validParentByWidgetId = new Map<string, string>();
+  for (const widget of orderedWidgets) {
+    const parent = widget.groupId ? widgetsById.get(widget.groupId) : undefined;
+    if (parent && parent.id !== widget.id && isWidgetContainedBy(widget, parent)) {
+      validParentByWidgetId.set(widget.id, parent.id);
+    }
+  }
+  const referencedWidgetParents = new Set(validParentByWidgetId.values());
   const containerIds = new Set(
     orderedWidgets
       .filter((widget) => isLayerContainer(widget) || referencedWidgetParents.has(widget.id))
@@ -181,12 +185,9 @@ export function buildLayerHierarchy(
   const parentByWidgetId = new Map<string, string>();
 
   for (const widget of orderedWidgets) {
-    if (
-      widget.groupId &&
-      widget.groupId !== widget.id &&
-      containerIds.has(widget.groupId)
-    ) {
-      parentByWidgetId.set(widget.id, widget.groupId);
+    const parentId = validParentByWidgetId.get(widget.id);
+    if (parentId && containerIds.has(parentId)) {
+      parentByWidgetId.set(widget.id, parentId);
     }
   }
 
@@ -226,6 +227,7 @@ export function buildLayerHierarchy(
   for (const widget of orderedWidgets) {
     if (
       widget.groupId &&
+      !widgetsById.has(widget.groupId) &&
       !containerIds.has(widget.groupId) &&
       !parentByWidgetId.has(widget.id)
     ) {

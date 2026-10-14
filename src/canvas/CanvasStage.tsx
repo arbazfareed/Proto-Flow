@@ -39,6 +39,7 @@ import {
   LAYER_DRAG_MIME,
   parseLayerDragPayload,
 } from "../project/layerDrag";
+import { getSelectedContainingParentId } from "../project/layers";
 import {
   clampCanvasZoom,
   fitCanvasBounds,
@@ -730,12 +731,6 @@ export function CanvasStage({
       }
 
       const widget = createShapeWidget(type, position.x, position.y, width, height, props);
-      const selectedParentId =
-        current.selectedIds.length === 1 ? current.selectedIds[0] : undefined;
-      const selectedParent = selectedParentId
-        ? screen.widgets.find((item) => item.id === selectedParentId)
-        : undefined;
-      if (selectedParent) widget.groupId = selectedParent.id;
       if (type === "button" && typeof window !== "undefined") {
         const accent = getComputedStyle(document.documentElement)
           .getPropertyValue("--accent-strong")
@@ -768,6 +763,12 @@ export function CanvasStage({
       );
       widget.x = snap.position.x;
       widget.y = snap.position.y;
+      const selectedParentId = getSelectedContainingParentId(
+        screen.widgets,
+        current.selectedIds,
+        widget,
+      );
+      if (selectedParentId) widget.groupId = selectedParentId;
       widget.zIndex = screen.widgets.reduce(
         (highest, item) => Math.max(highest, item.zIndex),
         -1,
