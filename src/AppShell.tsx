@@ -11,6 +11,11 @@ import { CommandPalette } from "./layout/CommandPalette";
 import { commandRegistry, createCoreCommands } from "./commands/registry";
 import { handleGlobalShortcut } from "./commands/shortcuts";
 import { formatProjectValidationError, SchemaValidationError } from "./project/schema";
+import type { Screen } from "./project/schema";
+import { createDefaultBreakpoints } from "./project/responsive";
+import { DEVICE_PRESETS, toScreenDevice } from "./devices/catalog";
+import type { DeviceCategory } from "./devices/types";
+import type { ShapeTool } from "./canvas/shapeTools";
 import {
   CanvasArea,
   LeftSidebar,
@@ -34,6 +39,7 @@ function AppShell() {
   const [notice, setNotice] = useState("");
   const [noticeIsError, setNoticeIsError] = useState(false);
   const [updateCheckRequest, setUpdateCheckRequest] = useState(0);
+  const [activeTool, setActiveTool] = useState<ShapeTool | null>(null);
 
   const notify = useCallback((message: string, isError = false) => {
     setNotice(message);
@@ -192,6 +198,30 @@ function AppShell() {
     });
   }, [notify]);
 
+  const addLibraryScreen = useCallback((category: DeviceCategory) => {
+    const preset = DEVICE_PRESETS.find((device) => device.category === category);
+    if (!preset) {
+      notify(`No ${category} device preset is available.`, true);
+      return;
+    }
+    const device = toScreenDevice(preset);
+    const screen: Screen = {
+      id: crypto.randomUUID(),
+      name: preset.name,
+      device,
+      breakpoints: createDefaultBreakpoints(device.width, device.height),
+      widgets: [],
+      interactionRules: [],
+    };
+    const current = useStore.getState();
+    current.setProject({
+      ...current.project,
+      updatedAt: new Date().toISOString(),
+      screens: [...current.project.screens, screen],
+    });
+    current.setActiveScreen(screen.id);
+  }, [notify]);
+
   return (
     <div className="app-shell">
       <TopBar
@@ -212,6 +242,9 @@ function AppShell() {
           onToggle={toggleLeftPanel}
           onOpenPalette={() => setPaletteOpen(true)}
           onUpdates={requestUpdateCheck}
+          activeTool={activeTool}
+          onSelectTool={setActiveTool}
+          onAddScreen={addLibraryScreen}
         />
         <CanvasArea
           onToggleLeft={toggleLeftPanel}
@@ -220,6 +253,8 @@ function AppShell() {
           onOpen={() => void openFile()}
           onOpenPalette={() => setPaletteOpen(true)}
           onNotify={notify}
+          activeTool={activeTool}
+          setActiveTool={setActiveTool}
         />
         <RightInspector
           onToggle={toggleRightPanel}

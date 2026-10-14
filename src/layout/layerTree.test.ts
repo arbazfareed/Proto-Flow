@@ -49,6 +49,23 @@ describe("layer hierarchy", () => {
     expect(roots[0].descendantCount).toBe(3);
   });
 
+  it("treats a selected shape with explicit children as an expandable parent", () => {
+    const roots = buildLayerHierarchy([
+      widget("rectangle-parent", "rectangle", 3),
+      widget("text-child", "text", 2, "rectangle-parent"),
+      widget("image-grandchild", "image", 1, "text-child"),
+    ], (item) => item.id);
+
+    expect(roots).toHaveLength(1);
+    expect(roots[0].id).toBe("rectangle-parent");
+    expect(roots[0].children[0].id).toBe("text-child");
+    expect(roots[0].children[0].children[0].id).toBe("image-grandchild");
+    expect(flattenLayerHierarchy(roots, new Set(["container:rectangle-parent"])))
+      .toHaveLength(1);
+    expect(flattenLayerHierarchy(roots, new Set()).map(({ node }) => node.id))
+      .toEqual(["rectangle-parent", "text-child", "image-grandchild"]);
+  });
+
   it("represents Ctrl+G groups as expandable virtual containers", () => {
     const roots = buildLayerHierarchy(
       [widget("one", "text", 5, "semantic-id"), widget("two", "image", 4, "semantic-id")],

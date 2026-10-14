@@ -730,6 +730,12 @@ export function CanvasStage({
       }
 
       const widget = createShapeWidget(type, position.x, position.y, width, height, props);
+      const selectedParentId =
+        current.selectedIds.length === 1 ? current.selectedIds[0] : undefined;
+      const selectedParent = selectedParentId
+        ? screen.widgets.find((item) => item.id === selectedParentId)
+        : undefined;
+      if (selectedParent) widget.groupId = selectedParent.id;
       if (type === "button" && typeof window !== "undefined") {
         const accent = getComputedStyle(document.documentElement)
           .getPropertyValue("--accent-strong")

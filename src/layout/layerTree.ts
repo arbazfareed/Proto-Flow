@@ -66,7 +66,7 @@ export function isLayerContainer(widget: Widget): boolean {
 
 export function getLayerTreeCollapseKey(node: LayerTreeNode): string | null {
   if (node.kind === "group") return node.groupId ? `semantic:${node.groupId}` : null;
-  return node.widget && isLayerContainer(node.widget)
+  return node.widget && (isLayerContainer(node.widget) || node.children.length > 0)
     ? `container:${node.widget.id}`
     : null;
 }
@@ -167,8 +167,16 @@ export function buildLayerHierarchy(
   labelForWidget: (widget: Widget) => string,
 ): LayerTreeNode[] {
   const orderedWidgets = [...widgets].sort(widgetOrder);
+  const widgetIds = new Set(orderedWidgets.map((widget) => widget.id));
+  const referencedWidgetParents = new Set(
+    orderedWidgets
+      .map((widget) => widget.groupId)
+      .filter((groupId): groupId is string => Boolean(groupId && widgetIds.has(groupId))),
+  );
   const containerIds = new Set(
-    orderedWidgets.filter(isLayerContainer).map((widget) => widget.id),
+    orderedWidgets
+      .filter((widget) => isLayerContainer(widget) || referencedWidgetParents.has(widget.id))
+      .map((widget) => widget.id),
   );
   const parentByWidgetId = new Map<string, string>();
 

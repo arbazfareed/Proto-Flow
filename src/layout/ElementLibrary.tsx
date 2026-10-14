@@ -7,6 +7,7 @@ import {
   Eye,
   EyeOff,
   Lock,
+  Search,
   Sparkles,
   Unlock,
   X,
@@ -70,30 +71,49 @@ function getToolGroup(type: ShapeTool): string {
 
 export interface ElementLibraryProps {
   activeTool: ShapeTool | null;
-  anchorRef: RefObject<HTMLDivElement | null>;
+  mode?: "popover" | "sidebar";
+  anchorRef?: RefObject<HTMLDivElement | null>;
+  onSelectTool?: (tool: ShapeTool) => void;
+  onAddScreen: (category: DeviceCategory) => void;
+  onClose?: () => void;
+}
+
+interface ElementLibrarySectionProps {
+  activeTool: ShapeTool | null;
+  mode: "popover" | "sidebar";
+  anchorRef?: RefObject<HTMLDivElement | null>;
   onSelectTool: (tool: ShapeTool) => void;
   onAddScreen: (category: DeviceCategory) => void;
   onClose: () => void;
 }
 
-export function ElementLibrary({
+function ElementLibraryContents({
   activeTool,
+  mode,
   anchorRef,
   onSelectTool,
   onAddScreen,
   onClose,
-}: ElementLibraryProps) {
+}: ElementLibrarySectionProps) {
   const popoverRef = useRef<HTMLDivElement>(null);
+  const searchRef = useRef<HTMLInputElement>(null);
+  const [query, setQuery] = useState("");
+  const matchingToolTypes = ELEMENT_LIBRARY_TOOL_TYPES.filter((tool) =>
+    `${tool} ${getShapeToolDefinition(tool)?.label ?? tool}`
+      .toLowerCase()
+      .includes(query.trim().toLowerCase()),
+  );
   const [placement, setPlacement] = useState({ left: 12, top: 80, width: 760 });
   const groupedTools = new Map<string, ShapeTool[]>();
-  for (const tool of ELEMENT_LIBRARY_TOOL_TYPES) {
+  for (const tool of matchingToolTypes) {
     const group = getToolGroup(tool);
     groupedTools.set(group, [...(groupedTools.get(group) ?? []), tool]);
   }
 
   useLayoutEffect(() => {
+    if (mode === "sidebar") return;
     const placePopover = () => {
-      const anchor = anchorRef.current;
+      const anchor = anchorRef?.current;
       const popover = popoverRef.current;
       if (!anchor || !popover) return;
       const anchorRect = anchor.getBoundingClientRect();
@@ -117,33 +137,56 @@ export function ElementLibrary({
     placePopover();
     window.addEventListener("resize", placePopover);
     return () => window.removeEventListener("resize", placePopover);
-  }, [anchorRef]);
+  }, [anchorRef, mode]);
 
-  return createPortal(
+  const contents = (
     <div
       ref={popoverRef}
-      className="element-library-popover"
-      role="dialog"
-      aria-label="Element library"
-      style={placement}
+      className={`element-library-content${mode === "popover" ? " element-library-popover" : " element-library-sidebar"}`}
+      role={mode === "popover" ? "dialog" : undefined}
+      aria-label={mode === "popover" ? "Element library" : undefined}
+      style={mode === "popover" ? placement : undefined}
       onKeyDown={(event) => {
         if (event.key === "Escape") onClose();
       }}
     >
       <div className="element-library-header">
         <div>
-          <strong>Element library</strong>
-          <span>Choose a tool, then drag on the canvas to place it.</span>
+          <strong>{mode === "sidebar" ? "ELEMENTS" : "Element library"}</strong>
+          <span>
+            {mode === "sidebar"
+              ? "Select exactly one layer to nest the next element inside it. Otherwise it stays on the screen."
+              : "Choose a tool, then drag on the canvas to place it."}
+          </span>
         </div>
-        <button
-          className="icon-button small-icon"
-          type="button"
-          aria-label="Close element library"
-          onClick={onClose}
-        >
-          <X size={15} />
-        </button>
+        {mode === "popover" && (
+          <button
+            className="icon-button small-icon"
+            type="button"
+            aria-label="Close element library"
+            onClick={onClose}
+          >
+            <X size={15} />
+          </button>
+        )}
       </div>
+
+      <label className="element-library-search">
+        <Search size={14} aria-hidden="true" />
+        <input
+          ref={searchRef}
+          type="search"
+          value={query}
+          aria-label="Search elements"
+          placeholder="Search elements"
+          onChange={(event) => setQuery(event.currentTarget.value)}
+        />
+        {query && (
+          <button type="button" aria-label="Clear element search" onClick={() => setQuery("")}>
+            <X size={12} />
+          </button>
+        )}
+      </label>
 
       <section className="element-library-section" aria-label="Screens">
         <h3>Screens</h3>
@@ -172,7 +215,10 @@ export function ElementLibrary({
         if (!tools?.length) return null;
         return (
           <section className="element-library-section" key={id} aria-label={label}>
-            <h3>{label}</h3>
+            <h3>
+              {label}
+              <span>{tools.length}</span>
+            </h3>
             <div className="element-library-grid">
               {tools.map((tool) => {
                 const definition = getShapeToolDefinition(tool);
@@ -185,7 +231,10 @@ export function ElementLibrary({
                     title={`${definition.label} — click, then drag to place`}
                     aria-label={`Add ${definition.label}`}
                     aria-pressed={activeTool === tool}
-                    onClick={() => onSelectTool(tool)}
+                    onClick={() => {
+                      onSelectTool(tool);
+                      if (mode === "popover") onClose();
+                    }}
                   >
                     <WidgetIcon type={tool} size={16} />
                     <span>{definition.label}</span>
@@ -209,7 +258,27 @@ export function ElementLibrary({
         </div>
       </section>
     </div>
-    ,
-    document.body,
+  );
+
+  return mode === "popover" ? createPortal(contents, document.body) : contents;
+}
+
+export function ElementLibrary({
+  activeTool,
+  mode = "popover",
+  anchorRef,
+  onSelectTool,
+  onAddScreen,
+  onClose,
+}: ElementLibraryProps) {
+  return (
+    <ElementLibraryContents
+      activeTool={activeTool}
+      mode={mode}
+      anchorRef={anchorRef}
+      onSelectTool={onSelectTool ?? (() => undefined)}
+      onAddScreen={onAddScreen}
+      onClose={onClose ?? (() => undefined)}
+    />
   );
 }

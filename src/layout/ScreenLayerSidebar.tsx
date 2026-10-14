@@ -1367,8 +1367,8 @@ export function ScreenLayerSidebar() {
   ) => {
     const selected = selectedIds.includes(widget.id);
     const label = widgetLabel(widget);
-    const container = isLayerContainer(widget);
     const hasChildren = entry.node.children.length > 0;
+    const container = isLayerContainer(widget) || hasChildren;
     const parentLabel = hierarchyParentLabels.get(widget.id) ?? "Screen";
     const collapseKey = getLayerTreeCollapseKey(entry.node);
     const indentation = Math.min(entry.depth + 1, 5) * 16;
@@ -1541,7 +1541,7 @@ export function ScreenLayerSidebar() {
                   container && hasChildren
                     ? `Parent of ${entry.node.children.length} direct ${entry.node.children.length === 1 ? "child" : "children"}`
                     : entry.depth === 0
-                      ? `Direct child of Screen: ${activeScreen?.name ?? "Screen"}. New items are added to the screen unless dropped into a container.`
+                      ? `Direct child of Screen: ${activeScreen?.name ?? "Screen"}. Select an item before adding another to nest it inside that parent.`
                       : `Child of ${parentLabel}`
                 }
               >
@@ -2328,7 +2328,7 @@ export function ScreenLayerSidebar() {
           )}
           {menu.kind === "layer" && (
             <>
-              {menuLayerWidget && isLayerContainer(menuLayerWidget) && menuLayerNode?.children.length ? (
+              {menuLayerWidget && menuLayerNode?.children.length ? (
                 <>
                   <button role="menuitem" onClick={() => {
                     setTreeCollapsed(menuLayerNode, false);

@@ -28,11 +28,9 @@ import {
 } from "lucide-react";
 import { isTauri } from "@tauri-apps/api/core";
 import { useStore } from "../store";
-import type { Project, Screen, Widget, WidgetStyle } from "../project/schema";
-import { createDefaultBreakpoints } from "../project/responsive";
+import type { Project, Widget, WidgetStyle } from "../project/schema";
 import {
   DEFAULT_DEVICE_PRESET,
-  DEVICE_PRESETS,
   toScreenDevice,
 } from "../devices/catalog";
 import type { DeviceCategory } from "../devices/types";
@@ -59,8 +57,6 @@ import {
   parseStyleColor,
 } from "../canvas/styleInspector";
 import {
-  PRIMITIVE_TOOLS,
-  WIDGET_TOOLS,
   getShapeToolDefinition,
   type ShapeTool,
 } from "../canvas/shapeTools";
@@ -168,9 +164,21 @@ interface LeftSidebarProps {
   onToggle: () => void;
   onOpenPalette: () => void;
   onUpdates: () => void;
+  activeTool: ShapeTool | null;
+  onSelectTool: (tool: ShapeTool) => void;
+  onAddScreen: (category: DeviceCategory) => void;
 }
 
-export function LeftSidebar({ onNew, onOpen, onToggle, onOpenPalette, onUpdates }: LeftSidebarProps) {
+export function LeftSidebar({
+  onNew,
+  onOpen,
+  onToggle,
+  onOpenPalette,
+  onUpdates,
+  activeTool,
+  onSelectTool,
+  onAddScreen,
+}: LeftSidebarProps) {
   const project = useStore((state) => state.project);
   const isDirty = useStore((state) => state.isDirty);
   const leftPanelOpen = useStore((state) => state.leftPanelOpen);
@@ -195,7 +203,12 @@ export function LeftSidebar({ onNew, onOpen, onToggle, onOpenPalette, onUpdates 
         <div className="nav-item active" aria-current="page"><FileText size={16} /><span>{project.name}</span><span className="nav-unsaved">{isDirty ? "•" : ""}</span></div>
         <button className="nav-item" onClick={onOpen}><FolderOpen size={16} /><span>Open project…</span><kbd>Ctrl O</kbd></button>
       </div>
-      <ScreenLayerSidebar />
+      <ElementLibrary
+        activeTool={activeTool}
+        mode="sidebar"
+        onSelectTool={onSelectTool}
+        onAddScreen={onAddScreen}
+      />
       <div className="sidebar-footer">
         <button className="nav-item" onClick={onOpenPalette}><Keyboard size={16} /><span>Keyboard shortcuts</span></button>
         <button className="nav-item" onClick={onUpdates}><CircleHelp size={16} /><span>Help & updates</span></button>
@@ -212,6 +225,8 @@ interface CanvasAreaProps {
   onOpen: () => void;
   onOpenPalette: () => void;
   onNotify: (message: string, isError?: boolean) => void;
+  activeTool: ShapeTool | null;
+  setActiveTool: (update: ShapeTool | null | ((current: ShapeTool | null) => ShapeTool | null)) => void;
 }
 
 export function CanvasArea({
@@ -221,6 +236,8 @@ export function CanvasArea({
   onOpen,
   onOpenPalette,
   onNotify,
+  activeTool,
+  setActiveTool,
 }: CanvasAreaProps) {
   const project = useStore((state) => state.project);
   const leftPanelOpen = useStore((state) => state.leftPanelOpen);
@@ -254,9 +271,6 @@ export function CanvasArea({
   const toggleBattery = useStore((state) => state.toggleBattery);
   const toggleSignal = useStore((state) => state.toggleSignal);
   const [viewMenuOpen, setViewMenuOpen] = useState(false);
-  const [elementLibraryOpen, setElementLibraryOpen] = useState(false);
-  const elementLibraryAnchorRef = useRef<HTMLDivElement>(null);
-  const [activeTool, setActiveTool] = useState<ShapeTool | null>(null);
   const [orientationRequest, setOrientationRequest] = useState<{
     screenId: string;
     device: ScreenDevice;
@@ -303,31 +317,6 @@ export function CanvasArea({
     setOrientationRequest(null);
   };
 
-  const addLibraryScreen = (category: DeviceCategory) => {
-    const preset = DEVICE_PRESETS.find((device) => device.category === category);
-    if (!preset) {
-      onNotify(`No ${category} device preset is available.`, true);
-      return;
-    }
-    const device = toScreenDevice(preset);
-    const screen: Screen = {
-      id: crypto.randomUUID(),
-      name: preset.name,
-      device,
-      breakpoints: createDefaultBreakpoints(device.width, device.height),
-      widgets: [],
-      interactionRules: [],
-    };
-    const current = useStore.getState();
-    current.setProject({
-      ...current.project,
-      updatedAt: new Date().toISOString(),
-      screens: [...current.project.screens, screen],
-    });
-    current.setActiveScreen(screen.id);
-    setElementLibraryOpen(false);
-  };
-
   const requestOrientationChange = () => {
     if (!activeScreen) return;
     const currentDevice = activeScreen.device ?? toScreenDevice(DEFAULT_DEVICE_PRESET);
@@ -364,61 +353,6 @@ export function CanvasArea({
         </div>
         <BreakpointToolbar />
         <div className="canvas-toolbar-actions">
-          <div className="shape-tools" role="toolbar" aria-label="Canvas tools">
-            {([["Shapes", PRIMITIVE_TOOLS], ["Widgets", WIDGET_TOOLS]] as const).map(
-              ([groupName, tools]) => (
-                <div className="shape-tool-group" key={groupName} role="group" aria-label={groupName}>
-                  <span className="shape-tool-group-label">{groupName}</span>
-                  <div className="shape-tool-buttons">
-                    {tools.map((tool) => {
-                      const definition = getShapeToolDefinition(tool);
-                      if (!definition) return null;
-                      return (
-                        <button
-                          key={tool}
-                          className={`icon-button small-icon shape-tool-button${activeTool === tool ? " is-active" : ""}`}
-                          type="button"
-                          aria-label={`Draw ${definition.label}`}
-                          aria-pressed={activeTool === tool}
-                          title={`${definition.label}${definition.shortcut ? ` (${definition.shortcut})` : ""}`}
-                          onClick={() =>
-                            setActiveTool((current) => (current === tool ? null : tool))
-                          }
-                        >
-                          <WidgetIcon type={tool} size={16} />
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
-              ),
-            )}
-          </div>
-          <div className="element-library-anchor" ref={elementLibraryAnchorRef}>
-            <button
-              className={`icon-button small-icon element-library-trigger${elementLibraryOpen ? " is-active" : ""}`}
-              type="button"
-              aria-label="Browse all elements"
-              title="Browse all elements"
-              aria-haspopup="dialog"
-              aria-expanded={elementLibraryOpen}
-              onClick={() => setElementLibraryOpen((open) => !open)}
-            >
-              <Layers2 size={15} />
-            </button>
-            {elementLibraryOpen && (
-              <ElementLibrary
-                activeTool={activeTool}
-                anchorRef={elementLibraryAnchorRef}
-                onSelectTool={(tool) => {
-                  setActiveTool(tool);
-                  setElementLibraryOpen(false);
-                }}
-                onAddScreen={addLibraryScreen}
-                onClose={() => setElementLibraryOpen(false)}
-              />
-            )}
-          </div>
           {activeTool && (
             <span
               className="active-element-tool"
@@ -1512,6 +1446,7 @@ function GeometrySection({ widgets }: { widgets: Widget[] }) {
 }
 
 export function RightInspector({ onToggle, onUpdates, onRename }: RightInspectorProps) {
+  const [dockTab, setDockTab] = useState<"layers" | "inspector">("layers");
   const [inspectorTab, setInspectorTab] = useState<"design" | "responsive">("design");
   const project = useStore((state) => state.project);
   const activeScreenId = useStore((state) => state.getActiveScreenId());
@@ -1541,10 +1476,38 @@ export function RightInspector({ onToggle, onUpdates, onRename }: RightInspector
   if (!rightPanelOpen) return null;
 
   return (
-    <aside className="sidebar inspector">
+    <aside className="sidebar inspector right-dock">
+      <div className="right-dock-header">
+        <div className="right-dock-tabs" role="tablist" aria-label="Right sidebar">
+          <button
+            className={`right-dock-tab${dockTab === "layers" ? " is-active" : ""}`}
+            type="button"
+            role="tab"
+            aria-selected={dockTab === "layers"}
+            onClick={() => setDockTab("layers")}
+          >
+            <Layers2 size={14} /> Layers
+          </button>
+          <button
+            className={`right-dock-tab${dockTab === "inspector" ? " is-active" : ""}`}
+            type="button"
+            role="tab"
+            aria-selected={dockTab === "inspector"}
+            onClick={() => setDockTab("inspector")}
+          >
+            <Square size={14} /> Inspector
+          </button>
+        </div>
+        <button className="icon-button small-icon" aria-label="Close right sidebar" onClick={onToggle}><PanelRightClose size={15} /></button>
+      </div>
+      {dockTab === "layers" ? (
+        <div className="layers-dock-body" role="tabpanel" aria-label="Layers and screens">
+          <ScreenLayerSidebar />
+        </div>
+      ) : (
+      <>
       <div className="inspector-top">
         <div><span className="inspector-overline">INSPECTOR</span><h2>{selectedWidget ? selectedLabel : selectedWidgets.length > 1 ? `${selectedWidgets.length} items selected` : "Select an element"}</h2></div>
-        <button className="icon-button small-icon" aria-label="Close inspector" onClick={onToggle}><PanelRightClose size={15} /></button>
       </div>
       <div className="inspector-body">
         {selectedWidget ? (
@@ -1620,6 +1583,8 @@ export function RightInspector({ onToggle, onUpdates, onRename }: RightInspector
         <div className="recovery-note"><span>Unsaved projects are autosaved on this device every 30 seconds.</span></div>
       </div>
       <div className="inspector-footer"><span>Project schema</span><span className="schema-version">{project.schemaVersion}</span></div>
+      </>
+      )}
     </aside>
   );
 }
