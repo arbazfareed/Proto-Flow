@@ -27,6 +27,7 @@ export const LAYER_CONTAINER_TYPES = new Set([
   "component-master",
   "componentMaster",
   "calendar",
+  "rectangle",
 ]);
 
 const LAYER_CONTAINMENT_TOLERANCE = 8; // Keep near-edge canvas alignment in the same hierarchy.
@@ -98,6 +99,22 @@ export function getWidgetParentIdMap(
   }
 
   return parents;
+}
+
+export function syncWidgetGroupIdsToContainment(widgets: readonly Widget[]): Widget[] {
+  const parentByWidgetId = getWidgetParentIdMap(widgets);
+  const widgetIds = new Set(widgets.map((widget) => widget.id));
+
+  return widgets.map((widget) => {
+    const parentId = parentByWidgetId.get(widget.id);
+    if (parentId) {
+      return widget.groupId === parentId ? widget : { ...widget, groupId: parentId };
+    }
+    if (widget.groupId && widgetIds.has(widget.groupId)) {
+      return { ...widget, groupId: undefined };
+    }
+    return widget;
+  });
 }
 
 export function getSelectedContainingParentId(

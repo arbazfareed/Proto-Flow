@@ -1490,7 +1490,10 @@ export function ScreenLayerSidebar() {
               <span
                 key={index}
                 className={`layer-tree-guide${continues ? "" : " is-last-path"}`}
-                style={{ left: `${Math.min(index + 1, 4) * 16 + 8}px` }}
+                style={{
+                  left: `${Math.min(index + 1, 4) * 16 + 8}px`,
+                  "--layer-tree-line": entry.ancestorAccents[index],
+                } as CSSProperties & { "--layer-tree-line": string }}
                 aria-hidden="true"
               />
             ))}
@@ -1503,7 +1506,12 @@ export function ScreenLayerSidebar() {
             )}
             <span
               className={`layer-tree-branch${entry.isLastChild ? " is-last" : ""}`}
-              style={{ left: `${Math.min(entry.depth, 4) * 16 + 8}px` }}
+              style={{
+                left: `${Math.min(entry.depth, 4) * 16 + 8}px`,
+                "--layer-tree-line": entry.depth > 0
+                  ? entry.ancestorAccents[entry.depth - 1]
+                  : "var(--layer-tree-line)",
+              } as CSSProperties & { "--layer-tree-line": string }}
               aria-hidden="true"
             />
             {container && collapseKey ? (
@@ -2162,13 +2170,21 @@ export function ScreenLayerSidebar() {
                       <span
                         key={index}
                         className={`layer-tree-guide${continues ? "" : " is-last-path"}`}
-                        style={{ left: `${Math.min(index + 1, 4) * 16 + 8}px` }}
+                        style={{
+                          left: `${Math.min(index + 1, 4) * 16 + 8}px`,
+                          "--layer-tree-line": entry.ancestorAccents[index],
+                        } as CSSProperties & { "--layer-tree-line": string }}
                         aria-hidden="true"
                       />
                     ))}
                     <span
                       className={`layer-tree-branch${entry.isLastChild ? " is-last" : ""}`}
-                      style={{ left: `${Math.min(entry.depth, 4) * 16 + 8}px` }}
+                      style={{
+                        left: `${Math.min(entry.depth, 4) * 16 + 8}px`,
+                        "--layer-tree-line": entry.depth > 0
+                          ? entry.ancestorAccents[entry.depth - 1]
+                          : "var(--layer-tree-line)",
+                      } as CSSProperties & { "--layer-tree-line": string }}
                       aria-hidden="true"
                     />
                     <button

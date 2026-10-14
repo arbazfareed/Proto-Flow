@@ -44,6 +44,7 @@ import {
   getSelectedContainingParentId,
   isWidgetContainedBy,
   isWidgetContainer,
+  syncWidgetGroupIdsToContainment,
 } from "../project/layers";
 import {
   clampCanvasZoom,
@@ -191,34 +192,43 @@ function commitWidgetGeometry(
   const project: Project = {
     ...current.project,
     updatedAt: new Date().toISOString(),
-    screens: current.project.screens.map((screen) =>
-      screen.id !== screenId
-        ? screen
-        : {
-            ...screen,
-            breakpoints: screen.id === screenId && overrideBreakpointId
-              ? screen.breakpoints ?? [...getScreenBreakpoints(screen)]
-              : screen.breakpoints,
-            widgets: screen.widgets.map((widget) => {
-              const update = updateById.get(widget.id);
-              if (!update) return widget;
-              const { id, ...geometry } = update;
-              const previous = effectiveWidgets.find((item) => item.id === id) ?? widget;
-              if (
-                (geometry.x === undefined || geometry.x === previous.x) &&
-                (geometry.y === undefined || geometry.y === previous.y) &&
-                (geometry.width === undefined || geometry.width === previous.width) &&
-                (geometry.height === undefined || geometry.height === previous.height) &&
-                (geometry.rotation === undefined || geometry.rotation === previous.rotation)
-              ) {
-                return widget;
-              }
-              return overrideBreakpointId
-                ? updateWidgetOverride(widget, overrideBreakpointId, geometry)
-                : { ...widget, ...geometry };
-            }),
-          },
-    ),
+    screens: current.project.screens.map((screen) => {
+      if (screen.id !== screenId) return screen;
+      const nextWidgets = screen.widgets.map((widget) => {
+        const update = updateById.get(widget.id);
+        if (!update) return widget;
+        const { id, ...geometry } = update;
+        const previous = effectiveWidgets.find((item) => item.id === id) ?? widget;
+        if (
+          (geometry.x === undefined || geometry.x === previous.x) &&
+          (geometry.y === undefined || geometry.y === previous.y) &&
+          (geometry.width === undefined || geometry.width === previous.width) &&
+          (geometry.height === undefined || geometry.height === previous.height) &&
+          (geometry.rotation === undefined || geometry.rotation === previous.rotation)
+        ) {
+          return widget;
+        }
+        return overrideBreakpointId
+          ? updateWidgetOverride(widget, overrideBreakpointId, geometry)
+          : { ...widget, ...geometry };
+      });
+      const updatedEffectiveWidgets = syncWidgetGroupIdsToContainment(
+        getEffectiveScreenWidgets({ ...screen, widgets: nextWidgets }, overrideBreakpointId),
+      );
+      const effectiveById = new Map(
+        updatedEffectiveWidgets.map((widget) => [widget.id, widget]),
+      );
+      return {
+        ...screen,
+        breakpoints: overrideBreakpointId
+          ? screen.breakpoints ?? [...getScreenBreakpoints(screen)]
+          : screen.breakpoints,
+        widgets: nextWidgets.map((widget) => {
+          const groupId = effectiveById.get(widget.id)?.groupId;
+          return widget.groupId === groupId ? widget : { ...widget, groupId };
+        }),
+      };
+    }),
   };
   if (project.screens.some((screen, index) =>
     screen.widgets.some((widget, widgetIndex) =>
@@ -774,7 +784,11 @@ export function CanvasStage({
       const dropParent = dropParentId
         ? screen.widgets.find((item) => item.id === dropParentId)
         : undefined;
-      if (dropParent && isWidgetContainedBy(widget, dropParent)) {
+      if (
+        dropParent &&
+        isWidgetContainer(dropParent) &&
+        isWidgetContainedBy(widget, dropParent)
+      ) {
         widget.groupId = dropParent.id;
       } else {
         const selectedParentId = getSelectedContainingParentId(
@@ -788,13 +802,14 @@ export function CanvasStage({
         (highest, item) => Math.max(highest, item.zIndex),
         -1,
       ) + 1;
+      const nextWidgets = syncWidgetGroupIdsToContainment([...screen.widgets, widget]);
 
       current.setProject({
         ...current.project,
         updatedAt: new Date().toISOString(),
         screens: current.project.screens.map((item) =>
           item.id === screen.id
-            ? { ...item, widgets: [...item.widgets, widget] }
+            ? { ...item, widgets: nextWidgets }
             : item,
         ),
       });
@@ -1027,7 +1042,8 @@ export function CanvasStage({
       parseLayerDragPayload(event.dataTransfer.getData(LAYER_DRAG_MIME));
     const targetId = getCanvasDropTarget(event.clientX, event.clientY);
     const targetWidget = screenWidgets.find((widget) => widget.id === targetId);
-    const nestedElementDrop = !!elementTool && !!targetWidget;
+    const nestedElementDrop =
+      !!elementTool && !!targetWidget && isWidgetContainer(targetWidget);
     const definition = elementTool ? getShapeToolDefinition(elementTool) : undefined;
     const screenDrop = payload?.kind === "screen";
     pendingDragFeedbackRef.current = {

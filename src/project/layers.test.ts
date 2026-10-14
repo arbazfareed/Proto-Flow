@@ -6,6 +6,7 @@ import {
   isWidgetContainer,
   reorderScreens,
   reorderWidgets,
+  syncWidgetGroupIdsToContainment,
 } from "./layers";
 
 function widget(id: string, zIndex: number) {
@@ -32,6 +33,27 @@ describe("layer and screen ordering", () => {
     expect(isWidgetContainer({ type: "calendar" })).toBe(true);
   });
 
+  it("recognizes Rectangle as a visual container", () => {
+    expect(isWidgetContainer({ type: "rectangle" })).toBe(true);
+  });
+
+  it("syncs persisted group IDs when widgets move into or out of a container", () => {
+    const rectangle = { ...widget("rectangle", 0), x: 10, y: 10, width: 100, height: 80 };
+    const text = { ...widget("text", 1), type: "text", x: 20, y: 20, width: 30, height: 20 };
+    const inside = syncWidgetGroupIdsToContainment([rectangle, text]);
+    expect(inside.find((item) => item.id === "text")?.groupId).toBe("rectangle");
+
+    const movedOutside = syncWidgetGroupIdsToContainment([
+      rectangle,
+      { ...inside[1], x: 200 },
+    ]);
+    expect(movedOutside.find((item) => item.id === "text")?.groupId).toBeUndefined();
+
+    const semanticGroup = { ...widget("grouped", 2), type: "text", groupId: "semantic-id" };
+    expect(syncWidgetGroupIdsToContainment([rectangle, semanticGroup])[1].groupId)
+      .toBe("semantic-id");
+  });
+
   it("checks whether a widget is fully inside a parent widget", () => {
     const parent = { x: 10, y: 20, width: 100, height: 60 };
     expect(isWidgetContainedBy({ x: 10, y: 20, width: 100, height: 60 }, parent)).toBe(true);
@@ -42,8 +64,8 @@ describe("layer and screen ordering", () => {
 
   it("nests a new widget only when it is placed inside the single selected parent", () => {
     const parent = { ...widget("parent", 1), x: 10, y: 10, width: 100, height: 60 };
-    const inside = { ...widget("inside", 2), x: 20, y: 20 };
-    const outside = { ...widget("outside", 3), x: 200, y: 20 };
+    const inside = { ...widget("inside", 2), type: "text", x: 20, y: 20 };
+    const outside = { ...widget("outside", 3), type: "text", x: 200, y: 20 };
 
     expect(getSelectedContainingParentId([parent], ["parent"], inside)).toBe("parent");
     expect(getSelectedContainingParentId([parent], ["parent"], outside)).toBeUndefined();

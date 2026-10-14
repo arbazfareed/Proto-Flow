@@ -4,7 +4,7 @@ import {
   isWidgetContainer,
 } from "../project/layers";
 export { LAYER_CONTAINER_TYPES } from "../project/layers";
-import { getLayerCategory } from "./layerGrouping";
+import { getLayerCategory, LAYER_CATEGORY_DEFINITIONS } from "./layerGrouping";
 import type { LayerCategoryId } from "./layerGrouping";
 
 export interface LayerTreeNode {
@@ -25,6 +25,7 @@ export interface FlattenedLayerTreeEntry {
   depth: number;
   isLastChild: boolean;
   ancestorContinues: boolean[];
+  ancestorAccents: string[];
   collapsed: boolean;
   position: number;
   siblingCount: number;
@@ -87,7 +88,7 @@ export function flattenLayerHierarchy(
   const visit = (
     nodes: readonly LayerTreeNode[],
     depth: number,
-    ancestors: { hasNextSibling: boolean; lastVisibleNodeId: string }[],
+    ancestors:     { hasNextSibling: boolean; lastVisibleNodeId: string; accent: string }[],
   ) => {
     nodes.forEach((node, index) => {
       const isLastChild = index === nodes.length - 1;
@@ -101,6 +102,7 @@ export function flattenLayerHierarchy(
           ({ hasNextSibling, lastVisibleNodeId }) =>
             hasNextSibling || node.id !== lastVisibleNodeId,
         ),
+        ancestorAccents: ancestors.map(({ accent }) => accent),
         collapsed,
         position: index + 1,
         siblingCount: nodes.length,
@@ -108,7 +110,11 @@ export function flattenLayerHierarchy(
       if (!collapsed && node.children.length > 0) {
         visit(node.children, depth + 1, [
           ...ancestors,
-          { hasNextSibling: !isLastChild, lastVisibleNodeId: getLastVisibleNodeId(node) },
+          {
+            hasNextSibling: !isLastChild,
+            lastVisibleNodeId: getLastVisibleNodeId(node),
+            accent: LAYER_CATEGORY_DEFINITIONS[node.category].badge,
+          },
         ]);
       }
     });

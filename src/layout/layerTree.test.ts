@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vitest";
 import type { Widget } from "../project/schema";
 import {
+  getSelectedContainingParentId,
+  syncWidgetGroupIdsToContainment,
+} from "../project/layers";
+import {
   buildLayerHierarchy,
   filterLayerHierarchy,
   flattenLayerHierarchy,
@@ -90,6 +94,90 @@ describe("layer hierarchy", () => {
       ["star", 2],
       ["screen-text", 1],
     ]);
+  });
+
+  it("lists clicked Text inside a selected Rectangle as its expandable child", () => {
+    const rectangle = {
+      ...widget("rectangle", "rectangle", 0),
+      x: 100,
+      y: 80,
+      width: 240,
+      height: 160,
+    };
+    const text = {
+      ...widget("text", "text", 1),
+      x: 120,
+      y: 100,
+      width: 64,
+      height: 32,
+    };
+    const selectedParentId = getSelectedContainingParentId(
+      [rectangle],
+      ["rectangle"],
+      text,
+    );
+    const persistedWidgets = syncWidgetGroupIdsToContainment([
+      rectangle,
+      { ...text, groupId: selectedParentId },
+    ]);
+    const roots = buildLayerHierarchy(persistedWidgets, (item) => item.id);
+    const entries = flattenLayerHierarchy(roots, new Set());
+
+    expect(persistedWidgets[1].groupId).toBe("rectangle");
+    expect(roots).toHaveLength(1);
+    expect(roots[0].children.map((node) => node.id)).toEqual(["text"]);
+    expect(getContainerBadge(roots[0].widget!, roots[0].children.length))
+      .toBe("1 child");
+    expect(entries.map(({ node, depth }) => [node.id, depth])).toEqual([
+      ["rectangle", 0],
+      ["text", 1],
+    ]);
+  });
+
+  it("infers visual children under Rectangle, Card, and Modal containers", () => {
+    const widgets = [
+      { ...widget("modal", "modal", 0), x: 10, y: 10, width: 120, height: 100 },
+      { ...widget("icon", "icon", 1), x: 20, y: 20, width: 20, height: 20 },
+      { ...widget("card", "card", 2), x: 160, y: 10, width: 140, height: 100 },
+      { ...widget("card-text-a", "text", 3), x: 170, y: 20, width: 50, height: 20 },
+      { ...widget("card-text-b", "text", 4), x: 170, y: 50, width: 50, height: 20 },
+      { ...widget("blue-box", "rectangle", 5), x: 330, y: 10, width: 160, height: 100 },
+      { ...widget("video", "video", 6), x: 340, y: 20, width: 60, height: 40 },
+      { ...widget("link", "link", 7), x: 340, y: 70, width: 60, height: 20 },
+    ];
+    const roots = buildLayerHierarchy(widgets, (item) => item.id);
+    const entries = flattenLayerHierarchy(roots, new Set());
+
+    expect(roots.map((node) => [node.id, node.children.map((child) => child.id)]))
+      .toEqual([
+        ["modal", ["icon"]],
+        ["card", ["card-text-a", "card-text-b"]],
+        ["blue-box", ["video", "link"]],
+      ]);
+    expect(entries.map(({ node, depth }) => [node.id, depth])).toEqual([
+      ["modal", 0],
+      ["icon", 1],
+      ["card", 0],
+      ["card-text-a", 1],
+      ["card-text-b", 1],
+      ["blue-box", 0],
+      ["video", 1],
+      ["link", 1],
+    ]);
+    expect(entries.find(({ node }) => node.id === "icon")?.ancestorAccents)
+      .toEqual(["#EAB308"]);
+    expect(entries.find(({ node }) => node.id === "video")?.ancestorAccents)
+      .toEqual(["#6366F1"]);
+
+    const movedRoots = buildLayerHierarchy(
+      widgets.map((item) =>
+        item.id === "blue-box" ? { ...item, x: 600 } : item,
+      ),
+      (item) => item.id,
+    );
+    expect(movedRoots.find((node) => node.id === "blue-box")?.children).toHaveLength(0);
+    expect(movedRoots.map((node) => node.id)).toContain("video");
+    expect(movedRoots.map((node) => node.id)).toContain("link");
   });
 
   it("updates parentage from containment and keeps outside widgets at the screen root", () => {
