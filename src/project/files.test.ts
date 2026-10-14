@@ -137,6 +137,48 @@ describe("native project file commands", () => {
     });
   });
 
+  it("copies linked image assets when saving a project to a new path", async () => {
+    const project = createEmptyProject("Portable images");
+    const image = {
+      id: crypto.randomUUID(),
+      type: "image",
+      x: 0,
+      y: 0,
+      width: 200,
+      height: 200,
+      rotation: 0,
+      opacity: 1,
+      visible: true,
+      locked: false,
+      zIndex: 0,
+      style: {},
+      props: { mime: "image/png", fileName: "portrait.png", assetPath: "assets/portrait.png" },
+    };
+    const projectWithAsset = {
+      ...project,
+      screens: [{ ...project.screens[0], widgets: [image] }],
+    };
+    invokeMock
+      .mockResolvedValueOnce("copied.pflow")
+      .mockResolvedValueOnce({ mime: "image/png", base64: "aW1hZ2U=" })
+      .mockResolvedValueOnce("assets/copied-portrait.png")
+      .mockResolvedValueOnce("copied.pflow");
+
+    const result = await saveProjectFile(projectWithAsset, "original.pflow", true);
+
+    expect(result?.project.screens[0].widgets[0].props.assetPath)
+      .toBe("assets/copied-portrait.png");
+    expect(invokeMock).toHaveBeenNthCalledWith(2, "read_image_asset", {
+      projectPath: "original.pflow",
+      assetPath: "assets/portrait.png",
+    });
+    expect(invokeMock).toHaveBeenNthCalledWith(3, "save_image_asset", {
+      projectPath: "copied.pflow",
+      mime: "image/png",
+      base64: "aW1hZ2U=",
+    });
+  });
+
   it("externalizes the image that would exceed the cumulative inline-payload budget", async () => {
     const project = createEmptyProject("Image budget");
     const src = `data:image/png;base64,${"A".repeat(600_000)}`;

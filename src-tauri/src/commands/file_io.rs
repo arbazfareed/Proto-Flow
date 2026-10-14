@@ -310,7 +310,15 @@ fn image_extension(mime: &str) -> Result<&'static str, String> {
         "image/jpeg" => Ok("jpg"),
         "image/svg+xml" => Ok("svg"),
         "image/webp" => Ok("webp"),
-        _ => Err("Unsupported image. Choose a PNG, JPG, SVG, or WebP file.".into()),
+        "image/avif" => Ok("avif"),
+        "image/gif" => Ok("gif"),
+        "image/bmp" => Ok("bmp"),
+        "image/x-icon" => Ok("ico"),
+        "image/tiff" => Ok("tiff"),
+        _ => Err(
+            "Unsupported image. Choose a PNG, JPG, GIF, BMP, AVIF, HEIC/HEIF, TIFF, ICO, SVG, or WebP file."
+                .into(),
+        ),
     }
 }
 
@@ -326,6 +334,27 @@ fn validate_image_bytes(mime: &str, bytes: &[u8]) -> Result<(), String> {
         "image/png" => bytes.starts_with(b"\x89PNG\r\n\x1a\n"),
         "image/jpeg" => bytes.starts_with(b"\xff\xd8\xff"),
         "image/webp" => bytes.len() >= 12 && &bytes[..4] == b"RIFF" && &bytes[8..12] == b"WEBP",
+        "image/avif" => {
+            bytes.len() >= 12
+                && &bytes[4..8] == b"ftyp"
+                && bytes[8..bytes.len().min(32)]
+                    .windows(4)
+                    .any(|brand| brand == b"avif" || brand == b"avis")
+        }
+        "image/gif" => bytes.starts_with(b"GIF87a") || bytes.starts_with(b"GIF89a"),
+        "image/bmp" => bytes.starts_with(b"BM"),
+        "image/x-icon" => bytes.starts_with(b"\x00\x00\x01\x00"),
+        "image/tiff" => bytes.starts_with(b"II*\x00") || bytes.starts_with(b"MM\x00*"),
+        "image/heic" | "image/heif" => {
+            bytes.len() >= 12
+                && &bytes[4..8] == b"ftyp"
+                && bytes[8..bytes.len().min(32)].windows(4).any(|brand| {
+                    matches!(
+                        brand,
+                        b"heic" | b"heix" | b"hevc" | b"hevx" | b"mif1" | b"msf1"
+                    )
+                })
+        }
         "image/svg+xml" => {
             let text = std::str::from_utf8(bytes)
                 .map_err(|_| "The SVG image is not valid UTF-8.".to_owned())?;
@@ -411,6 +440,11 @@ pub fn read_image_asset(project_path: String, asset_path: String) -> Result<Imag
         Some("jpg") => "image/jpeg",
         Some("svg") => "image/svg+xml",
         Some("webp") => "image/webp",
+        Some("avif") => "image/avif",
+        Some("gif") => "image/gif",
+        Some("bmp") => "image/bmp",
+        Some("ico") => "image/x-icon",
+        Some("tiff") => "image/tiff",
         _ => return Err("The project image asset has an unsupported format.".into()),
     };
     let bytes = fs::read(&path)
@@ -437,12 +471,25 @@ pub fn read_dropped_image(path: String) -> Result<ImageFile, String> {
     let mime = match path.extension().and_then(|extension| extension.to_str()) {
         Some(extension) if extension.eq_ignore_ascii_case("png") => "image/png",
         Some(extension)
-            if extension.eq_ignore_ascii_case("jpg") || extension.eq_ignore_ascii_case("jpeg") =>
+            if extension.eq_ignore_ascii_case("jpg")
+                || extension.eq_ignore_ascii_case("jpeg")
+                || extension.eq_ignore_ascii_case("jfif") =>
         {
             "image/jpeg"
         }
         Some(extension) if extension.eq_ignore_ascii_case("svg") => "image/svg+xml",
         Some(extension) if extension.eq_ignore_ascii_case("webp") => "image/webp",
+        Some(extension) if extension.eq_ignore_ascii_case("avif") => "image/avif",
+        Some(extension) if extension.eq_ignore_ascii_case("gif") => "image/gif",
+        Some(extension) if extension.eq_ignore_ascii_case("bmp") => "image/bmp",
+        Some(extension) if extension.eq_ignore_ascii_case("ico") => "image/x-icon",
+        Some(extension)
+            if extension.eq_ignore_ascii_case("tif") || extension.eq_ignore_ascii_case("tiff") =>
+        {
+            "image/tiff"
+        }
+        Some(extension) if extension.eq_ignore_ascii_case("heic") => "image/heic",
+        Some(extension) if extension.eq_ignore_ascii_case("heif") => "image/heif",
         _ => return Err("Unsupported image. Choose a PNG, JPG, SVG, or WebP file.".into()),
     };
     let bytes =
@@ -629,5 +676,14 @@ mod tests {
                 .chars()
                 .all(|character| character.is_ascii_hexdigit())
         );
+    }
+
+    #[test]
+    fn accepts_common_device_image_formats() {
+        assert!(validate_image_bytes("image/gif", b"GIF89a\0\0").is_ok());
+        assert!(validate_image_bytes("image/bmp", b"BM\0\0").is_ok());
+        assert!(validate_image_bytes("image/avif", b"\0\0\0\x1cftypavif\0\0\0\0").is_ok());
+        assert!(validate_image_bytes("image/heic", b"\0\0\0\x1cheic\0\0\0\0").is_err());
+        assert!(validate_image_bytes("image/tiff", b"II*\0").is_ok());
     }
 }

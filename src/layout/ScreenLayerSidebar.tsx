@@ -74,7 +74,7 @@ type LayerTreeEntry =
   | { kind: "category"; group: LayerGroup; collapsed: boolean; visibleCount: number }
   | ({ kind: "node" } & FlattenedLayerTreeEntry);
 const LAYER_ROW_HEIGHT = 30;
-const SCREEN_TREE_ROW_HEIGHT = 30;
+const SCREEN_TREE_ROW_HEIGHT = 34;
 const SCREEN_ROW_HEIGHT = 152;
 
 function collapsedStorageKey(projectId: string): string {
@@ -1439,6 +1439,13 @@ export function ScreenLayerSidebar() {
                 aria-hidden="true"
               />
             ))}
+            {layerMode === "z-order" && (
+              <span
+                className={`layer-tree-guide layer-screen-guide${entry.node.id === lastLayerNodeId ? " is-last-path" : ""}`}
+                style={{ left: "8px" }}
+                aria-hidden="true"
+              />
+            )}
             <span
               className={`layer-tree-branch${entry.isLastChild ? " is-last" : ""}`}
               style={{ left: `${Math.min(entry.depth, 4) * 16 + 8}px` }}
@@ -1779,7 +1786,9 @@ export function ScreenLayerSidebar() {
         <div className="layer-tree-toolbar">
           <div className="layer-tree-title">
             <span>LAYERS</span>
-            <span className="layer-count">{activeScreen?.widgets.length ?? 0}</span>
+            <span className="layer-count">
+              {activeScreen?.widgets.length ?? 0} items
+            </span>
           </div>
           <div className="layer-tree-controls">
             <button
@@ -1811,7 +1820,7 @@ export function ScreenLayerSidebar() {
             >
               {LAYER_VIEW_MODES.map((mode) => (
                 <option key={mode} value={mode}>
-                  {mode === "category" ? "By Category" : mode === "z-order" ? "By Z-Order" : "By Type"}
+                  {mode === "category" ? "By Category" : mode === "z-order" ? "Hierarchy" : "By Type"}
                 </option>
               ))}
             </select>
@@ -1889,6 +1898,9 @@ export function ScreenLayerSidebar() {
             >
               <Monitor size={14} aria-hidden="true" />
               <span className="layer-screen-name">{activeScreen.name}</span>
+              <span className="layer-child-count">
+                {activeScreen.widgets.length} items
+              </span>
               <span className="layer-screen-kind">Screen</span>
             </div>
             {activeScreen.widgets.length === 0 && (

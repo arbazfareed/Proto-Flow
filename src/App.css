@@ -104,10 +104,11 @@
 .sidebar-empty-state svg { flex-shrink:0; color:#8d829e; }
 .layer-list { --layer-tree-line:#55515e; position:relative; display:flex; flex-direction:column; gap:0; max-height:38vh; min-height:0; margin:7px 3px 0; overflow-y:auto; overscroll-behavior:contain; scrollbar-color:#383940 transparent; scrollbar-width:thin; }
 .layer-virtual-spacer { flex:0 0 auto; }
-.layer-screen-root { position:relative; z-index:1; display:flex; height:30px; flex:0 0 30px; align-items:center; gap:7px; padding:0 8px; border-radius:5px; color:#e4ddf4; font-size:10px; font-weight:700; }
-.layer-screen-root>svg { flex:0 0 auto; color:#b8a4eb; }
+.layer-screen-root { position:relative; z-index:1; display:flex; height:34px; flex:0 0 34px; align-items:center; gap:7px; padding:0 8px; border-radius:6px; color:#55a9ff; background:#172a3a; font-size:10px; font-weight:700; }
+.layer-screen-root>svg { flex:0 0 auto; color:#4da3ff; }
 .layer-screen-name { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-.layer-screen-kind { margin-left:auto; padding:2px 5px; border:1px solid #3a3546; border-radius:8px; color:#9992a8; font-size:8px; font-weight:500; }
+.layer-screen-root .layer-child-count { margin-left:auto; color:#80baff; background:#203b54; }
+.layer-screen-kind { padding:2px 5px; border:1px solid #2d4b64; border-radius:8px; color:#8ebdea; font-size:8px; font-weight:500; }
 .layer-tree-empty { margin-left:16px; }
 .layer-row { position:relative; display:flex; height:30px; flex:0 0 30px; align-items:center; min-width:0; border-radius:5px; }
 .layer-row::before { position:absolute; top:5px; bottom:5px; left:0; width:4px; border-radius:3px; background:var(--layer-accent,#9ca3af); content:""; }
@@ -300,6 +301,22 @@
 .canvas-drop-insertion { position:absolute; z-index:6; width:22px; height:2px; background:#c5afff; box-shadow:0 0 8px #a78bfa; transform:translate(-50%,-50%); pointer-events:none; }
 .canvas-drop-preview { position:absolute; z-index:7; display:flex; min-width:120px; align-items:center; gap:7px; padding:6px; border:1px solid #625486; border-radius:6px; color:#f0edf7; background:#24222cf2; box-shadow:0 4px 14px #0008; font-size:9px; pointer-events:none; }
 .canvas-drop-thumbnail { display:grid; width:32px; height:32px; flex:0 0 32px; place-items:center; border:1px solid #51456b; border-radius:4px; color:#d8cbff; background:#302a3c; font-size:10px; font-weight:700; }
+.image-url-trigger { position:absolute; z-index:8; top:12px; left:12px; display:flex; height:30px; align-items:center; gap:6px; padding:0 9px; border:1px solid #37323f; border-radius:6px; color:#d3c8eb; background:#211f28eF; box-shadow:0 2px 8px #0005; font-size:10px; cursor:pointer; touch-action:manipulation; }
+.image-url-trigger:hover { border-color:#7967a8; color:#fff; background:#302a3c; }
+.image-url-trigger svg { color:#bca6ef; }
+.image-url-backdrop { position:absolute; z-index:30; inset:0; display:grid; place-items:center; padding:16px; background:#09090dcc; backdrop-filter:blur(3px); touch-action:auto; }
+.image-url-dialog { width:min(100%,380px); padding:18px; border:1px solid #3b3745; border-radius:10px; color:#e5e2ec; background:#1d1e23; box-shadow:0 18px 60px #0009; }
+.image-url-dialog-heading { display:flex; align-items:flex-start; justify-content:space-between; gap:12px; margin-bottom:18px; }
+.image-url-overline { color:#a9a4b2; font-size:9px; font-weight:700; letter-spacing:.11em; }
+.image-url-dialog-heading h2 { margin:5px 0 0; font-size:16px; font-weight:650; }
+.image-url-dialog .field-label { display:block; margin:0 0 6px; }
+.image-url-dialog .text-field { width:100%; box-sizing:border-box; }
+.image-url-dialog .field-hint { line-height:1.5; }
+.image-url-dialog-actions { display:flex; justify-content:flex-end; gap:8px; margin-top:18px; }
+.image-url-dialog-actions .button { display:flex; align-items:center; gap:6px; }
+.image-url-dialog-actions .button:disabled { opacity:.55; cursor:wait; }
+.is-spinning { animation:image-import-spin .8s linear infinite; }
+@keyframes image-import-spin { to { transform:rotate(360deg); } }
 .canvas-stage-surface.is-space-ready { cursor:grab; }
 .canvas-stage-surface.is-panning { cursor:grabbing; }
 .canvas-stage-surface.is-drawing { cursor:crosshair; }
