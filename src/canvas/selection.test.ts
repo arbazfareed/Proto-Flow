@@ -25,11 +25,11 @@ function widget(
 describe("selection geometry", () => {
   it("finds selected widgets' parent containers and ancestors without looping on cycles", () => {
     const widgets = [
-      { id: "screen", groupId: undefined, x: 0, y: 0, width: 500, height: 500 },
-      { id: "card", groupId: "screen", x: 10, y: 10, width: 200, height: 200 },
-      { id: "image", groupId: "card", x: 20, y: 20, width: 50, height: 50 },
-      { id: "cycle-a", groupId: "cycle-b", x: 0, y: 0, width: 500, height: 500 },
-      { id: "cycle-b", groupId: "cycle-a", x: 0, y: 0, width: 500, height: 500 },
+      { id: "screen", type: "frame", groupId: undefined, x: 0, y: 0, width: 500, height: 500, zIndex: 0 },
+      { id: "card", type: "card", groupId: "screen", x: 10, y: 10, width: 200, height: 200, zIndex: 1 },
+      { id: "image", type: "image", groupId: "card", x: 20, y: 20, width: 50, height: 50, zIndex: 2 },
+      { id: "cycle-a", type: "text", groupId: "cycle-b", x: 0, y: 0, width: 500, height: 500, zIndex: 3 },
+      { id: "cycle-b", type: "text", groupId: "cycle-a", x: 0, y: 0, width: 500, height: 500, zIndex: 4 },
     ];
 
     expect([...getSelectedParentWidgetIds(widgets, ["image"])].sort())
@@ -37,9 +37,23 @@ describe("selection geometry", () => {
     expect([...getSelectedParentWidgetIds(widgets, ["cycle-a"])]).toEqual(["cycle-b"]);
     expect([...getSelectedParentWidgetIds(widgets, ["missing"])]).toEqual([]);
     expect([...getSelectedParentWidgetIds([
-      { id: "panel", groupId: undefined, x: 0, y: 0, width: 100, height: 100 },
-      { id: "outside", groupId: "panel", x: 150, y: 0, width: 20, height: 20 },
+      { id: "panel", type: "panel", groupId: undefined, x: 0, y: 0, width: 100, height: 100, zIndex: 0 },
+      { id: "outside", type: "text", groupId: "panel", x: 150, y: 0, width: 20, height: 20, zIndex: 1 },
     ], ["outside"])]).toEqual([]);
+  });
+
+  it("highlights inferred container ancestors when a widget is moved inside them", () => {
+    const widgets = [
+      { id: "frame", type: "frame", groupId: undefined, x: 0, y: 0, width: 400, height: 400, zIndex: 0 },
+      { id: "card", type: "card", groupId: undefined, x: 50, y: 50, width: 200, height: 200, zIndex: 1 },
+      { id: "text", type: "text", groupId: undefined, x: 60, y: 60, width: 40, height: 20, zIndex: 2 },
+    ];
+
+    expect([...getSelectedParentWidgetIds(widgets, ["text"])].sort()).toEqual(["card", "frame"]);
+    expect([...getSelectedParentWidgetIds(
+      widgets.map((widget) => widget.id === "text" ? { ...widget, x: 300 } : widget),
+      ["text"],
+    )]).toEqual(["frame"]);
   });
 
   it("transformer-inversion rejects inverted, undersized, and non-finite bounds", () => {

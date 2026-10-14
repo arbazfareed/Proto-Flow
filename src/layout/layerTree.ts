@@ -1,35 +1,11 @@
 import type { Widget } from "../project/schema";
-import { isWidgetContainedBy } from "../project/layers";
+import {
+  getWidgetParentIdMap,
+  isWidgetContainer,
+} from "../project/layers";
+export { LAYER_CONTAINER_TYPES } from "../project/layers";
 import { getLayerCategory } from "./layerGrouping";
 import type { LayerCategoryId } from "./layerGrouping";
-
-export const LAYER_CONTAINER_TYPES = new Set([
-  "group",
-  "frame",
-  "panel",
-  "dynamic-panel",
-  "dynamicPanel",
-  "repeater",
-  "card",
-  "modal",
-  "overlay",
-  "drawer",
-  "section",
-  "accordion",
-  "carousel",
-  "tabs-container",
-  "tabsContainer",
-  "form",
-  "navbar",
-  "sidebar",
-  "tabs",
-  "menu",
-  "dropdown-menu",
-  "dropdownMenu",
-  "footer",
-  "component-master",
-  "componentMaster",
-]);
 
 export interface LayerTreeNode {
   id: string;
@@ -62,7 +38,7 @@ function nodeOrder(first: LayerTreeNode, second: LayerTreeNode): number {
 }
 
 export function isLayerContainer(widget: Widget): boolean {
-  return LAYER_CONTAINER_TYPES.has(widget.type);
+  return isWidgetContainer(widget);
 }
 
 export function getLayerTreeCollapseKey(node: LayerTreeNode): string | null {
@@ -169,13 +145,7 @@ export function buildLayerHierarchy(
 ): LayerTreeNode[] {
   const orderedWidgets = [...widgets].sort(widgetOrder);
   const widgetsById = new Map(orderedWidgets.map((widget) => [widget.id, widget]));
-  const validParentByWidgetId = new Map<string, string>();
-  for (const widget of orderedWidgets) {
-    const parent = widget.groupId ? widgetsById.get(widget.groupId) : undefined;
-    if (parent && parent.id !== widget.id && isWidgetContainedBy(widget, parent)) {
-      validParentByWidgetId.set(widget.id, parent.id);
-    }
-  }
+  const validParentByWidgetId = getWidgetParentIdMap(orderedWidgets);
   const referencedWidgetParents = new Set(validParentByWidgetId.values());
   const containerIds = new Set(
     orderedWidgets

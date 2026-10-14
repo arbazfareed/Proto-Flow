@@ -1,6 +1,7 @@
 import type { Widget } from "../project/schema";
 import type { CanvasPoint } from "./snapping";
-import { isWidgetContainedBy } from "../project/layers";
+import { getWidgetParentIdMap } from "../project/layers";
+import type { WidgetParentCandidate } from "../project/layers";
 
 export interface SelectionBounds {
   x: number;
@@ -10,23 +11,19 @@ export interface SelectionBounds {
 }
 
 export function getSelectedParentWidgetIds(
-  widgets: readonly Pick<Widget, "id" | "groupId" | "x" | "y" | "width" | "height">[],
+  widgets: readonly WidgetParentCandidate[],
   selectedIds: readonly string[],
 ): Set<string> {
-  const widgetsById = new Map(widgets.map((widget) => [widget.id, widget]));
+  const parentByWidgetId = getWidgetParentIdMap(widgets);
   const parentIds = new Set<string>();
 
   for (const selectedId of selectedIds) {
     const visited = new Set([selectedId]);
-    let child = widgetsById.get(selectedId);
-    let parentId = child?.groupId;
+    let parentId = parentByWidgetId.get(selectedId);
     while (parentId && !visited.has(parentId)) {
-      const parent = widgetsById.get(parentId);
-      if (!parent || !child || !isWidgetContainedBy(child, parent)) break;
       visited.add(parentId);
       parentIds.add(parentId);
-      child = parent;
-      parentId = parent.groupId;
+      parentId = parentByWidgetId.get(parentId);
     }
   }
 

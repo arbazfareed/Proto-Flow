@@ -1,5 +1,42 @@
 import type { Widget } from "./schema";
 
+export const LAYER_CONTAINER_TYPES = new Set([
+  "group",
+  "frame",
+  "panel",
+  "dynamic-panel",
+  "dynamicPanel",
+  "repeater",
+  "card",
+  "modal",
+  "overlay",
+  "drawer",
+  "section",
+  "accordion",
+  "carousel",
+  "tabs-container",
+  "tabsContainer",
+  "form",
+  "navbar",
+  "sidebar",
+  "tabs",
+  "menu",
+  "dropdown-menu",
+  "dropdownMenu",
+  "footer",
+  "component-master",
+  "componentMaster",
+]);
+
+export function isWidgetContainer(widget: Pick<Widget, "type">): boolean {
+  return LAYER_CONTAINER_TYPES.has(widget.type);
+}
+
+export type WidgetParentCandidate = Pick<
+  Widget,
+  "id" | "groupId" | "type" | "x" | "y" | "width" | "height" | "zIndex"
+>;
+
 export function isWidgetContainedBy(
   widget: Pick<Widget, "x" | "y" | "width" | "height">,
   parent: Pick<Widget, "x" | "y" | "width" | "height">,
@@ -12,10 +49,58 @@ export function isWidgetContainedBy(
   );
 }
 
+export function getWidgetParentIdMap(
+  widgets: readonly WidgetParentCandidate[],
+): Map<string, string> {
+  const widgetsById = new Map(widgets.map((widget) => [widget.id, widget]));
+  const candidateParentIds = new Set(
+    widgets.filter(isWidgetContainer).map((widget) => widget.id),
+  );
+
+  for (const widget of widgets) {
+    const parent = widget.groupId ? widgetsById.get(widget.groupId) : undefined;
+    if (parent && parent.id !== widget.id && isWidgetContainedBy(widget, parent)) {
+      candidateParentIds.add(parent.id);
+    }
+  }
+  const candidateParents = widgets.filter((widget) => candidateParentIds.has(widget.id));
+
+  const parents = new Map<string, string>();
+  for (const widget of widgets) {
+    const referencedParent = widget.groupId ? widgetsById.get(widget.groupId) : undefined;
+    if (
+      referencedParent &&
+      referencedParent.id !== widget.id &&
+      isWidgetContainedBy(widget, referencedParent)
+    ) {
+      parents.set(widget.id, referencedParent.id);
+      continue;
+    }
+    if (widget.groupId && !widgetsById.has(widget.groupId)) continue;
+
+    const widgetArea = widget.width * widget.height;
+    const containingParents = candidateParents.filter((candidate) =>
+      candidate.id !== widget.id &&
+      candidateParentIds.has(candidate.id) &&
+      candidate.width * candidate.height > widgetArea &&
+      isWidgetContainedBy(widget, candidate),
+    );
+    containingParents.sort((first, second) =>
+      first.width * first.height - second.width * second.height ||
+      first.zIndex - second.zIndex ||
+      first.id.localeCompare(second.id),
+    );
+    const parent = containingParents[0];
+    if (parent) parents.set(widget.id, parent.id);
+  }
+
+  return parents;
+}
+
 export function getSelectedContainingParentId(
-  widgets: readonly Widget[],
+  widgets: readonly WidgetParentCandidate[],
   selectedIds: readonly string[],
-  child: Widget,
+  child: WidgetParentCandidate,
 ): string | undefined {
   if (selectedIds.length !== 1) return undefined;
   const parent = widgets.find((widget) => widget.id === selectedIds[0]);

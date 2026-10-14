@@ -11,6 +11,7 @@ function widget(id: string, zIndex: number) {
   return {
     id,
     type: "rectangle",
+    groupId: undefined,
     x: 0,
     y: 0,
     width: 10,

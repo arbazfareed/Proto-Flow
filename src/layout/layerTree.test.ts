@@ -66,14 +66,31 @@ describe("layer hierarchy", () => {
       .toEqual(["rectangle-parent", "text-child", "image-grandchild"]);
   });
 
-  it("keeps a widget outside its referenced parent's bounds at the screen root", () => {
+  it("updates parentage from containment and keeps outside widgets at the screen root", () => {
     const parent = { ...widget("panel", "panel", 3), x: 20, y: 20, width: 200, height: 120 };
-    const child = { ...widget("progress", "progress-bar", 2, "panel"), x: 400, y: 20 };
-    const containedChild = { ...widget("label", "text", 1, "panel"), x: 40, y: 40 };
-    const roots = buildLayerHierarchy([parent, child, containedChild], (item) => item.id);
+    const progress = { ...widget("progress", "progress-bar", 2), x: 40, y: 40 };
+    const label = { ...widget("label", "text", 1), x: 60, y: 50 };
+    const roots = buildLayerHierarchy([parent, progress, label], (item) => item.id);
 
-    expect(roots.map((node) => node.id)).toEqual(["panel", "progress"]);
-    expect(roots[0].children.map((node) => node.id)).toEqual(["label"]);
+    expect(roots.map((node) => node.id)).toEqual(["panel"]);
+    expect(roots[0].children.map((node) => node.id)).toEqual(["progress", "label"]);
+
+    const movedProgress = { ...progress, x: 400 };
+    const movedRoots = buildLayerHierarchy([parent, movedProgress, label], (item) => item.id);
+    expect(movedRoots.map((node) => node.id)).toEqual(["panel", "progress"]);
+    expect(movedRoots[0].children.map((node) => node.id)).toEqual(["label"]);
+  });
+
+  it("nests a widget under its nearest containing container", () => {
+    const outer = { ...widget("outer", "frame", 1), x: 0, y: 0, width: 500, height: 500 };
+    const inner = { ...widget("inner", "card", 2), x: 100, y: 100, width: 200, height: 200 };
+    const child = { ...widget("child", "text", 3), x: 120, y: 120, width: 50, height: 20 };
+    const roots = buildLayerHierarchy([outer, inner, child], (item) => item.id);
+
+    expect(roots).toHaveLength(1);
+    expect(roots[0].id).toBe("outer");
+    expect(roots[0].children[0].id).toBe("inner");
+    expect(roots[0].children[0].children[0].id).toBe("child");
   });
 
   it("represents Ctrl+G groups as expandable virtual containers", () => {
