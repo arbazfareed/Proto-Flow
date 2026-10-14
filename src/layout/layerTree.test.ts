@@ -9,6 +9,8 @@ import {
   filterLayerHierarchy,
   flattenLayerHierarchy,
   getContainerBadge,
+  getLayerTreeCollapseStateAtDepth,
+  getLayerTreeMaxDepth,
   isLayerContainer,
 } from "./layerTree";
 import { getLayerAccentColor } from "./layerGrouping";
@@ -78,6 +80,42 @@ describe("layer hierarchy", () => {
       .toHaveLength(1);
     expect(flattenLayerHierarchy(roots, new Set()).map(({ node }) => node.id))
       .toEqual(["rectangle-parent", "text-child", "image-grandchild"]);
+  });
+
+  it("expands a tree to a selected depth while keeping deeper containers collapsed", () => {
+    const roots = buildLayerHierarchy([
+      widget("frame", "frame", 0),
+      widget("rectangle", "rectangle", 1, "frame"),
+      widget("star", "star", 2, "rectangle"),
+    ], (item) => item.id);
+    const frame = roots[0];
+
+    expect(getLayerTreeMaxDepth(frame)).toBe(2);
+    expect(getLayerTreeCollapseStateAtDepth(frame, 2)).toEqual({
+      expandedKeys: ["container:frame", "container:rectangle"],
+      collapsedKeys: [],
+    });
+    expect(getLayerTreeCollapseStateAtDepth(frame, 1)).toEqual({
+      expandedKeys: ["container:frame"],
+      collapsedKeys: ["container:rectangle"],
+    });
+    expect(flattenLayerHierarchy(roots, new Set(["container:rectangle"]))
+      .map(({ node, depth }) => [node.id, depth]))
+      .toEqual([
+        ["frame", 0],
+        ["rectangle", 1],
+      ]);
+  });
+
+  it("does not mark empty containers as collapsed", () => {
+    const roots = buildLayerHierarchy([widget("empty-frame", "frame", 0)], (item) => item.id);
+
+    expect(getLayerTreeCollapseStateAtDepth(roots[0], 1)).toEqual({
+      expandedKeys: [],
+      collapsedKeys: [],
+    });
+    expect(flattenLayerHierarchy(roots, new Set(["container:empty-frame"]))[0].collapsed)
+      .toBe(false);
   });
 
   it("shows every direct child of a nested rectangle with matching count and depth", () => {

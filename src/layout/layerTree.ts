@@ -68,6 +68,36 @@ export function getLayerTreeCollapseKey(node: LayerTreeNode): string | null {
     : null;
 }
 
+export function getLayerTreeMaxDepth(root: LayerTreeNode): number {
+  let maxDepth = 0;
+  const visit = (node: LayerTreeNode, depth: number) => {
+    maxDepth = Math.max(maxDepth, depth);
+    node.children.forEach((child) => visit(child, depth + 1));
+  };
+  visit(root, 0);
+  return maxDepth;
+}
+
+export function getLayerTreeCollapseStateAtDepth(
+  root: LayerTreeNode,
+  expandedDepth: number,
+): { expandedKeys: string[]; collapsedKeys: string[] } {
+  const depthLimit = Number.isFinite(expandedDepth)
+    ? Math.max(1, Math.floor(expandedDepth))
+    : 1;
+  const expandedKeys: string[] = [];
+  const collapsedKeys: string[] = [];
+  const visit = (node: LayerTreeNode, depth: number) => {
+    const key = getLayerTreeCollapseKey(node);
+    if (key && node.children.length > 0) {
+      (depth < depthLimit ? expandedKeys : collapsedKeys).push(key);
+    }
+    node.children.forEach((child) => visit(child, depth + 1));
+  };
+  visit(root, 0);
+  return { expandedKeys, collapsedKeys };
+}
+
 export function flattenLayerHierarchy(
   roots: readonly LayerTreeNode[],
   collapsedIds: ReadonlySet<string>,
@@ -93,7 +123,10 @@ export function flattenLayerHierarchy(
     nodes.forEach((node, index) => {
       const isLastChild = index === nodes.length - 1;
       const collapseKey = getLayerTreeCollapseKey(node);
-      const collapsed = collapseKey !== null && collapsedIds.has(collapseKey);
+      const collapsed =
+        node.children.length > 0 &&
+        collapseKey !== null &&
+        collapsedIds.has(collapseKey);
       entries.push({
         node,
         depth,
