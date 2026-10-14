@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import type { CSSProperties, DragEvent, KeyboardEvent as ReactKeyboardEvent } from "react";
 import {
   ChevronDown,
+  ChevronLeft,
   ChevronRight,
   Check,
   CircleSlash,
@@ -366,6 +367,7 @@ export function ScreenLayerSidebar() {
   const [screenPickerOpen, setScreenPickerOpen] = useState(false);
   const [deviceTargetScreenId, setDeviceTargetScreenId] = useState<string | null>(null);
   const [draggedScreenId, setDraggedScreenId] = useState<string | null>(null);
+  const [showAllScreens, setShowAllScreens] = useState(false);
   const [draggedLayerIds, setDraggedLayerIds] = useState<string[]>([]);
   const [dropIndicator, setDropIndicator] = useState<LayerDropIndicator>(null);
   const [collapsedByScreen, setCollapsedByScreen] = useState(() =>
@@ -404,7 +406,7 @@ export function ScreenLayerSidebar() {
     const observer = new ResizeObserver(updateHeight);
     observer.observe(list);
     return () => observer.disconnect();
-  }, []);
+  }, [showAllScreens]);
 
   useEffect(() => {
     const previous = previousWidgetIdsRef.current;
@@ -792,6 +794,7 @@ export function ScreenLayerSidebar() {
     layerMode,
     selectedIds,
   ]);
+  const activeScreenIndex = project.screens.findIndex((screen) => screen.id === activeScreenId);
   const screenVirtualizedRange = project.screens.length > 20
     ? getVirtualizedRange(
         project.screens.length,
@@ -810,6 +813,9 @@ export function ScreenLayerSidebar() {
     screenVirtualizedRange.start,
     screenVirtualizedRange.end,
   );
+  const screensToRender = showAllScreens
+    ? visibleScreens
+    : activeScreen ? [activeScreen] : [];
 
   const addScreen = (device: ScreenDevice) => {
     const name = device.presetId === "custom"
@@ -1696,14 +1702,47 @@ export function ScreenLayerSidebar() {
       <section className="sidebar-section pages-section" aria-label="Screens">
         <div className="section-label">
           <span>SCREENS</span>
-          <button
-            className="icon-button small-icon"
-            aria-label="Add screen"
-            title="Add screen"
-            onClick={() => setScreenPickerOpen(true)}
-          >
-            <Plus size={15} />
-          </button>
+          <div className="screen-navigation">
+            <span className="screen-position" aria-label={`Screen ${activeScreenIndex + 1} of ${project.screens.length}`}>
+              {activeScreenIndex + 1} / {project.screens.length}
+            </span>
+            <button
+              className="screen-show-all"
+              type="button"
+              aria-label={showAllScreens ? "Show current screen only" : "Show all screens"}
+              aria-pressed={showAllScreens}
+              title={showAllScreens ? "Show current screen only" : "Show all screens"}
+              onClick={() => setShowAllScreens((expanded) => !expanded)}
+            >
+              {showAllScreens ? "Current" : "All"}
+            </button>
+            <button
+              className="icon-button small-icon"
+              aria-label="Previous screen"
+              title="Previous screen"
+              disabled={activeScreenIndex <= 0}
+              onClick={() => useStore.getState().setActiveScreen(project.screens[activeScreenIndex - 1].id)}
+            >
+              <ChevronLeft size={15} />
+            </button>
+            <button
+              className="icon-button small-icon"
+              aria-label="Next screen"
+              title="Next screen"
+              disabled={activeScreenIndex < 0 || activeScreenIndex >= project.screens.length - 1}
+              onClick={() => useStore.getState().setActiveScreen(project.screens[activeScreenIndex + 1].id)}
+            >
+              <ChevronRight size={15} />
+            </button>
+            <button
+              className="icon-button small-icon"
+              aria-label="Add screen"
+              title="Add screen"
+              onClick={() => setScreenPickerOpen(true)}
+            >
+              <Plus size={15} />
+            </button>
+          </div>
         </div>
         <div
           className="screen-list"
@@ -1712,11 +1751,11 @@ export function ScreenLayerSidebar() {
           ref={screenListRef}
           onScroll={(event) => setScreenScrollTop(event.currentTarget.scrollTop)}
         >
-          {screenVirtualizedRange.topSpacerHeight > 0 && (
+          {showAllScreens && screenVirtualizedRange.topSpacerHeight > 0 && (
             <div style={{ height: screenVirtualizedRange.topSpacerHeight }} aria-hidden="true" />
           )}
-          {visibleScreens.map((screen, visibleIndex) => {
-            const screenIndex = screenVirtualizedRange.start + visibleIndex;
+          {screensToRender.map((screen) => {
+            const screenIndex = project.screens.findIndex((item) => item.id === screen.id);
             const device = screen.device ?? toScreenDevice(DEFAULT_DEVICE_PRESET);
             const deviceName = screen.device?.presetId === "custom"
               ? "Custom size"
@@ -1753,29 +1792,36 @@ export function ScreenLayerSidebar() {
                       ? 0
                       : event.key === "End"
                         ? project.screens.length - 1
-                        : Math.max(
-                            0,
-                            Math.min(
-                              project.screens.length - 1,
-                              screenIndex + (event.key === "ArrowDown" ? 1 : -1),
+                        : Math.max(0, Math.min(
+                            project.screens.length - 1,
+                            screenIndex + (event.key === "ArrowDown" ? 1 : -1),
+                          ));
+                    if (nextIndex !== screenIndex) {
+                      useStore.getState().setActiveScreen(project.screens[nextIndex].id);
+                      if (showAllScreens) {
+                        const nextOption = screenListRef.current
+                          ?.querySelector<HTMLElement>(`[data-screen-index="${nextIndex}"]`);
+                        if (nextOption) {
+                          nextOption.focus();
+                        } else {
+                          if (screenListRef.current) {
+                            screenListRef.current.scrollTop = nextIndex * SCREEN_ROW_HEIGHT;
+                          }
+                          window.requestAnimationFrame(() =>
+                            window.requestAnimationFrame(() =>
+                              screenListRef.current
+                                ?.querySelector<HTMLElement>(`[data-screen-index="${nextIndex}"]`)
+                                ?.focus(),
                             ),
                           );
-                    const focusNextScreen = () => {
-                      screenListRef.current
-                        ?.querySelector<HTMLElement>(`[data-screen-index="${nextIndex}"]`)
-                        ?.focus();
-                    };
-                    const nextOption = screenListRef.current
-                      ?.querySelector<HTMLElement>(`[data-screen-index="${nextIndex}"]`);
-                    if (nextOption) {
-                      nextOption.focus();
-                    } else {
-                      if (screenListRef.current) {
-                        screenListRef.current.scrollTop = nextIndex * SCREEN_ROW_HEIGHT;
+                        }
+                      } else {
+                        window.requestAnimationFrame(() =>
+                          screenListRef.current
+                            ?.querySelector<HTMLElement>(`[data-screen-index="${nextIndex}"]`)
+                            ?.focus(),
+                        );
                       }
-                      window.requestAnimationFrame(() =>
-                        window.requestAnimationFrame(focusNextScreen),
-                      );
                     }
                   } else if (event.key === "Enter") {
                     event.preventDefault();
@@ -1846,7 +1892,7 @@ export function ScreenLayerSidebar() {
               </div>
             );
           })}
-          {screenVirtualizedRange.bottomSpacerHeight > 0 && (
+          {showAllScreens && screenVirtualizedRange.bottomSpacerHeight > 0 && (
             <div style={{ height: screenVirtualizedRange.bottomSpacerHeight }} aria-hidden="true" />
           )}
         </div>

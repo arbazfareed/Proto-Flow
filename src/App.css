@@ -327,6 +327,11 @@
 .layers-dock-body .pages-section { margin-top:11px; }
 .layers-dock-body .screen-list { max-height:min(26vh,220px); }
 .layers-dock-body .sidebar-section { margin-top:14px; }
+.screen-navigation { display:flex; align-items:center; gap:2px; }
+.screen-position { min-width:28px; color:#85838e; font-size:9px; font-variant-numeric:tabular-nums; text-align:center; }
+.screen-show-all { min-height:23px; padding:0 5px; border:1px solid #383940; border-radius:4px; color:#aaa8b3; background:#202126; font-size:8px; cursor:pointer; }
+.screen-show-all:hover,.screen-show-all[aria-pressed="true"] { border-color:#514768; color:#ded4ff; background:#292431; }
+.screen-navigation .icon-button:disabled { opacity:.35; cursor:default; }
 .canvas-toolbar-actions .canvas-view-menu-anchor { flex:0 0 auto; }
 @container (min-width:830px) {
   .canvas-toolbar { height:43px; min-height:43px; flex-wrap:nowrap; gap:8px; padding:0 14px; }
