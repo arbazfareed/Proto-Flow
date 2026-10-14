@@ -3,7 +3,8 @@ import { DEFAULT_DEVICE_PRESET, toScreenDevice } from "../devices/catalog";
 import { ScreenDeviceSchema } from "../devices/schema";
 import type { ScreenDevice } from "../devices/types";
 
-export const PROJECT_SCHEMA_VERSION = "1.0.0";
+export const PROJECT_SCHEMA_VERSION = "1.1.0";
+const LEGACY_PROJECT_SCHEMA_VERSION = "1.0.0";
 const COORDINATE_LIMIT = 100_000;
 const HexColorSchema = z
   .string()
@@ -166,6 +167,7 @@ export const ProtoWidgetSchema = z
     visible: z.boolean(),
     locked: z.boolean(),
     zIndex: z.number().int(),
+    symbolId: z.string().uuid().optional(),
     style: WidgetStyleSchema,
     props: z.record(z.string(), z.unknown()),
     cascadeMode: WidgetCascadeModeSchema.optional(),
@@ -174,6 +176,14 @@ export const ProtoWidgetSchema = z
     overrides: z.record(z.string(), WidgetOverrideSchema).optional(),
   })
   .strict();
+
+export const SymbolDefinitionSchema = z.object({
+  id: z.string().uuid(),
+  name: z.string().trim().min(1).max(120),
+  width: z.number().finite().min(1),
+  height: z.number().finite().min(1),
+  widgets: z.array(ProtoWidgetSchema).min(1),
+}).strict();
 
 export const ProtoScreenSchema = z
   .object({
@@ -232,10 +242,33 @@ export const ProtoFlowProjectSchema = z
     updatedAt: z.iso.datetime(),
     variables: z.array(VariableDefinitionSchema),
     screens: z.array(ProtoScreenSchema).min(1),
+    symbols: z.array(SymbolDefinitionSchema),
     startScreenId: z.string().uuid(),
   })
   .strict()
   .superRefine((project, context) => {
+    const symbolIds = new Set<string>();
+    for (const [index, symbol] of project.symbols.entries()) {
+      if (symbolIds.has(symbol.id)) {
+        context.addIssue({
+          code: "custom",
+          path: ["symbols", index, "id"],
+          message: `Duplicate symbol ID: ${symbol.id}.`,
+        });
+      }
+      symbolIds.add(symbol.id);
+    }
+    for (const [screenIndex, screen] of project.screens.entries()) {
+      for (const [widgetIndex, widget] of screen.widgets.entries()) {
+        if (widget.type === "symbol-instance" && !symbolIds.has(widget.symbolId ?? "")) {
+          context.addIssue({
+            code: "custom",
+            path: ["screens", screenIndex, "widgets", widgetIndex, "symbolId"],
+            message: "Symbol instance must reference an existing symbol.",
+          });
+        }
+      }
+    }
     if (!project.screens.some((screen) => screen.id === project.startScreenId)) {
       context.addIssue({
         code: "custom",
@@ -254,6 +287,7 @@ export type InteractionRule = z.infer<typeof InteractionRuleSchema>;
 export type WidgetShadow = z.infer<typeof WidgetShadowSchema>;
 export type WidgetStyle = z.infer<typeof WidgetStyleSchema>;
 export type Widget = z.infer<typeof ProtoWidgetSchema>;
+export type SymbolDefinition = z.infer<typeof SymbolDefinitionSchema>;
 export type WidgetOverride = z.infer<typeof WidgetOverrideSchema>;
 export type Breakpoint = z.infer<typeof BreakpointSchema>;
 export type WidgetCascadeMode = z.infer<typeof WidgetCascadeModeSchema>;
@@ -308,8 +342,22 @@ export function parseProject(raw: unknown): Project {
     typeof value === "object" &&
     value !== null &&
     "schemaVersion" in value &&
+    value.schemaVersion === LEGACY_PROJECT_SCHEMA_VERSION
+  ) {
+    value = {
+      ...value,
+      schemaVersion: PROJECT_SCHEMA_VERSION,
+      symbols: "symbols" in value && Array.isArray(value.symbols) ? value.symbols : [],
+    };
+  }
+
+  if (
+    typeof value === "object" &&
+    value !== null &&
+    "schemaVersion" in value &&
     typeof value.schemaVersion === "string" &&
-    value.schemaVersion !== PROJECT_SCHEMA_VERSION
+    value.schemaVersion !== PROJECT_SCHEMA_VERSION &&
+    value.schemaVersion !== LEGACY_PROJECT_SCHEMA_VERSION
   ) {
     throw new SchemaValidationError([
       {
@@ -338,6 +386,7 @@ export function createEmptyProject(name = "Untitled project"): Project {
     createdAt: now,
     updatedAt: now,
     variables: [],
+    symbols: [],
     screens: [
       {
         id: screenId,

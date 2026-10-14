@@ -41,6 +41,7 @@ import {
 } from "../devices/frame";
 import type { ScreenDevice } from "../devices/types";
 import { ScreenLayerSidebar } from "./ScreenLayerSidebar";
+import { SymbolLibrary } from "./SymbolLibrary";
 import { WidgetIcon } from "./widgetIcons";
 import { BreakpointToolbar, ResponsivePanel } from "./ResponsiveControls";
 import {
@@ -209,6 +210,7 @@ export function LeftSidebar({
         onSelectTool={onSelectTool}
         onAddScreen={onAddScreen}
       />
+      <SymbolLibrary />
       <div className="sidebar-footer">
         <button className="nav-item" onClick={onOpenPalette}><Keyboard size={16} /><span>Keyboard shortcuts</span></button>
         <button className="nav-item" onClick={onUpdates}><CircleHelp size={16} /><span>Help & updates</span></button>
