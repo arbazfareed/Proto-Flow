@@ -11,6 +11,7 @@ import {
   getContainerBadge,
   isLayerContainer,
 } from "./layerTree";
+import { getLayerAccentColor } from "./layerGrouping";
 
 function widget(
   id: string,
@@ -37,6 +38,15 @@ function widget(
 }
 
 describe("layer hierarchy", () => {
+  it("uses semantic category accents for layer rows", () => {
+    expect(getLayerAccentColor(widget("screen-shape", "star", 0))).toBe("#94A3B8");
+    expect(getLayerAccentColor(widget("container", "rectangle", 0))).toBe("#F59E0B");
+    expect(getLayerAccentColor(widget("frame", "frame", 0))).toBe("#F59E0B");
+    expect(getLayerAccentColor(widget("button", "button", 0))).toBe("#3B82F6");
+    expect(getLayerAccentColor(widget("panel", "panel", 0))).toBe("#F97316");
+    expect(getLayerAccentColor(widget("symbol", "symbol-instance", 0))).toBe("#8B5CF6");
+  });
+
   it("nests container children and semantic groups without flattening descendants", () => {
     const widgets = [
       widget("frame", "frame", 0),

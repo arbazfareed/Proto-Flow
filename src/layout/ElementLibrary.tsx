@@ -7,6 +7,7 @@ import {
   Eye,
   EyeOff,
   Lock,
+  Link2,
   Search,
   Sparkles,
   Unlock,
@@ -18,7 +19,7 @@ import {
   getShapeToolDefinition,
   type ShapeTool,
 } from "../canvas/shapeTools";
-import { ELEMENT_DRAG_MIME } from "../canvas/elementDrag";
+import { ELEMENT_DRAG_MIME, OPEN_IMAGE_URL_EVENT } from "../canvas/elementDrag";
 import {
   getScreenIconDefinition,
   getWidgetIconDefinition,
@@ -209,6 +210,22 @@ function ElementLibraryContents({
               </button>
             );
           })}
+        </div>
+      </section>
+
+      <section className="element-library-section" aria-label="Import image">
+        <h3>Import</h3>
+        <div className="element-library-grid">
+          <button
+            className="element-library-item"
+            type="button"
+            aria-label="Add image from URL"
+            title="Import an image from an HTTP or HTTPS URL"
+            onClick={() => window.dispatchEvent(new Event(OPEN_IMAGE_URL_EVENT))}
+          >
+            <Link2 size={16} aria-hidden="true" />
+            <span>Image URL</span>
+          </button>
         </div>
       </section>
 

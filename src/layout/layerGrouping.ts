@@ -1,4 +1,5 @@
 import type { Widget } from "../project/schema";
+import { isWidgetContainer } from "../project/layers";
 
 export const LAYER_VIEW_MODES = ["category", "z-order", "type"] as const;
 export type LayerViewMode = (typeof LAYER_VIEW_MODES)[number];
@@ -159,6 +160,25 @@ const CATEGORY_TYPES: Record<Exclude<LayerCategoryId, "other">, ReadonlySet<stri
     "footer",
   ]),
 };
+
+const LAYER_ACCENT_COLORS: Record<LayerCategoryId, string> = {
+  shapes: "#94A3B8",
+  widgets: "#3B82F6",
+  advanced: "#F97316",
+  symbols: "#8B5CF6",
+  containers: "#F59E0B",
+  other: "#94A3B8",
+};
+
+export function getLayerAccentColor(widget: Widget): string {
+  const category = getLayerCategory(widget.type, widget.layerCategory);
+  if (category === "advanced") return LAYER_ACCENT_COLORS.advanced;
+  if (category === "symbols") return LAYER_ACCENT_COLORS.symbols;
+  if (category === "containers" || (category === "shapes" && isWidgetContainer(widget))) {
+    return LAYER_ACCENT_COLORS.containers;
+  }
+  return LAYER_ACCENT_COLORS[category];
+}
 
 export function getLayerCategory(
   type: string,
