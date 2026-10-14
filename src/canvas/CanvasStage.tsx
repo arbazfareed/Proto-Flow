@@ -5,8 +5,10 @@ import type Konva from "konva";
 import {
   ArrowDownToLine,
   FolderOpen,
+  Hand,
   Link2,
   LoaderCircle,
+  Maximize2,
   Minus,
   Plus,
   X,
@@ -39,7 +41,11 @@ import {
   LAYER_DRAG_MIME,
   parseLayerDragPayload,
 } from "../project/layerDrag";
-import { ELEMENT_DRAG_MIME, parseElementDragPayload } from "./elementDrag";
+import {
+  ELEMENT_DRAG_MIME,
+  OPEN_IMAGE_URL_EVENT,
+  parseElementDragPayload,
+} from "./elementDrag";
 import {
   getSelectedContainingParentId,
   isWidgetContainedBy,
@@ -532,6 +538,7 @@ export function CanvasStage({
   const pendingDragFeedbackRef = useRef<CanvasDropFeedback | null>(null);
   const [size, setSize] = useState<CanvasSize>({ width: 0, height: 0 });
   const [spacePressed, setSpacePressed] = useState(false);
+  const [panMode, setPanMode] = useState(false);
   const [isPanning, setIsPanning] = useState(false);
   const [previewPositions, setPreviewPositions] = useState<Record<string, CanvasPoint>>({});
   const [guides, setGuides] = useState<CanvasGuide[]>([]);
@@ -1575,6 +1582,16 @@ export function CanvasStage({
   );
 
   useEffect(() => {
+    const openImageUrlDialog = () => setImageUrlDialogOpen(true);
+    window.addEventListener(OPEN_IMAGE_URL_EVENT, openImageUrlDialog);
+    return () => window.removeEventListener(OPEN_IMAGE_URL_EVENT, openImageUrlDialog);
+  }, []);
+
+  useEffect(() => {
+    if (activeTool) setPanMode(false);
+  }, [activeTool]);
+
+  useEffect(() => {
     const resetSpacePan = () => {
       spacePressedRef.current = false;
       setSpacePressed(false);
@@ -1674,7 +1691,7 @@ export function CanvasStage({
   const handlePointerDown = useCallback(
     (event: React.PointerEvent<HTMLDivElement>) => {
       const isMiddleButton = event.button === 1;
-      const isSpaceDrag = event.button === 0 && spacePressedRef.current;
+      const isSpaceDrag = event.button === 0 && (spacePressedRef.current || panMode);
       const targetIsControl =
         event.target instanceof Element &&
         Boolean(
@@ -1699,7 +1716,7 @@ export function CanvasStage({
       };
       setIsPanning(true);
     },
-    [],
+    [panMode],
   );
 
   const handlePointerMove = useCallback(
@@ -1743,7 +1760,7 @@ export function CanvasStage({
   return (
     <div
       ref={surfaceRef}
-      className={`canvas-stage-surface${spacePressed ? " is-space-ready" : ""}${isPanning ? " is-panning" : ""}${activeTool ? " is-drawing" : ""}`}
+      className={`canvas-stage-surface${spacePressed || panMode ? " is-space-ready" : ""}${panMode ? " is-pan-mode" : ""}${isPanning ? " is-panning" : ""}${activeTool ? " is-drawing" : ""}`}
       data-canvas-zoom={zoom}
       data-canvas-pan-x={pan.x}
       data-canvas-pan-y={pan.y}
@@ -1783,16 +1800,6 @@ export function CanvasStage({
         void handleImageFiles(Array.from(event.dataTransfer.files), position);
       }}
     >
-      <button
-        className="image-url-trigger"
-        type="button"
-        aria-label="Add image from URL"
-        title="Add image from URL"
-        onClick={() => setImageUrlDialogOpen(true)}
-      >
-        <Link2 size={14} />
-        <span>Image URL</span>
-      </button>
       {imageUrlDialogOpen && (
         <div
           className="image-url-backdrop"
@@ -2384,7 +2391,20 @@ export function CanvasStage({
           />
         );
       })()}
-      <div className="canvas-zoom-controls" role="group" aria-label="Canvas zoom controls">
+      <div className="canvas-zoom-controls" role="group" aria-label="Canvas view controls">
+        <button
+          className={`icon-button small-icon${panMode ? " is-active" : ""}`}
+          type="button"
+          title={panMode ? "Exit canvas pan mode" : "Pan canvas"}
+          aria-label={panMode ? "Exit canvas pan mode" : "Pan canvas"}
+          aria-pressed={panMode}
+          onClick={() => {
+            setPanMode((current) => !current);
+            onToolChange(null);
+          }}
+        >
+          <Hand size={14} />
+        </button>
         <button
           className="icon-button small-icon"
           title="Zoom out"
@@ -2421,6 +2441,33 @@ export function CanvasStage({
           }
         >
           <Plus size={14} />
+        </button>
+        <button
+          className="icon-button small-icon"
+          type="button"
+          title="Fit screen"
+          aria-label="Fit screen"
+          onClick={() => {
+            const current = useStore.getState();
+            const screen = current.project.screens.find(
+              (item) => item.id === current.getActiveScreenId(),
+            );
+            if (!screen || size.width === 0 || size.height === 0) return;
+            const device = screen.device ?? toScreenDevice(DEFAULT_DEVICE_PRESET);
+            applyView(
+              fitCanvasBounds(
+                getDeviceFrameBounds(
+                  device,
+                  findDevicePreset(device.presetId)?.frameChrome?.bezel ?? 0,
+                  showDeviceFrame,
+                ),
+                size,
+                40,
+              ),
+            );
+          }}
+        >
+          <Maximize2 size={14} />
         </button>
       </div>
     </div>

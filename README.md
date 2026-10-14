@@ -66,6 +66,8 @@ Screen 1 (Root Container) [PARENT]
 `-- Text [CHILD]
 ```
 
+Layer rows use category-specific accent stripes; category headers retain their category tint. Container rows are bold and show a live direct-child badge (or a gray `empty` badge), while panels and repeaters report their state and row counts. The canvas view controls include Pan mode for repositioning the viewport and Fit screen for recentering the active screen. The Image URL import action is available in the Elements library.
+
 ### Phase 2 failure-matrix verification
 
 The failure-focused checks for PF-T201–PF-T207 are tracked alongside their implementation tests. Run the targeted regression groups with:

@@ -1,4 +1,5 @@
 import { useRef } from "react";
+import type { CSSProperties } from "react";
 import {
   ChevronDown,
   ChevronRight,
@@ -81,7 +82,10 @@ export function CategoryHeader({
   return (
     <div
       className={`layer-category-header${isDropTarget ? " is-drop-target" : ""}`}
-      style={{ backgroundColor: `${category.badge}18` }}
+      style={{
+        backgroundColor: `${category.badge}18`,
+        "--layer-accent": category.badge,
+      } as CSSProperties & { "--layer-accent": string }}
       data-drop-edge={dropEdge}
       data-entry-index={entryIndex}
       id={`layer-category-${groupId}`}

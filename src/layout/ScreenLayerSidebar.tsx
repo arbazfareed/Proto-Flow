@@ -43,6 +43,7 @@ import { useStore } from "../store";
 import { CategoryHeader } from "./CategoryHeader";
 import {
   buildLayerGroups,
+  getLayerAccentColor,
   getLayerCategory,
   LAYER_CATEGORIES,
   LAYER_CATEGORY_DEFINITIONS,
@@ -154,9 +155,7 @@ function screenIconCategory(device: ScreenDevice | undefined): DeviceCategory {
 }
 
 function categoryAccent(widget: Widget): string {
-  return LAYER_CATEGORY_DEFINITIONS[
-    getLayerCategory(widget.type, widget.layerCategory)
-  ].badge;
+  return getLayerAccentColor(widget);
 }
 
 function wouldCreateLayerCycle(
@@ -1421,7 +1420,7 @@ export function ScreenLayerSidebar() {
         data-depth={entry.depth + 1}
         style={{
           paddingLeft: `${indentation}px`,
-          "--layer-accent": categoryAccent(widget),
+          "--layer-accent": invalidDrop ? "#EF4444" : categoryAccent(widget),
         } as CSSProperties & { "--layer-accent": string }}
         draggable={!renamingWidgetId}
         onKeyDown={navigateLayerTree}
@@ -1580,7 +1579,7 @@ export function ScreenLayerSidebar() {
               <span className="layer-name">{label}</span>
               {container && (
                 <span
-                  className="layer-child-count"
+                  className={`layer-child-count${childBadge === "empty" ? " is-empty" : ""}`}
                   aria-label={childBadge}
                 >
                   {entry.collapsed ? `(${childBadge})` : childBadge}
@@ -2126,9 +2125,11 @@ export function ScreenLayerSidebar() {
                     data-depth={entry.depth + 1}
                     style={{
                       paddingLeft: `${indentation}px`,
-                      "--layer-accent": node.children[0]?.widget
-                        ? categoryAccent(node.children[0].widget)
-                        : LAYER_CATEGORY_DEFINITIONS[node.category].badge,
+                      "--layer-accent": invalidDrop
+                        ? "#EF4444"
+                        : node.children[0]?.widget
+                          ? categoryAccent(node.children[0].widget)
+                          : LAYER_CATEGORY_DEFINITIONS[node.category].badge,
                     } as CSSProperties & { "--layer-accent": string }}
                     onKeyDown={navigateLayerTree}
                     onMouseEnter={() => members[0] && useStore.getState().setLayerHoveredWidget(members[0].id)}
