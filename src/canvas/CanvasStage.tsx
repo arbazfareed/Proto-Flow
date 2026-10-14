@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { DragEvent as ReactDragEvent } from "react";
 import { Group, Layer, Line, Rect, Shape, Stage, Text, Transformer } from "react-konva";
 import type Konva from "konva";
@@ -51,6 +51,7 @@ import {
 } from "./shapes";
 import {
   constrainTransformerBounds,
+  getSelectedParentWidgetIds,
   getSelectionBounds,
   getSelectionUpdates,
   getWidgetsInsideBounds,
@@ -340,6 +341,7 @@ function WidgetNode({
   widget,
   selected,
   hovered,
+  parentHighlighted,
   zoom,
   activeTool,
   position,
@@ -354,6 +356,7 @@ function WidgetNode({
   widget: Widget;
   selected: boolean;
   hovered: boolean;
+  parentHighlighted: boolean;
   zoom: number;
   activeTool: ShapeTool | null;
   position: CanvasPoint;
@@ -396,14 +399,14 @@ function WidgetNode({
       }
     >
       {renderWidgetShape(widget, selected)}
-      {(selected || hovered) && (
+      {(selected || hovered || parentHighlighted) && (
         <Rect
           x={-2 / zoom}
           y={-2 / zoom}
           width={widget.width + 4 / zoom}
           height={widget.height + 4 / zoom}
           fillEnabled={false}
-          stroke={selected ? "#bba5ff" : "#68a7ff"}
+          stroke={selected ? "#bba5ff" : parentHighlighted ? "#63cf9c" : "#68a7ff"}
           strokeWidth={1 / zoom}
           dash={selected ? undefined : [4 / zoom, 3 / zoom]}
           listening={false}
@@ -557,6 +560,10 @@ export function CanvasStage({
         activeScreen.device?.height ?? DEFAULT_DEVICE_PRESET.viewport.height,
       )
     : [...baseScreenWidgets].sort((first, second) => first.zIndex - second.zIndex);
+  const selectedParentWidgetIds = useMemo(
+    () => getSelectedParentWidgetIds(screenWidgets, selectedIds),
+    [screenWidgets, selectedIds],
+  );
   const baseDevice: ScreenDevice =
     activeScreen?.device ?? toScreenDevice(DEFAULT_DEVICE_PRESET);
   const activeDevice: ScreenDevice = activeBreakpoint
@@ -777,7 +784,8 @@ export function CanvasStage({
       image: ImportedImage,
       position: CanvasPoint,
       targetWidgetId: string | null = null,
-    ) => {
+      notifySuccess = true,
+    ): Promise<boolean> => {
       if (targetWidgetId) {
         const target = useStore
           .getState()
@@ -788,7 +796,7 @@ export function CanvasStage({
           );
         if (!target) {
           onNotify("Select an image widget before replacing its image.", true);
-          return;
+          return false;
         }
       }
       const current = useStore.getState();
@@ -804,13 +812,6 @@ export function CanvasStage({
       const needsExternalAsset =
         imageBytes >= IMAGE_ASSET_THRESHOLD ||
         inlineBytes + imageBytes > MAX_INLINE_IMAGE_BYTES;
-      if (needsExternalAsset && !(current.filePath && isTauri())) {
-        onNotify(
-          "Save the project in the desktop app before adding images that exceed the 2 MB inline image budget.",
-          true,
-        );
-        return;
-      }
       if (needsExternalAsset && current.filePath && isTauri()) {
         try {
           assetPath = await invoke<string>("save_image_asset", {
@@ -823,13 +824,13 @@ export function CanvasStage({
             error instanceof Error ? error.message : "Could not save the image asset.",
             true,
           );
-          return;
+          return false;
         }
       }
 
       const imageWidgetId =
         targetWidgetId ?? createWidgetAt("image", position);
-      if (!imageWidgetId) return;
+      if (!imageWidgetId) return false;
       updateWidgetProps(imageWidgetId, {
         src: assetPath ? undefined : image.src,
         mime: image.mime,
@@ -837,9 +838,12 @@ export function CanvasStage({
         assetPath,
       });
       useStore.getState().select([imageWidgetId]);
-      onNotify(
-        assetPath ? "Image added to the project assets." : "Image added.",
-      );
+      if (notifySuccess) {
+        onNotify(
+          assetPath ? "Image added to the project assets." : "Image added.",
+        );
+      }
+      return true;
     },
     [createWidgetAt, onNotify],
   );
@@ -1067,27 +1071,37 @@ export function CanvasStage({
   const handleDroppedImagePaths = useCallback(
     async (paths: string[], position: CanvasPoint) => {
       if (paths.length === 0) return;
-      try {
-        const image = await invoke<{
-          name: string;
-          mime: string;
-          size: number;
-          base64: string;
-        }>("read_dropped_image", { path: paths[0] });
-        await applyImportedImage(
-          {
-            name: image.name,
-            mime: image.mime,
-            size: image.size,
-            src: `data:${image.mime};base64,${image.base64}`,
-          },
-          position,
-        );
-      } catch (error) {
-        onNotify(
-          error instanceof Error ? error.message : "Could not import the dropped image.",
-          true,
-        );
+      let importedCount = 0;
+      for (const [index, path] of paths.entries()) {
+        try {
+          const image = await invoke<{
+            name: string;
+            mime: string;
+            size: number;
+            base64: string;
+          }>("read_dropped_image", { path });
+          const imported = await applyImportedImage(
+            {
+              name: image.name,
+              mime: image.mime,
+              size: image.size,
+              src: `data:${image.mime};base64,${image.base64}`,
+            },
+            { x: position.x + index * 24, y: position.y + index * 24 },
+            null,
+            false,
+          );
+          if (imported) importedCount += 1;
+        } catch (error) {
+          const name = path.split(/[\\/]/).at(-1) ?? path;
+          onNotify(
+            `${name}: ${error instanceof Error ? error.message : "Could not import the dropped image."}`,
+            true,
+          );
+        }
+      }
+      if (importedCount > 0) {
+        onNotify(`${importedCount} image${importedCount === 1 ? "" : "s"} added.`);
       }
     },
     [applyImportedImage, onNotify],
@@ -1763,6 +1777,7 @@ export function CanvasStage({
                   widget={widget}
                   selected={selectedIds.includes(widget.id)}
                   hovered={hoveredWidgetId === widget.id}
+                  parentHighlighted={selectedParentWidgetIds.has(widget.id)}
                   zoom={zoom}
                   activeTool={activeTool}
                   position={

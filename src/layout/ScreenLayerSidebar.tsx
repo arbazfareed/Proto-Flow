@@ -52,7 +52,6 @@ import {
   serializeLayerTreePreferences,
 } from "./layerTreePreferences";
 import type { LayerTreePreferences } from "./layerTreePreferences";
-import { WidgetThumbnail } from "./WidgetThumbnail";
 import { WidgetIcon } from "./widgetIcons";
 import { ScreenThumbnail } from "./ScreenThumbnail";
 import {
@@ -207,13 +206,13 @@ function beginLayerDrag(
     opacity: "0.6",
     pointerEvents: "none",
   });
-  const sourceThumbnail =
-    event.currentTarget.querySelector<HTMLImageElement>(".layer-thumbnail img") ??
-    event.currentTarget.closest(".layer-group")?.querySelector<HTMLImageElement>(".layer-thumbnail img");
-  if (sourceThumbnail) {
-    const thumbnail = sourceThumbnail.cloneNode() as HTMLImageElement;
-    Object.assign(thumbnail.style, { width: "64px", height: "64px", objectFit: "contain" });
-    ghost.append(thumbnail);
+  const sourceIcon =
+    event.currentTarget.querySelector<SVGElement>(".layer-select > svg") ??
+    event.currentTarget.querySelector<SVGElement>(".layer-group-row > svg");
+  if (sourceIcon) {
+    const icon = sourceIcon.cloneNode(true) as SVGElement;
+    Object.assign(icon.style, { width: "24px", height: "24px", flex: "0 0 24px" });
+    ghost.append(icon);
   } else {
     const placeholder = document.createElement("span");
     Object.assign(placeholder.style, {
@@ -1318,7 +1317,6 @@ export function ScreenLayerSidebar() {
     entry: FlattenedLayerTreeEntry,
     entryIndex: number,
   ) => {
-    const definition = getShapeToolDefinition(widget.type);
     const selected = selectedIds.includes(widget.id);
     const label = widgetLabel(widget);
     const container = isLayerContainer(widget);
@@ -1477,12 +1475,8 @@ export function ScreenLayerSidebar() {
             ) : (
               <span className="layer-chevron-spacer" aria-hidden="true" />
             )}
-            <WidgetThumbnail widget={widget} />
             <WidgetIcon type={widget.type} />
-            <span className="layer-copy">
-              <span className="layer-name">{label}</span>
-              <span className="layer-type">{definition?.label ?? widget.type}</span>
-            </span>
+            <span className="layer-name">{label}</span>
             {container && (
               <span
                 className="layer-child-count"

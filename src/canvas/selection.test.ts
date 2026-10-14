@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { createShapeWidget } from "./shapes";
 import {
   getSelectionBounds,
+  getSelectedParentWidgetIds,
   getSelectionUpdates,
   getWidgetsInsideBounds,
   offsetSelection,
@@ -22,6 +23,21 @@ function widget(
 }
 
 describe("selection geometry", () => {
+  it("finds selected widgets' parent containers and ancestors without looping on cycles", () => {
+    const widgets = [
+      { id: "screen", groupId: undefined },
+      { id: "card", groupId: "screen" },
+      { id: "image", groupId: "card" },
+      { id: "cycle-a", groupId: "cycle-b" },
+      { id: "cycle-b", groupId: "cycle-a" },
+    ];
+
+    expect([...getSelectedParentWidgetIds(widgets, ["image"])].sort())
+      .toEqual(["card", "screen"]);
+    expect([...getSelectedParentWidgetIds(widgets, ["cycle-a"])]).toEqual(["cycle-b"]);
+    expect([...getSelectedParentWidgetIds(widgets, ["missing"])]).toEqual([]);
+  });
+
   it("transformer-inversion rejects inverted, undersized, and non-finite bounds", () => {
     const oldBox = { x: 0, y: 0, width: 20, height: 20 };
     expect(constrainTransformerBounds(oldBox, { x: 10, y: 10, width: -2, height: 20 }))

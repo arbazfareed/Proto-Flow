@@ -8,6 +8,28 @@ export interface SelectionBounds {
   height: number;
 }
 
+export function getSelectedParentWidgetIds(
+  widgets: readonly Pick<Widget, "id" | "groupId">[],
+  selectedIds: readonly string[],
+): Set<string> {
+  const widgetsById = new Map(widgets.map((widget) => [widget.id, widget]));
+  const parentIds = new Set<string>();
+
+  for (const selectedId of selectedIds) {
+    const visited = new Set([selectedId]);
+    let parentId = widgetsById.get(selectedId)?.groupId;
+    while (parentId && !visited.has(parentId)) {
+      const parent = widgetsById.get(parentId);
+      if (!parent) break;
+      visited.add(parentId);
+      parentIds.add(parentId);
+      parentId = parent.groupId;
+    }
+  }
+
+  return parentIds;
+}
+
 export function constrainTransformerBounds(
   oldBox: SelectionBounds,
   newBox: SelectionBounds,

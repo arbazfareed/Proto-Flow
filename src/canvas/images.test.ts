@@ -84,4 +84,27 @@ describe("canvas image validation", () => {
       readImageFile(new File([externalSvg], "external.svg", { type: "image/svg+xml" })),
     ).rejects.toThrow("must not contain scripts or external resources");
   });
+
+  it("parses complete SVG documents larger than 4 KB", async () => {
+    let parsedLength = 0;
+    vi.stubGlobal(
+      "DOMParser",
+      class {
+        parseFromString(source: string) {
+          parsedLength = source.length;
+          return {
+            querySelector: () => null,
+            querySelectorAll: () => [],
+          };
+        }
+      },
+    );
+    const svg = `<svg xmlns="http://www.w3.org/2000/svg">${" ".repeat(5000)}<rect width="1" height="1"/></svg>`;
+    const image = await readImageFile(
+      new File([svg], "large.svg", { type: "image/svg+xml" }),
+    );
+
+    expect(image.mime).toBe("image/svg+xml");
+    expect(parsedLength).toBe(svg.length);
+  });
 });

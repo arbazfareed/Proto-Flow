@@ -56,17 +56,14 @@ function detectImageMime(bytes: Uint8Array, fileName: string): string {
   if (isJpeg) return "image/jpeg";
   if (isWebp) return "image/webp";
 
-  const text = new TextDecoder().decode(bytes.subarray(0, Math.min(bytes.length, 4096)));
-  if (
-    extensionMime === "image/svg+xml" &&
-    /^\s*(?:<\?xml[^>]*>\s*)?<svg(?:\s|>)/i.test(text)
-  ) {
-    const document = new DOMParser().parseFromString(text, "image/svg+xml");
-    if (
-      document.querySelector("parsererror, script, foreignObject") ||
-      [...document.querySelectorAll("*")].some((element) =>
-        [...element.attributes].some(
-          (attribute) => {
+  if (extensionMime === "image/svg+xml") {
+    const text = new TextDecoder().decode(bytes);
+    if (/^\s*(?:<\?xml[^>]*>\s*)?<svg(?:\s|>)/i.test(text)) {
+      const document = new DOMParser().parseFromString(text, "image/svg+xml");
+      if (
+        document.querySelector("parsererror, script, foreignObject") ||
+        [...document.querySelectorAll("*")].some((element) =>
+          [...element.attributes].some((attribute) => {
             if (/^on/i.test(attribute.name)) return true;
             if (/^(?:href|xlink:href|src)$/i.test(attribute.name)) {
               return /^(?:javascript:|https?:|file:|\/\/)/i.test(attribute.value.trim());
@@ -74,13 +71,13 @@ function detectImageMime(bytes: Uint8Array, fileName: string): string {
             return /url\(\s*['"]?\s*(?:javascript:|https?:|file:|\/\/)/i.test(
               attribute.value,
             );
-          },
-        ),
-      )
-    ) {
-      throw new Error("SVG images must not contain scripts or external resources.");
+          }),
+        )
+      ) {
+        throw new Error("SVG images must not contain scripts or external resources.");
+      }
+      return "image/svg+xml";
     }
-    return "image/svg+xml";
   }
 
   throw new Error("Unsupported or invalid image. Choose a PNG, JPG, SVG, or WebP file.");
