@@ -1446,7 +1446,6 @@ function GeometrySection({ widgets }: { widgets: Widget[] }) {
 }
 
 export function RightInspector({ onToggle, onUpdates, onRename }: RightInspectorProps) {
-  const [dockTab, setDockTab] = useState<"layers" | "inspector">("layers");
   const [inspectorTab, setInspectorTab] = useState<"design" | "responsive">("design");
   const project = useStore((state) => state.project);
   const activeScreenId = useStore((state) => state.getActiveScreenId());
@@ -1478,34 +1477,10 @@ export function RightInspector({ onToggle, onUpdates, onRename }: RightInspector
   return (
     <aside className="sidebar inspector right-dock">
       <div className="right-dock-header">
-        <div className="right-dock-tabs" role="tablist" aria-label="Right sidebar">
-          <button
-            className={`right-dock-tab${dockTab === "layers" ? " is-active" : ""}`}
-            type="button"
-            role="tab"
-            aria-selected={dockTab === "layers"}
-            onClick={() => setDockTab("layers")}
-          >
-            <Layers2 size={14} /> Layers
-          </button>
-          <button
-            className={`right-dock-tab${dockTab === "inspector" ? " is-active" : ""}`}
-            type="button"
-            role="tab"
-            aria-selected={dockTab === "inspector"}
-            onClick={() => setDockTab("inspector")}
-          >
-            <Square size={14} /> Inspector
-          </button>
-        </div>
+        <span className="right-dock-title">LAYERS &amp; INSPECTOR</span>
         <button className="icon-button small-icon" aria-label="Close right sidebar" onClick={onToggle}><PanelRightClose size={15} /></button>
       </div>
-      {dockTab === "layers" ? (
-        <div className="layers-dock-body" role="tabpanel" aria-label="Layers and screens">
-          <ScreenLayerSidebar />
-        </div>
-      ) : (
-      <>
+      <section className="right-inspector-panel" aria-label="Inspector">
       <div className="inspector-top">
         <div><span className="inspector-overline">INSPECTOR</span><h2>{selectedWidget ? selectedLabel : selectedWidgets.length > 1 ? `${selectedWidgets.length} items selected` : "Select an element"}</h2></div>
       </div>
@@ -1583,8 +1558,10 @@ export function RightInspector({ onToggle, onUpdates, onRename }: RightInspector
         <div className="recovery-note"><span>Unsaved projects are autosaved on this device every 30 seconds.</span></div>
       </div>
       <div className="inspector-footer"><span>Project schema</span><span className="schema-version">{project.schemaVersion}</span></div>
-      </>
-      )}
+      </section>
+      <div className="layers-dock-body" aria-label="Screens and layers">
+        <ScreenLayerSidebar />
+      </div>
     </aside>
   );
 }
