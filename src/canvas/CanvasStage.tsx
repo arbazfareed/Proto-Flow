@@ -52,6 +52,7 @@ import {
   isWidgetContainer,
   syncWidgetGroupIdsToContainment,
 } from "../project/layers";
+import { getLayerAccentColor } from "../layout/layerGrouping";
 import {
   clampCanvasZoom,
   fitCanvasBounds,
@@ -374,6 +375,7 @@ function WidgetNode({
   widget,
   selected,
   hovered,
+  hoverAccent,
   parentHighlighted,
   zoom,
   activeTool,
@@ -389,6 +391,7 @@ function WidgetNode({
   widget: Widget;
   selected: boolean;
   hovered: boolean;
+  hoverAccent: string;
   parentHighlighted: boolean;
   zoom: number;
   activeTool: ShapeTool | null;
@@ -439,9 +442,9 @@ function WidgetNode({
           width={widget.width + 4 / zoom}
           height={widget.height + 4 / zoom}
           fillEnabled={false}
-          stroke={selected ? "#bba5ff" : parentHighlighted ? "#63cf9c" : "#68a7ff"}
+          stroke={hovered ? hoverAccent : selected ? "#bba5ff" : parentHighlighted ? "#63cf9c" : "#68a7ff"}
           strokeWidth={1 / zoom}
-          dash={selected ? undefined : [4 / zoom, 3 / zoom]}
+          dash={selected || hovered ? undefined : [4 / zoom, 3 / zoom]}
           listening={false}
           perfectDrawEnabled={false}
         />
@@ -2032,6 +2035,7 @@ export function CanvasStage({
                   widget={widget}
                   selected={selectedIds.includes(widget.id)}
                   hovered={hoveredWidgetId === widget.id}
+                  hoverAccent={getLayerAccentColor(widget)}
                   parentHighlighted={selectedParentWidgetIds.has(widget.id)}
                   zoom={zoom}
                   activeTool={activeTool}

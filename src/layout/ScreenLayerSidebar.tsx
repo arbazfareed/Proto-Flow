@@ -67,7 +67,9 @@ import {
   filterLayerHierarchy,
   flattenLayerHierarchy,
   getContainerBadge,
+  getLayerTreeCollapseStateAtDepth,
   getLayerTreeCollapseKey,
+  getLayerTreeMaxDepth,
   isLayerContainer,
 } from "./layerTree";
 import type { FlattenedLayerTreeEntry, LayerTreeNode } from "./layerTree";
@@ -983,13 +985,29 @@ export function ScreenLayerSidebar() {
     const keys = new Set<string>();
     const visit = (node: LayerTreeNode) => {
       const key = getLayerTreeCollapseKey(node);
-      if (key) keys.add(key);
+      if (key && node.children.length > 0) keys.add(key);
       node.children.forEach(visit);
     };
     visit(root);
     const nextForScreen = collapsed
       ? [...new Set([...collapsedGroups, ...keys])]
       : collapsedGroups.filter((key) => !keys.has(key));
+    const next = { ...collapsedByScreen, [activeScreenId]: nextForScreen };
+    setCollapsedByScreen(next);
+    try {
+      localStorage.setItem(collapsedStorageKey(project.id), JSON.stringify(next));
+    } catch (error) {
+      console.error("Could not save the layer-tree collapse state.", error);
+    }
+  };
+
+  const setTreeExpandedToDepth = (root: LayerTreeNode, expandedDepth: number) => {
+    const { expandedKeys, collapsedKeys } = getLayerTreeCollapseStateAtDepth(root, expandedDepth);
+    const keys = new Set([...expandedKeys, ...collapsedKeys]);
+    const nextForScreen = [
+      ...collapsedGroups.filter((key) => !keys.has(key)),
+      ...collapsedKeys,
+    ];
     const next = { ...collapsedByScreen, [activeScreenId]: nextForScreen };
     setCollapsedByScreen(next);
     try {
@@ -1007,7 +1025,7 @@ export function ScreenLayerSidebar() {
     );
     const collectTreeKeys = (node: LayerTreeNode) => {
       const key = getLayerTreeCollapseKey(node);
-      if (key) activeKeys.add(key);
+      if (key && node.children.length > 0) activeKeys.add(key);
       node.children.forEach(collectTreeKeys);
     };
     buildLayerHierarchy(hierarchyWidgets, widgetLabel).forEach(collectTreeKeys);
@@ -1137,11 +1155,13 @@ export function ScreenLayerSidebar() {
   };
 
   const navigateLayerTree = (event: ReactKeyboardEvent<HTMLDivElement>) => {
-    if (
+    const targetIsChildControl =
       event.target !== event.currentTarget &&
       event.target instanceof HTMLElement &&
-      event.target.closest("button, input")
-    ) return;
+      Boolean(event.target.closest("button, input, textarea, select"));
+    if (targetIsChildControl && !event.key.startsWith("Arrow")) return;
+    if (targetIsChildControl && event.target instanceof HTMLElement &&
+      event.target.closest("input, textarea, select")) return;
     const collapseKey = event.currentTarget.dataset.collapseKey;
     const widgetId = event.currentTarget.dataset.widgetId;
     const widget = widgetId ? activeScreen?.widgets.find((item) => item.id === widgetId) : undefined;
@@ -1579,7 +1599,7 @@ export function ScreenLayerSidebar() {
               <span className="layer-name">{label}</span>
               {container && (
                 <span
-                  className={`layer-child-count${childBadge === "empty" ? " is-empty" : ""}`}
+                  className={`layer-child-count${childBadge === "empty" ? " is-empty" : ""}${entry.collapsed ? " is-collapsed" : ""}`}
                   aria-label={childBadge}
                 >
                   {entry.collapsed ? `(${childBadge})` : childBadge}
@@ -1638,6 +1658,7 @@ export function ScreenLayerSidebar() {
         menuLayerWidget.id,
       )
     : undefined;
+  const menuLayerMaxDepth = menuLayerNode ? getLayerTreeMaxDepth(menuLayerNode) : 0;
   const selectedGroupAllVisible = selectedGroup?.widgets.some((widget) => widget.visible) ?? false;
   const semanticGroups = [...new Set(
     activeScreen?.widgets.map((widget) => widget.groupId).filter((id): id is string => Boolean(id)) ?? [],
@@ -2420,6 +2441,22 @@ export function ScreenLayerSidebar() {
                   }}>
                     <ChevronRight size={14} /> Collapse all
                   </button>
+                  <div className="tree-context-menu-levels" role="group" aria-label="Expand to level">
+                    <span>Expand to level</span>
+                    {Array.from({ length: menuLayerMaxDepth }, (_, index) => index + 1).map((depth) => (
+                      <button
+                        key={depth}
+                        role="menuitem"
+                        aria-label={`Expand to level ${depth}`}
+                        onClick={() => {
+                          setTreeExpandedToDepth(menuLayerNode, depth);
+                          setMenu(null);
+                        }}
+                      >
+                        <ChevronRight size={14} /> Level {depth}
+                      </button>
+                    ))}
+                  </div>
                 </>
               ) : null}
               <button role="menuitem" onClick={() => {

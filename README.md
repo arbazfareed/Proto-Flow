@@ -68,6 +68,8 @@ Screen 1 (Root Container) [PARENT]
 
 Layer rows use category-specific accent stripes; category headers retain their category tint. Container rows are bold and show a live direct-child badge (or a gray `empty` badge), while panels and repeaters report their state and row counts. The canvas view controls include Pan mode for repositioning the viewport and Fit screen for recentering the active screen. The Image URL import action is available in the Elements library.
 
+Container expansion is stored per screen and project. Chevron clicks toggle one level, Alt-click expands or collapses the full subtree, and the context menu supports expanding all, collapsing all, or expanding through a selected depth; Left/Right arrow keys navigate and toggle tree rows. Hovering a layer outlines its canvas bounds with that layer's category accent, while canvas hover highlights and scrolls the matching layer row into view.
+
 ### Phase 2 failure-matrix verification
 
 The failure-focused checks for PF-T201–PF-T207 are tracked alongside their implementation tests. Run the targeted regression groups with:
