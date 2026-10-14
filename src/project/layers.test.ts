@@ -3,6 +3,7 @@ import { createEmptyProject, parseProject } from "./schema";
 import {
   getSelectedContainingParentId,
   isWidgetContainedBy,
+  isWidgetContainer,
   reorderScreens,
   reorderWidgets,
 } from "./layers";
@@ -11,6 +12,7 @@ function widget(id: string, zIndex: number) {
   return {
     id,
     type: "rectangle",
+    groupId: undefined,
     x: 0,
     y: 0,
     width: 10,
@@ -26,6 +28,10 @@ function widget(id: string, zIndex: number) {
 }
 
 describe("layer and screen ordering", () => {
+  it("recognizes Calendar as a layout container", () => {
+    expect(isWidgetContainer({ type: "calendar" })).toBe(true);
+  });
+
   it("checks whether a widget is fully inside a parent widget", () => {
     const parent = { x: 10, y: 20, width: 100, height: 60 };
     expect(isWidgetContainedBy({ x: 10, y: 20, width: 100, height: 60 }, parent)).toBe(true);
@@ -42,6 +48,52 @@ describe("layer and screen ordering", () => {
     expect(getSelectedContainingParentId([parent], ["parent"], inside)).toBe("parent");
     expect(getSelectedContainingParentId([parent], ["parent"], outside)).toBeUndefined();
     expect(getSelectedContainingParentId([parent], ["parent", "another"], inside)).toBeUndefined();
+  });
+
+  it("keeps new widgets at screen level when the selected widget is already nested", () => {
+    const parent = {
+      ...widget("parent", 1),
+      x: 10,
+      y: 10,
+      width: 100,
+      height: 60,
+    };
+    const selectedChild = {
+      ...widget("selected-child", 2),
+      groupId: "parent",
+      x: 20,
+      y: 20,
+      width: 80,
+      height: 40,
+    };
+    const newWidget = {
+      ...widget("new-widget", 3),
+      x: 25,
+      y: 25,
+      width: 20,
+      height: 10,
+    };
+
+    expect(
+      getSelectedContainingParentId(
+        [parent, selectedChild],
+        ["selected-child"],
+        newWidget,
+      ),
+    ).toBeUndefined();
+  });
+
+  it("keeps new containers as siblings unless nesting is explicitly established", () => {
+    const parent = { ...widget("parent", 1), x: 10, y: 10, width: 100, height: 60 };
+    const newContainer = {
+      ...widget("new-container", 2),
+      type: "panel",
+      x: 20,
+      y: 20,
+    };
+
+    expect(getSelectedContainingParentId([parent], ["parent"], newContainer))
+      .toBeUndefined();
   });
 
   it("moves a layer to the top-list target position and assigns descending z-index", () => {

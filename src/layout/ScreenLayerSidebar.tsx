@@ -27,7 +27,11 @@ import { DEFAULT_DEVICE_PRESET, findDevicePreset, toScreenDevice } from "../devi
 import { DevicePicker } from "../devices/DevicePicker";
 import type { DeviceCategory, ScreenDevice } from "../devices/types";
 import { reorderScreens } from "../project/layers";
-import { createDefaultBreakpoints } from "../project/responsive";
+import {
+  createDefaultBreakpoints,
+  resolveActiveBreakpoint,
+  resolveWidgetsForBreakpoint,
+} from "../project/responsive";
 import type { Project, Screen, Widget } from "../project/schema";
 import {
   setActiveLayerDragPayload,
@@ -360,6 +364,16 @@ export function ScreenLayerSidebar() {
   const selectedIds = useStore((state) => state.selectedIds);
   const hoveredWidgetId = useStore((state) => state.hoveredWidgetId);
   const activeScreen = project.screens.find((screen) => screen.id === activeScreenId);
+  const hierarchyWidgets = useMemo(() => {
+    if (!activeScreen) return [];
+    const breakpoint = resolveActiveBreakpoint(activeScreen, activeBreakpointId);
+    return resolveWidgetsForBreakpoint(
+      activeScreen.widgets,
+      breakpoint,
+      activeScreen.device?.width ?? DEFAULT_DEVICE_PRESET.viewport.width,
+      activeScreen.device?.height ?? DEFAULT_DEVICE_PRESET.viewport.height,
+    );
+  }, [activeScreen, activeBreakpointId]);
   const [menu, setMenu] = useState<MenuState>(null);
   const [renamingScreenId, setRenamingScreenId] = useState<string | null>(null);
   const [renamingWidgetId, setRenamingWidgetId] = useState<string | null>(null);
@@ -632,7 +646,7 @@ export function ScreenLayerSidebar() {
     layerPreferences.groupOrder,
   ]);
   const hierarchyRoots = useMemo(() => {
-    const roots = buildLayerHierarchy(activeScreen?.widgets ?? [], widgetLabel);
+    const roots = buildLayerHierarchy(hierarchyWidgets, widgetLabel);
     const query = categorySearch.trim().toLowerCase();
     return query
       ? filterLayerHierarchy(roots, (node) =>
@@ -641,7 +655,7 @@ export function ScreenLayerSidebar() {
           LAYER_CATEGORY_DEFINITIONS[node.category].label.toLowerCase().includes(query),
         )
       : roots;
-  }, [activeScreen, categorySearch]);
+  }, [categorySearch, hierarchyWidgets]);
   const hierarchyParentLabels = useMemo(() => {
     const parents = new Map<string, string>();
     const visit = (nodes: readonly LayerTreeNode[], parentLabel: string) => {
@@ -741,7 +755,7 @@ export function ScreenLayerSidebar() {
       return null;
     };
     const ancestors = findAncestors(
-      buildLayerHierarchy(activeScreen?.widgets ?? [], widgetLabel),
+      buildLayerHierarchy(hierarchyWidgets, widgetLabel),
       focusWidgetId,
     );
     const categoryKeys = layerMode === "z-order"
@@ -785,6 +799,7 @@ export function ScreenLayerSidebar() {
   }, [
     activeScreen,
     activeScreenId,
+    hierarchyWidgets,
     collapsedByScreen,
     collapsedGroups,
     hoveredWidgetId,
@@ -996,7 +1011,7 @@ export function ScreenLayerSidebar() {
       if (key) activeKeys.add(key);
       node.children.forEach(collectTreeKeys);
     };
-    buildLayerHierarchy(activeScreen?.widgets ?? [], widgetLabel).forEach(collectTreeKeys);
+    buildLayerHierarchy(hierarchyWidgets, widgetLabel).forEach(collectTreeKeys);
     const nextForScreen = collapsed
       ? [...new Set([...collapsedGroups, ...activeKeys])]
       : collapsedGroups.filter((id) => !activeKeys.has(id));
@@ -1612,7 +1627,7 @@ export function ScreenLayerSidebar() {
     : undefined;
   const menuLayerNode = menuLayerWidget
     ? findLayerTreeNode(
-        buildLayerHierarchy(activeScreen?.widgets ?? [], widgetLabel),
+        buildLayerHierarchy(hierarchyWidgets, widgetLabel),
         menuLayerWidget.id,
       )
     : undefined;
