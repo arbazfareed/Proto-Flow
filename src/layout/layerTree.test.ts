@@ -93,6 +93,80 @@ describe("layer hierarchy", () => {
     expect(roots[0].children[0].children[0].id).toBe("child");
   });
 
+  it("shows a contained Timeline below its Calendar parent", () => {
+    const calendar = {
+      ...widget("calendar", "calendar", 3),
+      x: 90,
+      y: 70,
+      width: 623,
+      height: 191,
+    };
+    const timeline = {
+      ...widget("timeline", "timeline", 4),
+      x: 255,
+      y: 140,
+      width: 464,
+      height: 74,
+    };
+    const roots = buildLayerHierarchy([calendar, timeline], (item) => item.id);
+    const entries = flattenLayerHierarchy(roots, new Set());
+
+    expect(roots.map((node) => node.id)).toEqual(["calendar"]);
+    expect(entries.map(({ node }) => node.id)).toEqual(["calendar", "timeline"]);
+    expect(entries[1]).toMatchObject({ depth: 1 });
+  });
+
+  it("keeps a child nested when it overhangs a container edge by only a few pixels", () => {
+    const calendar = {
+      ...widget("calendar", "calendar", 3),
+      x: 90,
+      y: 70,
+      width: 622.85,
+      height: 190.02,
+    };
+    const timeline = {
+      ...widget("timeline", "timeline", 4),
+      x: 254.99,
+      y: 140,
+      width: 464.49,
+      height: 73.9,
+    };
+    const roots = buildLayerHierarchy([calendar, timeline], (item) => item.id);
+
+    expect(roots.map((node) => node.id)).toEqual(["calendar"]);
+    expect(roots[0].children.map((node) => node.id)).toEqual(["timeline"]);
+  });
+
+  it("keeps the frontmost layer first when z-order changes or indices tie", () => {
+    const firstState = buildLayerHierarchy([
+      widget("calendar", "calendar", 1),
+      widget("timeline", "timeline", 1),
+    ], (item) => item.id);
+    const reorderedState = buildLayerHierarchy([
+      widget("calendar", "calendar", 2),
+      widget("timeline", "timeline", 1),
+    ], (item) => item.id);
+
+    expect(firstState.map((node) => node.id)).toEqual(["timeline", "calendar"]);
+    expect(reorderedState.map((node) => node.id)).toEqual(["calendar", "timeline"]);
+  });
+
+  it("keeps an explicitly nested child below its parent while ordering siblings by canvas stack", () => {
+    const calendar = { ...widget("calendar", "calendar", 1), x: 0, y: 0, width: 300, height: 200 };
+    const timeline = {
+      ...widget("timeline", "timeline", 2, "calendar"),
+      x: 10,
+      y: 10,
+      width: 100,
+      height: 40,
+    };
+    const roots = buildLayerHierarchy([calendar, timeline], (item) => item.id);
+    const entries = flattenLayerHierarchy(roots, new Set());
+
+    expect(entries.map(({ node }) => node.id)).toEqual(["calendar", "timeline"]);
+    expect(entries[0].node.children.map((node) => node.id)).toEqual(["timeline"]);
+  });
+
   it("represents Ctrl+G groups as expandable virtual containers", () => {
     const roots = buildLayerHierarchy(
       [widget("one", "text", 5, "semantic-id"), widget("two", "image", 4, "semantic-id")],

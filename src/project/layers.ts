@@ -26,7 +26,10 @@ export const LAYER_CONTAINER_TYPES = new Set([
   "footer",
   "component-master",
   "componentMaster",
+  "calendar",
 ]);
+
+const LAYER_CONTAINMENT_TOLERANCE = 8; // Keep near-edge canvas alignment in the same hierarchy.
 
 export function isWidgetContainer(widget: Pick<Widget, "type">): boolean {
   return LAYER_CONTAINER_TYPES.has(widget.type);
@@ -42,10 +45,10 @@ export function isWidgetContainedBy(
   parent: Pick<Widget, "x" | "y" | "width" | "height">,
 ): boolean {
   return (
-    widget.x >= parent.x &&
-    widget.y >= parent.y &&
-    widget.x + widget.width <= parent.x + parent.width &&
-    widget.y + widget.height <= parent.y + parent.height
+    widget.x >= parent.x - LAYER_CONTAINMENT_TOLERANCE &&
+    widget.y >= parent.y - LAYER_CONTAINMENT_TOLERANCE &&
+    widget.x + widget.width <= parent.x + parent.width + LAYER_CONTAINMENT_TOLERANCE &&
+    widget.y + widget.height <= parent.y + parent.height + LAYER_CONTAINMENT_TOLERANCE
   );
 }
 

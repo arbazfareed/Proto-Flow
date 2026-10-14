@@ -3,6 +3,7 @@ import { createEmptyProject, parseProject } from "./schema";
 import {
   getSelectedContainingParentId,
   isWidgetContainedBy,
+  isWidgetContainer,
   reorderScreens,
   reorderWidgets,
 } from "./layers";
@@ -27,6 +28,10 @@ function widget(id: string, zIndex: number) {
 }
 
 describe("layer and screen ordering", () => {
+  it("recognizes Calendar as a layout container", () => {
+    expect(isWidgetContainer({ type: "calendar" })).toBe(true);
+  });
+
   it("checks whether a widget is fully inside a parent widget", () => {
     const parent = { x: 10, y: 20, width: 100, height: 60 };
     expect(isWidgetContainedBy({ x: 10, y: 20, width: 100, height: 60 }, parent)).toBe(true);

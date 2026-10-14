@@ -17,6 +17,7 @@ export interface LayerTreeNode {
   children: LayerTreeNode[];
   descendantCount: number;
   maxZIndex: number;
+  maxStackingOrder: number;
 }
 
 export interface FlattenedLayerTreeEntry {
@@ -29,12 +30,24 @@ export interface FlattenedLayerTreeEntry {
   siblingCount: number;
 }
 
-function widgetOrder(first: Widget, second: Widget): number {
-  return second.zIndex - first.zIndex || first.id.localeCompare(second.id);
+function widgetOrder(
+  first: Widget,
+  second: Widget,
+  stackingOrderById: ReadonlyMap<string, number>,
+): number {
+  return (
+    second.zIndex - first.zIndex ||
+    (stackingOrderById.get(second.id) ?? 0) - (stackingOrderById.get(first.id) ?? 0) ||
+    first.id.localeCompare(second.id)
+  );
 }
 
 function nodeOrder(first: LayerTreeNode, second: LayerTreeNode): number {
-  return second.maxZIndex - first.maxZIndex || first.id.localeCompare(second.id);
+  return (
+    second.maxZIndex - first.maxZIndex ||
+    second.maxStackingOrder - first.maxStackingOrder ||
+    first.id.localeCompare(second.id)
+  );
 }
 
 export function isLayerContainer(widget: Widget): boolean {
@@ -143,7 +156,10 @@ export function buildLayerHierarchy(
   widgets: readonly Widget[],
   labelForWidget: (widget: Widget) => string,
 ): LayerTreeNode[] {
-  const orderedWidgets = [...widgets].sort(widgetOrder);
+  const stackingOrderById = new Map(widgets.map((widget, index) => [widget.id, index]));
+  const orderedWidgets = [...widgets].sort((first, second) =>
+    widgetOrder(first, second, stackingOrderById),
+  );
   const widgetsById = new Map(orderedWidgets.map((widget) => [widget.id, widget]));
   const validParentByWidgetId = getWidgetParentIdMap(orderedWidgets);
   const referencedWidgetParents = new Set(validParentByWidgetId.values());
@@ -190,6 +206,7 @@ export function buildLayerHierarchy(
       children: [],
       descendantCount: 0,
       maxZIndex: widget.zIndex,
+      maxStackingOrder: stackingOrderById.get(widget.id) ?? 0,
     });
   }
 
@@ -209,7 +226,9 @@ export function buildLayerHierarchy(
 
   const groupNodes = new Map<string, LayerTreeNode>();
   for (const [groupId, members] of groupMembers) {
-    const sortedMembers = members.sort(widgetOrder);
+    const sortedMembers = members.sort((first, second) =>
+      widgetOrder(first, second, stackingOrderById),
+    );
     groupNodes.set(groupId, {
       id: `semantic:${groupId}`,
       kind: "group",
@@ -219,6 +238,7 @@ export function buildLayerHierarchy(
       children: sortedMembers.map((widget) => widgetNodes.get(widget.id)!),
       descendantCount: 0,
       maxZIndex: sortedMembers[0].zIndex,
+      maxStackingOrder: stackingOrderById.get(sortedMembers[0].id) ?? 0,
     });
   }
 
@@ -234,7 +254,7 @@ export function buildLayerHierarchy(
       const firstWidget = first.widget;
       const secondWidget = second.widget;
       return firstWidget && secondWidget
-        ? widgetOrder(firstWidget, secondWidget)
+        ? widgetOrder(firstWidget, secondWidget, stackingOrderById)
         : nodeOrder(first, second);
     });
   }
@@ -268,10 +288,16 @@ export function buildLayerHierarchy(
       (count, child) => count + 1 + child.descendantCount,
       0,
     );
-    node.maxZIndex = node.children.reduce(
-      (maxZIndex, child) => Math.max(maxZIndex, child.maxZIndex),
-      node.widget?.zIndex ?? Number.NEGATIVE_INFINITY,
-    );
+    for (const child of node.children) {
+      if (
+        child.maxZIndex > node.maxZIndex ||
+        (child.maxZIndex === node.maxZIndex &&
+          child.maxStackingOrder > node.maxStackingOrder)
+      ) {
+        node.maxZIndex = child.maxZIndex;
+        node.maxStackingOrder = child.maxStackingOrder;
+      }
+    }
   };
   roots.forEach(finalize);
 
