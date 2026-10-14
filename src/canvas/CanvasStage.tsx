@@ -53,6 +53,12 @@ import {
   isWidgetContainer,
   syncWidgetGroupIdsToContainment,
 } from "../project/layers";
+import {
+  copyWidgetsToClipboard,
+  createWidgetCopies,
+  readWidgetClipboard,
+  reorderWidgetSelection,
+} from "../project/widgetClipboard";
 import { getLayerAccentColor } from "../layout/layerGrouping";
 import {
   clampCanvasZoom,
@@ -389,6 +395,7 @@ function WidgetNode({
   onDragEnd,
   onDragBound,
   onEdit,
+  onContextMenu,
 }: {
   widget: Widget;
   selected: boolean;
@@ -406,6 +413,7 @@ function WidgetNode({
   onDragEnd: (position: CanvasPoint) => void;
   onDragBound: (position: CanvasPoint) => CanvasPoint;
   onEdit: () => void;
+  onContextMenu: (event: Konva.KonvaEventObject<MouseEvent>) => void;
 }) {
   return (
     <Group
@@ -420,6 +428,7 @@ function WidgetNode({
       dragBoundFunc={onDragBound}
       onClick={(event) => onSelect(event)}
       onTap={(event) => onSelect(event)}
+      onContextMenu={onContextMenu}
       onMouseEnter={() => onHover(true)}
       onMouseLeave={() => onHover(false)}
       onDblClick={(event) => {
@@ -551,6 +560,7 @@ export function CanvasStage({
   const [shapeDraft, setShapeDraft] = useState<ShapeDraft | null>(null);
   const [selectionDraft, setSelectionDraft] = useState<SelectionDraft | null>(null);
   const [canvasDropFeedback, setCanvasDropFeedback] = useState<CanvasDropFeedback | null>(null);
+  const [canvasContextMenu, setCanvasContextMenu] = useState<{ x: number; y: number } | null>(null);
   const [imageUrlDialogOpen, setImageUrlDialogOpen] = useState(false);
   const [imageUrlDraft, setImageUrlDraft] = useState("");
   const [imageUrlLoading, setImageUrlLoading] = useState(false);
@@ -570,6 +580,7 @@ export function CanvasStage({
   const lastFitKeyRef = useRef("");
   const activeToolRef = useRef<ShapeTool | null>(activeTool);
   const lastPointerWorldRef = useRef<CanvasPoint>({ x: 0, y: 0 });
+  const pasteOffsetRef = useRef(0);
   const zoom = useStore((state) => state.zoom);
   const pan = useStore((state) => state.pan);
   const gridSize = useStore((state) => state.gridSize);
@@ -634,6 +645,12 @@ export function CanvasStage({
   const selectedWidgets = screenWidgets.filter((widget) =>
     selectedIds.includes(widget.id),
   );
+  const selectedHasSemanticGroup = selectedWidgets.some(
+    (widget) =>
+      widget.groupId &&
+      !baseScreenWidgets.some((candidate) => candidate.id === widget.groupId),
+  );
+  const selectedHasUnlockedWidget = selectedWidgets.some((widget) => !widget.locked);
   const selectionBounds = getSelectionBounds(selectedWidgets);
 
   useEffect(() => {
@@ -1428,6 +1445,175 @@ export function CanvasStage({
     commitWidgetGeometry(updates);
   }, []);
 
+  const updateActiveScreenWidgets = useCallback((widgets: Widget[]) => {
+    const current = useStore.getState();
+    const screenId = current.getActiveScreenId();
+    const activeScreen = current.project.screens.find((screen) => screen.id === screenId);
+    if (
+      !activeScreen ||
+      (widgets.length === activeScreen.widgets.length &&
+        widgets.every((widget, index) => widget === activeScreen.widgets[index]))
+    ) return;
+    current.setProject({
+      ...current.project,
+      updatedAt: new Date().toISOString(),
+      screens: current.project.screens.map((screen) =>
+        screen.id === screenId ? { ...screen, widgets } : screen,
+      ),
+    });
+  }, []);
+
+  const copySelection = useCallback(async (cut = false) => {
+    const current = useStore.getState();
+    const screen = current.project.screens.find(
+      (item) => item.id === current.getActiveScreenId(),
+    );
+    if (!screen) return;
+    const selected = screen.widgets.filter((widget) =>
+      current.selectedIds.includes(widget.id) && (!cut || !widget.locked),
+    );
+    if (selected.length === 0) return;
+    try {
+      const wroteSystemClipboard = await copyWidgetsToClipboard(selected);
+      if (!wroteSystemClipboard) {
+        onNotify("Copied layers internally; system clipboard access is unavailable.");
+      }
+    } catch (error) {
+      console.error("Could not write ProtoFlow widgets to the system clipboard.", error);
+      onNotify("Copied layers internally, but the system clipboard could not be updated.", true);
+    }
+    if (cut) {
+      const ids = new Set(selected.map((widget) => widget.id));
+      updateActiveScreenWidgets(screen.widgets.filter((widget) => !ids.has(widget.id)));
+      current.clearSelection();
+    }
+  }, [onNotify, updateActiveScreenWidgets]);
+
+  const pasteSelection = useCallback(async () => {
+    try {
+      const source = await readWidgetClipboard();
+      const current = useStore.getState();
+      const screenId = current.getActiveScreenId();
+      const screen = current.project.screens.find((item) => item.id === screenId);
+      if (!screen) return;
+      pasteOffsetRef.current += 20;
+      const copies = createWidgetCopies(
+        source,
+        current.project.screens.flatMap((item) => item.widgets),
+        { x: pasteOffsetRef.current, y: pasteOffsetRef.current },
+      );
+      updateActiveScreenWidgets([...screen.widgets, ...copies]);
+      current.select(copies.map((widget) => widget.id));
+    } catch (error) {
+      console.error("Could not paste ProtoFlow widgets.", error);
+      onNotify(error instanceof Error ? error.message : "Could not paste layers.", true);
+    }
+  }, [onNotify, updateActiveScreenWidgets]);
+
+  const duplicateSelection = useCallback(() => {
+    const current = useStore.getState();
+    const screen = current.project.screens.find(
+      (item) => item.id === current.getActiveScreenId(),
+    );
+    if (!screen) return;
+    const selected = screen.widgets.filter((widget) =>
+      current.selectedIds.includes(widget.id),
+    );
+    if (selected.length === 0) return;
+    const copies = createWidgetCopies(
+      selected,
+      current.project.screens.flatMap((item) => item.widgets),
+      { x: 20, y: 20 },
+    );
+    updateActiveScreenWidgets([...screen.widgets, ...copies]);
+    current.select(copies.map((widget) => widget.id));
+  }, [updateActiveScreenWidgets]);
+
+  const deleteSelection = useCallback(() => {
+    const current = useStore.getState();
+    const screen = current.project.screens.find(
+      (item) => item.id === current.getActiveScreenId(),
+    );
+    if (!screen || current.selectedIds.length === 0) return;
+    const deletable = new Set(
+      screen.widgets
+        .filter((widget) => current.selectedIds.includes(widget.id) && !widget.locked)
+        .map((widget) => widget.id),
+    );
+    if (deletable.size === 0) return;
+    transformerRef.current?.nodes([]);
+    contentLayerRef.current?.batchDraw();
+    updateActiveScreenWidgets(screen.widgets.filter((widget) => !deletable.has(widget.id)));
+    current.clearSelection();
+  }, [updateActiveScreenWidgets]);
+
+  const changeSelectionZOrder = useCallback((
+    action: "forward" | "backward" | "front" | "back",
+  ) => {
+    const current = useStore.getState();
+    const screen = current.project.screens.find(
+      (item) => item.id === current.getActiveScreenId(),
+    );
+    if (!screen) return;
+    updateActiveScreenWidgets(
+      reorderWidgetSelection(screen.widgets, current.selectedIds, action),
+    );
+  }, [updateActiveScreenWidgets]);
+
+  const toggleSelectionLock = useCallback(() => {
+    const current = useStore.getState();
+    const selected = new Set(current.selectedIds);
+    const screen = current.project.screens.find(
+      (item) => item.id === current.getActiveScreenId(),
+    );
+    if (!screen || selected.size === 0) return;
+    const lock = !screen.widgets
+      .filter((widget) => selected.has(widget.id))
+      .every((widget) => widget.locked);
+    updateActiveScreenWidgets(screen.widgets.map((widget) =>
+      selected.has(widget.id) ? { ...widget, locked: lock } : widget,
+    ));
+  }, [updateActiveScreenWidgets]);
+
+  const groupSelection = useCallback((ungroup = false) => {
+    const current = useStore.getState();
+    const selected = new Set(current.selectedIds);
+    const screen = current.project.screens.find(
+      (item) => item.id === current.getActiveScreenId(),
+    );
+    if (!screen || selected.size === 0) return;
+    if (ungroup) {
+      const groupIds = new Set(screen.widgets
+        .filter((widget) => selected.has(widget.id) && widget.groupId)
+        .map((widget) => widget.groupId!));
+      updateActiveScreenWidgets(screen.widgets.map((widget) => {
+        if (selected.has(widget.id) && widget.groupId && groupIds.has(widget.groupId)) {
+          const { groupId: _groupId, ...rest } = widget;
+          return rest;
+        }
+        return widget;
+      }));
+      return;
+    }
+    if (selected.size < 2) return;
+    const groupId = crypto.randomUUID();
+    updateActiveScreenWidgets(screen.widgets.map((widget) =>
+      selected.has(widget.id) ? { ...widget, groupId } : widget,
+    ));
+  }, [updateActiveScreenWidgets]);
+
+  const handleCanvasWidgetContextMenu = useCallback((
+    widgetId: string,
+    event: Konva.KonvaEventObject<MouseEvent>,
+  ) => {
+    event.cancelBubble = true;
+    event.evt.preventDefault();
+    event.evt.stopPropagation();
+    const current = useStore.getState();
+    if (!current.selectedIds.includes(widgetId)) current.select([widgetId]);
+    setCanvasContextMenu({ x: event.evt.clientX, y: event.evt.clientY });
+  }, []);
+
   useEffect(() => {
     const shortcuts: Record<string, ShapeTool> = {
       r: "rectangle",
@@ -1440,7 +1626,32 @@ export function CanvasStage({
       c: "checkbox",
     };
     const onKeyDown = (event: KeyboardEvent) => {
-      if (event.ctrlKey || event.metaKey || event.altKey || isEditingTarget(event.target)) {
+      if (isEditingTarget(event.target)) {
+        return;
+      }
+      if (event.altKey) return;
+      if (event.ctrlKey || event.metaKey) {
+        const key = event.key.toLowerCase();
+        if (key === "c" || key === "x") {
+          event.preventDefault();
+          void copySelection(key === "x");
+          return;
+        }
+        if (key === "v") {
+          event.preventDefault();
+          void pasteSelection();
+          return;
+        }
+        if (key === "d") {
+          event.preventDefault();
+          duplicateSelection();
+          return;
+        }
+        return;
+      }
+      if (event.key === "Escape" && canvasContextMenu) {
+        setCanvasContextMenu(null);
+        event.preventDefault();
         return;
       }
       if (event.key === "Escape" && activeToolRef.current) {
@@ -1453,30 +1664,7 @@ export function CanvasStage({
         (event.key === "Delete" || event.key === "Backspace") &&
         !activeToolRef.current
       ) {
-        const current = useStore.getState();
-        if (current.selectedIds.length === 0) return;
-        const selected = new Set(
-          current.project.screens
-            .find((screen) => screen.id === current.getActiveScreenId())
-            ?.widgets.filter((widget) => current.selectedIds.includes(widget.id) && !widget.locked)
-            .map((widget) => widget.id),
-        );
-        if (selected.size === 0) return;
-        transformerRef.current?.nodes([]);
-        contentLayerRef.current?.batchDraw();
-        current.setProject({
-          ...current.project,
-          updatedAt: new Date().toISOString(),
-          screens: current.project.screens.map((screen) =>
-            screen.id === current.getActiveScreenId()
-              ? {
-                  ...screen,
-                  widgets: screen.widgets.filter((widget) => !selected.has(widget.id)),
-                }
-              : screen,
-          ),
-        });
-        current.clearSelection();
+        deleteSelection();
         event.preventDefault();
         return;
       }
@@ -1522,7 +1710,15 @@ export function CanvasStage({
     };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [createWidgetAt, onToolChange]);
+  }, [
+    canvasContextMenu,
+    copySelection,
+    createWidgetAt,
+    deleteSelection,
+    duplicateSelection,
+    onToolChange,
+    pasteSelection,
+  ]);
 
   useEffect(
     () => () => {
@@ -1530,6 +1726,19 @@ export function CanvasStage({
     },
     [],
   );
+
+  useEffect(() => {
+    if (!canvasContextMenu) return;
+    const closeOnOutsidePointerDown = (event: PointerEvent) => {
+      if (
+        event.target instanceof Element &&
+        event.target.closest(".canvas-context-menu")
+      ) return;
+      setCanvasContextMenu(null);
+    };
+    window.addEventListener("pointerdown", closeOnOutsidePointerDown);
+    return () => window.removeEventListener("pointerdown", closeOnOutsidePointerDown);
+  }, [canvasContextMenu]);
 
   useEffect(() => {
     const surface = surfaceRef.current;
@@ -1775,6 +1984,11 @@ export function CanvasStage({
       onPointerUp={handlePointerUp}
       onPointerCancel={handlePointerUp}
       onLostPointerCapture={handlePointerUp}
+      onContextMenu={(event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        setCanvasContextMenu({ x: event.clientX, y: event.clientY });
+      }}
       onAuxClick={(event) => {
         if (event.button === 1) event.preventDefault();
       }}
@@ -2047,6 +2261,9 @@ export function CanvasStage({
                     previewPositions[widget.id] ?? { x: widget.x, y: widget.y }
                   }
                   onEdit={() => beginWidgetTextEdit(widget)}
+                  onContextMenu={(event) =>
+                    handleCanvasWidgetContextMenu(widget.id, event)
+                  }
                   onHover={(hovered) =>
                     useStore.getState().setCanvasHoveredWidget(hovered ? widget.id : null)
                   }
@@ -2478,6 +2695,64 @@ export function CanvasStage({
           <Maximize2 size={14} />
         </button>
       </div>
+      {canvasContextMenu && (
+        <div
+          className="tree-context-menu canvas-context-menu"
+          role="menu"
+          style={{
+            left: Math.min(canvasContextMenu.x, window.innerWidth - 210),
+            top: Math.min(canvasContextMenu.y, window.innerHeight - 300),
+          }}
+          onPointerDown={(event) => event.stopPropagation()}
+          onContextMenu={(event) => event.preventDefault()}
+        >
+          <button role="menuitem" disabled={selectedWidgets.length === 0} onClick={() => { void copySelection(); setCanvasContextMenu(null); }}>
+            Copy
+          </button>
+          <button role="menuitem" disabled={!selectedHasUnlockedWidget} onClick={() => { void copySelection(true); setCanvasContextMenu(null); }}>
+            Cut
+          </button>
+          <button role="menuitem" onClick={() => { void pasteSelection(); setCanvasContextMenu(null); }}>
+            Paste
+          </button>
+          <button role="menuitem" disabled={selectedWidgets.length === 0} onClick={() => { duplicateSelection(); setCanvasContextMenu(null); }}>
+            Duplicate
+          </button>
+          <button role="menuitem" disabled={selectedWidgets.length === 0} onClick={() => { changeSelectionZOrder("forward"); setCanvasContextMenu(null); }}>
+            Bring Forward
+          </button>
+          <button role="menuitem" disabled={selectedWidgets.length === 0} onClick={() => { changeSelectionZOrder("front"); setCanvasContextMenu(null); }}>
+            Bring to Front
+          </button>
+          <button role="menuitem" disabled={selectedWidgets.length === 0} onClick={() => { changeSelectionZOrder("backward"); setCanvasContextMenu(null); }}>
+            Send Backward
+          </button>
+          <button role="menuitem" disabled={selectedWidgets.length === 0} onClick={() => { changeSelectionZOrder("back"); setCanvasContextMenu(null); }}>
+            Send to Back
+          </button>
+          <button
+            role="menuitem"
+            disabled={selectedIds.length < 2}
+            onClick={() => { groupSelection(); setCanvasContextMenu(null); }}
+          >
+            Group
+          </button>
+          <button role="menuitem" disabled={!selectedHasSemanticGroup} onClick={() => { groupSelection(true); setCanvasContextMenu(null); }}>
+            Ungroup
+          </button>
+          <button role="menuitem" disabled={selectedWidgets.length === 0} onClick={() => { toggleSelectionLock(); setCanvasContextMenu(null); }}>
+            {selectedWidgets.length > 0 && selectedWidgets.every((widget) => widget.locked)
+              ? "Unlock"
+              : "Lock"}
+          </button>
+          <button role="menuitem" disabled={!selectedHasUnlockedWidget} onClick={() => { deleteSelection(); setCanvasContextMenu(null); }}>
+            Delete
+          </button>
+          <button role="menuitem" disabled title="Available in Task 210">
+            Save as Symbol
+          </button>
+        </div>
+      )}
     </div>
   );
 }
