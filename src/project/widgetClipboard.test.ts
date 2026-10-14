@@ -3,8 +3,11 @@ import { createShapeWidget } from "../canvas/shapes";
 import type { Widget } from "./schema";
 import {
   clearInternalWidgetClipboard,
+  copyWidgetStyle,
   copyWidgetsToClipboard,
   createWidgetCopies,
+  getCopiedWidgetStyle,
+  pasteWidgetStyle,
   parseWidgetClipboard,
   readWidgetClipboard,
   reorderWidgetSelection,
@@ -44,6 +47,28 @@ describe("widget clipboard and z-order actions", () => {
     const source = widget("00000000-0000-4000-8000-000000000002", 1);
     expect(await copyWidgetsToClipboard([source])).toBe(false);
     expect(await readWidgetClipboard()).toEqual([source]);
+  });
+
+  it("copies and applies visual and typography styles without replacing target content", () => {
+    const source = {
+      ...createShapeWidget("text", 0, 0),
+      style: { ...createShapeWidget("text", 0, 0).style, fill: "#ff0000" },
+      props: { text: "source", fontSize: 30, fontWeight: "bold" },
+    };
+    const target = {
+      ...createShapeWidget("text", 20, 20),
+      props: { text: "target", fontSize: 12 },
+    };
+    const locked = { ...widget("locked", 1), locked: true };
+    const style = copyWidgetStyle(source);
+    const result = pasteWidgetStyle(style, [target, locked]);
+
+    expect(getCopiedWidgetStyle()).toEqual(style);
+    expect(result[0]).toMatchObject({
+      style: source.style,
+      props: { text: "target", fontSize: 30, fontWeight: "bold" },
+    });
+    expect(result[1]).toBe(locked);
   });
 
   it("creates multi-widget copies with new IDs, preserved parent references, offsets, and top z-order", () => {

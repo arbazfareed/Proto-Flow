@@ -55,8 +55,10 @@ import {
   getDefaultTextProperties,
   getStyleUpdates,
   getTextPropertyUpdates,
+  isTextStyleWidget,
   parseStyleColor,
 } from "../canvas/styleInspector";
+import { measureTextBounds } from "../canvas/textMeasurement";
 import {
   getShapeToolDefinition,
   type ShapeTool,
@@ -694,11 +696,24 @@ function StyleSection({ widgets }: { widgets: Widget[] }) {
             ? item
             : {
                 ...item,
-                widgets: item.widgets.map((widget) =>
-                  updates.has(widget.id)
-                    ? { ...widget, props: updates.get(widget.id)! }
-                    : widget,
-                ),
+                widgets: item.widgets.map((widget) => {
+                  const props = updates.get(widget.id);
+                  if (!props) return widget;
+                  const measured = props.autoSize === true
+                    ? measureTextBounds(
+                        typeof props.text === "string" ? props.text : "",
+                        typeof props.fontFamily === "string" ? props.fontFamily : "Arial",
+                        typeof props.fontSize === "number" ? props.fontSize : 24,
+                        typeof props.fontWeight === "string" ? props.fontWeight : "normal",
+                        typeof props.lineHeight === "number" ? props.lineHeight : 1.2,
+                      )
+                    : null;
+                  return {
+                    ...widget,
+                    props,
+                    ...(measured ? { width: measured.width, height: measured.height } : {}),
+                  };
+                }),
               },
         ),
       };
@@ -758,9 +773,7 @@ function StyleSection({ widgets }: { widgets: Widget[] }) {
 
   const resetSection = (section: "fill" | "stroke" | "radius" | "shadow" | "blend" | "text") => {
     if (section === "text") {
-      const textWidgets = editableWidgets.filter((widget) =>
-        ["text", "button", "input", "checkbox", "radio", "toggle"].includes(widget.type),
-      );
+      const textWidgets = editableWidgets.filter(isTextStyleWidget);
       const defaults = textWidgets[0] ? getDefaultTextProperties(textWidgets[0]) : {};
       applyText(defaults);
       return;
@@ -798,12 +811,10 @@ function StyleSection({ widgets }: { widgets: Widget[] }) {
   const radiusMixed = mixed(valuesFor("cornerRadius"));
   const commonShadow = commonStyleValue("shadow", undefined);
   const shadowMixed = mixed(valuesFor("shadow"));
-  const hasText = editableWidgets.some((widget) =>
-    ["text", "button", "input", "checkbox", "radio", "toggle"].includes(widget.type),
-  );
+  const hasText = editableWidgets.some(isTextStyleWidget);
   const textProperty = (key: string, fallback: unknown): unknown[] =>
     editableWidgets
-      .filter((widget) => ["text", "button", "input", "checkbox", "radio", "toggle"].includes(widget.type))
+      .filter(isTextStyleWidget)
       .map((widget) => widget.props[key] ?? getDefaultTextProperties(widget)[key] ?? fallback);
   const textValue = (key: string, fallback: unknown): unknown => {
     const values = textProperty(key, fallback);

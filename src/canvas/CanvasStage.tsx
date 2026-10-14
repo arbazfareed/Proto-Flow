@@ -54,8 +54,11 @@ import {
   syncWidgetGroupIdsToContainment,
 } from "../project/layers";
 import {
+  copyWidgetStyle,
   copyWidgetsToClipboard,
   createWidgetCopies,
+  getCopiedWidgetStyle,
+  pasteWidgetStyle,
   readWidgetClipboard,
   reorderWidgetSelection,
 } from "../project/widgetClipboard";
@@ -82,10 +85,11 @@ import {
   createShapeWidget,
   getShapeDefinition,
   measureTextBounds,
-  renderWidgetShape,
   MAX_WIDGET_TEXT_LENGTH,
+  renderWidgetShape,
   type ShapeTool,
 } from "./shapes";
+import { normalizeListItems } from "./styleInspector";
 import { getShapeToolDefinition } from "./shapeTools";
 import {
   constrainTransformerBounds,
@@ -541,13 +545,14 @@ function WidgetNode({
 }
 
 type EditableWidgetText = {
-  key: "text" | "label" | "placeholder" | "value";
+  key: "text" | "label" | "placeholder" | "value" | "items";
   value: string;
 };
 
 function getEditableWidgetText(widget: Widget): EditableWidgetText | null {
-  const keys =
-    widget.type === "text"
+  const keys = widget.type === "list"
+    ? ["items"]
+    : ["text", "heading", "paragraph", "link", "label"].includes(widget.type)
       ? ["text"]
       : widget.type === "input"
         ? [widget.props.value ? "value" : "placeholder"]
@@ -556,6 +561,9 @@ function getEditableWidgetText(widget: Widget): EditableWidgetText | null {
           : [];
   const key = keys[0] as EditableWidgetText["key"] | undefined;
   if (!key) return null;
+  if (key === "items") {
+    return { key, value: normalizeListItems(widget.props.items).join("\n") };
+  }
   const value = widget.props[key];
   return { key, value: typeof value === "string" ? value : "" };
 }
@@ -584,15 +592,35 @@ function updateWidgetProps(
             breakpoints: resolvedOverrideBreakpointId
               ? screen.breakpoints ?? [...getScreenBreakpoints(screen)]
               : screen.breakpoints,
-            widgets: screen.widgets.map((widget) =>
-              widget.id === widgetId
-                ? resolvedOverrideBreakpointId
-                  ? updateWidgetOverride(widget, resolvedOverrideBreakpointId, {
-                      props: { ...widget.props, ...patch },
-                    })
-                  : { ...widget, props: { ...widget.props, ...patch } }
-                : widget,
-            ),
+            widgets: screen.widgets.map((widget) => {
+              if (widget.id !== widgetId) return widget;
+              const props: Record<string, unknown> = {
+                ...widget.props,
+                ...patch,
+                ...(patch.items !== undefined
+                  ? { items: normalizeListItems(patch.items) }
+                  : {}),
+              };
+              const text = widget.type === "list"
+                ? normalizeListItems(props.items).join("\n")
+                : typeof props.text === "string" ? props.text : "";
+              const measured = props.autoSize === true
+                ? measureTextBounds(
+                    text,
+                    typeof props.fontFamily === "string" ? props.fontFamily : "Arial",
+                    typeof props.fontSize === "number" ? props.fontSize : 24,
+                    typeof props.fontWeight === "string" ? props.fontWeight : "normal",
+                    typeof props.lineHeight === "number" ? props.lineHeight : 1.2,
+                  )
+                : null;
+              const widgetPatch = {
+                props,
+                ...(measured ? { width: measured.width, height: measured.height } : {}),
+              };
+              return resolvedOverrideBreakpointId
+                ? updateWidgetOverride(widget, resolvedOverrideBreakpointId, widgetPatch)
+                : { ...widget, ...widgetPatch };
+            }),
           },
     ),
   };
@@ -1105,7 +1133,12 @@ export function CanvasStage({
 
   const commitWidgetTextEdit = useCallback(() => {
     if (!editing) return;
-    updateWidgetProps(editing.widgetId, { [editing.key]: editValue });
+    updateWidgetProps(
+      editing.widgetId,
+      editing.key === "items"
+        ? { items: normalizeListItems(editValue) }
+        : { [editing.key]: editValue },
+    );
     setEditing(null);
   }, [editValue, editing]);
 
@@ -1562,6 +1595,37 @@ export function CanvasStage({
     }
   }, [onNotify, updateActiveScreenWidgets]);
 
+  const copyStyleSelection = useCallback(() => {
+    const current = useStore.getState();
+    const screen = current.project.screens.find(
+      (item) => item.id === current.getActiveScreenId(),
+    );
+    const selected = screen?.widgets.filter((widget) =>
+      current.selectedIds.includes(widget.id),
+    ) ?? [];
+    if (selected.length !== 1) return;
+    copyWidgetStyle(selected[0]);
+    onNotify("Style copied. Select one or more widgets and paste the style.");
+  }, [onNotify]);
+
+  const pasteStyleSelection = useCallback(() => {
+    const copiedStyle = getCopiedWidgetStyle();
+    if (!copiedStyle) return;
+    const current = useStore.getState();
+    const screen = current.project.screens.find(
+      (item) => item.id === current.getActiveScreenId(),
+    );
+    if (!screen) return;
+    const selected = screen.widgets.filter((widget) =>
+      current.selectedIds.includes(widget.id),
+    );
+    if (selected.length === 0) return;
+    const updated = new Map(
+      pasteWidgetStyle(copiedStyle, selected).map((widget) => [widget.id, widget]),
+    );
+    updateActiveScreenWidgets(screen.widgets.map((widget) => updated.get(widget.id) ?? widget));
+  }, [updateActiveScreenWidgets]);
+
   const pasteSelection = useCallback(async () => {
     try {
       const source = await readWidgetClipboard();
@@ -1864,6 +1928,19 @@ export function CanvasStage({
         requestCreateSymbolFromSelection();
         return;
       }
+      if ((event.ctrlKey || event.metaKey) && event.altKey) {
+        const key = event.key.toLowerCase();
+        if (key === "c") {
+          event.preventDefault();
+          copyStyleSelection();
+          return;
+        }
+        if (key === "v") {
+          event.preventDefault();
+          pasteStyleSelection();
+          return;
+        }
+      }
       if (event.altKey) return;
       if (event.ctrlKey || event.metaKey) {
         const key = event.key.toLowerCase();
@@ -1948,12 +2025,14 @@ export function CanvasStage({
   }, [
     canvasContextMenu,
     copySelection,
+    copyStyleSelection,
     createWidgetAt,
     requestCreateSymbolFromSelection,
     deleteSelection,
     duplicateSelection,
     onToolChange,
     pasteSelection,
+    pasteStyleSelection,
   ]);
 
   useEffect(
@@ -2974,11 +3053,25 @@ export function CanvasStage({
           <button role="menuitem" disabled={selectedWidgets.length === 0} onClick={() => { void copySelection(); setCanvasContextMenu(null); }}>
             Copy
           </button>
+          <button
+            role="menuitem"
+            disabled={selectedWidgets.length !== 1}
+            onClick={() => { copyStyleSelection(); setCanvasContextMenu(null); }}
+          >
+            Copy Style
+          </button>
           <button role="menuitem" disabled={!selectedHasUnlockedWidget} onClick={() => { void copySelection(true); setCanvasContextMenu(null); }}>
             Cut
           </button>
           <button role="menuitem" onClick={() => { void pasteSelection(); setCanvasContextMenu(null); }}>
             Paste
+          </button>
+          <button
+            role="menuitem"
+            disabled={!getCopiedWidgetStyle() || selectedWidgets.length === 0}
+            onClick={() => { pasteStyleSelection(); setCanvasContextMenu(null); }}
+          >
+            Paste Style
           </button>
           <button role="menuitem" disabled={selectedWidgets.length === 0} onClick={() => { duplicateSelection(); setCanvasContextMenu(null); }}>
             Duplicate

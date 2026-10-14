@@ -271,6 +271,7 @@ function genericElementDimensions(type: GenericElementTool): [number, number] {
   if (type === "video" || type === "chart" || type === "table" || type === "grid") {
     return [200, 120];
   }
+  if (type === "list") return [220, 96];
   return [160, 48];
 }
 
@@ -297,7 +298,16 @@ function genericElementDefinition(
         align: "left",
         lineHeight: 1.2,
       }
-    : { label };
+    : type === "list"
+      ? {
+          items: ["List item 1", "List item 2", "List item 3"],
+          listStyle: "bullet",
+          fontFamily: "Arial",
+          fontSize: 16,
+          fontWeight: "normal",
+          lineHeight: 1.4,
+        }
+      : { label };
   return {
     label,
     shortcut: "",

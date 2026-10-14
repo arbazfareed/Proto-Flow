@@ -5,6 +5,8 @@ import {
   getSafeBlendMode,
   getStyleUpdates,
   getTextPropertyUpdates,
+  isTextStyleWidget,
+  normalizeListItems,
   parseStyleColor,
   styleColorToRgba,
 } from "./styleInspector";
@@ -64,5 +66,20 @@ describe("style inspector helpers", () => {
       fontWeight: "bold",
       verticalAlign: "middle",
     });
+  });
+
+  it("exposes typography for text-bearing library elements and normalizes list content", () => {
+    const heading = createShapeWidget("heading", 0, 0);
+    const list = createShapeWidget("list", 0, 0);
+    const rectangle = createShapeWidget("rectangle", 0, 0);
+
+    expect(isTextStyleWidget(heading)).toBe(true);
+    expect(isTextStyleWidget(list)).toBe(true);
+    expect(isTextStyleWidget(rectangle)).toBe(false);
+    expect(getTextPropertyUpdates([heading, list, rectangle], { fontSize: 20 }))
+      .toHaveLength(2);
+    expect(normalizeListItems([" First ", { text: "Second" }, { label: "Third" }, null]))
+      .toEqual(["First", "Second", "Third"]);
+    expect(normalizeListItems("First\n\nSecond")).toEqual(["First", "Second"]);
   });
 });

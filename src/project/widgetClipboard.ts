@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { ProtoWidgetSchema } from "./schema";
-import type { Widget } from "./schema";
+import type { Widget, WidgetStyle } from "./schema";
 
 const WidgetClipboardSchema = z.object({
   format: z.literal("protoflow/widgets"),
@@ -11,6 +11,58 @@ const WidgetClipboardSchema = z.object({
 export type WidgetClipboardPayload = z.infer<typeof WidgetClipboardSchema>;
 
 let internalClipboard: Widget[] = [];
+const STYLE_PROP_KEYS = [
+  "fontFamily",
+  "fontSize",
+  "fontWeight",
+  "fontStyle",
+  "underline",
+  "align",
+  "verticalAlign",
+  "lineHeight",
+  "letterSpacing",
+] as const;
+
+export interface WidgetStyleClipboard {
+  style: WidgetStyle;
+  props: Partial<Record<(typeof STYLE_PROP_KEYS)[number], unknown>>;
+}
+
+let internalStyleClipboard: WidgetStyleClipboard | null = null;
+
+export function copyWidgetStyle(widget: Widget): WidgetStyleClipboard {
+  const props: WidgetStyleClipboard["props"] = {};
+  for (const key of STYLE_PROP_KEYS) {
+    if (widget.props[key] !== undefined) props[key] = structuredClone(widget.props[key]);
+  }
+  internalStyleClipboard = {
+    style: structuredClone(widget.style),
+    props,
+  };
+  return structuredClone(internalStyleClipboard);
+}
+
+export function getCopiedWidgetStyle(): WidgetStyleClipboard | null {
+  return internalStyleClipboard ? structuredClone(internalStyleClipboard) : null;
+}
+
+export function pasteWidgetStyle(
+  clipboard: WidgetStyleClipboard,
+  widgets: readonly Widget[],
+): Widget[] {
+  return widgets.map((widget) => {
+    if (widget.locked) return widget;
+    const props = { ...widget.props };
+    for (const key of STYLE_PROP_KEYS) {
+      if (clipboard.props[key] !== undefined) props[key] = structuredClone(clipboard.props[key]);
+    }
+    return {
+      ...widget,
+      style: structuredClone(clipboard.style),
+      props,
+    };
+  });
+}
 
 function serializeWidgets(widgets: readonly Widget[]): string {
   return JSON.stringify({
@@ -56,6 +108,7 @@ export async function readWidgetClipboard(): Promise<Widget[]> {
 
 export function clearInternalWidgetClipboard(): void {
   internalClipboard = [];
+  internalStyleClipboard = null;
 }
 
 export function createWidgetCopies(

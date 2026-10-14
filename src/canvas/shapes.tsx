@@ -22,7 +22,9 @@ import {
   type ShapeToolDefinition,
   type WidgetTool,
 } from "./shapeTools";
-import { getSafeBlendMode, styleColorToRgba } from "./styleInspector";
+import { MAX_WIDGET_TEXT_LENGTH } from "./textMeasurement";
+import { getSafeBlendMode, normalizeListItems, styleColorToRgba } from "./styleInspector";
+export { measureTextBounds } from "./textMeasurement";
 export { SHAPE_TOOLS };
 export type { ShapeTool };
 
@@ -39,7 +41,7 @@ export interface ShapeDefinition extends ShapeToolDefinition {
 }
 
 const DEFAULT_STROKE = "#a78bfa";
-export const MAX_WIDGET_TEXT_LENGTH = 10_000;
+export { MAX_WIDGET_TEXT_LENGTH } from "./textMeasurement";
 
 function getPoints(widget: Widget): number[] {
   const points = widget.props.points;
@@ -122,6 +124,33 @@ function TextShape({ widget, fill, stroke, strokeWidth }: ShapeComponentProps) {
       stroke={stroke}
       strokeWidth={strokeWidth}
       dash={widget.style.dash}
+      perfectDrawEnabled={false}
+    />
+  );
+}
+
+function ListShape({ widget, fill }: ShapeComponentProps) {
+  const items = normalizeListItems(widget.props.items);
+  const numbered = widget.props.listStyle === "number";
+  const text = (items.length > 0 ? items : ["List item 1", "List item 2", "List item 3"])
+    .map((item, index) => `${numbered ? `${index + 1}.` : "•"}  ${item}`)
+    .join("\n");
+
+  return (
+    <KonvaText
+      width={widget.width}
+      height={widget.height}
+      text={text}
+      fontFamily={typeof widget.props.fontFamily === "string" ? widget.props.fontFamily : "Arial"}
+      fontSize={typeof widget.props.fontSize === "number" ? widget.props.fontSize : 16}
+      fontStyle={`${typeof widget.props.fontStyle === "string" ? widget.props.fontStyle : "normal"} ${typeof widget.props.fontWeight === "string" ? widget.props.fontWeight : "normal"}`.trim()}
+      textDecoration={widget.props.underline === true ? "underline" : undefined}
+      align={typeof widget.props.align === "string" ? widget.props.align : "left"}
+      verticalAlign={typeof widget.props.verticalAlign === "string" ? widget.props.verticalAlign : "top"}
+      lineHeight={typeof widget.props.lineHeight === "number" ? widget.props.lineHeight : 1.4}
+      letterSpacing={typeof widget.props.letterSpacing === "number" ? widget.props.letterSpacing : 0}
+      fill={fill ?? "#e9e9ec"}
+      wrap="word"
       perfectDrawEnabled={false}
     />
   );
@@ -637,7 +666,9 @@ const SHAPE_REGISTRY = Object.fromEntries(
     {
       ...definition,
       component:
-        type in WIDGET_COMPONENTS
+        type === "list"
+          ? ListShape
+          : type in WIDGET_COMPONENTS
           ? WIDGET_COMPONENTS[type as WidgetTool]
           : type in SHAPE_COMPONENTS
             ? SHAPE_COMPONENTS[type as PrimitiveTool]
@@ -679,30 +710,6 @@ export function createShapeWidget(
     zIndex: 0,
     style: { ...definition.style },
     props: structuredClone(props),
-  };
-}
-
-export function measureTextBounds(
-  text: string,
-  fontFamily = "Arial",
-  fontSize = 24,
-  fontWeight = "normal",
-  lineHeight = 1.2,
-): { width: number; height: number } {
-  const lines = text.slice(0, MAX_WIDGET_TEXT_LENGTH).split(/\r?\n/);
-  let measuredWidth = 0;
-  if (typeof document !== "undefined") {
-    const context = document.createElement("canvas").getContext("2d");
-    if (!context) throw new Error("The browser could not create a text measurement canvas.");
-    context.font = `${fontWeight} ${fontSize}px ${fontFamily}`;
-    measuredWidth = Math.max(...lines.map((line) => context.measureText(line).width));
-  } else {
-    measuredWidth = Math.max(...lines.map((line) => [...line].length * fontSize * 0.6));
-  }
-
-  return {
-    width: Math.max(1, Math.ceil(measuredWidth + 2)),
-    height: Math.max(1, Math.ceil(lines.length * fontSize * lineHeight + 2)),
   };
 }
 
