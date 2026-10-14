@@ -40,7 +40,11 @@ import {
   parseLayerDragPayload,
 } from "../project/layerDrag";
 import { ELEMENT_DRAG_MIME, parseElementDragPayload } from "./elementDrag";
-import { getSelectedContainingParentId, isWidgetContainer } from "../project/layers";
+import {
+  getSelectedContainingParentId,
+  isWidgetContainedBy,
+  isWidgetContainer,
+} from "../project/layers";
 import {
   clampCanvasZoom,
   fitCanvasBounds,
@@ -694,6 +698,7 @@ export function CanvasStage({
       position: CanvasPoint,
       bounds?: { width: number; height: number; points?: number[] },
       altKey = altHeldRef.current,
+      dropParentId?: string | null,
     ): string | null => {
       const current = useStore.getState();
       const screen = current.project.screens.find(
@@ -766,12 +771,19 @@ export function CanvasStage({
       );
       widget.x = snap.position.x;
       widget.y = snap.position.y;
-      const selectedParentId = getSelectedContainingParentId(
-        screen.widgets,
-        current.selectedIds,
-        widget,
-      );
-      if (selectedParentId) widget.groupId = selectedParentId;
+      const dropParent = dropParentId
+        ? screen.widgets.find((item) => item.id === dropParentId)
+        : undefined;
+      if (dropParent && isWidgetContainedBy(widget, dropParent)) {
+        widget.groupId = dropParent.id;
+      } else {
+        const selectedParentId = getSelectedContainingParentId(
+          screen.widgets,
+          current.selectedIds,
+          widget,
+        );
+        if (selectedParentId) widget.groupId = selectedParentId;
+      }
       widget.zIndex = screen.widgets.reduce(
         (highest, item) => Math.max(highest, item.zIndex),
         -1,
@@ -1015,7 +1027,7 @@ export function CanvasStage({
       parseLayerDragPayload(event.dataTransfer.getData(LAYER_DRAG_MIME));
     const targetId = getCanvasDropTarget(event.clientX, event.clientY);
     const targetWidget = screenWidgets.find((widget) => widget.id === targetId);
-    const nestedElementDrop = !!elementTool && !!targetWidget && isWidgetContainer(targetWidget);
+    const nestedElementDrop = !!elementTool && !!targetWidget;
     const definition = elementTool ? getShapeToolDefinition(elementTool) : undefined;
     const screenDrop = payload?.kind === "screen";
     pendingDragFeedbackRef.current = {
@@ -1144,10 +1156,22 @@ export function CanvasStage({
     if (!tool) return true;
     const position = getWorldPositionFromClient(event.clientX, event.clientY);
     lastPointerWorldRef.current = position;
-    createWidgetAt(tool, position);
+    createWidgetAt(
+      tool,
+      position,
+      undefined,
+      event.altKey,
+      getCanvasDropTarget(event.clientX, event.clientY),
+    );
     onToolChange(null);
     return true;
-  }, [clearCanvasDropFeedback, createWidgetAt, getWorldPositionFromClient, onToolChange]);
+  }, [
+    clearCanvasDropFeedback,
+    createWidgetAt,
+    getCanvasDropTarget,
+    getWorldPositionFromClient,
+    onToolChange,
+  ]);
 
   useEffect(() => {
     const cancelDropFeedback = (event: KeyboardEvent) => {

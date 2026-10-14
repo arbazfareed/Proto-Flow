@@ -66,6 +66,32 @@ describe("layer hierarchy", () => {
       .toEqual(["rectangle-parent", "text-child", "image-grandchild"]);
   });
 
+  it("shows every direct child of a nested rectangle with matching count and depth", () => {
+    const roots = buildLayerHierarchy([
+      { ...widget("screen-parent", "frame", 0), x: 0, y: 0, width: 600, height: 500 },
+      { ...widget("rectangle-parent", "rectangle", 1, "screen-parent"), x: 20, y: 20, width: 300, height: 240 },
+      { ...widget("nested-rectangle", "rectangle", 2, "rectangle-parent"), x: 40, y: 40, width: 100, height: 80 },
+      { ...widget("star", "star", 3, "rectangle-parent"), x: 180, y: 40, width: 40, height: 40 },
+      { ...widget("screen-text", "text", 4, "screen-parent"), x: 20, y: 300, width: 80, height: 24 },
+    ], (item) => item.id);
+    const entries = flattenLayerHierarchy(roots, new Set());
+    const rectangle = roots[0].children[0];
+
+    expect(rectangle.children.map((node) => node.id)).toEqual([
+      "nested-rectangle",
+      "star",
+    ]);
+    expect(getContainerBadge(rectangle.widget!, rectangle.children.length))
+      .toBe("2 children");
+    expect(entries.map(({ node, depth }) => [node.id, depth])).toEqual([
+      ["screen-parent", 0],
+      ["rectangle-parent", 1],
+      ["nested-rectangle", 2],
+      ["star", 2],
+      ["screen-text", 1],
+    ]);
+  });
+
   it("updates parentage from containment and keeps outside widgets at the screen root", () => {
     const parent = { ...widget("panel", "panel", 3), x: 20, y: 20, width: 200, height: 120 };
     const progress = { ...widget("progress", "progress-bar", 2), x: 40, y: 40 };
