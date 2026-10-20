@@ -644,6 +644,20 @@
 .wallet-menu-link { display:flex; width:100%; justify-content:space-between; padding:8px 2px 4px; border:0; color:#c1b0fb; background:transparent; text-align:left; font-size:10px; cursor:pointer; }
 .wallet-menu-link:disabled { color:#777780; cursor:not-allowed; }
 .wallet-menu-link span { color:#777780; }
+.metered-overlay { position:fixed; inset:0; z-index:80; display:grid; place-items:center; padding:16px; background:#09090bc9; }
+.metered-dialog { position:relative; width:min(420px,100%); padding:23px; border:1px solid #3b3a43; border-radius:10px; color:#dedde4; background:#1b1c20; box-shadow:0 18px 60px #000b; }
+.metered-dialog .dialog-icon { display:grid; width:36px; height:36px; place-items:center; margin-bottom:13px; border:1px solid #53476f; border-radius:9px; color:#c3adff; background:#2d263b; }
+.metered-dialog .eyebrow { color:#a495d0; font-size:9px; font-weight:650; letter-spacing:.08em; }
+.metered-dialog h2 { margin:7px 0; color:#f0eff4; font-size:18px; font-weight:620; }
+.metered-dialog>p { margin:0 0 16px; color:#aaa9b3; font-size:11px; line-height:1.6; }
+.metered-dialog-close { position:absolute; top:10px; right:10px; }
+.metered-option { display:flex; align-items:center; gap:8px; margin-top:10px; color:#c5c4cc; font-size:10px; cursor:pointer; }
+.metered-option input { accent-color:#9b7cf2; }
+.metered-dialog-actions { display:flex; justify-content:flex-end; gap:8px; margin-top:21px; }
+.metered-claim-button { justify-content:center; width:100%; margin:1px 0 4px; }
+.metered-credit-note { margin:12px 0 0 !important; }
+.metered-toast { z-index:100; max-width:min(440px,calc(100vw - 32px)); }
+.metered-toast .icon-button { flex:0 0 auto; }
 .shortcut-link { padding:0 3px; border:1px solid #414149; border-radius:4px; color:#aaaab4; background:#27282d; font:9px ui-monospace,SFMono-Regular,Consolas,monospace; cursor:pointer; }
 .app-statusbar { height:24px; min-height:24px; display:flex; align-items:center; gap:16px; padding:0 13px; border-top:1px solid var(--border); color:var(--text-muted); background:var(--surface-panel); font-size:9px; }
 .app-statusbar>span { display:flex; align-items:center; gap:6px; }
