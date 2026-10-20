@@ -6,6 +6,7 @@ use std::{
 
 use keyring::Entry;
 use serde::Serialize;
+use sha2::{Digest, Sha256};
 use tauri::{AppHandle, Manager};
 use uuid::Uuid;
 
@@ -49,6 +50,28 @@ fn load_or_create_install_id(directory: &Path) -> Result<String, String> {
     }
 }
 
+fn device_id_for_install(device_id: &str, install_id: &str) -> String {
+    let digest = Sha256::digest(format!("{device_id}:{install_id}").as_bytes());
+    digest.iter().map(|byte| format!("{byte:02x}")).collect()
+}
+
+fn replace_install_id(directory: &Path) -> Result<String, String> {
+    fs::create_dir_all(directory)
+        .map_err(|error| format!("Could not create wallet identity storage: {error}"))?;
+    let install_id = Uuid::new_v4().to_string();
+    let path = directory.join(INSTALL_ID_FILE);
+    let mut file = OpenOptions::new()
+        .write(true)
+        .create(true)
+        .truncate(true)
+        .open(path)
+        .map_err(|error| format!("Could not reset the install ID: {error}"))?;
+    file.write_all(install_id.as_bytes())
+        .and_then(|()| file.sync_all())
+        .map_err(|error| format!("Could not save the reset install ID: {error}"))?;
+    Ok(install_id)
+}
+
 fn wallet_jwt_entry() -> Result<Entry, String> {
     Entry::new(KEYRING_SERVICE, KEYRING_ACCOUNT)
         .map_err(|error| format!("Could not access secure wallet storage: {error}"))
@@ -60,9 +83,25 @@ pub fn get_wallet_identity(app: AppHandle) -> Result<WalletIdentity, String> {
         .path()
         .app_data_dir()
         .map_err(|error| format!("Could not locate wallet identity storage: {error}"))?;
+    let install_id = load_or_create_install_id(&app_data_dir)?;
     Ok(WalletIdentity {
-        device_id: get_device_id()?,
-        install_id: load_or_create_install_id(&app_data_dir)?,
+        device_id: device_id_for_install(&get_device_id()?, &install_id),
+        install_id,
+    })
+}
+
+#[tauri::command]
+pub fn reset_wallet_identity(app: AppHandle) -> Result<WalletIdentity, String> {
+    let app_data_dir = app
+        .path()
+        .app_data_dir()
+        .map_err(|error| format!("Could not locate wallet identity storage: {error}"))?;
+    clear_wallet_jwt()?;
+    let hardware_device_id = get_device_id()?;
+    let install_id = replace_install_id(&app_data_dir)?;
+    Ok(WalletIdentity {
+        device_id: device_id_for_install(&hardware_device_id, &install_id),
+        install_id,
     })
 }
 
@@ -109,10 +148,39 @@ mod tests {
     }
 
     #[test]
+    fn reset_replaces_the_persisted_install_id() {
+        let directory = tempdir().unwrap();
+        let first = load_or_create_install_id(directory.path()).unwrap();
+        let reset = replace_install_id(directory.path()).unwrap();
+
+        assert_ne!(first, reset);
+        assert_eq!(load_or_create_install_id(directory.path()).unwrap(), reset);
+    }
+
+    #[test]
     fn invalid_saved_install_id_is_reported() {
         let directory = tempdir().unwrap();
         fs::write(directory.path().join(INSTALL_ID_FILE), "not-a-uuid").unwrap();
 
         assert!(load_or_create_install_id(directory.path()).is_err());
+    }
+
+    #[test]
+    fn device_identity_is_stable_per_install_and_changes_after_reset() {
+        let first = device_id_for_install("hardware-hash", "install-one");
+        let same_install = device_id_for_install("hardware-hash", "install-one");
+        let reset_install = device_id_for_install("hardware-hash", "install-two");
+
+        assert_eq!(first, same_install);
+        assert_ne!(first, reset_install);
+        assert_eq!(first.len(), 64);
+    }
+
+    #[test]
+    fn changed_device_fingerprint_changes_hashed_identity() {
+        assert_ne!(
+            device_id_for_install("hardware-before", "same-install"),
+            device_id_for_install("hardware-after", "same-install")
+        );
     }
 }

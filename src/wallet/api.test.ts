@@ -1,10 +1,12 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   canUseOfflineWallet,
+  checkCloudHealth,
   claimDailyCredits,
   fetchWalletMe,
   getCachedWallet,
   provisionAnonymousWallet,
+  resetWalletIdentity,
   runMeteredAction,
   WalletApiError,
   type WalletSnapshot,
@@ -85,6 +87,35 @@ describe("wallet persistence", () => {
       nextClaimAt: null,
       syncedAt: now - 60_000,
     });
+  });
+
+  it("clears the prior JWT and wallet cache when resetting to a new identity", async () => {
+    const values = stubStorage();
+    values.set("protoflow.wallet.install-id", "old-install-id");
+    values.set("protoflow.wallet.jwt", "old-token");
+    values.set("protoflow.wallet.cache", JSON.stringify(wallet(now)));
+
+    const identity = await resetWalletIdentity();
+
+    expect(identity.installId).not.toBe("old-install-id");
+    expect(identity.deviceId).toHaveLength(64);
+    expect(values.has("protoflow.wallet.jwt")).toBe(false);
+    expect(values.has("protoflow.wallet.cache")).toBe(false);
+    expect(values.get("protoflow.wallet.install-id")).toBe(identity.installId);
+  });
+
+  it("reports cloud health only for a successful health response", async () => {
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(new Response(JSON.stringify({ status: "ok" }), { status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ status: "degraded" }), { status: 200 }))
+      .mockResolvedValueOnce(new Response(null, { status: 503 }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(checkCloudHealth()).resolves.toBe(true);
+    await expect(checkCloudHealth()).resolves.toBe(false);
+    await expect(checkCloudHealth()).resolves.toBe(false);
+    expect(fetchMock).toHaveBeenCalledTimes(3);
+    expect(fetchMock.mock.calls[0]?.[0]).toBe("http://127.0.0.1:8790/health");
   });
 
   it("reads next refill timestamps and preserves server claim cooldown responses", async () => {

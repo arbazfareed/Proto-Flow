@@ -158,6 +158,7 @@ export function MeteredActionProvider({ children }: MeteredActionProviderProps) 
   const claimDaily = useWalletStore((state) => state.claimDaily);
   const claimable = useWalletStore((state) => state.claimable);
   const walletStatus = useWalletStore((state) => state.status);
+  const networkStatus = useWalletStore((state) => state.networkStatus);
 
   const notify = useCallback((message: string, kind: ToastKind = "error") => {
     setToast({ message, kind });
@@ -330,13 +331,13 @@ export function MeteredActionProvider({ children }: MeteredActionProviderProps) 
             <span className="eyebrow">CREDITS NEEDED</span>
             <h2 id="metered-credit-title">Not enough credits</h2>
             <p>This action needs {creditPrompt} credits. Claim your daily refill, then run the action again.</p>
-            {claimable && walletStatus === "online" ? (
+            {claimable && walletStatus === "online" && networkStatus === "online" ? (
               <button className="button button-primary metered-claim-button" disabled={claiming} onClick={() => void submitDailyClaim()}>
                 {claiming ? "Claiming…" : "Claim Daily +20"}
               </button>
             ) : (
               <p className="metered-credit-note">
-                {walletStatus === "offline"
+                {walletStatus === "offline" || networkStatus === "offline"
                   ? "Reconnect to the internet to claim credits or use cloud actions."
                   : "A daily refill is not currently available. Refresh your wallet to check again."}
               </p>
@@ -401,9 +402,14 @@ export function useMeteredAction<T = unknown>(
     try {
       const definition = METERED_ACTIONS[actionType];
       let wallet = useWalletStore.getState();
-      if (wallet.status !== "online" || !wallet.jwt || !wallet.accountId) {
+      if (
+        wallet.status !== "online" ||
+        wallet.networkStatus === "offline" ||
+        !wallet.jwt ||
+        !wallet.accountId
+      ) {
         const message =
-          wallet.status === "offline"
+          wallet.status === "offline" || wallet.networkStatus === "offline"
             ? "Cloud actions require an internet connection. Reconnect and try again."
             : "Your wallet is not synced. Refresh it before using cloud actions.";
         setError(message);
@@ -431,7 +437,7 @@ export function useMeteredAction<T = unknown>(
       }
 
       wallet = useWalletStore.getState();
-      if (wallet.status !== "online" || !wallet.jwt) {
+      if (wallet.status !== "online" || wallet.networkStatus === "offline" || !wallet.jwt) {
         const message = "Cloud actions require an internet connection. No credits were deducted.";
         setError(message);
         context.notify(message);
@@ -452,7 +458,7 @@ export function useMeteredAction<T = unknown>(
         ) {
           await useWalletStore.getState().sync();
           wallet = useWalletStore.getState();
-          if (wallet.status === "online" && wallet.jwt) {
+          if (wallet.status === "online" && wallet.networkStatus !== "offline" && wallet.jwt) {
             response = await runMeteredAction<T>(wallet.jwt, actionType, requestPayload);
           } else {
             throw cause;

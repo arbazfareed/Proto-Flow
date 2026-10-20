@@ -4,7 +4,7 @@ This document describes the data used by PF-T302 anonymous wallet provisioning. 
 
 ## Anonymous wallet identity
 
-- On desktop, ProtoFlow computes a SHA-256 device ID locally from the hostname, operating system, and CPU architecture using the existing native `get_device_id` command. The raw hostname and other source values are not sent to the Worker.
+- On desktop, ProtoFlow computes a SHA-256 device ID locally from the hostname, operating system, and CPU architecture, then hashes that result together with the install UUID. The raw hostname and other source values are not sent to the Worker.
 - ProtoFlow generates a random UUID install ID and stores it in the app's data directory. It is sent to the Worker with the hashed device ID to keep the wallet associated with the installation if the device fingerprint changes.
 - The Worker stores the account UUID, hashed device fingerprint, install UUID, wallet balance, and wallet ledger entries in Cloudflare D1. Anonymous accounts do not include an email address.
 - The app stores the signed wallet token in the operating system credential store. The balance and last-sync time are cached in local storage for offline display; the balance cache is not authoritative.
@@ -12,9 +12,9 @@ This document describes the data used by PF-T302 anonymous wallet provisioning. 
 
 ## Offline behavior and identity reset
 
-When Cloudflare cannot be reached, the app may show the last synced balance for up to 24 hours if the cached token is still unexpired. This is a display-only grace period; the server remains authoritative and cloud actions are unavailable offline.
+When Cloudflare cannot be reached, the app may show the last synced balance for up to 24 hours after the last successful wallet sync. This is a display-only grace period; the server remains authoritative and cloud actions are unavailable offline. The app checks the Worker health endpoint every 30 seconds while reachable and backs off to 30 seconds, 1 minute, 5 minutes, and then 15 minutes after failures. The status bar reflects Worker reachability.
 
-The wallet dialog's **Reset identity** action refreshes the local signed token for the same device/install identity. It keeps the existing account and balance and does not issue another starter grant. Removing the app's local identity files does not delete a cloud account or its records.
+The wallet dialog's **Reset cloud identity** action creates a new random install ID, clears the locally cached wallet and signed token, and creates a new anonymous wallet when online. The previous cloud account and its records remain on the server. If the device fingerprint changes while the install ID remains stable, the Worker can still resolve the existing account using that install ID.
 
 ## Data handling
 
