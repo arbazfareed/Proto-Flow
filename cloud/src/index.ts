@@ -9,6 +9,7 @@ import {
   verifyTurnstileToken,
 } from "./abuse";
 import { requireJwt, signJwt } from "./auth";
+import { registerAdminRoutes, recordUsageEvent, runOperationalAlerts } from "./admin";
 import type { AuthClaims, WorkerEnv } from "./env";
 import { errorResponse } from "./errors";
 
@@ -24,7 +25,9 @@ app.use("*", async (context, next) => {
   context.header("X-RateLimit-Reset", String(resetAt));
 
   const origin = context.req.header("Origin");
-  const allowedOrigins = (context.env.ALLOWED_ORIGINS ?? "")
+  const allowedOrigins = [context.env.ALLOWED_ORIGINS, context.env.ADMIN_ALLOWED_ORIGINS]
+    .filter(Boolean)
+    .join(",")
     .split(",")
     .map((value) => value.trim())
     .filter(Boolean);
@@ -46,11 +49,17 @@ app.use("*", async (context, next) => {
       "Access-Control-Allow-Headers",
       "Authorization, Content-Type, X-Turnstile-Token",
     );
+    context.header("Access-Control-Allow-Credentials", "true");
     context.header(
       "Access-Control-Expose-Headers",
       "X-RateLimit-Limit, X-RateLimit-Remaining, X-RateLimit-Reset, Retry-After",
     );
     context.header("Access-Control-Max-Age", "86400");
+  }
+
+  if (context.req.path.startsWith("/admin/")) {
+    context.header("Cache-Control", "private, no-store, max-age=0");
+    context.header("Vary", origin ? "Origin, Cookie" : "Cookie");
   }
 
   if (context.req.method === "OPTIONS") return context.body(null, 204);
@@ -123,7 +132,7 @@ function safeLedgerMetadata(metadataJson: string): Record<string, number> {
   const safeMetadata: Record<string, number> = {};
   for (const [key, value] of Object.entries(metadata as Record<string, unknown>)) {
     if (
-      ["promptTokens", "completionTokens", "outputTokens", "assetCount"].includes(key) &&
+      ["inputTokens", "promptTokens", "completionTokens", "outputTokens", "assetCount"].includes(key) &&
       typeof value === "number" && Number.isSafeInteger(value) && value >= 0
     ) {
       safeMetadata[key] = value;
@@ -1127,6 +1136,14 @@ app.post("/action/run", requireJwt, async (context) => {
       );
     }
 
+    const usageEventType = body.type === "ai_interaction_generator"
+      ? "ai_generate"
+      : body.type === "cloud_preview_publish"
+        ? "cloud_publish"
+        : "code_export";
+    // These handlers are still intentionally unavailable; count requests, not fabricated provider usage or cost.
+    await recordUsageEvent(context.env, accountId, usageEventType, {});
+
     return errorResponse(
       context,
       501,
@@ -1150,14 +1167,7 @@ app.post("/action/run", requireJwt, async (context) => {
 
 registerAccountAuthRoutes(app);
 
-app.all("/admin/*", requireJwt, (context) =>
-  errorResponse(
-    context,
-    501,
-    "ADMIN_NOT_IMPLEMENTED",
-    "Administrative operations are scheduled for Task PF-T310.",
-  ),
-);
+registerAdminRoutes(app);
 
 async function sendAbuseDigest(env: WorkerEnv): Promise<void> {
   if (!env.ABUSE_DIGEST_EMAIL || !env.RESEND_API_KEY || !env.AUTH_EMAIL_FROM) return;
@@ -1275,7 +1285,9 @@ export async function runScheduledTasks(env: WorkerEnv): Promise<void> {
 export default {
   fetch: (request: Request, env: WorkerEnv, executionContext: ExecutionContext) =>
     app.fetch(request, env, executionContext),
-  scheduled: (_event: ScheduledController, env: WorkerEnv, executionContext: ExecutionContext) => {
-    executionContext.waitUntil(runScheduledTasks(env));
+  scheduled: (event: ScheduledController, env: WorkerEnv, executionContext: ExecutionContext) => {
+    executionContext.waitUntil(event.cron === "0 * * * *"
+      ? runOperationalAlerts(env)
+      : runScheduledTasks(env));
   },
 };

@@ -3,3 +3,18 @@ JWT_SECRET=replace-with-a-random-secret-of-at-least-32-characters
 # TURNSTILE_SECRET_KEY=
 # Optional weekly abuse digest; requires Resend credentials and AUTH_EMAIL_FROM.
 # ABUSE_DIGEST_EMAIL=
+# PF-T310: Cloudflare Access settings; leave unset to keep all /admin/* routes fail-closed.
+# ADMIN_ACCESS_TEAM_DOMAIN=https://<your-team-name>.cloudflareaccess.com
+# ADMIN_ACCESS_AUD=<admin Worker Access application audience tag>
+# ADMIN_ALLOWED_EMAILS=you@example.com
+# ADMIN_ALLOWED_ORIGINS=https://admin.protoflow.app
+# Optional operational alerts; requires at least one destination.
+# ADMIN_ALERT_EMAIL=you@example.com
+# ADMIN_ALERT_WEBHOOK_URL=https://hooks.example.com/your-private-endpoint
+# ADMIN_AI_COST_THRESHOLD_USD=10
+# Optional rough cost-rate overrides; values are USD per million tokens, GB-month, or million D1 ops.
+# GEMINI_INPUT_USD_PER_MILLION=0.1
+# GEMINI_OUTPUT_USD_PER_MILLION=0.4
+# R2_STORAGE_USD_PER_GB_MONTH=0.015
+# D1_READ_USD_PER_MILLION=0.001
+# D1_WRITE_USD_PER_MILLION=1

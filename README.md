@@ -48,7 +48,7 @@ The element library includes dedicated canvas visuals for avatars, icon buttons,
 
 ### Phase 3 — Cloud API gateway scaffold
 
-`cloud/` contains the Cloudflare Workers/Hono API scaffold for PF-T301. It defines local Wrangler bindings for D1 (`DB`), KV (`CACHE`), and R2 (`ASSETS`), a repeatable D1 migration plus standalone `schema.sql`, Tauri-origin CORS allowlisting, consistent JSON errors, and HS256 Bearer JWT verification for wallet, metered-action, and admin route groups. Anonymous wallet provisioning, authenticated wallet reads, daily claims, and optional email/Google account linking are implemented; metered action execution and admin handlers remain explicit `501` stubs for later tasks.
+`cloud/` contains the Cloudflare Workers/Hono API scaffold for PF-T301. It defines local Wrangler bindings for D1 (`DB`), KV (`CACHE`), and R2 (`ASSETS`), repeatable D1 migrations plus standalone `schema.sql`, origin allowlisting, consistent JSON errors, and HS256 Bearer JWT verification for wallet routes. Anonymous wallet provisioning, authenticated wallet reads, daily claims, optional email/Google account linking, and Cloudflare Access-protected admin endpoints are implemented. Metered action execution remains an explicit `501` stub; admin endpoints fail closed until Access settings are configured.
 
 Use Node.js 20.19+ or 22.12+:
 
@@ -92,6 +92,12 @@ Apply migration `0005_rate_limits_abuse_flags.sql` using `npm run db:apply:local
 ### PF-T309 — Usage ledger, history, and data controls
 
 The Worker exposes the authenticated wallet ledger at `GET /wallet/ledger` with cursor pagination (up to 50 entries) and reason filtering. The wallet menu's **View full history** dialog shows local timestamps and credit/debit colors, and exports the filtered history as CSV. Wallet settings can download the full account, wallet totals, and ledger as JSON, or request cloud-data deletion by typing `DELETE`. Deletion revokes the current session immediately, retains an inaccessible tombstone for 30 days, and the daily scheduled task then removes the account and its related wallet, ledger, authentication, and abuse rows. The weekly abuse digest remains weekly. Ledger metadata is restricted to non-PII usage counters; account-merge balance caps are recorded as `account_merge_cap` debits. Apply `0006_usage_ledger_data_controls.sql` before deploying this version.
+
+### PF-T310 — Admin dashboard and operations
+
+`cloud/admin/` is a separate React/Vite static dashboard for Cloudflare Pages. Configure the Pages project root as `cloud/admin`, build command `npm run build`, and output directory `dist`. Protect the Pages hostname with a Cloudflare Access self-hosted application and an exact-email Allow policy; also protect the Worker API hostname with Access. The Worker independently verifies `Cf-Access-Jwt-Assertion` using the Access JWKS issuer, app audience, and `ADMIN_ALLOWED_EMAILS`, and fails closed when those values are absent.
+
+The dashboard provides account search/detail, ledger and flag review, bounded manual adjustments, temporary read-only flags, bulk unflag/daily refill reissue, 30-day usage/cost estimates, and an audit log. Usage data does not store prompts, raw device identifiers, or IP addresses. Metered action handlers remain unavailable; current usage counts are request attempts and do not imply completed provider calls or charges. Hourly anomaly checks can send deduplicated alerts to a configured Resend email and/or HTTPS webhook. Configure Access, origins, alert destinations, and rough service rates in Worker environment variables; never commit their values. Apply `0007_admin_audit_usage.sql` before enabling the dashboard against D1. Setup details are in `cloud/admin/README.md`.
 
 ### PF-T306 — Device identity and offline resilience
 
