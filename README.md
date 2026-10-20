@@ -46,6 +46,25 @@ Selection transforms, geometry/style/responsive inspector editing, the screen/la
 
 The element library includes dedicated canvas visuals for avatars, icon buttons, badges, alerts, progress, ratings, data summaries, and modern app patterns such as notifications, metric/profile/pricing cards, empty states, code blocks, segmented controls, and step indicators. Canvas icons use a Lucide preset selector in the inspector and render as SVGs on the canvas; library thumbnails continue to use the shared widget icon registry. Click an element to activate its draw tool, then drag on the canvas; alternatively, drag the library item directly onto the canvas to place it at that point.
 
+### Phase 3 — Cloud API gateway scaffold
+
+`cloud/` contains the Cloudflare Workers/Hono API scaffold for PF-T301. It defines local Wrangler bindings for D1 (`DB`), KV (`CACHE`), and R2 (`ASSETS`), a repeatable D1 migration plus standalone `schema.sql`, Tauri-origin CORS allowlisting, consistent JSON errors, and HS256 Bearer JWT verification for wallet, metered-action, and admin route groups. Wallet provisioning, wallet operations, metered actions, email authentication, and admin handlers deliberately return `501` until their follow-up tasks implement those behaviors.
+
+Use Node.js 20.19+ or 22.12+:
+
+```sh
+cd cloud
+npm install
+Copy-Item .dev.vars.example .dev.vars
+# Replace JWT_SECRET in .dev.vars with a random secret of at least 32 characters.
+npm run db:apply:local
+npm test
+npm run typecheck
+npm run dev
+```
+
+Before production deployment, create the named D1 database, KV namespace, and R2 bucket, replace the placeholder binding IDs in `cloud/wrangler.toml`, authenticate Wrangler, and set the JWT secret with `npx wrangler secret put JWT_SECRET`. Apply the migration remotely before `npm run deploy`. Do not commit `.dev.vars` or production secrets. Configure production `ALLOWED_ORIGINS` only with the shipped Tauri origins. Production deployment requires an authenticated Cloudflare account and account-specific resources.
+
 ### PF-T218 — Layer tree behavior and implementation notes
 
 The layer tree should make the canvas structure and stacking order understandable without rendering miniature shapes or images in each row. Each active screen is a root; its rows distinguish containers, direct screen children, and descendants. The hierarchy view is the default, while category, type, and z-order views remain available. Rows use the shared Lucide element icon mapping, short labels, expandable parent controls, child counts, and CSS-drawn tree branches. Indentation is 16px per level, capped at 80px, and branch lines close at the last visible descendant.
