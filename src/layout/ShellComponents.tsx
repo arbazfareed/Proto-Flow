@@ -208,7 +208,7 @@ export function TopBar({
       }}
     >
       <div className="brand-lockup" data-tauri-drag-region>
-        <div className="brand-mark">P<span>F</span></div>
+        <div className="brand-mark" aria-hidden="true"><span>PF</span></div>
         <span className="brand-name">proto<span>flow</span></span>
         <div className="topbar-divider" />
         <div className="document-heading">

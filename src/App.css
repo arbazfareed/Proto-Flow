@@ -9,8 +9,8 @@
 .topbar { position:relative; height:44px; min-height:44px; display:flex; align-items:center; gap:12px; padding:0 17px 0 19px; border-bottom:1px solid var(--border); background:#151619; }
 .brand-lockup,.topbar-actions,.document-heading,.canvas-toolbar,.breadcrumb,.canvas-toolbar-actions,.sidebar-heading,.workspace-card,.section-label,.nav-item,.page-item,.detail-row,.inspector-top,.inspector-footer,.canvas-statusbar,.canvas-statusbar>span,.empty-shortcut,.palette-search,.palette-item,.palette-footer,.dialog-actions { display:flex; align-items:center; }
 .brand-lockup { gap:11px; flex:1; min-width:0; }
-.brand-mark { width: 27px; height: 27px; display:grid; place-items:center; border-radius:8px; background:linear-gradient(145deg,#ae95ff,#7658d5); color:#fff; font-size:13px; font-weight:800; letter-spacing:-1px; box-shadow:0 2px 10px #8b69ed38; }
-.brand-mark span { color:#e7defe; }
+.brand-mark { width:30px; height:30px; flex:0 0 30px; display:flex; align-items:center; justify-content:center; border:1px solid #c4b2ff55; border-radius:9px; background:linear-gradient(145deg,#ae95ff,#7658d5); color:#fff; box-shadow:0 2px 10px #8b69ed38,inset 0 1px #ffffff30; }
+.brand-mark span { display:block; padding-right:1px; color:#fff; font-size:11px; font-weight:850; letter-spacing:-1.35px; line-height:1; }
 .brand-name { font-size:14px; font-weight:650; letter-spacing:-.35px; color:#e7e5ec; }
 .brand-name span { color:#9995a6; font-weight:450; }
 .topbar-divider { height:25px; width:1px; margin:0 5px; background:var(--border); }
