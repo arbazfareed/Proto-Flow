@@ -7,16 +7,20 @@ import {
   getCachedWallet,
   getWalletIdentity,
   provisionAnonymousWallet,
+  resetWalletIdentity as resetStoredWalletIdentity,
   setCachedToken,
+  tokenExpiration,
   WalletApiError,
   type LedgerEntry,
   type WalletSnapshot,
 } from "./api";
+import type { NetworkStatus } from "./network";
 
 type WalletStatus = "loading" | "online" | "offline" | "error";
 
 interface WalletState {
   status: WalletStatus;
+  networkStatus: NetworkStatus;
   balance: number;
   lifetimeGranted: number;
   lifetimeSpent: number;
@@ -71,6 +75,7 @@ function setSnapshot(snapshot: WalletSnapshot, jwt?: string | null): void {
   persistWallet(snapshot);
   useWalletStore.setState({
     status: "online",
+    networkStatus: "online",
     balance: snapshot.balance,
     lifetimeGranted: snapshot.lifetimeGranted,
     lifetimeSpent: snapshot.lifetimeSpent,
@@ -89,6 +94,7 @@ async function refreshToken(): Promise<string> {
   const { token, snapshot } = await provisionAnonymousWallet(identity);
   persistWallet(snapshot);
   useWalletStore.setState({
+    networkStatus: "online",
     balance: snapshot.balance,
     lifetimeGranted: snapshot.lifetimeGranted,
     lifetimeSpent: snapshot.lifetimeSpent,
@@ -104,10 +110,7 @@ async function refreshToken(): Promise<string> {
 }
 
 async function loadCachedWallet(): Promise<void> {
-  const [token, cached] = await Promise.all([
-    getCachedToken(),
-    Promise.resolve(getCachedWallet()),
-  ]);
+  const cached = getCachedWallet();
   if (!cached || !canUseOfflineWallet(cached)) {
     throw new Error("The wallet is unavailable until the cloud service can be reached.");
   }
@@ -116,7 +119,7 @@ async function loadCachedWallet(): Promise<void> {
     balance: cached.balance,
     lifetimeGranted: cached.lifetimeGranted,
     lifetimeSpent: cached.lifetimeSpent,
-    jwt: token,
+    jwt: null,
     accountId: cached.accountId,
     recentLedger: cached.recentLedger.slice(0, MAX_LEDGER_ENTRIES),
     lastSyncedAt: cached.syncedAt,
@@ -135,7 +138,7 @@ async function syncWallet(): Promise<void> {
   try {
     let token = current.jwt ?? (await getCachedToken());
     let snapshot: WalletSnapshot;
-    if (!token) token = await refreshToken();
+    if (!token || tokenExpiresSoon(token)) token = await refreshToken();
     try {
       snapshot = await fetchWalletMe(token);
     } catch (error) {
@@ -154,13 +157,25 @@ async function syncWallet(): Promise<void> {
       error instanceof WalletApiError &&
       (error.retryable || error.code === "SERVICE_NOT_CONFIGURED")
     ) {
+      useWalletStore.setState({ networkStatus: "offline" });
       try {
         await loadCachedWallet();
-        useWalletStore.setState({ error: "Sync paused — showing the last synced balance." });
+        useWalletStore.setState({
+          error: "Sync paused — reconnect to use cloud features. Showing your last synced balance.",
+        });
         return;
       } catch (offlineError) {
         useWalletStore.setState({
           status: "error",
+          balance: 0,
+          lifetimeGranted: 0,
+          lifetimeSpent: 0,
+          jwt: null,
+          accountId: null,
+          recentLedger: [],
+          lastSyncedAt: null,
+          claimable: false,
+          nextClaimAt: null,
           error: offlineError instanceof Error ? offlineError.message : "Wallet sync failed.",
         });
         return;
@@ -185,6 +200,7 @@ async function syncWallet(): Promise<void> {
 
 export const useWalletStore = create<WalletState>((set, get) => ({
   status: "loading",
+  networkStatus: "checking",
   balance: 0,
   lifetimeGranted: 0,
   lifetimeSpent: 0,
@@ -296,6 +312,18 @@ export const useWalletStore = create<WalletState>((set, get) => ({
   resetIdentity: async () => {
     set({ status: "loading", error: null });
     try {
+      await resetStoredWalletIdentity();
+      set({
+        balance: 0,
+        lifetimeGranted: 0,
+        lifetimeSpent: 0,
+        jwt: null,
+        accountId: null,
+        recentLedger: [],
+        lastSyncedAt: null,
+        claimable: false,
+        nextClaimAt: null,
+      });
       const token = await refreshToken();
       setSnapshot(await fetchWalletMe(token), token);
     } catch (error) {
@@ -307,3 +335,8 @@ export const useWalletStore = create<WalletState>((set, get) => ({
     }
   },
 }));
+
+function tokenExpiresSoon(token: string, now = Date.now()): boolean {
+  const expiresAt = tokenExpiration(token);
+  return expiresAt !== null && expiresAt <= now + 60_000;
+}

@@ -27,6 +27,7 @@ import {
   Square,
   Undo2,
   RotateCcw,
+  Wifi,
   WifiOff,
   Zap,
   X,
@@ -134,6 +135,7 @@ export function TopBar({
   const canRedo = useStore((state) => state.future.length > 0);
   const walletBalance = useWalletStore((state) => state.balance);
   const walletStatus = useWalletStore((state) => state.status);
+  const networkStatus = useWalletStore((state) => state.networkStatus);
   const lifetimeGranted = useWalletStore((state) => state.lifetimeGranted);
   const lifetimeSpent = useWalletStore((state) => state.lifetimeSpent);
   const recentLedger = useWalletStore((state) => state.recentLedger);
@@ -275,10 +277,10 @@ export function TopBar({
                 <span>Lifetime granted <strong>{lifetimeGranted}</strong></span>
                 <span>Lifetime spent <strong>{lifetimeSpent}</strong></span>
               </div>
-              {walletStatus === "offline" && (
+              {(walletStatus === "offline" || networkStatus === "offline") && (
                 <p className="wallet-menu-status"><WifiOff size={13} /> Offline — last synced {lastSyncedAt ? formatWalletSyncAge(lastSyncedAt) : "unknown"}</p>
               )}
-              {walletStatus === "online" && lastSyncedAt && (
+              {walletStatus === "online" && networkStatus !== "offline" && lastSyncedAt && (
                 <p className="wallet-menu-status">Last synced {formatWalletSyncAge(lastSyncedAt)}</p>
               )}
               {walletStatus === "loading" && <p className="wallet-menu-status">Syncing wallet…</p>}
@@ -297,7 +299,7 @@ export function TopBar({
                   </div>
                 ))}
               </div>
-              {claimable && walletStatus === "online" ? (
+              {claimable && walletStatus === "online" && networkStatus === "online" ? (
                 <button
                   className="button button-primary wallet-claim-button"
                   onClick={() => void claimDailyCredits()}
@@ -309,7 +311,7 @@ export function TopBar({
                 <p className="wallet-menu-refill-countdown">
                   {walletBalance >= 100
                     ? "Wallet full · 100-credit cap"
-                    : walletStatus === "offline"
+                    : walletStatus === "offline" || networkStatus === "offline"
                       ? "Reconnect to claim your daily refill"
                       : formatRefillCountdown(nextClaimAt, walletClock)}
                   {nextClaimAt && walletBalance < 100 && (
@@ -319,11 +321,13 @@ export function TopBar({
                   )}
                 </p>
               )}
-              {!claimable && walletStatus === "online" && walletBalance < 100 && (
+              {(!claimable || networkStatus !== "online") &&
+                walletStatus === "online" &&
+                walletBalance < 100 && (
                 <button className="button button-primary wallet-claim-button" disabled>
                   Claim Daily +20
                 </button>
-              )}
+                )}
               <button
                 className="wallet-menu-link"
                 title="Email sign-in will be available in Task PF-T307"
@@ -2008,6 +2012,7 @@ export function RightInspector({ onToggle, onUpdates, onRename }: RightInspector
 export function StatusBar() {
   const zoom = useStore((state) => state.zoom);
   const selectedCount = useStore((state) => state.selectedIds.length);
+  const networkStatus = useWalletStore((state) => state.networkStatus);
 
   return (
     <footer className="app-statusbar">
@@ -2015,6 +2020,14 @@ export function StatusBar() {
       <span>{Math.round(zoom * 100)}%</span>
       <span>{selectedCount} selected</span>
       <span className="status-spacer" />
+      <span className={`network-status network-status-${networkStatus}`} role="status">
+        {networkStatus === "online" ? <Wifi size={12} /> : <WifiOff size={12} />}
+        {networkStatus === "online"
+          ? "Cloud connected"
+          : networkStatus === "offline"
+            ? "Sync paused — reconnect to use cloud features"
+            : "Checking cloud"}
+      </span>
       <span>ProtoFlow 0.1.0</span>
     </footer>
   );

@@ -17,6 +17,7 @@ pub fn run() {
             commands::file_io::read_dropped_image,
             commands::file_io::get_device_id,
             commands::wallet::get_wallet_identity,
+            commands::wallet::reset_wallet_identity,
             commands::wallet::get_wallet_jwt,
             commands::wallet::save_wallet_jwt,
             commands::wallet::clear_wallet_jwt

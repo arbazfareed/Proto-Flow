@@ -158,6 +158,25 @@ export function getWalletIdentity(): Promise<WalletIdentity> {
   return identityPromise;
 }
 
+export async function resetWalletIdentity(): Promise<WalletIdentity> {
+  let identity: WalletIdentity;
+  if (isTauri()) {
+    identity = await invoke<WalletIdentity>("reset_wallet_identity");
+  } else {
+    await setCachedToken(null);
+    const installId = crypto.randomUUID();
+    localStorage.setItem(INSTALL_ID_KEY, installId);
+    const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(installId));
+    const deviceId = Array.from(new Uint8Array(digest), (byte) =>
+      byte.toString(16).padStart(2, "0"),
+    ).join("");
+    identity = { deviceId, installId };
+  }
+  localStorage.removeItem(CACHED_WALLET_KEY);
+  identityPromise = Promise.resolve(identity);
+  return identity;
+}
+
 export async function getCachedToken(): Promise<string | null> {
   return isTauri()
     ? invoke<string | null>("get_wallet_jwt")
@@ -219,7 +238,7 @@ export function getCachedWallet(): WalletSnapshot | null {
   };
 }
 
-function tokenExpiration(token: string): number | null {
+export function tokenExpiration(token: string): number | null {
   const parts = token.split(".");
   if (parts.length !== 3) return null;
   try {
@@ -243,6 +262,36 @@ export function canUseOfflineWallet(
       cached.syncedAt <= now &&
       now - cached.syncedAt <= OFFLINE_GRACE_MS,
   );
+}
+
+export async function checkCloudHealth(): Promise<boolean> {
+  let url: string;
+  try {
+    url = `${apiBaseUrl()}/health`;
+  } catch (error) {
+    if (error instanceof WalletApiError && error.code === "SERVICE_NOT_CONFIGURED") return false;
+    throw error;
+  }
+  let response: Response;
+  try {
+    response = await fetch(url, {
+      signal: AbortSignal.timeout(5_000),
+    });
+  } catch {
+    return false;
+  }
+  if (!response.ok) return false;
+  let result: unknown;
+  try {
+    result = await response.json();
+  } catch {
+    return false;
+  }
+  return typeof result === "object" &&
+    result !== null &&
+    !Array.isArray(result) &&
+    "status" in result &&
+    result.status === "ok";
 }
 
 export async function provisionAnonymousWallet(

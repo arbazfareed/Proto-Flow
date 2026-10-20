@@ -16,6 +16,8 @@ import type { Screen } from "./project/schema";
 import { createDefaultBreakpoints } from "./project/responsive";
 import { DEVICE_PRESETS, toScreenDevice } from "./devices/catalog";
 import { useWalletStore } from "./wallet/store";
+import { checkCloudHealth } from "./wallet/api";
+import { startNetworkMonitor } from "./wallet/network";
 import type { DeviceCategory } from "./devices/types";
 import type { ShapeTool } from "./canvas/shapeTools";
 import {
@@ -75,6 +77,16 @@ function AppShell() {
   useEffect(
     () => subscribeAutosaveErrors((message) => notify(message, true)),
     [notify],
+  );
+
+  useEffect(
+    () =>
+      startNetworkMonitor(
+        checkCloudHealth,
+        (networkStatus) => useWalletStore.setState({ networkStatus }),
+        () => void syncWallet(),
+      ),
+    [syncWallet],
   );
 
   const requestUpdateCheck = useCallback(() => {

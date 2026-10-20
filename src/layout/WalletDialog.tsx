@@ -8,6 +8,7 @@ interface WalletDialogProps {
 
 export function WalletDialog({ onClose }: WalletDialogProps) {
   const status = useWalletStore((state) => state.status);
+  const networkStatus = useWalletStore((state) => state.networkStatus);
   const balance = useWalletStore((state) => state.balance);
   const error = useWalletStore((state) => state.error);
   const resetIdentity = useWalletStore((state) => state.resetIdentity);
@@ -16,7 +17,7 @@ export function WalletDialog({ onClose }: WalletDialogProps) {
   const reset = async () => {
     if (
       !window.confirm(
-        "Refresh this device's wallet credentials? Your existing account and credit balance will be kept.",
+        "Reset this cloud identity? A new install identity and wallet will be created when the cloud is reachable. The current wallet will remain on the server and cannot be restored without sign-in.",
       )
     ) {
       return;
@@ -50,13 +51,22 @@ export function WalletDialog({ onClose }: WalletDialogProps) {
           {balance === null ? "Wallet status" : `${balance} credits`}
         </h2>
         <p>
-          {status === "online" && "Wallet synced with the cloud."}
-          {status === "offline" && "Offline grace period: showing your last synced balance. Cloud actions need a connection."}
+          {(status === "offline" || networkStatus === "offline") &&
+            "Offline grace period: showing your last synced balance. Cloud actions need a connection."}
+          {status === "online" && networkStatus !== "offline" && "Wallet synced with the cloud."}
           {status === "loading" && "Connecting to your wallet…"}
           {status === "error" && (error ?? "Could not load wallet details.")}
         </p>
+        <p className="wallet-menu-status">
+          Cloud connection: {networkStatus === "online" ? "connected" : networkStatus === "offline" ? "unreachable" : "checking"}
+        </p>
         {error && status !== "error" && (
           <p className="wallet-dialog-error" role="alert"><CircleAlert size={14} /> {error}</p>
+        )}
+        {status === "error" && (
+          <p className="wallet-privacy-note">
+            Email recovery will be available in PF-T307. You can reset this identity to create a new wallet, but the existing server-side wallet will remain separate.
+          </p>
         )}
         <p className="wallet-privacy-note">
           ProtoFlow uses a hashed device ID and random install ID to identify this wallet. Cloudflare also provides an IP address for refill-abuse limits; ProtoFlow stores only a keyed hash of it, not the raw address.
@@ -68,7 +78,7 @@ export function WalletDialog({ onClose }: WalletDialogProps) {
             onClick={() => void reset()}
             disabled={resetting || status === "loading"}
           >
-            <RotateCcw size={14} /> {resetting ? "Refreshing…" : "Reset identity"}
+            <RotateCcw size={14} /> {resetting ? "Resetting…" : "Reset cloud identity"}
           </button>
         </div>
       </section>
