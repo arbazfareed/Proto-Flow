@@ -4,6 +4,9 @@ export type ErrorCode =
   | "ADMIN_NOT_IMPLEMENTED"
   | "ACTION_NOT_IMPLEMENTED"
   | "AUTH_NOT_IMPLEMENTED"
+  | "BAD_REQUEST"
+  | "DATABASE_UNAVAILABLE"
+  | "IDENTITY_CONFLICT"
   | "INTERNAL_ERROR"
   | "INVALID_TOKEN"
   | "METHOD_NOT_ALLOWED"
@@ -15,7 +18,7 @@ export type ErrorCode =
 
 export function errorResponse(
   context: Context,
-  status: 401 | 403 | 404 | 405 | 500 | 501 | 503,
+  status: 400 | 401 | 403 | 404 | 405 | 409 | 500 | 501 | 503,
   code: ErrorCode,
   message: string,
 ) {

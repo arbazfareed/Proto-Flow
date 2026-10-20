@@ -7,6 +7,7 @@ import { openProjectFile, saveProjectFile } from "./project/files";
 import { useStore } from "./store";
 import { RestoreModal } from "./layout/RestoreModal";
 import { UpdateToast } from "./layout/UpdateToast";
+import { WalletDialog } from "./layout/WalletDialog";
 import { CommandPalette } from "./layout/CommandPalette";
 import { commandRegistry, createCoreCommands } from "./commands/registry";
 import { handleGlobalShortcut } from "./commands/shortcuts";
@@ -14,6 +15,7 @@ import { formatProjectValidationError, SchemaValidationError } from "./project/s
 import type { Screen } from "./project/schema";
 import { createDefaultBreakpoints } from "./project/responsive";
 import { DEVICE_PRESETS, toScreenDevice } from "./devices/catalog";
+import { useWalletStore } from "./wallet/store";
 import type { DeviceCategory } from "./devices/types";
 import type { ShapeTool } from "./canvas/shapeTools";
 import {
@@ -40,6 +42,12 @@ function AppShell() {
   const [noticeIsError, setNoticeIsError] = useState(false);
   const [updateCheckRequest, setUpdateCheckRequest] = useState(0);
   const [activeTool, setActiveTool] = useState<ShapeTool | null>(null);
+  const [walletOpen, setWalletOpen] = useState(false);
+  const initializeWallet = useWalletStore((state) => state.initialize);
+
+  useEffect(() => {
+    void initializeWallet();
+  }, [initializeWallet]);
 
   const notify = useCallback((message: string, isError = false) => {
     setNotice(message);
@@ -232,6 +240,7 @@ function AppShell() {
         onUndo={undo}
         onRedo={redo}
         onOpenPalette={() => setPaletteOpen(true)}
+        onOpenWallet={() => setWalletOpen(true)}
         onStartDragging={startWindowDragging}
         onWindowAction={runWindowAction}
       />
@@ -266,6 +275,7 @@ function AppShell() {
       <RestoreModal />
       <UpdateToast requestId={updateCheckRequest} />
       <CommandPalette />
+      {walletOpen && <WalletDialog onClose={() => setWalletOpen(false)} />}
 
       {notice && (
         <div className={`toast${noticeIsError ? " toast-error" : ""}`} role={noticeIsError ? "alert" : "status"}>

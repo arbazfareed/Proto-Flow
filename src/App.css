@@ -617,7 +617,7 @@
 .geometry-expression-error { padding:0 15px; color:#e98a94; }
 @media (max-width:1000px) { .breakpoint-toolbar-label { display:none; } .breakpoint-toolbar select { max-width:160px; } }
 @media (max-width:700px) { .breakpoint-modal { max-height:95vh; overflow-y:auto; } .breakpoint-edit-row { grid-template-columns:repeat(2,minmax(0,1fr)) 25px; } .breakpoint-edit-row legend { grid-column:1/-1; } .breakpoint-edit-row .icon-button { grid-column:3; grid-row:2; } }
-.wallet-placeholder { padding:5px 8px; border:1px solid #34313c; border-radius:5px; color:#aca2c1; background:#211f27; font-size:9px; white-space:nowrap; }
+.wallet-placeholder { padding:5px 8px; border:1px solid #34313c; border-radius:5px; color:#aca2c1; background:#211f27; cursor:pointer; font-size:9px; white-space:nowrap; }
 .shortcut-link { padding:0 3px; border:1px solid #414149; border-radius:4px; color:#aaaab4; background:#27282d; font:9px ui-monospace,SFMono-Regular,Consolas,monospace; cursor:pointer; }
 .app-statusbar { height:24px; min-height:24px; display:flex; align-items:center; gap:16px; padding:0 13px; border-top:1px solid var(--border); color:var(--text-muted); background:var(--surface-panel); font-size:9px; }
 .app-statusbar>span { display:flex; align-items:center; gap:6px; }
@@ -662,6 +662,12 @@
 .dialog-card>p { margin:0; color:#9a9aa3; font-size:11px; line-height:1.7; }
 .dialog-card>p strong { color:#dddde2; font-weight:550; }
 .dialog-actions { justify-content:flex-end; gap:8px; margin-top:22px; }
+.wallet-dialog { width:min(430px,92vw); }
+.wallet-dialog .wallet-dialog-error { display:flex; align-items:center; gap:6px; color:#ef9a9a; }
+.wallet-dialog .wallet-privacy-note { margin-top:14px; padding-top:12px; border-top:1px solid #303137; font-size:10px; }
+.wallet-dialog-actions { display:flex; justify-content:flex-end; gap:8px; margin-top:22px; }
+.wallet-dialog-actions .button { display:flex; align-items:center; gap:6px; }
+.wallet-dialog-actions .button:disabled { opacity:.55; cursor:wait; }
 .update-dialog { width:min(390px,92vw); }
 @media (max-width:1200px) {
   .inspector { width:320px; }
