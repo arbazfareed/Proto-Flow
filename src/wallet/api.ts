@@ -58,6 +58,16 @@ interface DailyClaimResponse extends WalletResponse {
   granted: number;
 }
 
+export type MeteredActionType =
+  | "ai_interaction_generator"
+  | "cloud_preview_publish"
+  | "react_tailwind_code_export";
+
+export interface MeteredActionResponse<T = unknown> {
+  result: T;
+  wallet: WalletSnapshot;
+}
+
 interface CachedWallet extends Omit<WalletSnapshot, "recentLedger" | "claimable"> {
   recentLedger?: LedgerEntry[];
   claimable?: boolean;
@@ -95,6 +105,7 @@ export class WalletApiError extends Error {
     message: string,
     readonly retryable: boolean,
     readonly code?: string,
+    readonly retryAfterSeconds?: number,
   ) {
     super(message);
     this.name = "WalletApiError";
@@ -234,7 +245,11 @@ export async function provisionAnonymousWallet(
       body: JSON.stringify(identity),
     });
   } catch {
-    throw new WalletApiError("Could not reach the cloud wallet service.", true);
+    throw new WalletApiError(
+      "Could not reach the cloud wallet service.",
+      true,
+      "NETWORK_ERROR",
+    );
   }
 
   if (!response.ok) {
@@ -300,7 +315,11 @@ async function authenticatedRequest<T>(
       },
     });
   } catch {
-    throw new WalletApiError("Could not reach the cloud wallet service.", true);
+    throw new WalletApiError(
+      "Could not reach the cloud wallet service.",
+      true,
+      "NETWORK_ERROR",
+    );
   }
   if (!response.ok) {
     let payload: ApiErrorResponse = {};
@@ -315,6 +334,9 @@ async function authenticatedRequest<T>(
       payload.error?.message ?? `Wallet request failed (${response.status}).`,
       response.status >= 500,
       payload.error?.code,
+      response.status === 429
+        ? Math.max(0, Number(response.headers.get("Retry-After")) || 0)
+        : undefined,
     );
   }
   return (await response.json()) as T;
@@ -393,4 +415,49 @@ export async function claimDailyCredits(token: string): Promise<WalletSnapshot> 
     throw new Error("The cloud wallet service returned an invalid daily claim response.");
   }
   return toSnapshot(response);
+}
+
+export async function runMeteredAction<T = unknown>(
+  token: string,
+  type: MeteredActionType,
+  payload: Record<string, unknown>,
+): Promise<MeteredActionResponse<T>> {
+  let body: string;
+  try {
+    body = JSON.stringify({ type, payload });
+  } catch {
+    throw new WalletApiError("The action payload must contain valid JSON values.", false, "INVALID_PAYLOAD");
+  }
+  if (new TextEncoder().encode(body).byteLength > 64 * 1024) {
+    throw new WalletApiError("The action payload is too large.", false, "INVALID_PAYLOAD");
+  }
+
+  const response = await authenticatedRequest<unknown>("/action/run", token, {
+    method: "POST",
+    body,
+  });
+  if (typeof response !== "object" || response === null || Array.isArray(response)) {
+    throw new Error("The cloud action service returned an invalid response.");
+  }
+
+  const result = response as {
+    success?: unknown;
+    type?: unknown;
+    result?: unknown;
+    wallet?: unknown;
+  };
+  if (
+    result.success !== true ||
+    result.type !== type ||
+    typeof result.wallet !== "object" ||
+    result.wallet === null ||
+    Array.isArray(result.wallet)
+  ) {
+    throw new Error("The cloud action service returned an invalid success response.");
+  }
+
+  return {
+    result: result.result as T,
+    wallet: toSnapshot(result.wallet as WalletResponse),
+  };
 }

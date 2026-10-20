@@ -85,9 +85,38 @@ const STARTER_CREDITS = 50;
 const DAILY_CREDITS = 20;
 const MAX_WALLET_BALANCE = 100;
 const TOKEN_LIFETIME_SECONDS = 24 * 60 * 60;
+const MAX_ACTION_BODY_BYTES = 64 * 1024;
 const DEVICE_ID_PATTERN = /^[a-f\d]{64}$/i;
 const INSTALL_ID_PATTERN =
   /^[a-f\d]{8}-[a-f\d]{4}-4[a-f\d]{3}-[89ab][a-f\d]{3}-[a-f\d]{12}$/i;
+const METERED_ACTION_COSTS = {
+  ai_interaction_generator: 1,
+  cloud_preview_publish: 2,
+  react_tailwind_code_export: 3,
+} as const;
+
+type MeteredActionType = keyof typeof METERED_ACTION_COSTS;
+
+interface MeteredActionRequest {
+  type: MeteredActionType;
+  payload: Record<string, unknown>;
+}
+
+function isMeteredActionRequest(value: unknown): value is MeteredActionRequest {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) return false;
+  const request = value as Partial<MeteredActionRequest>;
+  const keys = Object.keys(value);
+  return (
+    keys.length === 2 &&
+    keys.includes("type") &&
+    keys.includes("payload") &&
+    typeof request.type === "string" &&
+    Object.hasOwn(METERED_ACTION_COSTS, request.type) &&
+    typeof request.payload === "object" &&
+    request.payload !== null &&
+    !Array.isArray(request.payload)
+  );
+}
 
 function isAnonymousRequest(value: unknown): value is AnonymousRequest {
   if (typeof value !== "object" || value === null) return false;
@@ -419,14 +448,81 @@ app.post("/wallet/claim-daily", requireJwt, async (context) => {
   }
 });
 
-app.post("/action/run", requireJwt, (context) =>
-  errorResponse(
-    context,
-    501,
-    "ACTION_NOT_IMPLEMENTED",
-    "Metered actions are scheduled for a later task.",
-  ),
-);
+app.post("/action/run", requireJwt, async (context) => {
+  const contentLength = Number(context.req.header("Content-Length") ?? 0);
+  if (contentLength > MAX_ACTION_BODY_BYTES) {
+    return errorResponse(context, 400, "INVALID_PAYLOAD", "The action payload is too large.");
+  }
+
+  let rawBody: string;
+  try {
+    rawBody = await context.req.text();
+  } catch {
+    return errorResponse(context, 400, "INVALID_PAYLOAD", "A valid JSON request body is required.");
+  }
+  if (new TextEncoder().encode(rawBody).byteLength > MAX_ACTION_BODY_BYTES) {
+    return errorResponse(context, 400, "INVALID_PAYLOAD", "The action payload is too large.");
+  }
+
+  let body: unknown;
+  try {
+    body = JSON.parse(rawBody);
+  } catch {
+    return errorResponse(context, 400, "INVALID_PAYLOAD", "A valid JSON request body is required.");
+  }
+  if (!isMeteredActionRequest(body)) {
+    return errorResponse(
+      context,
+      400,
+      "INVALID_PAYLOAD",
+      "Provide a supported action type and an object payload. Costs are determined by the server.",
+    );
+  }
+
+  const accountId = context.get("auth").accountId;
+  const cost = METERED_ACTION_COSTS[body.type];
+  try {
+    const wallet = await context.env.DB
+      .prepare("SELECT balance FROM wallets WHERE account_id = ?")
+      .bind(accountId)
+      .first<{ balance: number }>();
+    if (!wallet) {
+      return errorResponse(context, 404, "WALLET_NOT_FOUND", "The requested wallet does not exist.");
+    }
+    if (wallet.balance < cost) {
+      return context.json(
+        {
+          error: {
+            code: "INSUFFICIENT_BALANCE",
+            message: `This action requires ${cost} credit${cost === 1 ? "" : "s"}.`,
+          },
+          balance: wallet.balance,
+          required: cost,
+        },
+        402,
+      );
+    }
+
+    return errorResponse(
+      context,
+      501,
+      "ACTION_NOT_IMPLEMENTED",
+      "This cloud action is not available yet. No credits were deducted.",
+    );
+  } catch (error) {
+    console.error("Metered action dispatch failed.", {
+      accountId,
+      actionType: body.type,
+      message: error instanceof Error ? error.message : "Unknown database error.",
+    });
+    return errorResponse(
+      context,
+      503,
+      "DATABASE_UNAVAILABLE",
+      "The wallet service is temporarily unavailable.",
+    );
+  }
+});
 
 app.post("/auth/email/start", (context) =>
   errorResponse(

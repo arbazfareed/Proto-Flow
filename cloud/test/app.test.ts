@@ -141,16 +141,23 @@ describe("Worker API gateway", () => {
     }
   });
 
-  it("verifies valid HS256 tokens and reaches the protected metered-action route", async () => {
+  it("verifies valid HS256 tokens before dispatching metered actions", async () => {
     const token = await signToken(validClaims());
     const response = await app.request(
       "/action/run",
-      { method: "POST", headers: { Authorization: `Bearer ${token}` } },
+      {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ type: "ai_interaction_generator", payload: {} }),
+      },
       environment(),
     );
-    expect(response.status).toBe(501);
+    expect(response.status).toBe(503);
     expect(await response.json()).toMatchObject({
-      error: { code: "ACTION_NOT_IMPLEMENTED" },
+      error: { code: "DATABASE_UNAVAILABLE" },
     });
   });
 

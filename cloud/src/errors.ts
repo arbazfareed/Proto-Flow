@@ -6,7 +6,9 @@ export type ErrorCode =
   | "AUTH_NOT_IMPLEMENTED"
   | "BAD_REQUEST"
   | "DATABASE_UNAVAILABLE"
+  | "INSUFFICIENT_BALANCE"
   | "IDENTITY_CONFLICT"
+  | "INVALID_PAYLOAD"
   | "INTERNAL_ERROR"
   | "INVALID_TOKEN"
   | "METHOD_NOT_ALLOWED"
@@ -14,12 +16,13 @@ export type ErrorCode =
   | "NOT_FOUND"
   | "ORIGIN_NOT_ALLOWED"
   | "SERVICE_NOT_CONFIGURED"
+  | "RATE_LIMITED"
   | "WALLET_NOT_FOUND"
   | "WALLET_NOT_IMPLEMENTED";
 
 export function errorResponse(
   context: Context,
-  status: 400 | 401 | 403 | 404 | 405 | 409 | 500 | 501 | 503,
+  status: 400 | 401 | 402 | 403 | 404 | 405 | 409 | 429 | 500 | 501 | 503,
   code: ErrorCode,
   message: string,
 ) {

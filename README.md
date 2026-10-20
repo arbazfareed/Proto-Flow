@@ -75,6 +75,12 @@ For local development, start the Worker with `cd cloud; npm run dev`, then start
 
 The always-visible top-bar pill uses green for 20+ credits, yellow for 5–19, and red for fewer than 5. Its dropdown shows lifetime totals, the latest 20 ledger entries, sync/offline status, refresh, and a daily claim when available. A daily claim grants up to 20 credits once per rolling 24 hours and never raises a wallet above 100 credits. Wallet snapshots (not JWTs) are cached in local storage; desktop JWTs stay in the operating system credential store, and browser-preview JWTs use session storage. The UI syncs on launch, when the app becomes visible, and every 60 seconds while active. Email sign-in remains a Task PF-T307 placeholder; metered actions are not yet implemented and remain unavailable offline.
 
+### PF-T304 — Metered action confirmation
+
+Use `useMeteredAction` from `src/wallet/meteredActions.tsx` for cloud actions. It checks the online wallet and balance, requires confirmation for paid actions unless the user has opted out for that action and account, and sends only the action type and JSON payload. The Worker owns the action cost map (1 credit for AI interaction generation, 2 for cloud preview publish, and 3 for React/Tailwind export); the client never sends a cost. Insufficient funds prompt the user to claim the daily refill. Rate-limit, network, invalid-request, and server-error responses have separate user-facing messages. Usage telemetry is an on-device aggregate, disabled until the user opts in.
+
+The AI, publish, and export execution handlers are intentionally out of scope for this task. Until a later task implements them, the Worker validates the action and wallet balance, then returns an explicit not-available response without deducting credits. No current app feature invokes a metered cloud action yet.
+
 ### PF-T218 — Layer tree behavior and implementation notes
 
 The layer tree should make the canvas structure and stacking order understandable without rendering miniature shapes or images in each row. Each active screen is a root; its rows distinguish containers, direct screen children, and descendants. The hierarchy view is the default, while category, type, and z-order views remain available. Rows use the shared Lucide element icon mapping, short labels, expandable parent controls, child counts, and CSS-drawn tree branches. Indentation is 16px per level, capped at 80px, and branch lines close at the last visible descendant.

@@ -3,6 +3,8 @@ import {
   canUseOfflineWallet,
   getCachedWallet,
   provisionAnonymousWallet,
+  runMeteredAction,
+  WalletApiError,
   type WalletSnapshot,
 } from "./api";
 
@@ -78,6 +80,98 @@ describe("wallet persistence", () => {
       recentLedger: [],
       claimable: false,
       syncedAt: now - 60_000,
+    });
+  });
+
+  describe("metered action API", () => {
+    it("sends action type and payload without a client-supplied cost", async () => {
+      const fetchMock = vi.fn().mockResolvedValue(
+        new Response(
+          JSON.stringify({
+            success: true,
+            type: "ai_interaction_generator",
+            result: { prompt: "ready" },
+            wallet: {
+              accountId: "account-1",
+              balance: 49,
+              lifetimeGranted: 50,
+              lifetimeSpent: 1,
+              syncedAt: now,
+              recentLedger: [{
+                id: "ledger-1",
+                delta: -1,
+                reason: "ai_interaction_generator",
+                metadata_json: "{}",
+                created_at: new Date(now).toISOString(),
+              }],
+              claimable: false,
+            },
+          }),
+          { status: 200, headers: { "Content-Type": "application/json" } },
+        ),
+      );
+      vi.stubGlobal("fetch", fetchMock);
+
+      const result = await runMeteredAction<{ prompt: string }>(
+        "session-token",
+        "ai_interaction_generator",
+        { screenId: "screen-1" },
+      );
+
+      const [, request] = fetchMock.mock.calls[0] as [string, RequestInit];
+      expect(JSON.parse(request.body as string)).toEqual({
+        type: "ai_interaction_generator",
+        payload: { screenId: "screen-1" },
+      });
+      expect(request.headers).toMatchObject({ Authorization: "Bearer session-token" });
+      expect(result).toMatchObject({
+        result: { prompt: "ready" },
+        wallet: { balance: 49, lifetimeSpent: 1, recentLedger: [{ delta: -1 }] },
+      });
+    });
+
+    it("surfaces insufficient balance and Retry-After responses as structured errors", async () => {
+      vi.stubGlobal(
+        "fetch",
+        vi.fn()
+          .mockResolvedValueOnce(
+            new Response(
+              JSON.stringify({ error: { code: "INSUFFICIENT_BALANCE", message: "Need credits." } }),
+              { status: 402, headers: { "Content-Type": "application/json" } },
+            ),
+          )
+          .mockResolvedValueOnce(
+            new Response(
+              JSON.stringify({ error: { code: "RATE_LIMITED", message: "Slow down." } }),
+              { status: 429, headers: { "Content-Type": "application/json", "Retry-After": "17" } },
+            ),
+          ),
+      );
+
+      await expect(
+        runMeteredAction("session-token", "cloud_preview_publish", { projectId: "project-1" }),
+      ).rejects.toMatchObject<Partial<WalletApiError>>({ code: "INSUFFICIENT_BALANCE" });
+      await expect(
+        runMeteredAction("session-token", "cloud_preview_publish", { projectId: "project-1" }),
+      ).rejects.toMatchObject<Partial<WalletApiError>>({
+        code: "RATE_LIMITED",
+        retryAfterSeconds: 17,
+      });
+    });
+
+    it("rejects oversized and non-serializable payloads before making a request", async () => {
+      const fetchMock = vi.fn();
+      vi.stubGlobal("fetch", fetchMock);
+      const cyclic: Record<string, unknown> = {};
+      cyclic.self = cyclic;
+
+      await expect(
+        runMeteredAction("session-token", "react_tailwind_code_export", cyclic),
+      ).rejects.toMatchObject<Partial<WalletApiError>>({ code: "INVALID_PAYLOAD" });
+      await expect(
+        runMeteredAction("session-token", "react_tailwind_code_export", { source: "x".repeat(70_000) }),
+      ).rejects.toMatchObject<Partial<WalletApiError>>({ code: "INVALID_PAYLOAD" });
+      expect(fetchMock).not.toHaveBeenCalled();
     });
   });
 
