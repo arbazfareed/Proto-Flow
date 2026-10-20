@@ -4,7 +4,10 @@ import type { WorkerEnv } from "../src/env";
 
 const secret = "test-secret-that-is-long-enough-for-hmac-validation";
 
-afterEach(() => vi.unstubAllGlobals());
+afterEach(() => {
+  vi.unstubAllGlobals();
+  vi.useRealTimers();
+});
 
 interface WalletResponse {
   accountId: string;
@@ -84,6 +87,8 @@ class MemoryD1Database {
   readonly dailyGrants = new Map<string, MemoryDailyGrant>();
   readonly ipActivity = new Map<string, MemoryIpActivity>();
   readonly dailyIpGrants = new Map<string, { account_id: string; granted_at: string }>();
+  readonly signups = new Map<string, { ip_hash: string; created_at: number }>();
+  readonly cache = new Map<string, string>();
   private changes = 0;
 
   prepare(sql: string): MemoryD1Statement {
@@ -135,6 +140,23 @@ class MemoryD1Database {
             account.device_fingerprint === fingerprint || account.install_id === installId,
         )
         .slice(0, 2);
+    } else if (statement.startsWith("select id, scope, scope_key, mode, reason from abuse_flags")) {
+      results = [];
+    } else if (statement.startsWith("select id from abuse_flags")) {
+      results = [];
+    } else if (statement.startsWith("insert or ignore into abuse_signups")) {
+      const [accountId, ipHash, createdAt] = parameters as [string, string, number];
+      if (!this.signups.has(accountId)) {
+        this.signups.set(accountId, { ip_hash: ipHash, created_at: createdAt });
+        this.changes = 1;
+      }
+    } else if (statement.startsWith("select count(*) as count from abuse_signups")) {
+      const [ipHash, createdAt] = parameters as [string, number];
+      results = [{
+        count: [...this.signups.values()].filter(
+          (signup) => signup.ip_hash === ipHash && signup.created_at > createdAt,
+        ).length,
+      }];
     } else if (statement.startsWith("update accounts set device_fingerprint")) {
       const [fingerprint, accountId] = parameters as [string, string];
       const account = this.accounts.get(accountId);
@@ -439,9 +461,18 @@ function environment(
   database: MemoryD1Database,
   overrides: Partial<WorkerEnv> = {},
 ): WorkerEnv {
+  const cache: KVNamespace = {
+    get: async (key: string) => database.cache.get(key) ?? null,
+    put: async (key: string, value: string) => {
+      database.cache.set(key, value);
+    },
+    delete: async (key: string) => {
+      database.cache.delete(key);
+    },
+  } as unknown as KVNamespace;
   return {
     DB: database as unknown as D1Database,
-    CACHE: {} as KVNamespace,
+    CACHE: cache,
     ASSETS: {} as R2Bucket,
     JWT_SECRET: secret,
     ALLOWED_ORIGINS: "",
@@ -482,6 +513,30 @@ async function provision(
 }
 
 describe("anonymous wallet provisioning", () => {
+  it("rate-limits anonymous provisioning per device and returns rate-limit headers", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-10-20T12:00:00.000Z"));
+    const database = new MemoryD1Database();
+    const request = () =>
+      provision(
+        database,
+        "f".repeat(64),
+        "723e4567-e89b-42d3-a456-426614174000",
+      );
+
+    let response: Response | undefined;
+    for (let attempt = 0; attempt < 11; attempt += 1) response = await request();
+
+    expect(response?.status).toBe(429);
+    expect(response?.headers.get("X-RateLimit-Limit")).toBe("10");
+    expect(response?.headers.get("X-RateLimit-Remaining")).toBe("0");
+    expect(response?.headers.get("Retry-After")).toMatch(/^\d+$/);
+    expect(await response?.json()).toMatchObject({
+      error: { code: "RATE_LIMITED" },
+    });
+    expect(database.wallets.size).toBe(1);
+  });
+
   it("creates a 50-credit wallet once and returns the same account on retry", async () => {
     const database = new MemoryD1Database();
     const deviceId = "a".repeat(64);

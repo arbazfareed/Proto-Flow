@@ -1,5 +1,13 @@
 import { Hono } from "hono";
 import { registerAccountAuthRoutes } from "./accountAuth";
+import {
+  activeAbuseFlag,
+  enforceAbuseFlag,
+  enforceRateLimit,
+  hashWithSecret,
+  recordAbuseFlag,
+  verifyTurnstileToken,
+} from "./abuse";
 import { requireJwt, signJwt } from "./auth";
 import type { AuthClaims, WorkerEnv } from "./env";
 import { errorResponse } from "./errors";
@@ -9,6 +17,12 @@ type AppEnvironment = { Bindings: WorkerEnv; Variables: { auth: AuthClaims } };
 export const app = new Hono<AppEnvironment>();
 
 app.use("*", async (context, next) => {
+  const now = Math.floor(Date.now() / 1000);
+  const resetAt = Math.floor(now / 3600) * 3600 + 3600;
+  context.header("X-RateLimit-Limit", "1000");
+  context.header("X-RateLimit-Remaining", "1000");
+  context.header("X-RateLimit-Reset", String(resetAt));
+
   const origin = context.req.header("Origin");
   const allowedOrigins = (context.env.ALLOWED_ORIGINS ?? "")
     .split(",")
@@ -32,10 +46,20 @@ app.use("*", async (context, next) => {
       "Access-Control-Allow-Headers",
       "Authorization, Content-Type, X-Turnstile-Token",
     );
+    context.header(
+      "Access-Control-Expose-Headers",
+      "X-RateLimit-Limit, X-RateLimit-Remaining, X-RateLimit-Reset, Retry-After",
+    );
     context.header("Access-Control-Max-Age", "86400");
   }
 
   if (context.req.method === "OPTIONS") return context.body(null, 204);
+  const clientIp = context.req.header("CF-Connecting-IP");
+  if (clientIp && context.env.JWT_SECRET) {
+    const ipHash = await hashWithSecret(`protoflow-wallet-ip:${clientIp}`, context.env.JWT_SECRET);
+    const blocked = await enforceRateLimit(context, `ip:global:${ipHash}`, 1000, 60 * 60, "ip");
+    if (blocked) return blocked;
+  }
   await next();
 });
 
@@ -261,11 +285,60 @@ app.post("/auth/anonymous", async (context) => {
   }
 
   try {
+    const deviceHash = await hashWithSecret(`protoflow-device:${body.deviceId.toLowerCase()}`, secret);
+    const deviceLimit = await enforceRateLimit(
+      context,
+      `device:anonymous:${deviceHash}`,
+      10,
+      60 * 60,
+      "device",
+    );
+    if (deviceLimit) return deviceLimit;
+
+    const clientIp = context.req.header("CF-Connecting-IP");
+    const ipHash = clientIp
+      ? await hashWithSecret(`protoflow-wallet-ip:${clientIp}`, secret)
+      : null;
+    if (ipHash) {
+      const ipLimit = await enforceRateLimit(context, `ip:anonymous:${ipHash}`, 100, 60 * 60, "ip");
+      if (ipLimit) return ipLimit;
+      const signups = await context.env.DB
+        .prepare(
+          "SELECT COUNT(*) AS count FROM abuse_signups WHERE ip_hash = ? AND created_at > ?",
+        )
+        .bind(ipHash, Math.floor(Date.now() / 1000) - 24 * 60 * 60)
+        .first<{ count: number }>();
+      if ((signups?.count ?? 0) >= 5) {
+        await recordAbuseFlag(context, "ip", ipHash, null, "multiple_accounts_per_ip");
+      }
+      const ipFlag = await activeAbuseFlag(context, null, ipHash);
+      if (ipFlag) {
+        const challenge = await enforceAbuseFlag(context, null);
+        if (challenge) return challenge;
+      }
+    }
+
     const { account, wallet } = await provisionAnonymousWallet(
       context.env.DB,
       body.deviceId,
       body.installId,
     );
+    if (ipHash) {
+      const now = Math.floor(Date.now() / 1000);
+      await context.env.DB
+        .prepare("INSERT OR IGNORE INTO abuse_signups (account_id, ip_hash, created_at) VALUES (?, ?, ?)")
+        .bind(account.id, ipHash, now)
+        .run();
+      const signups = await context.env.DB
+        .prepare(
+          "SELECT COUNT(*) AS count FROM abuse_signups WHERE ip_hash = ? AND created_at > ?",
+        )
+        .bind(ipHash, now - 24 * 60 * 60)
+        .first<{ count: number }>();
+      if ((signups?.count ?? 0) >= 5) {
+        await recordAbuseFlag(context, "ip", ipHash, account.id, "multiple_accounts_per_ip");
+      }
+    }
     const now = Math.floor(Date.now() / 1000);
     const expiresAt = now + TOKEN_LIFETIME_SECONDS;
     const token = await signJwt(
@@ -358,23 +431,6 @@ async function hashClientIp(ipAddress: string, secret: string): Promise<string> 
     new TextEncoder().encode(`protoflow-wallet-ip:${ipAddress}`),
   );
   return Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, "0")).join("");
-}
-
-async function verifyTurnstileToken(token: string, secret: string): Promise<boolean> {
-  const body = new URLSearchParams({ secret, response: token });
-  const response = await fetch("https://challenges.cloudflare.com/turnstile/v0/siteverify", {
-    method: "POST",
-    body,
-  });
-  if (!response.ok) throw new Error("Turnstile verification is unavailable.");
-  const result: unknown = await response.json();
-  return (
-    typeof result === "object" &&
-    result !== null &&
-    !Array.isArray(result) &&
-    "success" in result &&
-    result.success === true
-  );
 }
 
 function nextClaimAt(lastGrantedAt: string | null): string | null {
@@ -475,7 +531,11 @@ app.post("/wallet/claim-daily", requireJwt, async (context) => {
         );
       }
       try {
-        if (!(await verifyTurnstileToken(turnstileToken, context.env.TURNSTILE_SECRET_KEY))) {
+        if (!(await verifyTurnstileToken(
+          turnstileToken,
+          context.env.TURNSTILE_SECRET_KEY,
+          clientIp,
+        ))) {
           return errorResponse(
             context,
             403,
@@ -731,8 +791,69 @@ app.post("/action/run", requireJwt, async (context) => {
   }
 
   const accountId = context.get("auth").accountId;
+  const deviceId = context.get("auth").deviceId;
   const cost = METERED_ACTION_COSTS[body.type];
   try {
+    const actionLimit = body.type === "ai_interaction_generator" ? 30 : 10;
+    const deviceHash = await hashWithSecret(`protoflow-device:${deviceId}`, context.env.JWT_SECRET!);
+    const deviceLimit = await enforceRateLimit(
+      context,
+      `device:action:${body.type}:${deviceHash}`,
+      actionLimit,
+      60,
+      "device",
+    );
+    if (deviceLimit) return deviceLimit;
+
+    const clientIp = context.req.header("CF-Connecting-IP");
+    if (clientIp) {
+      const ipHash = await hashWithSecret(
+        `protoflow-wallet-ip:${clientIp}`,
+        context.env.JWT_SECRET!,
+      );
+      const ipLimit = await enforceRateLimit(
+        context,
+        `ip:action:${body.type}:${ipHash}`,
+        500,
+        60 * 60,
+        "ip",
+      );
+      if (ipLimit) return ipLimit;
+    }
+
+    if (body.type === "ai_interaction_generator" && typeof body.payload.prompt === "string") {
+      const promptHash = await hashWithSecret(
+        `${accountId}:${JSON.stringify(body.payload.prompt)}`,
+        context.env.JWT_SECRET!,
+      );
+      const repeatedPrompt = await enforceRateLimit(
+        context,
+        `prompt:${promptHash}`,
+        20,
+        60,
+        accountId,
+      );
+      if (repeatedPrompt) {
+        await recordAbuseFlag(context, "account", accountId, accountId, "repeated_identical_ai_prompt");
+        return repeatedPrompt;
+      }
+    }
+
+    const recentSpend = await context.env.DB
+      .prepare(
+        `SELECT COALESCE(SUM(-delta), 0) AS spent
+         FROM ledger
+         WHERE account_id = ? AND delta < 0
+           AND julianday(created_at) > julianday(?) - (1.0 / 24)`,
+      )
+      .bind(accountId, new Date().toISOString())
+      .first<{ spent: number }>();
+    if ((recentSpend?.spent ?? 0) >= 100) {
+      await recordAbuseFlag(context, "account", accountId, accountId, "rapid_credit_drain");
+      const abuseResponse = await enforceAbuseFlag(context, accountId);
+      if (abuseResponse) return abuseResponse;
+    }
+
     const wallet = await context.env.DB
       .prepare("SELECT balance FROM wallets WHERE account_id = ?")
       .bind(accountId)
@@ -786,4 +907,76 @@ app.all("/admin/*", requireJwt, (context) =>
   ),
 );
 
-export default app;
+async function sendAbuseDigest(env: WorkerEnv): Promise<void> {
+  if (!env.ABUSE_DIGEST_EMAIL || !env.RESEND_API_KEY || !env.AUTH_EMAIL_FROM) return;
+  try {
+    const since = Math.floor(Date.now() / 1000) - 7 * 24 * 60 * 60;
+    const result = await env.DB
+      .prepare(
+        `SELECT scope, reason, mode, COUNT(*) AS count
+         FROM abuse_flags
+         WHERE flagged_at >= ?
+         GROUP BY scope, reason, mode
+         ORDER BY count DESC, reason`,
+      )
+      .bind(since)
+      .all<{ scope: string; reason: string; mode: string; count: number }>();
+    if (!result.success) throw new Error("Could not read the weekly abuse summary.");
+    const summary = result.results.length
+      ? result.results.map(({ scope, reason, mode, count }) =>
+          `${count} ${scope} flag(s): ${reason} (${mode})`,
+        ).join("\n")
+      : "No abuse flags were recorded during this period.";
+    const response = await fetch("https://api.resend.com/emails", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${env.RESEND_API_KEY}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        from: env.AUTH_EMAIL_FROM,
+        to: [env.ABUSE_DIGEST_EMAIL],
+        subject: "ProtoFlow weekly abuse-prevention digest",
+        text: `Abuse-prevention summary for the last 7 days:\n\n${summary}`,
+      }),
+    });
+    if (!response.ok) {
+      throw new Error(`The abuse digest email service returned ${response.status}.`);
+    }
+    console.info("Weekly abuse digest sent.", { recipientConfigured: true, groups: result.results.length });
+  } catch (error) {
+    console.error("Weekly abuse digest delivery failed.", {
+      message: error instanceof Error ? error.message : "Unknown digest error.",
+    });
+  }
+}
+
+async function runScheduledTasks(env: WorkerEnv): Promise<void> {
+  const now = Math.floor(Date.now() / 1000);
+  try {
+    const results = await env.DB.batch([
+      env.DB
+        .prepare("DELETE FROM abuse_signups WHERE created_at < ?")
+        .bind(now - 30 * 24 * 60 * 60),
+      env.DB
+        .prepare("DELETE FROM abuse_flags WHERE flagged_at < ?")
+        .bind(now - 90 * 24 * 60 * 60),
+    ]);
+    if (results.some((result) => !result.success)) {
+      throw new Error("Abuse-record retention cleanup did not complete.");
+    }
+  } catch (error) {
+    console.error("Abuse-record retention cleanup failed.", {
+      message: error instanceof Error ? error.message : "Unknown cleanup error.",
+    });
+  }
+  await sendAbuseDigest(env);
+}
+
+export default {
+  fetch: (request: Request, env: WorkerEnv, executionContext: ExecutionContext) =>
+    app.fetch(request, env, executionContext),
+  scheduled: (_event: ScheduledController, env: WorkerEnv, executionContext: ExecutionContext) => {
+    executionContext.waitUntil(runScheduledTasks(env));
+  },
+};

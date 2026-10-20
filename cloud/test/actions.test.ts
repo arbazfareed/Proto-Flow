@@ -1,13 +1,16 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { signJwt } from "../src/auth";
 import { app } from "../src";
 import type { WorkerEnv } from "../src/env";
 
 const secret = "test-secret-that-is-long-enough-for-hmac-validation";
 
+afterEach(() => vi.useRealTimers());
+
 class ActionTestDatabase {
   reads = 0;
   balance: number | null;
+  readonly cache = new Map<string, string>();
 
   constructor(balance: number | null) {
     this.balance = balance;
@@ -24,6 +27,7 @@ class ActionTestDatabase {
         if (normalized.includes("select id from accounts")) {
           return { id: "account-1" } as T;
         }
+        if (normalized.includes("from abuse_flags")) return null;
         this.reads += 1;
         if (!normalized.includes("select balance from wallets") || this.balance === null) {
           return null;
@@ -56,7 +60,15 @@ async function authorizedRequest(
     },
     {
       DB: database as unknown as D1Database,
-      CACHE: {} as KVNamespace,
+      CACHE: {
+        get: async (key: string) => database.cache.get(key) ?? null,
+        put: async (key: string, value: string) => {
+          database.cache.set(key, value);
+        },
+        delete: async (key: string) => {
+          database.cache.delete(key);
+        },
+      } as unknown as KVNamespace,
       ASSETS: {} as R2Bucket,
       JWT_SECRET: secret,
       ALLOWED_ORIGINS: "",
@@ -116,7 +128,25 @@ describe("metered action dispatcher", () => {
       error: { code: "ACTION_NOT_IMPLEMENTED" },
     });
     expect(database.balance).toBe(10);
-    expect(database.reads).toBe(1);
+    expect(database.reads).toBe(2);
+  });
+
+  it("limits AI dispatch to 30 calls per device per minute", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-10-20T12:00:00.000Z"));
+    const database = new ActionTestDatabase(50);
+    const request = () =>
+      authorizedRequest(
+        database,
+        JSON.stringify({ type: "ai_interaction_generator", payload: {} }),
+      );
+    let response: Response | undefined;
+    for (let attempt = 0; attempt < 31; attempt += 1) response = await request();
+
+    expect(response?.status).toBe(429);
+    expect(response?.headers.get("X-RateLimit-Limit")).toBe("30");
+    expect(response?.headers.get("X-RateLimit-Remaining")).toBe("0");
+    expect(await response?.json()).toMatchObject({ error: { code: "RATE_LIMITED" } });
   });
 
   it("rejects unknown actions and non-JSON bodies", async () => {

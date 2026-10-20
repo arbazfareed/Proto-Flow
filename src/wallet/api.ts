@@ -92,6 +92,25 @@ interface LinkedAccountResponse {
   tokenExpiresAt: string;
 }
 
+interface TurnstileApi {
+  render(
+    container: HTMLElement,
+    options: {
+      sitekey: string;
+      size: "invisible";
+      execution: "execute";
+      appearance: "execute";
+      callback: (token: string) => void;
+      "error-callback": () => void;
+      "expired-callback": () => void;
+    },
+  ): string;
+  execute(widgetId: string): void;
+  remove(widgetId: string): void;
+}
+
+let turnstileScript: Promise<TurnstileApi> | null = null;
+
 function isNonNegativeSafeInteger(value: unknown): value is number {
   return Number.isSafeInteger(value) && typeof value === "number" && value >= 0;
 }
@@ -112,6 +131,123 @@ function isCachedLedgerEntry(value: unknown): value is LedgerEntry {
     entry.metadata !== null &&
     !Array.isArray(entry.metadata)
   );
+}
+
+async function loadTurnstile(): Promise<TurnstileApi> {
+  const browserWindow = window as Window & { turnstile?: TurnstileApi };
+  if (browserWindow.turnstile) return browserWindow.turnstile;
+  if (!turnstileScript) {
+    turnstileScript = new Promise<TurnstileApi>((resolve, reject) => {
+      const script = document.createElement("script");
+      script.src = "https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit";
+      script.async = true;
+      script.defer = true;
+      const timeout = window.setTimeout(() => {
+        turnstileScript = null;
+        reject(new Error("Turnstile script loading timed out."));
+      }, 15_000);
+      script.onload = () => {
+        window.clearTimeout(timeout);
+        if (browserWindow.turnstile) resolve(browserWindow.turnstile);
+        else {
+          turnstileScript = null;
+          reject(new Error("Turnstile script loaded without its API."));
+        }
+      };
+      script.onerror = () => {
+        window.clearTimeout(timeout);
+        turnstileScript = null;
+        reject(new Error("Turnstile script could not be loaded."));
+      };
+      document.head.appendChild(script);
+    });
+  }
+  return turnstileScript;
+}
+
+async function createTurnstileToken(): Promise<string> {
+  const siteKey = import.meta.env.VITE_TURNSTILE_SITE_KEY?.trim();
+  if (!siteKey) {
+    throw new WalletApiError(
+      "Anti-abuse verification is required, but no Turnstile site key is configured.",
+      false,
+      "TURNSTILE_UNAVAILABLE",
+    );
+  }
+
+  let api: TurnstileApi;
+  try {
+    api = await loadTurnstile();
+  } catch {
+    throw new WalletApiError(
+      "Anti-abuse verification could not be loaded. Check your connection and try again.",
+      true,
+      "TURNSTILE_UNAVAILABLE",
+    );
+  }
+  const container = document.createElement("div");
+  container.style.position = "fixed";
+  container.style.left = "-10000px";
+  container.style.top = "0";
+  document.body.appendChild(container);
+
+  return new Promise<string>((resolve, reject) => {
+    let widgetId: string | null = null;
+    const timeout = window.setTimeout(() => {
+      finish(new WalletApiError("Anti-abuse verification timed out. Try again.", true, "TURNSTILE_UNAVAILABLE"));
+    }, 30_000);
+    const finish = (error?: Error, token?: string) => {
+      window.clearTimeout(timeout);
+      if (widgetId) api.remove(widgetId);
+      container.remove();
+      if (error) reject(error);
+      else if (token) resolve(token);
+      else reject(new WalletApiError("Anti-abuse verification returned no token.", true, "TURNSTILE_UNAVAILABLE"));
+    };
+
+    try {
+      widgetId = api.render(container, {
+        sitekey: siteKey,
+        size: "invisible",
+        execution: "execute",
+        appearance: "execute",
+        callback: (token) => finish(undefined, token),
+        "error-callback": () =>
+          finish(new WalletApiError("Anti-abuse verification failed. Try again.", true, "TURNSTILE_UNAVAILABLE")),
+        "expired-callback": () =>
+          finish(new WalletApiError("Anti-abuse verification expired. Try again.", true, "TURNSTILE_UNAVAILABLE")),
+      });
+      api.execute(widgetId);
+    } catch {
+      finish(new WalletApiError("Anti-abuse verification could not start.", true, "TURNSTILE_UNAVAILABLE"));
+    }
+  });
+}
+
+async function fetchWithTurnstileRetry(url: string, init: RequestInit): Promise<Response> {
+  const response = await fetch(url, init);
+  if (response.status !== 403) return response;
+
+  let requiresChallenge = false;
+  try {
+    const payload: unknown = await response.clone().json();
+    requiresChallenge =
+      typeof payload === "object" &&
+      payload !== null &&
+      "error" in payload &&
+      typeof payload.error === "object" &&
+      payload.error !== null &&
+      "code" in payload.error &&
+      payload.error.code === "TURNSTILE_REQUIRED";
+  } catch {
+    return response;
+  }
+  if (!requiresChallenge) return response;
+
+  const token = await createTurnstileToken();
+  const headers = new Headers(init.headers);
+  headers.set("X-Turnstile-Token", token);
+  return fetch(url, { ...init, headers });
 }
 
 export class WalletApiError extends Error {
@@ -310,12 +446,13 @@ export async function provisionAnonymousWallet(
   const url = `${apiBaseUrl()}/auth/anonymous`;
   let response: Response;
   try {
-    response = await fetch(url, {
+    response = await fetchWithTurnstileRetry(url, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(identity),
     });
-  } catch {
+  } catch (error) {
+    if (error instanceof WalletApiError) throw error;
     throw new WalletApiError(
       "Could not reach the cloud wallet service.",
       true,
@@ -379,7 +516,7 @@ async function authenticatedRequest<T>(
 ): Promise<T> {
   let response: Response;
   try {
-    response = await fetch(`${apiBaseUrl()}${path}`, {
+    response = await fetchWithTurnstileRetry(`${apiBaseUrl()}${path}`, {
       ...init,
       headers: {
         Authorization: `Bearer ${token}`,
@@ -387,7 +524,8 @@ async function authenticatedRequest<T>(
         ...init.headers,
       },
     });
-  } catch {
+  } catch (error) {
+    if (error instanceof WalletApiError) throw error;
     throw new WalletApiError(
       "Could not reach the cloud wallet service.",
       true,

@@ -9,6 +9,7 @@ export interface WorkerEnv {
   GOOGLE_CLIENT_ID?: string;
   GOOGLE_CLIENT_SECRET?: string;
   GOOGLE_REDIRECT_URI?: string;
+  ABUSE_DIGEST_EMAIL?: string;
   ALLOWED_ORIGINS?: string;
 }
 

@@ -127,6 +127,15 @@ function errorMessage(error: unknown): string {
       return error.retryAfterSeconds
         ? `Too many requests. Try again in ${error.retryAfterSeconds} seconds.`
         : "Too many requests. Wait a moment and try again.";
+    case "TURNSTILE_REQUIRED":
+    case "TURNSTILE_INVALID":
+    case "TURNSTILE_UNAVAILABLE":
+      return error.message;
+    case "ABUSE_REVIEW_REQUIRED":
+    case "READ_ONLY":
+      return error.message;
+    case "RATE_LIMIT_UNAVAILABLE":
+      return "Abuse protection is temporarily unavailable. No credits were deducted; try again shortly.";
     case "INVALID_PAYLOAD":
     case "BAD_REQUEST":
       return "The action details are invalid. Review them and try again.";
