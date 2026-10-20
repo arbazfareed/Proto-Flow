@@ -4,7 +4,7 @@ compatibility_date = "2026-10-20"
 workers_dev = true
 
 [triggers]
-crons = ["0 9 * * *"]
+crons = ["0 9 * * *", "0 * * * *"]
 
 [vars]
 ALLOWED_ORIGINS = "tauri://localhost,https://tauri.localhost,http://tauri.localhost"
@@ -28,6 +28,7 @@ enabled = true
 
 [env.local.vars]
 ALLOWED_ORIGINS = "tauri://localhost,https://tauri.localhost,http://tauri.localhost,http://localhost:1420"
+ADMIN_ALLOWED_ORIGINS = "http://localhost:1422"
 
 [[env.local.d1_databases]]
 binding = "DB"

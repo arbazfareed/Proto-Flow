@@ -77,6 +77,17 @@ describe("Worker API gateway", () => {
     expect(response.headers.get("Access-Control-Expose-Headers")).toContain("Retry-After");
   });
 
+  it("allows credentialed requests only from the configured admin dashboard origin", async () => {
+    const response = await app.request(
+      "/health",
+      { headers: { Origin: "https://admin.protoflow.app" } },
+      environment({ ADMIN_ALLOWED_ORIGINS: "https://admin.protoflow.app" }),
+    );
+    expect(response.status).toBe(200);
+    expect(response.headers.get("Access-Control-Allow-Origin")).toBe("https://admin.protoflow.app");
+    expect(response.headers.get("Access-Control-Allow-Credentials")).toBe("true");
+  });
+
   it("rejects disallowed origins and preflight requests", async () => {
     for (const method of ["GET", "OPTIONS"]) {
       const response = await app.request(
@@ -118,14 +129,17 @@ describe("Worker API gateway", () => {
       app.request("/wallet/me", {}, environment()),
       app.request("/wallet/claim-daily", { method: "POST" }, environment()),
       app.request("/action/run", { method: "POST" }, environment()),
-      app.request("/admin/status", {}, environment()),
+      app.request("/admin/me", {}, environment()),
     ];
-    for (const response of await Promise.all(requests)) {
+    const responses = await Promise.all(requests);
+    for (const response of responses.slice(0, 3)) {
       expect(response.status).toBe(401);
       expect(await response.json()).toMatchObject({
         error: { code: "MISSING_TOKEN" },
       });
     }
+    expect(responses[3]?.status).toBe(503);
+    expect(await responses[3]?.json()).toMatchObject({ error: { code: "ADMIN_NOT_CONFIGURED" } });
   });
 
   it("rejects tampered, expired, malformed, and non-HS256 tokens", async () => {
