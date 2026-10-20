@@ -89,6 +89,10 @@ The Worker stores HMAC-hashed IP signup activity for 30 days and flags an addres
 
 Apply migration `0005_rate_limits_abuse_flags.sql` using `npm run db:apply:local` from `cloud/` for local testing or `npm run db:apply:remote` after configuring production resources.
 
+### PF-T309 — Usage ledger, history, and data controls
+
+The Worker exposes the authenticated wallet ledger at `GET /wallet/ledger` with cursor pagination (up to 50 entries) and reason filtering. The wallet menu's **View full history** dialog shows local timestamps and credit/debit colors, and exports the filtered history as CSV. Wallet settings can download the full account, wallet totals, and ledger as JSON, or request cloud-data deletion by typing `DELETE`. Deletion revokes the current session immediately, retains an inaccessible tombstone for 30 days, and the daily scheduled task then removes the account and its related wallet, ledger, authentication, and abuse rows. The weekly abuse digest remains weekly. Ledger metadata is restricted to non-PII usage counters; account-merge balance caps are recorded as `account_merge_cap` debits. Apply `0006_usage_ledger_data_controls.sql` before deploying this version.
+
 ### PF-T306 — Device identity and offline resilience
 
 The client caches only the wallet snapshot and last successful sync time in local storage; the JWT remains in the OS credential store on desktop and session storage in browser previews. The cached balance is display-only for 24 hours after sync, and cloud actions remain disabled offline. The app checks Worker `/health` immediately and every 30 seconds while reachable; failures back off to 30 seconds, 1 minute, 5 minutes, then 15 minutes. The status bar shows actual Worker reachability and a successful reconnect triggers wallet sync.

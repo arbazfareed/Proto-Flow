@@ -3,6 +3,10 @@ import {
   canUseOfflineWallet,
   checkCloudHealth,
   claimDailyCredits,
+  deleteCloudWalletData,
+  exportWalletData,
+  fetchAllLedgerEntries,
+  fetchLedgerPage,
   fetchWalletMe,
   getCachedWallet,
   provisionAnonymousWallet,
@@ -403,5 +407,92 @@ describe("wallet persistence", () => {
 
     expect(JSON.stringify(values.get("protoflow.wallet.cache"))).not.toContain(accessToken);
     expect(values.get("protoflow.wallet.jwt")).toBe(accessToken);
+  });
+});
+
+describe("wallet history and data controls API", () => {
+  it("fetches a paginated ledger page with reason and cursor filters", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify({
+      entries: [{
+        id: "ledger-1",
+        delta: 20,
+        reason: "daily_refill",
+        metadata: {},
+        createdAt: new Date(now).toISOString(),
+      }],
+      nextCursor: "next-page",
+    }), { status: 200, headers: { "Content-Type": "application/json" } }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(fetchLedgerPage("session-token", {
+      limit: 50,
+      cursor: "cursor-value",
+      reason: "daily_refill",
+    })).resolves.toMatchObject({ entries: [{ reason: "daily_refill", delta: 20 }], nextCursor: "next-page" });
+    const [url, request] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(url).toContain("/wallet/ledger?");
+    expect(url).toContain("limit=50");
+    expect(url).toContain("cursor=cursor-value");
+    expect(url).toContain("reason=daily_refill");
+    expect(request.headers).toMatchObject({ Authorization: "Bearer session-token" });
+  });
+
+  it("retrieves every CSV-export page and rejects repeated pagination cursors", async () => {
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(new Response(JSON.stringify({
+        entries: [{ id: "one", delta: 1, reason: "starter_grant", metadata: {}, createdAt: new Date(now).toISOString() }],
+        nextCursor: "next",
+      }), { status: 200, headers: { "Content-Type": "application/json" } }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({
+        entries: [{ id: "two", delta: 20, reason: "daily_refill", metadata: {}, createdAt: new Date(now - 1).toISOString() }],
+        nextCursor: null,
+      }), { status: 200, headers: { "Content-Type": "application/json" } }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(fetchAllLedgerEntries("session-token")).resolves.toHaveLength(2);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+
+    vi.stubGlobal("fetch", vi.fn().mockImplementation(() => Promise.resolve(new Response(JSON.stringify({
+      entries: [{ id: "one", delta: 1, reason: "starter_grant", metadata: {}, createdAt: new Date(now).toISOString() }],
+      nextCursor: "repeated",
+    }), { status: 200, headers: { "Content-Type": "application/json" } }))));
+    await expect(fetchAllLedgerEntries("session-token")).rejects.toThrow("repeated a ledger cursor");
+  });
+
+  it("validates a JSON export and sends typed DELETE confirmation", async () => {
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(new Response(JSON.stringify({
+        schemaVersion: 1,
+        exportedAt: new Date(now).toISOString(),
+        account: {
+          id: "account-1",
+          deviceIdHash: "a".repeat(64),
+          email: "owner@example.com",
+          createdAt: new Date(now - 10).toISOString(),
+        },
+        wallet: { balance: 50, lifetimeGranted: 50, lifetimeSpent: 0 },
+        ledger: [{
+          id: "ledger-1",
+          delta: 50,
+          reason: "starter_grant",
+          metadata: {},
+          createdAt: new Date(now).toISOString(),
+        }],
+      }), { status: 200, headers: { "Content-Type": "application/json" } }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({
+        deleted: true,
+        deletedAt: new Date(now).toISOString(),
+        purgeAfter: new Date(now + 30 * 24 * 60 * 60 * 1000).toISOString(),
+      }), { status: 200, headers: { "Content-Type": "application/json" } }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    const exported = await exportWalletData("session-token");
+    expect(exported.account.email).toBe("owner@example.com");
+    expect(exported.ledger).toHaveLength(1);
+    await expect(deleteCloudWalletData("session-token")).resolves.toMatchObject({ purgeAfter: expect.any(String) });
+    const [url, request] = fetchMock.mock.calls[1] as [string, RequestInit];
+    expect(url).toContain("/account/data");
+    expect(request.method).toBe("DELETE");
+    expect(JSON.parse(request.body as string)).toEqual({ confirmation: "DELETE" });
   });
 });

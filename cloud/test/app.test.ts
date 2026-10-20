@@ -108,7 +108,7 @@ describe("Worker API gateway", () => {
       environment(),
     );
     expect(response.status).toBe(204);
-    expect(response.headers.get("Access-Control-Allow-Methods")).toBe("GET, POST, OPTIONS");
+    expect(response.headers.get("Access-Control-Allow-Methods")).toBe("GET, POST, DELETE, OPTIONS");
     expect(response.headers.get("Access-Control-Allow-Headers")).toContain("X-Turnstile-Token");
     expect(response.headers.get("Access-Control-Expose-Headers")).toContain("X-RateLimit-Remaining");
   });

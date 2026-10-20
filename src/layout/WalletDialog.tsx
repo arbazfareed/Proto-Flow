@@ -1,7 +1,8 @@
 import { useState, type FormEvent } from "react";
 import { isTauri } from "@tauri-apps/api/core";
 import { open } from "@tauri-apps/plugin-shell";
-import { CircleAlert, Coins, RotateCcw, X } from "lucide-react";
+import { CircleAlert, Coins, Download, RotateCcw, Trash2, X } from "lucide-react";
+import { exportWalletData } from "../wallet/api";
 import { useWalletStore } from "../wallet/store";
 
 interface WalletDialogProps {
@@ -18,11 +19,55 @@ export function WalletDialog({ onClose }: WalletDialogProps) {
   const startEmailSignIn = useWalletStore((state) => state.startEmailSignIn);
   const startGoogleSignIn = useWalletStore((state) => state.startGoogleSignIn);
   const signOut = useWalletStore((state) => state.signOut);
+  const jwt = useWalletStore((state) => state.jwt);
+  const deleteCloudData = useWalletStore((state) => state.deleteCloudData);
   const [resetting, setResetting] = useState(false);
   const [emailAddress, setEmailAddress] = useState("");
   const [authBusy, setAuthBusy] = useState(false);
   const [authMessage, setAuthMessage] = useState("");
   const [authError, setAuthError] = useState("");
+  const [dataBusy, setDataBusy] = useState(false);
+  const [deleteConfirmation, setDeleteConfirmation] = useState("");
+  const [dataMessage, setDataMessage] = useState("");
+  const [dataError, setDataError] = useState("");
+
+  const exportData = async () => {
+    if (!jwt) return;
+    setDataBusy(true);
+    setDataError("");
+    setDataMessage("");
+    try {
+      const data = await exportWalletData(jwt);
+      const url = URL.createObjectURL(new Blob([JSON.stringify(data, null, 2)], {
+        type: "application/json;charset=utf-8",
+      }));
+      const anchor = document.createElement("a");
+      anchor.href = url;
+      anchor.download = `protoflow-data-${new Date().toISOString().slice(0, 10)}.json`;
+      anchor.click();
+      requestAnimationFrame(() => URL.revokeObjectURL(url));
+      setDataMessage("Your data export has been downloaded.");
+    } catch (failure) {
+      setDataError(failure instanceof Error ? failure.message : "Could not export your data.");
+    } finally {
+      setDataBusy(false);
+    }
+  };
+
+  const requestDataDeletion = async () => {
+    setDataBusy(true);
+    setDataError("");
+    setDataMessage("");
+    try {
+      const result = await deleteCloudData();
+      setDeleteConfirmation("");
+      setDataMessage(`Deletion requested. Wallet and usage records will be permanently erased after ${new Date(result.purgeAfter).toLocaleDateString()}.`);
+    } catch (failure) {
+      setDataError(failure instanceof Error ? failure.message : "Could not request data deletion.");
+    } finally {
+      setDataBusy(false);
+    }
+  };
 
   const callbackUri = (endpoint: "verify" | "google-callback") =>
     isTauri()
@@ -167,6 +212,37 @@ export function WalletDialog({ onClose }: WalletDialogProps) {
           {authMessage && <p className="wallet-signin-message" role="status">{authMessage}</p>}
           {authError && <p className="wallet-dialog-error" role="alert"><CircleAlert size={14} /> {authError}</p>}
         </div>
+        <section className="wallet-data-controls" aria-labelledby="wallet-data-title">
+          <h3 id="wallet-data-title">Data &amp; privacy</h3>
+          <p>Download a copy of your account, wallet totals, and full usage ledger.</p>
+          <button
+            className="button button-secondary wallet-data-export"
+            onClick={() => void exportData()}
+            disabled={dataBusy || !jwt || status !== "online" || networkStatus !== "online"}
+          >
+            <Download size={14} /> {dataBusy ? "Working…" : "Export my data (JSON)"}
+          </button>
+          <div className="wallet-data-delete">
+            <label htmlFor="wallet-delete-confirmation">To delete cloud data, type DELETE</label>
+            <input
+              id="wallet-delete-confirmation"
+              value={deleteConfirmation}
+              onChange={(event) => setDeleteConfirmation(event.target.value)}
+              autoComplete="off"
+              spellCheck={false}
+              disabled={dataBusy || !jwt || status !== "online" || networkStatus !== "online"}
+            />
+            <button
+              className="button wallet-data-delete-button"
+              onClick={() => void requestDataDeletion()}
+              disabled={dataBusy || deleteConfirmation !== "DELETE" || !jwt || status !== "online" || networkStatus !== "online"}
+            >
+              <Trash2 size={14} /> Delete my cloud data
+            </button>
+          </div>
+          {dataMessage && <p className="wallet-data-message" role="status">{dataMessage}</p>}
+          {dataError && <p className="wallet-dialog-error" role="alert"><CircleAlert size={14} /> {dataError}</p>}
+        </section>
         <p className="wallet-privacy-note">
           ProtoFlow uses a hashed device ID and random install ID to identify this wallet. Cloudflare also provides an IP address for refill-abuse limits; ProtoFlow stores only a keyed hash of it, not the raw address.
         </p>

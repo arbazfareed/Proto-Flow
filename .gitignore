@@ -22,7 +22,9 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+src-tauri/target-pf-t309/
 
 # Cloudflare local secrets
+.env
 cloud/.dev.vars
 cloud/.wrangler/
