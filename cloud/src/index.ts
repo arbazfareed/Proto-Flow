@@ -1,9 +1,10 @@
 import { Hono } from "hono";
+import { registerAccountAuthRoutes } from "./accountAuth";
 import { requireJwt, signJwt } from "./auth";
-import type { WorkerEnv } from "./env";
+import type { AuthClaims, WorkerEnv } from "./env";
 import { errorResponse } from "./errors";
 
-type AppEnvironment = { Bindings: WorkerEnv };
+type AppEnvironment = { Bindings: WorkerEnv; Variables: { auth: AuthClaims } };
 
 export const app = new Hono<AppEnvironment>();
 
@@ -62,6 +63,7 @@ interface AccountRow {
   id: string;
   device_fingerprint: string;
   install_id: string | null;
+  merged_into: string | null;
 }
 
 interface WalletRow {
@@ -153,7 +155,7 @@ async function provisionAnonymousWallet(
 
   const matchingAccounts = await database
     .prepare(
-      `SELECT id, device_fingerprint, install_id
+      `SELECT id, device_fingerprint, install_id, merged_into
        FROM accounts
        WHERE device_fingerprint = ? OR install_id = ?
        LIMIT 2`,
@@ -166,7 +168,16 @@ async function provisionAnonymousWallet(
   }
   if (matchingAccounts.results.length > 1) throw new IdentityConflictError();
 
-  const account = matchingAccounts.results[0];
+  let account = matchingAccounts.results[0];
+  for (let depth = 0; account.merged_into && depth < 8; depth += 1) {
+    const resolved = await database
+      .prepare("SELECT id, device_fingerprint, install_id, merged_into FROM accounts WHERE id = ?")
+      .bind(account.merged_into)
+      .first<AccountRow>();
+    if (!resolved) throw new Error("The merged wallet account could not be resolved.");
+    account = resolved;
+  }
+  if (account.merged_into) throw new Error("The wallet account merge chain is invalid.");
   if (
     account.install_id === normalizedInstallId &&
     account.device_fingerprint !== normalizedDeviceId
@@ -379,8 +390,13 @@ app.get("/wallet/me", requireJwt, async (context) => {
       context.get("auth").accountId,
       now,
     );
+    const account = await context.env.DB
+      .prepare("SELECT email FROM accounts WHERE id = ? AND merged_into IS NULL")
+      .bind(context.get("auth").accountId)
+      .first<{ email: string | null }>();
     return context.json({
       accountId: context.get("auth").accountId,
+      email: account?.email ?? null,
       balance: wallet.balance,
       lifetimeGranted: wallet.lifetime_granted,
       lifetimeSpent: wallet.lifetime_spent,
@@ -759,23 +775,7 @@ app.post("/action/run", requireJwt, async (context) => {
   }
 });
 
-app.post("/auth/email/start", (context) =>
-  errorResponse(
-    context,
-    501,
-    "AUTH_NOT_IMPLEMENTED",
-    "Email sign-in is scheduled for Task PF-T307.",
-  ),
-);
-
-app.post("/auth/email/verify", (context) =>
-  errorResponse(
-    context,
-    501,
-    "AUTH_NOT_IMPLEMENTED",
-    "Email sign-in is scheduled for Task PF-T307.",
-  ),
-);
+registerAccountAuthRoutes(app);
 
 app.all("/admin/*", requireJwt, (context) =>
   errorResponse(

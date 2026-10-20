@@ -18,6 +18,8 @@ interface MemoryAccount {
   id: string;
   device_fingerprint: string;
   install_id: string | null;
+  merged_into: string | null;
+  email: string | null;
 }
 
 interface MemoryWallet {
@@ -111,10 +113,21 @@ class MemoryD1Database {
           id,
           device_fingerprint: fingerprint,
           install_id: installId,
+          merged_into: null,
+          email: null,
         });
         this.changes = 1;
       }
-    } else if (statement.startsWith("select id, device_fingerprint, install_id from accounts")) {
+    } else if (statement.startsWith("select id from accounts where id = ? and merged_into is null")) {
+      const account = this.accounts.get(parameters[0] as string);
+      if (account && !account.merged_into) results = [{ id: account.id }];
+    } else if (statement.startsWith("select email from accounts where id = ? and merged_into is null")) {
+      const account = this.accounts.get(parameters[0] as string);
+      if (account && !account.merged_into) results = [{ email: account.email }];
+    } else if (statement.startsWith("select id, device_fingerprint, install_id, merged_into from accounts where id = ?")) {
+      const account = this.accounts.get(parameters[0] as string);
+      if (account) results = [account];
+    } else if (statement.startsWith("select id, device_fingerprint, install_id, merged_into from accounts")) {
       const [fingerprint, installId] = parameters as [string, string];
       results = [...this.accounts.values()]
         .filter(

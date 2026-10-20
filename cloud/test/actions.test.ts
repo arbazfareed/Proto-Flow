@@ -20,8 +20,12 @@ class ActionTestDatabase {
     } = {
       bind: (..._values: unknown[]) => statement,
       first: async <T>() => {
+        const normalized = sql.toLowerCase();
+        if (normalized.includes("select id from accounts")) {
+          return { id: "account-1" } as T;
+        }
         this.reads += 1;
-        if (!sql.toLowerCase().includes("select balance from wallets") || this.balance === null) {
+        if (!normalized.includes("select balance from wallets") || this.balance === null) {
           return null;
         }
         return { balance: this.balance } as T;

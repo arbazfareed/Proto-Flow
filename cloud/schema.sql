@@ -5,6 +5,8 @@ CREATE TABLE IF NOT EXISTS accounts (
   device_fingerprint TEXT NOT NULL UNIQUE,
   install_id TEXT UNIQUE,
   email TEXT,
+  google_sub TEXT,
+  merged_into TEXT REFERENCES accounts(id),
   created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
   last_seen_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
 ) STRICT;
@@ -45,6 +47,49 @@ CREATE INDEX IF NOT EXISTS ledger_account_created_idx
 
 CREATE INDEX IF NOT EXISTS accounts_email_idx
   ON accounts (email) WHERE email IS NOT NULL;
+CREATE UNIQUE INDEX IF NOT EXISTS accounts_email_unique_idx
+  ON accounts (email COLLATE NOCASE) WHERE email IS NOT NULL;
+
+CREATE UNIQUE INDEX IF NOT EXISTS accounts_google_sub_idx
+  ON accounts (google_sub) WHERE google_sub IS NOT NULL;
+
+CREATE TABLE IF NOT EXISTS auth_magic_links (
+  token_hash TEXT PRIMARY KEY NOT NULL,
+  account_id TEXT NOT NULL REFERENCES accounts(id),
+  email TEXT NOT NULL,
+  expires_at INTEGER NOT NULL,
+  consumed_at INTEGER
+) STRICT;
+
+CREATE TABLE IF NOT EXISTS auth_email_rate_limits (
+  email_hash TEXT PRIMARY KEY NOT NULL,
+  window_start INTEGER NOT NULL,
+  count INTEGER NOT NULL CHECK (count >= 0)
+) STRICT;
+
+CREATE TABLE IF NOT EXISTS auth_oauth_states (
+  state_hash TEXT PRIMARY KEY NOT NULL,
+  account_id TEXT NOT NULL REFERENCES accounts(id),
+  device_id TEXT NOT NULL,
+  code_verifier TEXT NOT NULL,
+  redirect_uri TEXT NOT NULL,
+  expires_at INTEGER NOT NULL,
+  consumed_at INTEGER
+) STRICT;
+
+CREATE TABLE IF NOT EXISTS auth_oauth_tickets (
+  ticket_hash TEXT PRIMARY KEY NOT NULL,
+  account_id TEXT NOT NULL REFERENCES accounts(id),
+  device_id TEXT NOT NULL,
+  google_sub TEXT NOT NULL,
+  email TEXT NOT NULL,
+  expires_at INTEGER NOT NULL,
+  consumed_at INTEGER
+) STRICT;
+
+CREATE INDEX IF NOT EXISTS auth_magic_links_expiry_idx ON auth_magic_links (expires_at);
+CREATE INDEX IF NOT EXISTS auth_oauth_states_expiry_idx ON auth_oauth_states (expires_at);
+CREATE INDEX IF NOT EXISTS auth_oauth_tickets_expiry_idx ON auth_oauth_tickets (expires_at);
 
 CREATE UNIQUE INDEX IF NOT EXISTS ledger_starter_grant_once_idx
   ON ledger (account_id)

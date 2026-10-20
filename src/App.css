@@ -709,6 +709,17 @@
 .wallet-dialog { width:min(430px,92vw); }
 .wallet-dialog .wallet-dialog-error { display:flex; align-items:center; gap:6px; color:#ef9a9a; }
 .wallet-dialog .wallet-privacy-note { margin-top:14px; padding-top:12px; border-top:1px solid #303137; font-size:10px; }
+.wallet-signin { display:grid; gap:9px; margin-top:18px; }
+.wallet-signin h3 { margin:0; color:#dddde2; font-size:12px; font-weight:600; }
+.wallet-signin-form { display:grid; gap:7px; }
+.wallet-signin-form label { color:#a5a5ad; font-size:10px; }
+.wallet-signin-form input { min-width:0; height:34px; padding:0 10px; border:1px solid #3a3b42; border-radius:6px; outline:none; color:#e8e7eb; background:#151619; font:inherit; font-size:11px; }
+.wallet-signin-form input:focus { border-color:#8c73d4; }
+.wallet-signin .button { display:flex; align-items:center; justify-content:center; }
+.wallet-signin .button:disabled { opacity:.55; cursor:wait; }
+.wallet-signin-email { margin:0; color:#bcb5d4; font-size:11px; }
+.wallet-signin-message { margin:0; color:#9bd9b0; font-size:10px; line-height:1.6; }
+.wallet-google-button { width:100%; }
 .wallet-dialog-actions { display:flex; justify-content:flex-end; gap:8px; margin-top:22px; }
 .wallet-dialog-actions .button { display:flex; align-items:center; gap:6px; }
 .wallet-dialog-actions .button:disabled { opacity:.55; cursor:wait; }

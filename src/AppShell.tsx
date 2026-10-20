@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { isTauri } from "@tauri-apps/api/core";
 import { getCurrentWindow } from "@tauri-apps/api/window";
+import { getCurrent, onOpenUrl } from "@tauri-apps/plugin-deep-link";
 import { Check, CircleAlert } from "lucide-react";
 import { clearAutosave, subscribeAutosaveErrors } from "./project/autosave";
 import { openProjectFile, saveProjectFile } from "./project/files";
@@ -54,6 +55,79 @@ function AppShell() {
     setNoticeIsError(isError);
     window.setTimeout(() => setNotice(""), 4000);
   }, []);
+
+  const processAuthCallback = useCallback(async (value: string) => {
+    let callback: URL;
+    try {
+      callback = new URL(value);
+    } catch {
+      return;
+    }
+
+    const isDesktopCallback =
+      callback.protocol === "protoflow:" &&
+      callback.hostname === "auth" &&
+      (callback.pathname === "/verify" || callback.pathname === "/google-callback");
+    const isBrowserCallback =
+      !isTauri() &&
+      callback.origin === window.location.origin &&
+      callback.pathname === window.location.pathname;
+    if (!isDesktopCallback && !isBrowserCallback) return;
+
+    const magicToken = callback.pathname === "/verify" ? callback.searchParams.get("token") : null;
+    const googleTicket =
+      callback.pathname === "/google-callback" ? callback.searchParams.get("ticket") : null;
+    if (!magicToken && !googleTicket) return;
+
+    if (isBrowserCallback) {
+      window.history.replaceState({}, document.title, callback.pathname);
+    }
+    try {
+      await useWalletStore.getState().sync();
+      if (magicToken) {
+        await useWalletStore.getState().verifyEmailSignIn(magicToken);
+      } else if (googleTicket) {
+        await useWalletStore.getState().verifyGoogleSignIn(googleTicket);
+      }
+      notify(`Wallet linked to ${useWalletStore.getState().email}.`);
+    } catch (callbackError) {
+      notify(
+        callbackError instanceof Error ? callbackError.message : "Could not complete sign-in.",
+        true,
+      );
+    }
+  }, [notify]);
+
+  useEffect(() => {
+    if (!isTauri()) {
+      void processAuthCallback(window.location.href);
+      return;
+    }
+
+    let disposed = false;
+    let stopDeepLink: (() => void) | undefined;
+    const setup = async () => {
+      stopDeepLink = await onOpenUrl((urls) => {
+        for (const url of urls) void processAuthCallback(url);
+      });
+      if (disposed) {
+        stopDeepLink();
+        return;
+      }
+      const initialUrls = await getCurrent();
+      for (const url of initialUrls ?? []) void processAuthCallback(url);
+    };
+    void setup().catch((callbackError) => {
+      notify(
+        callbackError instanceof Error ? callbackError.message : "Could not initialize sign-in callbacks.",
+        true,
+      );
+    });
+    return () => {
+      disposed = true;
+      stopDeepLink?.();
+    };
+  }, [notify, processAuthCallback]);
 
   useEffect(() => {
     if (!walletInitializationStarted.current) {

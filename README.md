@@ -48,7 +48,7 @@ The element library includes dedicated canvas visuals for avatars, icon buttons,
 
 ### Phase 3 — Cloud API gateway scaffold
 
-`cloud/` contains the Cloudflare Workers/Hono API scaffold for PF-T301. It defines local Wrangler bindings for D1 (`DB`), KV (`CACHE`), and R2 (`ASSETS`), a repeatable D1 migration plus standalone `schema.sql`, Tauri-origin CORS allowlisting, consistent JSON errors, and HS256 Bearer JWT verification for wallet, metered-action, and admin route groups. Anonymous wallet provisioning, authenticated wallet reads, and daily claims are implemented; metered actions, email authentication, and admin handlers remain explicit `501` stubs for later tasks.
+`cloud/` contains the Cloudflare Workers/Hono API scaffold for PF-T301. It defines local Wrangler bindings for D1 (`DB`), KV (`CACHE`), and R2 (`ASSETS`), a repeatable D1 migration plus standalone `schema.sql`, Tauri-origin CORS allowlisting, consistent JSON errors, and HS256 Bearer JWT verification for wallet, metered-action, and admin route groups. Anonymous wallet provisioning, authenticated wallet reads, daily claims, and optional email/Google account linking are implemented; metered action execution and admin handlers remain explicit `501` stubs for later tasks.
 
 Use Node.js 20.19+ or 22.12+:
 
@@ -63,7 +63,7 @@ npm run typecheck
 npm run dev
 ```
 
-Before production deployment, create the named D1 database, KV namespace, and R2 bucket, replace the placeholder binding IDs in `cloud/wrangler.toml`, authenticate Wrangler, and set the JWT secret with `npx wrangler secret put JWT_SECRET`. Apply the migration remotely before `npm run deploy`. Do not commit `.dev.vars` or production secrets. Configure production `ALLOWED_ORIGINS` only with the shipped Tauri origins. Production deployment requires an authenticated Cloudflare account and account-specific resources.
+Before production deployment, create the named D1 database, KV namespace, and R2 bucket, replace the placeholder binding IDs in `cloud/wrangler.toml`, authenticate Wrangler, and set the JWT secret with `npx wrangler secret put JWT_SECRET`. Apply migrations remotely before `npm run deploy`. Do not commit `.dev.vars` or production secrets. Configure `ALLOWED_ORIGINS` with the shipped Tauri origins and any web-app origin that should be permitted. Production deployment requires an authenticated Cloudflare account and account-specific resources.
 
 ### PF-T302 — Anonymous wallet
 
@@ -73,7 +73,7 @@ For local development, start the Worker with `cd cloud; npm run dev`, then start
 
 ### PF-T303 — Client wallet and balance pill
 
-The always-visible top-bar pill uses green for 20+ credits, yellow for 5–19, and red for fewer than 5. Its dropdown shows lifetime totals, the latest 20 ledger entries, sync/offline status, refresh, and a daily claim when available. Wallet snapshots (not JWTs) are cached in local storage; desktop JWTs stay in the operating system credential store, and browser-preview JWTs use session storage. The UI syncs on launch, when the app becomes visible, and every 60 seconds while active. Email sign-in remains a Task PF-T307 placeholder; metered actions are not yet implemented and remain unavailable offline.
+The always-visible top-bar pill uses green for 20+ credits, yellow for 5–19, and red for fewer than 5. Its dropdown shows lifetime totals, the latest 20 ledger entries, sync/offline status, refresh, and a daily claim when available. Wallet snapshots (not JWTs) are cached in local storage; desktop JWTs stay in the operating system credential store, and browser-preview JWTs use session storage. The UI syncs on launch, when the app becomes visible, and every 60 seconds while active. Email and Google sign-in are optional and available from wallet settings; metered actions are not yet implemented and remain unavailable offline.
 
 ### PF-T305 — Daily refill and abuse limits
 
@@ -85,7 +85,20 @@ The Worker observes only Cloudflare's `CF-Connecting-IP` header and stores an HM
 
 The client caches only the wallet snapshot and last successful sync time in local storage; the JWT remains in the OS credential store on desktop and session storage in browser previews. The cached balance is display-only for 24 hours after sync, and cloud actions remain disabled offline. The app checks Worker `/health` immediately and every 30 seconds while reachable; failures back off to 30 seconds, 1 minute, 5 minutes, then 15 minutes. The status bar shows actual Worker reachability and a successful reconnect triggers wallet sync.
 
-Wallet sync silently provisions a replacement JWT through idempotent `/auth/anonymous` when the current token is missing, invalid, or within one minute of expiry. The random install ID remains stable across operating-system fingerprint changes, allowing the Worker to find the existing account and update its hashed device fingerprint. Reset cloud identity explicitly creates a new install ID, clears the local cache and JWT, and provisions a new wallet once connected; the old server account is retained. Email-based recovery/merging remains part of PF-T307.
+Wallet sync silently provisions a replacement JWT through idempotent `/auth/anonymous` when the current token is missing, invalid, or within one minute of expiry. The random install ID remains stable across operating-system fingerprint changes, allowing the Worker to find the existing account and update its hashed device fingerprint. Reset cloud identity explicitly creates a new install ID, clears the local cache and JWT, and provisions a new wallet once connected; the old server account is retained.
+
+### PF-T307 — Optional email and Google sign-in
+
+The wallet dropdown opens settings where users can request a one-time email link or start Google OAuth. Email tokens are single-use and expire after 15 minutes; email requests are limited to three per address per hour. Google uses OAuth authorization-code flow with PKCE. Both flows link the verified identity to the current wallet and merge an already-linked wallet into it, capping the resulting balance at 100 credits while retaining lifetime totals and ledger history. Signing out removes the linked email/Google identity but keeps the local wallet and balance. JWTs remain in the desktop OS credential store or browser session storage; linked email addresses are not written to local storage.
+
+Configure the following before enabling production sign-in:
+
+- Verify a sending domain with Resend, then configure `RESEND_API_KEY` and `AUTH_EMAIL_FROM`. The sender must be authorized by that Resend account.
+- Create a Google OAuth web client. Configure `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, and `GOOGLE_REDIRECT_URI`; register the exact Worker callback URL (`https://<worker-host>/auth/google/callback`) as an authorized redirect URI in Google Cloud Console.
+- Add the deployed web-app origin to Worker `ALLOWED_ORIGINS` if browser access is needed. The desktop callback scheme `protoflow://` is registered by the Tauri deep-link plugin; desktop OAuth opens in the system browser and returns to the app.
+- Apply migration `0004_optional_account_sign_in.sql` in each D1 environment before deploying the new Worker.
+
+For local development, put provider values in the ignored `cloud/.dev.vars` file. For production, use `npx wrangler secret put` for the Resend API key and Google client secret; configure non-secret sender/client/redirect values as Worker variables or secrets. Never place provider credentials in Vite environment variables, frontend code, or committed files. Live email and Google sign-in require provider credentials, verified sender configuration, and an authorized Google redirect URI. The app uses a hashed device fingerprint and random install ID for anonymous wallet identity; an email or Google identity is stored only after the user chooses to link an account.
 
 ### PF-T304 — Metered action confirmation
 
