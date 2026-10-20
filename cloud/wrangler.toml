@@ -1,0 +1,41 @@
+name = "protoflow-api-gateway"
+main = "src/index.ts"
+compatibility_date = "2026-10-20"
+workers_dev = true
+
+[vars]
+ALLOWED_ORIGINS = "tauri://localhost,https://tauri.localhost,http://tauri.localhost"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "protoflow-ledger"
+database_id = "00000000000000000000000000000000"
+migrations_dir = "migrations"
+
+[[kv_namespaces]]
+binding = "CACHE"
+id = "00000000000000000000000000000000"
+
+[[r2_buckets]]
+binding = "ASSETS"
+bucket_name = "protoflow-assets"
+
+[observability]
+enabled = true
+
+[env.local.vars]
+ALLOWED_ORIGINS = "tauri://localhost,https://tauri.localhost,http://tauri.localhost,http://localhost:1420"
+
+[[env.local.d1_databases]]
+binding = "DB"
+database_name = "protoflow-ledger"
+database_id = "00000000000000000000000000000000"
+migrations_dir = "migrations"
+
+[[env.local.kv_namespaces]]
+binding = "CACHE"
+id = "00000000000000000000000000000000"
+
+[[env.local.r2_buckets]]
+binding = "ASSETS"
+bucket_name = "protoflow-assets"

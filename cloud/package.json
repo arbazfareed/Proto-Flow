@@ -1,0 +1,23 @@
+{
+  "name": "@proto-flow/cloud-api",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "wrangler dev --env local",
+    "deploy": "wrangler deploy",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit",
+    "db:apply:local": "wrangler d1 migrations apply protoflow-ledger --local --env local",
+    "db:apply:remote": "wrangler d1 migrations apply protoflow-ledger --remote"
+  },
+  "dependencies": {
+    "hono": "^4.10.4"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^5.20261019.1",
+    "typescript": "^6.0.3",
+    "vitest": "^5.0.4",
+    "wrangler": "^4.40.0"
+  }
+}
