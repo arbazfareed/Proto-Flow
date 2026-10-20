@@ -7,6 +7,7 @@ CREATE TABLE IF NOT EXISTS accounts (
   email TEXT,
   google_sub TEXT,
   merged_into TEXT REFERENCES accounts(id),
+  deleted_at TEXT,
   created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
   last_seen_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
 ) STRICT;
@@ -47,6 +48,8 @@ CREATE INDEX IF NOT EXISTS ledger_account_created_idx
 
 CREATE INDEX IF NOT EXISTS accounts_email_idx
   ON accounts (email) WHERE email IS NOT NULL;
+CREATE INDEX IF NOT EXISTS accounts_deleted_at_idx
+  ON accounts (deleted_at) WHERE deleted_at IS NOT NULL;
 CREATE UNIQUE INDEX IF NOT EXISTS accounts_email_unique_idx
   ON accounts (email COLLATE NOCASE) WHERE email IS NOT NULL;
 

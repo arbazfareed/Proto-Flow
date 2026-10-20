@@ -2,6 +2,7 @@ import { create } from "zustand";
 import {
   canUseOfflineWallet,
   claimDailyCredits,
+  deleteCloudWalletData,
   fetchWalletMe,
   getCachedToken,
   getCachedWallet,
@@ -46,6 +47,7 @@ interface WalletState {
   sync: () => Promise<void>;
   initialize: () => Promise<number>;
   claimDaily: () => Promise<boolean>;
+  deleteCloudData: () => Promise<{ deletedAt: string; purgeAfter: string }>;
   resetIdentity: () => Promise<void>;
   startEmailSignIn: (email: string, callbackUri: string) => Promise<void>;
   verifyEmailSignIn: (token: string) => Promise<void>;
@@ -333,6 +335,29 @@ export const useWalletStore = create<WalletState>((set, get) => ({
       }
       return false;
     }
+  },
+  deleteCloudData: async () => {
+    const { jwt } = get();
+    if (!jwt) throw new Error("Connect to the cloud before deleting account data.");
+    const result = await deleteCloudWalletData(jwt);
+    await setCachedToken(null);
+    localStorage.removeItem(CACHE_KEY);
+    set({
+      status: "error",
+      networkStatus: "online",
+      balance: 0,
+      lifetimeGranted: 0,
+      lifetimeSpent: 0,
+      jwt: null,
+      accountId: null,
+      email: null,
+      recentLedger: [],
+      lastSyncedAt: null,
+      claimable: false,
+      nextClaimAt: null,
+      error: "Cloud data deletion is pending. Reset cloud identity to create a new wallet.",
+    });
+    return result;
   },
   resetIdentity: async () => {
     set({ status: "loading", error: null });

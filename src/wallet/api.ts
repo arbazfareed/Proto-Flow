@@ -30,6 +30,38 @@ export interface LedgerEntry {
   createdAt: string;
 }
 
+export interface LedgerPage {
+  entries: LedgerEntry[];
+  nextCursor: string | null;
+}
+
+export type LedgerReason =
+  | "starter_grant"
+  | "daily_refill"
+  | "sign_in_bonus"
+  | "account_merge_cap"
+  | "action:ai_generate"
+  | "action:cloud_publish"
+  | "action:code_export"
+  | "admin_adjust";
+
+export interface WalletDataExport {
+  schemaVersion: 1;
+  exportedAt: string;
+  account: {
+    id: string;
+    deviceIdHash: string;
+    email: string | null;
+    createdAt: string;
+  };
+  wallet: {
+    balance: number;
+    lifetimeGranted: number;
+    lifetimeSpent: number;
+  };
+  ledger: LedgerEntry[];
+}
+
 interface AnonymousWalletResponse {
   accountId: string;
   token: string;
@@ -621,6 +653,125 @@ function toSnapshot(response: WalletResponse): WalletSnapshot {
 export async function fetchWalletMe(token: string): Promise<WalletSnapshot> {
   const response = await authenticatedRequest<WalletResponse>("/wallet/me", token);
   return toSnapshot(response);
+}
+
+export async function fetchLedgerPage(
+  token: string,
+  options: { limit?: number; cursor?: string | null; reason?: LedgerReason | null } = {},
+): Promise<LedgerPage> {
+  const limit = options.limit ?? 50;
+  if (!Number.isInteger(limit) || limit < 1 || limit > 50) {
+    throw new RangeError("Ledger page size must be between 1 and 50.");
+  }
+  const query = new URLSearchParams({ limit: String(limit) });
+  if (options.cursor) query.set("cursor", options.cursor);
+  if (options.reason) query.set("reason", options.reason);
+  const response = await authenticatedRequest<unknown>(`/wallet/ledger?${query}`, token);
+  if (
+    typeof response !== "object" || response === null || Array.isArray(response) ||
+    !("entries" in response) || !Array.isArray(response.entries) ||
+    !("nextCursor" in response) ||
+    (response.nextCursor !== null && typeof response.nextCursor !== "string") ||
+    response.entries.length > limit
+  ) {
+    throw new Error("The cloud wallet service returned invalid ledger history.");
+  }
+  const entries = response.entries.map((entry) => {
+    if (typeof entry !== "object" || entry === null || Array.isArray(entry)) {
+      throw new Error("The cloud wallet service returned an invalid ledger entry.");
+    }
+    const value = entry as Partial<LedgerEntry>;
+    if (
+      typeof value.id !== "string" || value.id.length === 0 ||
+      !Number.isSafeInteger(value.delta) || value.delta === 0 ||
+      typeof value.reason !== "string" ||
+      typeof value.createdAt !== "string" || !Number.isFinite(Date.parse(value.createdAt)) ||
+      typeof value.metadata !== "object" || value.metadata === null || Array.isArray(value.metadata)
+    ) {
+      throw new Error("The cloud wallet service returned an invalid ledger entry.");
+    }
+    return value as LedgerEntry;
+  });
+  return { entries, nextCursor: response.nextCursor as string | null };
+}
+
+export async function fetchAllLedgerEntries(
+  token: string,
+  reason?: LedgerReason | null,
+): Promise<LedgerEntry[]> {
+  const entries: LedgerEntry[] = [];
+  const seenCursors = new Set<string>();
+  let cursor: string | null = null;
+  do {
+    const page = await fetchLedgerPage(token, { limit: 50, cursor, reason });
+    entries.push(...page.entries);
+    cursor = page.nextCursor;
+    if (cursor && seenCursors.has(cursor)) {
+      throw new Error("The cloud wallet service repeated a ledger cursor.");
+    }
+    if (cursor) seenCursors.add(cursor);
+  } while (cursor);
+  return entries;
+}
+
+export async function exportWalletData(token: string): Promise<WalletDataExport> {
+  const response = await authenticatedRequest<unknown>("/account/export", token);
+  if (typeof response !== "object" || response === null || Array.isArray(response)) {
+    throw new Error("The cloud wallet service returned an invalid data export.");
+  }
+  const result = response as Partial<WalletDataExport>;
+  if (
+    result.schemaVersion !== 1 ||
+    typeof result.exportedAt !== "string" || !Number.isFinite(Date.parse(result.exportedAt)) ||
+    typeof result.account !== "object" || result.account === null ||
+    typeof result.wallet !== "object" || result.wallet === null ||
+    !Array.isArray(result.ledger)
+  ) {
+    throw new Error("The cloud wallet service returned an invalid data export.");
+  }
+  const { account, wallet } = result;
+  if (
+    typeof account.id !== "string" || typeof account.deviceIdHash !== "string" ||
+    !(account.email === null || typeof account.email === "string") ||
+    typeof account.createdAt !== "string" || !Number.isFinite(Date.parse(account.createdAt)) ||
+    !isNonNegativeSafeInteger(wallet.balance) ||
+    !isNonNegativeSafeInteger(wallet.lifetimeGranted) ||
+    !isNonNegativeSafeInteger(wallet.lifetimeSpent)
+  ) {
+    throw new Error("The cloud wallet service returned invalid account or wallet data.");
+  }
+  const ledger = result.ledger.map((entry) => {
+    if (
+      typeof entry !== "object" || entry === null || Array.isArray(entry) ||
+      typeof entry.id !== "string" || !Number.isSafeInteger(entry.delta) || entry.delta === 0 ||
+      typeof entry.reason !== "string" ||
+      typeof entry.createdAt !== "string" || !Number.isFinite(Date.parse(entry.createdAt)) ||
+      typeof entry.metadata !== "object" || entry.metadata === null || Array.isArray(entry.metadata)
+    ) {
+      throw new Error("The cloud wallet service returned an invalid ledger entry in the export.");
+    }
+    return entry;
+  });
+  return { schemaVersion: 1, exportedAt: result.exportedAt, account, wallet, ledger };
+}
+
+export async function deleteCloudWalletData(token: string): Promise<{ deletedAt: string; purgeAfter: string }> {
+  const response = await authenticatedRequest<{
+    deleted?: boolean;
+    deletedAt?: string;
+    purgeAfter?: string;
+  }>("/account/data", token, {
+    method: "DELETE",
+    body: JSON.stringify({ confirmation: "DELETE" }),
+  });
+  if (
+    response.deleted !== true || typeof response.deletedAt !== "string" ||
+    !Number.isFinite(Date.parse(response.deletedAt)) || typeof response.purgeAfter !== "string" ||
+    !Number.isFinite(Date.parse(response.purgeAfter))
+  ) {
+    throw new Error("The cloud wallet service did not confirm data deletion.");
+  }
+  return { deletedAt: response.deletedAt, purgeAfter: response.purgeAfter };
 }
 
 export async function startEmailSignIn(

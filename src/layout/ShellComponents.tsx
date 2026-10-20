@@ -74,6 +74,7 @@ import {
 import { ElementLibrary } from "./ElementLibrary";
 import { CANVAS_ICON_NAMES } from "../canvas/iconLibrary";
 import { useWalletStore } from "../wallet/store";
+import { WalletHistoryDialog } from "./WalletHistoryDialog";
 
 const CanvasStage = lazy(() =>
   import("../canvas/CanvasStage").then((module) => ({
@@ -144,9 +145,11 @@ export function TopBar({
   const nextClaimAt = useWalletStore((state) => state.nextClaimAt);
   const walletError = useWalletStore((state) => state.error);
   const walletEmail = useWalletStore((state) => state.email);
+  const walletJwt = useWalletStore((state) => state.jwt);
   const syncWallet = useWalletStore((state) => state.sync);
   const claimDaily = useWalletStore((state) => state.claimDaily);
   const [walletMenuOpen, setWalletMenuOpen] = useState(false);
+  const [walletHistoryOpen, setWalletHistoryOpen] = useState(false);
   const [claimingDaily, setClaimingDaily] = useState(false);
   const [walletClock, setWalletClock] = useState(Date.now());
   const walletMenuRef = useRef<HTMLDivElement>(null);
@@ -300,6 +303,17 @@ export function TopBar({
                   </div>
                 ))}
               </div>
+              <button
+                className="wallet-menu-link"
+                onClick={() => {
+                  setWalletMenuOpen(false);
+                  setWalletHistoryOpen(true);
+                }}
+                disabled={!walletJwt || walletStatus !== "online" || networkStatus !== "online"}
+                title={!walletJwt ? "Connect to view full usage history" : undefined}
+              >
+                View full history
+              </button>
               {claimable && walletStatus === "online" && networkStatus === "online" ? (
                 <button
                   className="button button-primary wallet-claim-button"
@@ -350,6 +364,9 @@ export function TopBar({
             </section>
           )}
         </div>
+        {walletHistoryOpen && walletJwt && (
+          <WalletHistoryDialog token={walletJwt} onClose={() => setWalletHistoryOpen(false)} />
+        )}
         {isTauri() && (
           <div className="window-controls" aria-label="Window controls">
             <button className="window-control" aria-label="Minimize window" onClick={() => onWindowAction("minimize")}><Minus size={14} /></button>

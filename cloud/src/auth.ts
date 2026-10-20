@@ -148,14 +148,17 @@ export const requireJwt: MiddlewareHandler<{ Bindings: WorkerEnv; Variables: { a
 
     try {
       const account = await context.env.DB
-        .prepare("SELECT id FROM accounts WHERE id = ? AND merged_into IS NULL")
+        .prepare("SELECT id FROM accounts WHERE id = ? AND merged_into IS NULL AND deleted_at IS NULL")
         .bind(claims.accountId)
         .first<{ id: string }>();
       if (!account) {
         return errorResponse(context, 401, "INVALID_TOKEN", "The wallet session is no longer active.");
       }
-      const abuseResponse = await enforceAbuseFlag(context, claims.accountId);
-      if (abuseResponse) return abuseResponse;
+      // Privacy controls must remain available to a valid account even if cloud actions are read-only.
+      if (!context.req.path.startsWith("/account/")) {
+        const abuseResponse = await enforceAbuseFlag(context, claims.accountId);
+        if (abuseResponse) return abuseResponse;
+      }
     } catch (error) {
       console.error("Could not verify wallet account status.", {
         message: error instanceof Error ? error.message : "Unknown database error.",

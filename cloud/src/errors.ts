@@ -6,6 +6,8 @@ export type ErrorCode =
   | "AUTH_NOT_IMPLEMENTED"
   | "ABUSE_REVIEW_REQUIRED"
   | "BAD_REQUEST"
+  | "CONFIRMATION_REQUIRED"
+  | "ACCOUNT_DELETION_PENDING"
   | "DAILY_ALREADY_CLAIMED"
   | "DAILY_IP_LIMIT"
   | "DATABASE_UNAVAILABLE"
@@ -31,7 +33,7 @@ export type ErrorCode =
 
 export function errorResponse(
   context: Context,
-  status: 400 | 401 | 402 | 403 | 404 | 405 | 409 | 429 | 500 | 501 | 503,
+  status: 400 | 401 | 402 | 403 | 404 | 405 | 409 | 410 | 429 | 500 | 501 | 503,
   code: ErrorCode,
   message: string,
 ) {

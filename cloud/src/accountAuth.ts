@@ -10,6 +10,7 @@ interface AccountRow {
   email: string | null;
   google_sub: string | null;
   merged_into: string | null;
+  deleted_at?: string | null;
 }
 
 async function hmacHex(value: string, secret: string): Promise<string> {
@@ -139,7 +140,7 @@ function addQuery(uri: string, key: string, value: string): string {
 
 async function isActiveAccount(database: D1Database, accountId: string): Promise<boolean> {
   const row = await database
-    .prepare("SELECT id FROM accounts WHERE id = ? AND merged_into IS NULL")
+    .prepare("SELECT id FROM accounts WHERE id = ? AND merged_into IS NULL AND deleted_at IS NULL")
     .bind(accountId)
     .first<{ id: string }>();
   return Boolean(row);
@@ -149,10 +150,10 @@ async function resolveAccount(database: D1Database, accountId: string): Promise<
   let currentId = accountId;
   for (let depth = 0; depth < 8; depth += 1) {
     const account = await database
-      .prepare("SELECT id, email, google_sub, merged_into FROM accounts WHERE id = ?")
+      .prepare("SELECT id, email, google_sub, merged_into, deleted_at FROM accounts WHERE id = ?")
       .bind(currentId)
       .first<AccountRow>();
-    if (!account) return null;
+    if (!account || account.deleted_at) return null;
     if (!account.merged_into) return account;
     currentId = account.merged_into;
   }
@@ -178,27 +179,40 @@ async function consumeMagicLink(
 async function mergeWallets(database: D1Database, targetId: string, sourceId: string): Promise<void> {
   if (targetId === sourceId) return;
   const source = await database
-    .prepare("SELECT id, merged_into FROM accounts WHERE id = ?")
+    .prepare("SELECT id, merged_into, deleted_at FROM accounts WHERE id = ?")
     .bind(sourceId)
-    .first<{ id: string; merged_into: string | null }>();
+    .first<{ id: string; merged_into: string | null; deleted_at: string | null }>();
   const target = await database
-    .prepare("SELECT id, merged_into FROM accounts WHERE id = ?")
+    .prepare("SELECT id, merged_into, deleted_at FROM accounts WHERE id = ?")
     .bind(targetId)
-    .first<{ id: string; merged_into: string | null }>();
-  if (!source || source.merged_into || !target || target.merged_into) {
+    .first<{ id: string; merged_into: string | null; deleted_at: string | null }>();
+  if (
+    !source || source.merged_into || source.deleted_at ||
+    !target || target.merged_into || target.deleted_at
+  ) {
     throw new Error("One of the wallet accounts is unavailable for merging.");
   }
 
   const results = await database.batch([
     database
       .prepare(
+        `INSERT INTO ledger (id, account_id, delta, reason, metadata_json)
+         SELECT ?, ?, -(target.balance + source.balance - 100), 'account_merge_cap', '{}'
+         FROM wallets AS target
+         JOIN wallets AS source ON source.account_id = ?
+         WHERE target.account_id = ? AND target.balance + source.balance > 100`,
+      )
+      .bind(crypto.randomUUID(), targetId, sourceId, targetId),
+    database
+      .prepare(
         `UPDATE wallets
          SET balance = MIN(100, balance + (SELECT balance FROM wallets WHERE account_id = ?)),
              lifetime_granted = lifetime_granted + (SELECT lifetime_granted FROM wallets WHERE account_id = ?),
              lifetime_spent = lifetime_spent + (SELECT lifetime_spent FROM wallets WHERE account_id = ?)
+               + MAX(0, balance + (SELECT balance FROM wallets WHERE account_id = ?) - 100)
          WHERE account_id = ?`,
       )
-      .bind(sourceId, sourceId, sourceId, targetId),
+      .bind(sourceId, sourceId, sourceId, sourceId, targetId),
     database
       .prepare("UPDATE ledger SET account_id = ? WHERE account_id = ?")
       .bind(targetId, sourceId),
@@ -249,10 +263,10 @@ async function linkAccount(
   googleSub?: string,
 ): Promise<void> {
   const target = await database
-    .prepare("SELECT id, email, google_sub, merged_into FROM accounts WHERE id = ?")
+    .prepare("SELECT id, email, google_sub, merged_into, deleted_at FROM accounts WHERE id = ?")
     .bind(targetId)
     .first<AccountRow>();
-  if (!target || target.merged_into) throw new Error("The active wallet account was not found.");
+  if (!target || target.merged_into || target.deleted_at) throw new Error("The active wallet account was not found.");
   if ((target.email && target.email.toLowerCase() !== email.toLowerCase()) ||
       (googleSub && target.google_sub && target.google_sub !== googleSub)) {
     throw new Error("This wallet is already linked to a different sign-in identity.");

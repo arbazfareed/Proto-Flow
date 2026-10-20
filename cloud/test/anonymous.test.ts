@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { app } from "../src";
+import { app, runScheduledTasks } from "../src";
 import type { WorkerEnv } from "../src/env";
 
 const secret = "test-secret-that-is-long-enough-for-hmac-validation";
@@ -23,6 +23,9 @@ interface MemoryAccount {
   install_id: string | null;
   merged_into: string | null;
   email: string | null;
+  google_sub?: string | null;
+  deleted_at?: string | null;
+  created_at?: string;
 }
 
 interface MemoryWallet {
@@ -120,19 +123,46 @@ class MemoryD1Database {
           install_id: installId,
           merged_into: null,
           email: null,
+          google_sub: null,
+          deleted_at: null,
+          created_at: new Date().toISOString(),
         });
         this.changes = 1;
       }
     } else if (statement.startsWith("select id from accounts where id = ? and merged_into is null")) {
       const account = this.accounts.get(parameters[0] as string);
-      if (account && !account.merged_into) results = [{ id: account.id }];
+      if (account && !account.merged_into && !account.deleted_at) results = [{ id: account.id }];
     } else if (statement.startsWith("select email from accounts where id = ? and merged_into is null")) {
       const account = this.accounts.get(parameters[0] as string);
       if (account && !account.merged_into) results = [{ email: account.email }];
-    } else if (statement.startsWith("select id, device_fingerprint, install_id, merged_into from accounts where id = ?")) {
+    } else if (statement.startsWith("select a.id, a.device_fingerprint, a.email, a.created_at")) {
+      const account = this.accounts.get(parameters[0] as string);
+      const wallet = this.wallets.get(parameters[0] as string);
+      if (account && wallet && !account.deleted_at && !account.merged_into) {
+        results = [{
+          id: account.id,
+          device_fingerprint: account.device_fingerprint,
+          email: account.email,
+          created_at: account.created_at,
+          balance: wallet.balance,
+          lifetime_granted: wallet.lifetime_granted,
+          lifetime_spent: wallet.lifetime_spent,
+        }];
+      }
+    } else if (statement.startsWith("update accounts set deleted_at")) {
+      const [deletedAt, accountId] = parameters as [string, string];
+      const account = this.accounts.get(accountId);
+      if (account && !account.deleted_at && !account.merged_into) {
+        account.deleted_at = deletedAt;
+        account.email = null;
+        account.google_sub = null;
+        results = [{ id: accountId }];
+        this.changes = 1;
+      }
+    } else if (statement.startsWith("select id, device_fingerprint, install_id, merged_into, deleted_at from accounts where id = ?")) {
       const account = this.accounts.get(parameters[0] as string);
       if (account) results = [account];
-    } else if (statement.startsWith("select id, device_fingerprint, install_id, merged_into from accounts")) {
+    } else if (statement.startsWith("select id, device_fingerprint, install_id, merged_into, deleted_at from accounts")) {
       const [fingerprint, installId] = parameters as [string, string];
       results = [...this.accounts.values()]
         .filter(
@@ -157,7 +187,10 @@ class MemoryD1Database {
           (signup) => signup.ip_hash === ipHash && signup.created_at > createdAt,
         ).length,
       }];
-    } else if (statement.startsWith("update accounts set device_fingerprint")) {
+    } else if (
+      statement.startsWith("update accounts set device_fingerprint") &&
+      !statement.includes("randomblob(32)")
+    ) {
       const [fingerprint, accountId] = parameters as [string, string];
       const account = this.accounts.get(accountId);
       if (account) {
@@ -185,24 +218,111 @@ class MemoryD1Database {
         this.changes = 1;
       }
     } else if (statement.startsWith("delete from wallet_ip_activity")) {
-      const [cutoffNow] = parameters as [string];
-      for (const [key, activity] of this.ipActivity) {
-        if (
-          Date.parse(activity.last_seen_at) <
-          Date.parse(cutoffNow) - 30 * 24 * 60 * 60 * 1000
-        ) {
-          this.ipActivity.delete(key);
-          this.changes += 1;
+      if (statement.includes("deleted_at <= ?")) {
+        const [purgeBefore] = parameters as [string];
+        const deletedIds = new Set([...this.accounts.values()]
+          .filter((account) => account.deleted_at && account.deleted_at <= purgeBefore)
+          .map((account) => account.id));
+        for (const [key, activity] of this.ipActivity) {
+          if (deletedIds.has(activity.account_id)) {
+            this.ipActivity.delete(key);
+            this.changes += 1;
+          }
+        }
+      } else {
+        const [cutoffNow] = parameters as [string];
+        for (const [key, activity] of this.ipActivity) {
+          if (Date.parse(activity.last_seen_at) < Date.parse(cutoffNow) - 30 * 24 * 60 * 60 * 1000) {
+            this.ipActivity.delete(key);
+            this.changes += 1;
+          }
         }
       }
     } else if (statement.startsWith("delete from daily_ip_grants")) {
-      const [cutoffNow] = parameters as [string];
-      for (const [ipHash, grant] of this.dailyIpGrants) {
-        if (
-          Date.parse(grant.granted_at) <
-          Date.parse(cutoffNow) - 30 * 24 * 60 * 60 * 1000
-        ) {
-          this.dailyIpGrants.delete(ipHash);
+      if (statement.includes("deleted_at <= ?")) {
+        const [purgeBefore] = parameters as [string];
+        const deletedIds = new Set([...this.accounts.values()]
+          .filter((account) => account.deleted_at && account.deleted_at <= purgeBefore)
+          .map((account) => account.id));
+        for (const [ipHash, grant] of this.dailyIpGrants) {
+          if (deletedIds.has(grant.account_id)) {
+            this.dailyIpGrants.delete(ipHash);
+            this.changes += 1;
+          }
+        }
+      } else {
+        const [cutoffNow] = parameters as [string];
+        for (const [ipHash, grant] of this.dailyIpGrants) {
+          if (Date.parse(grant.granted_at) < Date.parse(cutoffNow) - 30 * 24 * 60 * 60 * 1000) {
+            this.dailyIpGrants.delete(ipHash);
+            this.changes += 1;
+          }
+        }
+      }
+    } else if (statement.startsWith("delete from daily_grants where account_id in")) {
+      const [purgeBefore] = parameters as [string];
+      const deletedIds = new Set([...this.accounts.values()]
+        .filter((account) => account.deleted_at && account.deleted_at <= purgeBefore)
+        .map((account) => account.id));
+      for (const accountId of this.dailyGrants.keys()) {
+        if (deletedIds.has(accountId)) {
+          this.dailyGrants.delete(accountId);
+          this.changes += 1;
+        }
+      }
+    } else if (statement.startsWith("delete from wallets where account_id in")) {
+      const [purgeBefore] = parameters as [string];
+      const deletedIds = new Set([...this.accounts.values()]
+        .filter((account) => account.deleted_at && account.deleted_at <= purgeBefore)
+        .map((account) => account.id));
+      for (const accountId of deletedIds) {
+        if (this.wallets.delete(accountId)) this.changes += 1;
+      }
+    } else if (statement.startsWith("delete from ledger where account_id in")) {
+      const [purgeBefore] = parameters as [string];
+      const deletedIds = new Set([...this.accounts.values()]
+        .filter((account) => account.deleted_at && account.deleted_at <= purgeBefore)
+        .map((account) => account.id));
+      for (const [id, entry] of this.ledger) {
+        if (deletedIds.has(entry.account_id)) {
+          this.ledger.delete(id);
+          this.changes += 1;
+        }
+      }
+    } else if (
+      statement.startsWith("delete from auth_magic_links") ||
+      statement.startsWith("delete from auth_oauth_states") ||
+      statement.startsWith("delete from auth_oauth_tickets")
+    ) {
+      this.changes = 0;
+    } else if (statement.startsWith("delete from abuse_signups")) {
+      if (statement.includes("deleted_at <= ?")) {
+        const [purgeBefore] = parameters as [string];
+        const deletedIds = new Set([...this.accounts.values()]
+          .filter((account) => account.deleted_at && account.deleted_at <= purgeBefore)
+          .map((account) => account.id));
+        for (const accountId of deletedIds) {
+          if (this.signups.delete(accountId)) this.changes += 1;
+        }
+      } else {
+        const [cutoff] = parameters as [number];
+        for (const [accountId, signup] of this.signups) {
+          if (signup.created_at < cutoff) {
+            this.signups.delete(accountId);
+            this.changes += 1;
+          }
+        }
+      }
+    } else if (statement.startsWith("delete from abuse_flags")) {
+      this.changes = 0;
+    } else if (
+      statement.startsWith("delete from accounts where id in (") &&
+      statement.includes("with recursive deleted_accounts")
+    ) {
+      const [purgeBefore] = parameters as [string];
+      for (const account of this.accounts.values()) {
+        if (account.deleted_at && account.deleted_at <= purgeBefore) {
+          this.accounts.delete(account.id);
           this.changes += 1;
         }
       }
@@ -229,7 +349,7 @@ class MemoryD1Database {
           });
           this.changes = 1;
         }
-      } else if (statement.includes("'daily_grant'")) {
+      } else if (statement.includes("'daily_refill'")) {
         const [id, accountId, createdAt, grantAccountId, grantedAt] = parameters as [
           string,
           string,
@@ -247,7 +367,7 @@ class MemoryD1Database {
             id,
             account_id: accountId,
             delta: grant.amount,
-            reason: "daily_grant",
+            reason: "daily_refill",
             metadata_json: "{}",
             created_at: createdAt,
           });
@@ -430,11 +550,21 @@ class MemoryD1Database {
         .at(-1);
       results = [{ last_granted_at: latestGrant ?? null }];
     } else if (statement.startsWith("select id, delta, reason, metadata_json, created_at from ledger")) {
-      const [accountId] = parameters as [string];
+      const accountId = parameters[0] as string;
+      let parameterIndex = 1;
+      const reason = statement.includes("reason = ?") ? parameters[parameterIndex++] as string : null;
+      const hasCursor = statement.includes("created_at < ? or (created_at = ? and id < ?)");
+      const cursorCreatedAt = hasCursor ? parameters[parameterIndex++] as string : null;
+      if (hasCursor) parameterIndex += 1;
+      const cursorId = hasCursor ? parameters[parameterIndex++] as string : null;
+      const limit = statement.includes("limit ?") ? parameters[parameterIndex] as number : Infinity;
       results = [...this.ledger.values()]
         .filter((entry) => entry.account_id === accountId)
-        .sort((left, right) => right.created_at.localeCompare(left.created_at))
-        .slice(0, 20);
+        .filter((entry) => !reason || entry.reason === reason)
+        .filter((entry) => !cursorCreatedAt || entry.created_at < cursorCreatedAt ||
+          (entry.created_at === cursorCreatedAt && entry.id < cursorId!))
+        .sort((left, right) => right.created_at.localeCompare(left.created_at) || right.id.localeCompare(left.id))
+        .slice(0, limit);
     } else if (statement.startsWith("select balance, lifetime_granted, lifetime_spent from wallets")) {
       const [accountId] = parameters as [string];
       const wallet = this.wallets.get(accountId);
@@ -571,6 +701,169 @@ describe("anonymous wallet provisioning", () => {
     });
   });
 
+  it("paginates and filters full ledger history and exports the account data", async () => {
+    const database = new MemoryD1Database();
+    const created = await provision(
+      database,
+      "e".repeat(64),
+      "823e4567-e89b-42d3-a456-426614174000",
+    );
+    const wallet = await created.json() as WalletResponse;
+    for (let index = 0; index < 53; index += 1) {
+      const createdAt = new Date(Date.UTC(2026, 0, 1, 0, index)).toISOString();
+      const id = `ledger-${String(index).padStart(3, "0")}`;
+      database.ledger.set(id, {
+        id,
+        account_id: wallet.accountId,
+        delta: index % 2 === 0 ? 1 : -1,
+        reason: index % 2 === 0 ? "daily_refill" : "action:ai_generate",
+        metadata_json: index === 1
+          ? JSON.stringify({ email: "private@example.com", prompt: "private prompt", promptTokens: 17 })
+          : "{}",
+        created_at: createdAt,
+      });
+    }
+
+    const request = (path: string) => app.request(
+      path,
+      { headers: { Authorization: `Bearer ${wallet.token}` } },
+      environment(database),
+    );
+    const walletResponse = await request("/wallet/me");
+    const walletSummary = await walletResponse.json() as {
+      recentLedger: Array<{ id: string; metadata_json: string }>;
+    };
+    const recentSensitiveEntry = walletSummary.recentLedger.find((entry) => entry.id === "ledger-001");
+    expect(recentSensitiveEntry).toBeDefined();
+    expect(JSON.parse(recentSensitiveEntry!.metadata_json)).toEqual({ promptTokens: 17 });
+
+    const firstPageResponse = await request("/wallet/ledger?limit=50");
+    const firstPage = await firstPageResponse.json() as {
+      entries: Array<{ id: string; reason: string }>;
+      nextCursor: string | null;
+    };
+    expect(firstPageResponse.status).toBe(200);
+    expect(firstPage.entries).toHaveLength(50);
+    expect(firstPage.nextCursor).toBeTruthy();
+
+    const secondPageResponse = await request(
+      `/wallet/ledger?limit=50&cursor=${encodeURIComponent(firstPage.nextCursor!)}`,
+    );
+    const secondPage = await secondPageResponse.json() as typeof firstPage;
+    expect(secondPage.entries).toHaveLength(4);
+    expect(secondPage.nextCursor).toBeNull();
+    expect(new Set([...firstPage.entries, ...secondPage.entries].map((entry) => entry.id)).size).toBe(54);
+
+    const filteredResponse = await request("/wallet/ledger?reason=daily_refill");
+    const filtered = await filteredResponse.json() as typeof firstPage;
+    expect(filtered.entries).toHaveLength(27);
+    expect(filtered.entries.every((entry) => entry.reason === "daily_refill")).toBe(true);
+    expect((await request("/wallet/ledger?limit=51")).status).toBe(400);
+    expect((await request("/wallet/ledger?reason=email")).status).toBe(400);
+
+    const exportResponse = await request("/account/export");
+    const exported = await exportResponse.json() as {
+      schemaVersion: number;
+      account: { deviceIdHash: string; email: string | null };
+      wallet: { balance: number; lifetimeGranted: number; lifetimeSpent: number };
+      ledger: Array<{ id: string; metadata: Record<string, unknown> }>;
+    };
+    expect(exportResponse.status).toBe(200);
+    expect(exported).toMatchObject({
+      schemaVersion: 1,
+      account: { deviceIdHash: "e".repeat(64), email: null },
+      wallet: { balance: 50, lifetimeGranted: 50, lifetimeSpent: 0 },
+    });
+    expect(exported.ledger).toHaveLength(54);
+    expect(exported.ledger.find((entry) => entry.id === "ledger-001")).toMatchObject({
+      metadata: { promptTokens: 17 },
+    });
+    expect(JSON.stringify(exported.ledger)).not.toContain("private@example.com");
+    expect(JSON.stringify(exported.ledger)).not.toContain("private prompt");
+  });
+
+  it("soft-deletes only after typed confirmation and rejects the old session", async () => {
+    const database = new MemoryD1Database();
+    const created = await provision(
+      database,
+      "f".repeat(64),
+      "923e4567-e89b-42d3-a456-426614174000",
+    );
+    const wallet = await created.json() as WalletResponse;
+    const request = (body: string) => app.request(
+      "/account/data",
+      {
+        method: "DELETE",
+        headers: {
+          Authorization: `Bearer ${wallet.token}`,
+          "Content-Type": "application/json",
+        },
+        body,
+      },
+      environment(database),
+    );
+
+    expect((await request(JSON.stringify({ confirmation: "delete" }))).status).toBe(400);
+    const deletion = await request(JSON.stringify({ confirmation: "DELETE" }));
+    const result = await deletion.json() as { deleted: boolean; purgeAfter: string };
+    expect(deletion.status).toBe(200);
+    expect(result.deleted).toBe(true);
+    expect(Date.parse(result.purgeAfter) - Date.now()).toBeGreaterThan(29 * 24 * 60 * 60 * 1000);
+    expect(database.wallets.get(wallet.accountId)?.balance).toBe(50);
+    expect(database.accounts.get(wallet.accountId)?.deleted_at).toBeTruthy();
+
+    const staleSession = await app.request(
+      "/wallet/me",
+      { headers: { Authorization: `Bearer ${wallet.token}` } },
+      environment(database),
+    );
+    expect(staleSession.status).toBe(401);
+    const sameIdentity = await provision(
+      database,
+      "f".repeat(64),
+      "923e4567-e89b-42d3-a456-426614174000",
+    );
+    expect(sameIdentity.status).toBe(410);
+  });
+
+  it("hard-deletes wallet data and the account after 30 days", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-10-20T12:00:00.000Z"));
+    const database = new MemoryD1Database();
+    const created = await provision(
+      database,
+      "a".repeat(64),
+      "a23e4567-e89b-42d3-a456-426614174000",
+    );
+    const wallet = await created.json() as WalletResponse;
+    const account = database.accounts.get(wallet.accountId);
+    if (!account) throw new Error("Test account was not provisioned.");
+    account.email = "owner@example.com";
+    account.deleted_at = new Date(Date.now() - 31 * 24 * 60 * 60 * 1000).toISOString();
+    database.dailyGrants.set(wallet.accountId, {
+      granted_at: new Date(Date.now() - 40 * 24 * 60 * 60 * 1000).toISOString(),
+      amount: 20,
+    });
+    database.ipActivity.set(`hash:${wallet.accountId}`, {
+      ip_hash: "hash",
+      account_id: wallet.accountId,
+      last_seen_at: new Date().toISOString(),
+    });
+    database.dailyIpGrants.set("hash", {
+      account_id: wallet.accountId,
+      granted_at: new Date().toISOString(),
+    });
+
+    await runScheduledTasks(environment(database));
+
+    expect(database.wallets.has(wallet.accountId)).toBe(false);
+    expect([...database.ledger.values()].some((entry) => entry.account_id === wallet.accountId)).toBe(false);
+    expect(database.dailyGrants.has(wallet.accountId)).toBe(false);
+    expect([...database.ipActivity.values()].some((entry) => entry.account_id === wallet.accountId)).toBe(false);
+    expect(database.dailyIpGrants.has("hash")).toBe(false);
+    expect(database.accounts.has(wallet.accountId)).toBe(false);
+  });
+
   it("claims only the balance needed to reach the daily cap and records one ledger grant", async () => {
     const database = new MemoryD1Database();
     const provisionedResponse = await provision(
@@ -604,7 +897,7 @@ describe("anonymous wallet provisioning", () => {
       claimable: false,
     });
     expect(typeof firstResult.nextClaimAt).toBe("string");
-    expect([...database.ledger.values()].filter((entry) => entry.reason === "daily_grant")).toHaveLength(1);
+    expect([...database.ledger.values()].filter((entry) => entry.reason === "daily_refill")).toHaveLength(1);
 
     const repeatedClaim = await claim();
     expect(repeatedClaim.status).toBe(409);
@@ -612,7 +905,7 @@ describe("anonymous wallet provisioning", () => {
       error: { code: "DAILY_ALREADY_CLAIMED" },
       balance: 100,
     });
-    expect([...database.ledger.values()].filter((entry) => entry.reason === "daily_grant")).toHaveLength(1);
+    expect([...database.ledger.values()].filter((entry) => entry.reason === "daily_refill")).toHaveLength(1);
   });
 
   it("accumulates missed daily refills up to 60 credits without exceeding the wallet cap", async () => {

@@ -41,7 +41,7 @@ app.use("*", async (context, next) => {
   if (origin) {
     context.header("Access-Control-Allow-Origin", origin);
     context.header("Vary", "Origin");
-    context.header("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
+    context.header("Access-Control-Allow-Methods", "GET, POST, DELETE, OPTIONS");
     context.header(
       "Access-Control-Allow-Headers",
       "Authorization, Content-Type, X-Turnstile-Token",
@@ -88,6 +88,7 @@ interface AccountRow {
   device_fingerprint: string;
   install_id: string | null;
   merged_into: string | null;
+  deleted_at?: string | null;
 }
 
 interface WalletRow {
@@ -109,7 +110,30 @@ interface WalletMeRow extends WalletRow {
   last_granted_at: string | null;
 }
 
+function safeLedgerMetadata(metadataJson: string): Record<string, number> {
+  let metadata: unknown;
+  try {
+    metadata = JSON.parse(metadataJson);
+  } catch {
+    throw new Error("A wallet ledger entry contains invalid metadata.");
+  }
+  if (typeof metadata !== "object" || metadata === null || Array.isArray(metadata)) {
+    throw new Error("A wallet ledger entry contains invalid metadata.");
+  }
+  const safeMetadata: Record<string, number> = {};
+  for (const [key, value] of Object.entries(metadata as Record<string, unknown>)) {
+    if (
+      ["promptTokens", "completionTokens", "outputTokens", "assetCount"].includes(key) &&
+      typeof value === "number" && Number.isSafeInteger(value) && value >= 0
+    ) {
+      safeMetadata[key] = value;
+    }
+  }
+  return safeMetadata;
+}
+
 class IdentityConflictError extends Error {}
+class AccountDeletionPendingError extends Error {}
 
 const STARTER_CREDITS = 50;
 const DAILY_CREDITS = 20;
@@ -179,7 +203,7 @@ async function provisionAnonymousWallet(
 
   const matchingAccounts = await database
     .prepare(
-      `SELECT id, device_fingerprint, install_id, merged_into
+      `SELECT id, device_fingerprint, install_id, merged_into, deleted_at
        FROM accounts
        WHERE device_fingerprint = ? OR install_id = ?
        LIMIT 2`,
@@ -195,13 +219,14 @@ async function provisionAnonymousWallet(
   let account = matchingAccounts.results[0];
   for (let depth = 0; account.merged_into && depth < 8; depth += 1) {
     const resolved = await database
-      .prepare("SELECT id, device_fingerprint, install_id, merged_into FROM accounts WHERE id = ?")
+      .prepare("SELECT id, device_fingerprint, install_id, merged_into, deleted_at FROM accounts WHERE id = ?")
       .bind(account.merged_into)
       .first<AccountRow>();
     if (!resolved) throw new Error("The merged wallet account could not be resolved.");
     account = resolved;
   }
   if (account.merged_into) throw new Error("The wallet account merge chain is invalid.");
+  if (account.deleted_at) throw new AccountDeletionPendingError();
   if (
     account.install_id === normalizedInstallId &&
     account.device_fingerprint !== normalizedDeviceId
@@ -359,6 +384,14 @@ app.post("/auth/anonymous", async (context) => {
       lifetimeSpent: wallet.lifetime_spent,
     });
   } catch (error) {
+    if (error instanceof AccountDeletionPendingError) {
+      return errorResponse(
+        context,
+        410,
+        "ACCOUNT_DELETION_PENDING",
+        "This wallet is scheduled for deletion. Reset the cloud identity to create a new wallet.",
+      );
+    }
     if (error instanceof IdentityConflictError) {
       return errorResponse(
         context,
@@ -414,7 +447,13 @@ async function loadWallet(
     .all<LedgerRow>();
   if (!ledgerResult.success) throw new Error("Could not read wallet ledger entries.");
 
-  return { wallet, recentLedger: ledgerResult.results };
+  return {
+    wallet,
+    recentLedger: ledgerResult.results.map((entry) => ({
+      ...entry,
+      metadata_json: JSON.stringify(safeLedgerMetadata(entry.metadata_json)),
+    })),
+  };
 }
 
 async function hashClientIp(ipAddress: string, secret: string): Promise<string> {
@@ -436,6 +475,58 @@ async function hashClientIp(ipAddress: string, secret: string): Promise<string> 
 function nextClaimAt(lastGrantedAt: string | null): string | null {
   if (!lastGrantedAt) return null;
   return new Date(Date.parse(lastGrantedAt) + 24 * 60 * 60 * 1000).toISOString();
+}
+
+const LEDGER_REASONS = new Set([
+  "starter_grant",
+  "daily_refill",
+  "sign_in_bonus",
+  "account_merge_cap",
+  "action:ai_generate",
+  "action:cloud_publish",
+  "action:code_export",
+  "admin_adjust",
+]);
+
+function encodeLedgerCursor(entry: Pick<LedgerRow, "created_at" | "id">): string {
+  const bytes = new TextEncoder().encode(JSON.stringify([entry.created_at, entry.id]));
+  let binary = "";
+  for (const byte of bytes) binary += String.fromCharCode(byte);
+  return btoa(binary).replaceAll("+", "-").replaceAll("/", "_").replace(/=+$/, "");
+}
+
+function decodeLedgerCursor(value: string): { createdAt: string; id: string } | null {
+  if (!/^[A-Za-z\d_-]{1,256}$/.test(value)) return null;
+  try {
+    const base64 = value.replaceAll("-", "+").replaceAll("_", "/");
+    const binary = atob(base64.padEnd(Math.ceil(base64.length / 4) * 4, "="));
+    const decoded = JSON.parse(new TextDecoder().decode(
+      Uint8Array.from(binary, (character) => character.charCodeAt(0)),
+    )) as unknown;
+    if (
+      !Array.isArray(decoded) ||
+      decoded.length !== 2 ||
+      typeof decoded[0] !== "string" ||
+      !Number.isFinite(Date.parse(decoded[0])) ||
+      typeof decoded[1] !== "string" ||
+      decoded[1].length < 1 ||
+      decoded[1].length > 128
+    ) return null;
+    return { createdAt: decoded[0], id: decoded[1] };
+  } catch {
+    return null;
+  }
+}
+
+function serializeLedgerEntry(entry: LedgerRow) {
+  const safeMetadata = safeLedgerMetadata(entry.metadata_json);
+  return {
+    id: entry.id,
+    delta: entry.delta,
+    reason: entry.reason,
+    metadata: safeMetadata,
+    createdAt: entry.created_at,
+  };
 }
 
 app.get("/wallet/me", requireJwt, async (context) => {
@@ -475,6 +566,167 @@ app.get("/wallet/me", requireJwt, async (context) => {
       "DATABASE_UNAVAILABLE",
       "The wallet service is temporarily unavailable.",
     );
+  }
+});
+
+app.get("/wallet/ledger", requireJwt, async (context) => {
+  const rawLimit = context.req.query("limit") ?? "50";
+  const limit = /^\d{1,3}$/.test(rawLimit) ? Number(rawLimit) : Number.NaN;
+  if (!Number.isInteger(limit) || limit < 1 || limit > 50) {
+    return errorResponse(context, 400, "BAD_REQUEST", "Ledger limit must be between 1 and 50.");
+  }
+
+  const reason = context.req.query("reason");
+  if (reason && !LEDGER_REASONS.has(reason)) {
+    return errorResponse(context, 400, "BAD_REQUEST", "The requested ledger reason is not supported.");
+  }
+  const cursorValue = context.req.query("cursor");
+  const cursor = cursorValue ? decodeLedgerCursor(cursorValue) : null;
+  if (cursorValue && !cursor) {
+    return errorResponse(context, 400, "BAD_REQUEST", "The ledger cursor is invalid.");
+  }
+
+  const conditions = ["account_id = ?"];
+  const parameters: (string | number)[] = [context.get("auth").accountId];
+  if (reason) {
+    conditions.push("reason = ?");
+    parameters.push(reason);
+  }
+  if (cursor) {
+    conditions.push("(created_at < ? OR (created_at = ? AND id < ?))");
+    parameters.push(cursor.createdAt, cursor.createdAt, cursor.id);
+  }
+
+  try {
+    const result = await context.env.DB
+      .prepare(
+        `SELECT id, delta, reason, metadata_json, created_at
+         FROM ledger
+         WHERE ${conditions.join(" AND ")}
+         ORDER BY created_at DESC, id DESC
+         LIMIT ?`,
+      )
+      .bind(...parameters, limit + 1)
+      .all<LedgerRow>();
+    if (!result.success) throw new Error("Could not read wallet history.");
+    const hasMore = result.results.length > limit;
+    const rows = result.results.slice(0, limit);
+    return context.json({
+      entries: rows.map(serializeLedgerEntry),
+      nextCursor: hasMore ? encodeLedgerCursor(rows[rows.length - 1]) : null,
+    });
+  } catch (error) {
+    console.error("Wallet history read failed.", {
+      accountId: context.get("auth").accountId,
+      message: error instanceof Error ? error.message : "Unknown database error.",
+    });
+    return errorResponse(context, 503, "DATABASE_UNAVAILABLE", "Wallet history is temporarily unavailable.");
+  }
+});
+
+app.get("/account/export", requireJwt, async (context) => {
+  const accountId = context.get("auth").accountId;
+  try {
+    const account = await context.env.DB
+      .prepare(
+        `SELECT a.id, a.device_fingerprint, a.email, a.created_at,
+                w.balance, w.lifetime_granted, w.lifetime_spent
+         FROM accounts AS a
+         JOIN wallets AS w ON w.account_id = a.id
+         WHERE a.id = ? AND a.merged_into IS NULL AND a.deleted_at IS NULL`,
+      )
+      .bind(accountId)
+      .first<{
+        id: string;
+        device_fingerprint: string;
+        email: string | null;
+        created_at: string;
+        balance: number;
+        lifetime_granted: number;
+        lifetime_spent: number;
+      }>();
+    if (!account) {
+      return errorResponse(context, 404, "WALLET_NOT_FOUND", "The requested wallet does not exist.");
+    }
+
+    const ledger = await context.env.DB
+      .prepare(
+        `SELECT id, delta, reason, metadata_json, created_at
+         FROM ledger WHERE account_id = ?
+         ORDER BY created_at DESC, id DESC`,
+      )
+      .bind(accountId)
+      .all<LedgerRow>();
+    if (!ledger.success) throw new Error("Could not read the complete wallet ledger.");
+
+    return context.json({
+      schemaVersion: 1,
+      exportedAt: new Date().toISOString(),
+      account: {
+        id: account.id,
+        deviceIdHash: account.device_fingerprint,
+        email: account.email,
+        createdAt: account.created_at,
+      },
+      wallet: {
+        balance: account.balance,
+        lifetimeGranted: account.lifetime_granted,
+        lifetimeSpent: account.lifetime_spent,
+      },
+      ledger: ledger.results.map(serializeLedgerEntry),
+    });
+  } catch (error) {
+    console.error("Wallet data export failed.", {
+      accountId,
+      message: error instanceof Error ? error.message : "Unknown database error.",
+    });
+    return errorResponse(context, 503, "DATABASE_UNAVAILABLE", "The data export is temporarily unavailable.");
+  }
+});
+
+app.delete("/account/data", requireJwt, async (context) => {
+  const contentLength = Number(context.req.header("Content-Length") ?? 0);
+  if (contentLength > 1024) {
+    return errorResponse(context, 400, "BAD_REQUEST", "The confirmation request is invalid.");
+  }
+  let body: unknown;
+  try {
+    const rawBody = await context.req.text();
+    if (new TextEncoder().encode(rawBody).byteLength > 1024) {
+      return errorResponse(context, 400, "BAD_REQUEST", "The confirmation request is invalid.");
+    }
+    body = JSON.parse(rawBody);
+  } catch {
+    return errorResponse(context, 400, "BAD_REQUEST", "Type DELETE to confirm cloud data deletion.");
+  }
+  if (
+    typeof body !== "object" || body === null || Array.isArray(body) ||
+    !("confirmation" in body) || body.confirmation !== "DELETE"
+  ) {
+    return errorResponse(context, 400, "CONFIRMATION_REQUIRED", "Type DELETE to confirm cloud data deletion.");
+  }
+
+  const deletedAt = new Date().toISOString();
+  try {
+    const deleted = await context.env.DB
+      .prepare(
+        `UPDATE accounts
+         SET deleted_at = ?, email = NULL, google_sub = NULL
+         WHERE id = ? AND merged_into IS NULL AND deleted_at IS NULL
+         RETURNING id`,
+      )
+      .bind(deletedAt, context.get("auth").accountId)
+      .first<{ id: string }>();
+    if (!deleted) {
+      return errorResponse(context, 404, "WALLET_NOT_FOUND", "The requested wallet does not exist.");
+    }
+    return context.json({ deleted: true, deletedAt, purgeAfter: new Date(Date.parse(deletedAt) + 30 * 24 * 60 * 60 * 1000).toISOString() });
+  } catch (error) {
+    console.error("Cloud wallet deletion request failed.", {
+      accountId: context.get("auth").accountId,
+      message: error instanceof Error ? error.message : "Unknown database error.",
+    });
+    return errorResponse(context, 503, "DATABASE_UNAVAILABLE", "Cloud data deletion is temporarily unavailable.");
   }
 });
 
@@ -649,7 +901,7 @@ app.post("/wallet/claim-daily", requireJwt, async (context) => {
       context.env.DB
         .prepare(
           `INSERT INTO ledger (id, account_id, delta, reason, metadata_json, created_at)
-           SELECT ?, ?, amount, 'daily_grant', '{}', ?
+           SELECT ?, ?, amount, 'daily_refill', '{}', ?
            FROM daily_grants
            WHERE account_id = ? AND granted_at = ? AND changes() = 1`,
         )
@@ -951,8 +1203,20 @@ async function sendAbuseDigest(env: WorkerEnv): Promise<void> {
   }
 }
 
-async function runScheduledTasks(env: WorkerEnv): Promise<void> {
+const DELETED_ACCOUNT_IDS = `(
+  WITH RECURSIVE deleted_accounts(id) AS (
+    SELECT id FROM accounts WHERE deleted_at <= ?
+    UNION
+    SELECT child.id
+    FROM accounts AS child
+    JOIN deleted_accounts AS deleted ON child.merged_into = deleted.id
+  )
+  SELECT id FROM deleted_accounts
+)`;
+
+export async function runScheduledTasks(env: WorkerEnv): Promise<void> {
   const now = Math.floor(Date.now() / 1000);
+  const purgeBefore = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
   try {
     const results = await env.DB.batch([
       env.DB
@@ -961,16 +1225,51 @@ async function runScheduledTasks(env: WorkerEnv): Promise<void> {
       env.DB
         .prepare("DELETE FROM abuse_flags WHERE flagged_at < ?")
         .bind(now - 90 * 24 * 60 * 60),
+      env.DB
+        .prepare(`DELETE FROM auth_magic_links WHERE account_id IN ${DELETED_ACCOUNT_IDS}`)
+        .bind(purgeBefore),
+      env.DB
+        .prepare(`DELETE FROM auth_oauth_states WHERE account_id IN ${DELETED_ACCOUNT_IDS}`)
+        .bind(purgeBefore),
+      env.DB
+        .prepare(`DELETE FROM auth_oauth_tickets WHERE account_id IN ${DELETED_ACCOUNT_IDS}`)
+        .bind(purgeBefore),
+      env.DB
+        .prepare(`DELETE FROM abuse_signups WHERE account_id IN ${DELETED_ACCOUNT_IDS}`)
+        .bind(purgeBefore),
+      env.DB
+        .prepare(`DELETE FROM abuse_flags WHERE account_id IN ${DELETED_ACCOUNT_IDS}`)
+        .bind(purgeBefore),
+      env.DB
+        .prepare(`DELETE FROM wallet_ip_activity WHERE account_id IN ${DELETED_ACCOUNT_IDS}`)
+        .bind(purgeBefore),
+      env.DB
+        .prepare(`DELETE FROM daily_ip_grants WHERE account_id IN ${DELETED_ACCOUNT_IDS}`)
+        .bind(purgeBefore),
+      env.DB
+        .prepare(`DELETE FROM daily_grants WHERE account_id IN ${DELETED_ACCOUNT_IDS}`)
+        .bind(purgeBefore),
+      env.DB
+        .prepare(`DELETE FROM wallets WHERE account_id IN ${DELETED_ACCOUNT_IDS}`)
+        .bind(purgeBefore),
+      env.DB
+        .prepare(`DELETE FROM ledger WHERE account_id IN ${DELETED_ACCOUNT_IDS}`)
+        .bind(purgeBefore),
+      env.DB
+        .prepare(
+          `DELETE FROM accounts WHERE id IN ${DELETED_ACCOUNT_IDS}`,
+        )
+        .bind(purgeBefore),
     ]);
     if (results.some((result) => !result.success)) {
-      throw new Error("Abuse-record retention cleanup did not complete.");
+      throw new Error("Scheduled data-retention cleanup did not complete.");
     }
   } catch (error) {
-    console.error("Abuse-record retention cleanup failed.", {
+    console.error("Scheduled data-retention cleanup failed.", {
       message: error instanceof Error ? error.message : "Unknown cleanup error.",
     });
   }
-  await sendAbuseDigest(env);
+  if (new Date().getUTCDay() === 1) await sendAbuseDigest(env);
 }
 
 export default {
