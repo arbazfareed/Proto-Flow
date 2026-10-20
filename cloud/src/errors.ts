@@ -14,6 +14,7 @@ export type ErrorCode =
   | "NOT_FOUND"
   | "ORIGIN_NOT_ALLOWED"
   | "SERVICE_NOT_CONFIGURED"
+  | "WALLET_NOT_FOUND"
   | "WALLET_NOT_IMPLEMENTED";
 
 export function errorResponse(

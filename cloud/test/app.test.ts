@@ -141,16 +141,16 @@ describe("Worker API gateway", () => {
     }
   });
 
-  it("verifies valid HS256 tokens and returns the explicit wallet scaffold response", async () => {
+  it("verifies valid HS256 tokens and reaches the protected metered-action route", async () => {
     const token = await signToken(validClaims());
     const response = await app.request(
-      "/wallet/me",
-      { headers: { Authorization: `Bearer ${token}` } },
+      "/action/run",
+      { method: "POST", headers: { Authorization: `Bearer ${token}` } },
       environment(),
     );
     expect(response.status).toBe(501);
     expect(await response.json()).toMatchObject({
-      error: { code: "WALLET_NOT_IMPLEMENTED" },
+      error: { code: "ACTION_NOT_IMPLEMENTED" },
     });
   });
 

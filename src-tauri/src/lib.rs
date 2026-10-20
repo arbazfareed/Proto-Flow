@@ -18,7 +18,8 @@ pub fn run() {
             commands::file_io::get_device_id,
             commands::wallet::get_wallet_identity,
             commands::wallet::get_wallet_jwt,
-            commands::wallet::save_wallet_jwt
+            commands::wallet::save_wallet_jwt,
+            commands::wallet::clear_wallet_jwt
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

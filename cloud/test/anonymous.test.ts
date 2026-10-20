@@ -25,6 +25,20 @@ interface MemoryWallet {
   lifetime_spent: number;
 }
 
+interface MemoryLedgerEntry {
+  id: string;
+  account_id: string;
+  delta: number;
+  reason: string;
+  metadata_json: string;
+  created_at: string;
+}
+
+interface MemoryDailyGrant {
+  granted_at: string;
+  amount: number;
+}
+
 class MemoryD1Statement {
   private parameters: unknown[] = [];
 
@@ -56,6 +70,8 @@ class MemoryD1Database {
   readonly accounts = new Map<string, MemoryAccount>();
   readonly wallets = new Map<string, MemoryWallet>();
   readonly starterGrants = new Set<string>();
+  readonly ledger = new Map<string, MemoryLedgerEntry>();
+  readonly dailyGrants = new Map<string, MemoryDailyGrant>();
   private changes = 0;
 
   prepare(sql: string): MemoryD1Statement {
@@ -124,14 +140,99 @@ class MemoryD1Database {
         this.changes = 1;
       }
     } else if (statement.startsWith("insert into ledger")) {
-      const [grantId, accountId] = parameters as [string, string, number];
-      void grantId;
-      if (previousChanges === 1 && !this.starterGrants.has(accountId)) {
-        this.starterGrants.add(accountId);
-        this.changes = 1;
-      } else {
-        this.changes = 0;
+      if (statement.includes("'starter_grant'")) {
+        const [id, accountId, delta] = parameters as [string, string, number];
+        if (previousChanges === 1 && !this.starterGrants.has(accountId)) {
+          this.starterGrants.add(accountId);
+          this.ledger.set(id, {
+            id,
+            account_id: accountId,
+            delta,
+            reason: "starter_grant",
+            metadata_json: "{}",
+            created_at: new Date().toISOString(),
+          });
+          this.changes = 1;
+        }
+      } else if (statement.includes("'daily_grant'")) {
+        const [id, accountId, createdAt, grantAccountId, grantedAt] = parameters as [
+          string,
+          string,
+          string,
+          string,
+          string,
+        ];
+        const grant = this.dailyGrants.get(grantAccountId);
+        if (
+          previousChanges === 1 &&
+          grant?.granted_at === grantedAt &&
+          grant.amount > 0
+        ) {
+          this.ledger.set(id, {
+            id,
+            account_id: accountId,
+            delta: grant.amount,
+            reason: "daily_grant",
+            metadata_json: "{}",
+            created_at: createdAt,
+          });
+          this.changes = 1;
+        }
       }
+    } else if (statement.startsWith("insert or ignore into daily_grants")) {
+      const [accountId, grantedAt, dailyAmount, maxBalance, walletId, walletCap, historyAccountId, now] =
+        parameters as [string, string, number, number, string, number, string, string];
+      const wallet = this.wallets.get(walletId);
+      const latestGrant = this.dailyGrants.get(historyAccountId);
+      const isClaimedRecently =
+        latestGrant !== undefined &&
+        Date.parse(latestGrant.granted_at) > Date.parse(now) - 24 * 60 * 60 * 1000;
+      if (wallet && wallet.balance < walletCap && !isClaimedRecently) {
+        this.dailyGrants.set(accountId, {
+          granted_at: grantedAt,
+          amount: Math.min(dailyAmount, maxBalance - wallet.balance),
+        });
+        this.changes = 1;
+      }
+    } else if (statement.startsWith("update wallets set balance = balance +")) {
+      const grantAccountId = parameters[0] as string;
+      const grantedAt = parameters[1] as string;
+      const lifetimeGrantedAt = parameters[3] as string;
+      const accountId = parameters[5] as string;
+      const expectedAt = parameters[7] as string;
+      const grant = this.dailyGrants.get(grantAccountId);
+      const wallet = this.wallets.get(accountId);
+      if (
+        previousChanges === 1 &&
+        grant?.granted_at === grantedAt &&
+        grant.granted_at === lifetimeGrantedAt &&
+        grant.granted_at === expectedAt &&
+        wallet
+      ) {
+        wallet.balance += grant.amount;
+        wallet.lifetime_granted += grant.amount;
+        this.changes = 1;
+      }
+    } else if (statement.startsWith("select balance, lifetime_granted, lifetime_spent, case")) {
+      const [, historyAccountId, now, accountId] = parameters as [number, string, string, string];
+      const wallet = this.wallets.get(accountId);
+      const grant = this.dailyGrants.get(historyAccountId);
+      const recentlyClaimed =
+        grant !== undefined && Date.parse(grant.granted_at) > Date.parse(now) - 24 * 60 * 60 * 1000;
+      if (wallet) {
+        results = [{
+          balance: wallet.balance,
+          lifetime_granted: wallet.lifetime_granted,
+          lifetime_spent: wallet.lifetime_spent,
+          claimable: wallet.balance < 100 && !recentlyClaimed ? 1 : 0,
+        }];
+      }
+    } else if (statement.startsWith("select id, delta, reason, metadata_json, created_at from ledger")) {
+      const [accountId] = parameters as [string];
+      results = [...this.ledger.values()]
+        .filter((entry) => entry.account_id === accountId)
+        .sort((left, right) => right.created_at.localeCompare(left.created_at))
+        .slice(0, 20);
     } else if (statement.startsWith("select balance, lifetime_granted, lifetime_spent from wallets")) {
       const [accountId] = parameters as [string];
       const wallet = this.wallets.get(accountId);
@@ -202,11 +303,61 @@ describe("anonymous wallet provisioning", () => {
       { headers: { Authorization: `Bearer ${first.token}` } },
       environment(database),
     );
-    const authenticationResult = await authenticated.json();
-    expect(authenticationResult).toMatchObject({
-      error: { code: "WALLET_NOT_IMPLEMENTED" },
+    const wallet = await authenticated.json();
+    expect(authenticated.status).toBe(200);
+    expect(wallet).toMatchObject({
+      accountId: first.accountId,
+      balance: 50,
+      lifetimeGranted: 50,
+      lifetimeSpent: 0,
+      claimable: true,
+      recentLedger: [{ delta: 50, reason: "starter_grant" }],
     });
-    expect(authenticated.status).toBe(501);
+  });
+
+  it("claims only the balance needed to reach the daily cap and records one ledger grant", async () => {
+    const database = new MemoryD1Database();
+    const provisionedResponse = await provision(
+      database,
+      "c".repeat(64),
+      "323e4567-e89b-42d3-a456-426614174000",
+    );
+    const provisioned = (await provisionedResponse.json()) as WalletResponse;
+    const wallet = database.wallets.get(provisioned.accountId);
+    if (!wallet) throw new Error("Test wallet was not provisioned.");
+    wallet.balance = 95;
+
+    const claim = () =>
+      app.request(
+        "/wallet/claim-daily",
+        {
+          method: "POST",
+          headers: { Authorization: `Bearer ${provisioned.token}` },
+        },
+        environment(database),
+      );
+    const firstClaim = await claim();
+    const firstResult = await firstClaim.json();
+    expect(firstClaim.status).toBe(200);
+    expect(firstResult).toMatchObject({
+      accountId: provisioned.accountId,
+      claimed: true,
+      granted: 5,
+      balance: 100,
+      lifetimeGranted: 55,
+      claimable: false,
+    });
+    expect([...database.ledger.values()].filter((entry) => entry.reason === "daily_grant")).toHaveLength(1);
+
+    const repeatedClaim = await claim();
+    expect(repeatedClaim.status).toBe(200);
+    expect(await repeatedClaim.json()).toMatchObject({
+      claimed: false,
+      granted: 0,
+      balance: 100,
+      lifetimeGranted: 55,
+    });
+    expect([...database.ledger.values()].filter((entry) => entry.reason === "daily_grant")).toHaveLength(1);
   });
 
   it("uses the stable install ID when the device fingerprint changes", async () => {

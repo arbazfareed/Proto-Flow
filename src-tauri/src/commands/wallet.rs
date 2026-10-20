@@ -85,6 +85,14 @@ pub fn save_wallet_jwt(token: String) -> Result<(), String> {
         .map_err(|error| format!("Could not save the secure wallet token: {error}"))
 }
 
+#[tauri::command]
+pub fn clear_wallet_jwt() -> Result<(), String> {
+    match wallet_jwt_entry()?.delete_credential() {
+        Ok(()) | Err(keyring::Error::NoEntry) => Ok(()),
+        Err(error) => Err(format!("Could not clear the secure wallet token: {error}")),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
