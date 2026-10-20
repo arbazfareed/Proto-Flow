@@ -18,4 +18,6 @@ The wallet dialog's **Reset identity** action refreshes the local signed token f
 
 ## Data handling
 
-Wallet requests are sent to the configured Cloudflare Worker over HTTPS in production. The Worker uses the device and install IDs only to resolve the anonymous account and returns a signed session token and wallet summary. This feature does not implement an account deletion workflow; deletion and retention policies should be defined before production launch.
+Wallet requests are sent to the configured Cloudflare Worker over HTTPS in production. For daily-refill abuse prevention, the Worker reads Cloudflare's `CF-Connecting-IP` request header and stores an HMAC hash of the address with recent wallet activity; it does not store the raw address in D1. The IP hash is keyed with the Worker JWT secret and is used to limit refills when five or more distinct wallets claim from the same IP within 24 hours. Hashed IP activity and IP grant markers are pruned after 30 days. Local requests without Cloudflare's IP header use per-account limits only. If Turnstile is configured later, suspicious claims may submit a challenge token to Cloudflare for verification.
+
+The Worker uses the device and install IDs to resolve the anonymous account and returns a signed session token and wallet summary. This feature does not implement an account deletion workflow; deletion and retention policies should be defined before production launch.

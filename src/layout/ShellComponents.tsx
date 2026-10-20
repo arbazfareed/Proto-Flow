@@ -89,6 +89,7 @@ interface TopBarProps {
   onRedo: () => void;
   onOpenPalette: () => void;
   onOpenWallet: () => void;
+  onNotify: (message: string, isError?: boolean) => void;
   onStartDragging: () => void;
   onWindowAction: (action: "minimize" | "maximize" | "close") => void;
 }
@@ -101,6 +102,19 @@ function formatWalletSyncAge(timestamp: number): string {
   return `${hours} hr${hours === 1 ? "" : "s"} ago`;
 }
 
+function formatRefillCountdown(nextClaimAt: string | null, now: number): string {
+  if (!nextClaimAt) return "Daily refill available";
+  const millisecondsLeft = Date.parse(nextClaimAt) - now;
+  if (millisecondsLeft <= 0) return "Daily refill available";
+  const minutes = Math.ceil(millisecondsLeft / 60_000);
+  if (minutes < 60) return `Next refill in ${minutes} min`;
+  const hours = Math.floor(minutes / 60);
+  const remainingMinutes = minutes % 60;
+  return remainingMinutes === 0
+    ? `Next refill in ${hours} hr`
+    : `Next refill in ${hours} hr ${remainingMinutes} min`;
+}
+
 export function TopBar({
   onNew,
   onOpen,
@@ -110,6 +124,7 @@ export function TopBar({
   onRedo,
   onOpenPalette,
   onOpenWallet,
+  onNotify,
   onStartDragging,
   onWindowAction,
 }: TopBarProps) {
@@ -124,11 +139,13 @@ export function TopBar({
   const recentLedger = useWalletStore((state) => state.recentLedger);
   const lastSyncedAt = useWalletStore((state) => state.lastSyncedAt);
   const claimable = useWalletStore((state) => state.claimable);
+  const nextClaimAt = useWalletStore((state) => state.nextClaimAt);
   const walletError = useWalletStore((state) => state.error);
   const syncWallet = useWalletStore((state) => state.sync);
   const claimDaily = useWalletStore((state) => state.claimDaily);
   const [walletMenuOpen, setWalletMenuOpen] = useState(false);
   const [claimingDaily, setClaimingDaily] = useState(false);
+  const [walletClock, setWalletClock] = useState(Date.now());
   const walletMenuRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -149,10 +166,22 @@ export function TopBar({
     };
   }, [walletMenuOpen]);
 
+  useEffect(() => {
+    if (!walletMenuOpen) return;
+    setWalletClock(Date.now());
+    const interval = window.setInterval(() => setWalletClock(Date.now()), 60_000);
+    return () => window.clearInterval(interval);
+  }, [walletMenuOpen]);
+
   const claimDailyCredits = async () => {
     setClaimingDaily(true);
+    const previousBalance = useWalletStore.getState().balance;
     try {
-      await claimDaily();
+      const claimed = await claimDaily();
+      if (claimed) {
+        const granted = useWalletStore.getState().balance - previousBalance;
+        onNotify(`Daily refill: +${granted} credits`);
+      }
     } finally {
       setClaimingDaily(false);
     }
@@ -268,13 +297,31 @@ export function TopBar({
                   </div>
                 ))}
               </div>
-              {claimable && (
+              {claimable && walletStatus === "online" ? (
                 <button
                   className="button button-primary wallet-claim-button"
                   onClick={() => void claimDailyCredits()}
-                  disabled={claimingDaily || walletStatus !== "online"}
+                  disabled={claimingDaily}
                 >
                   {claimingDaily ? "Claiming…" : "Claim Daily +20"}
+                </button>
+              ) : (
+                <p className="wallet-menu-refill-countdown">
+                  {walletBalance >= 100
+                    ? "Wallet full · 100-credit cap"
+                    : walletStatus === "offline"
+                      ? "Reconnect to claim your daily refill"
+                      : formatRefillCountdown(nextClaimAt, walletClock)}
+                  {nextClaimAt && walletBalance < 100 && (
+                    <time dateTime={nextClaimAt} title={new Date(nextClaimAt).toLocaleString()}>
+                      {` · ${new Date(nextClaimAt).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}`}
+                    </time>
+                  )}
+                </p>
+              )}
+              {!claimable && walletStatus === "online" && walletBalance < 100 && (
+                <button className="button button-primary wallet-claim-button" disabled>
+                  Claim Daily +20
                 </button>
               )}
               <button

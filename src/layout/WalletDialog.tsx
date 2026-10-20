@@ -59,7 +59,7 @@ export function WalletDialog({ onClose }: WalletDialogProps) {
           <p className="wallet-dialog-error" role="alert"><CircleAlert size={14} /> {error}</p>
         )}
         <p className="wallet-privacy-note">
-          ProtoFlow sends a hashed device ID and random install ID to identify this wallet. It does not send your hostname.
+          ProtoFlow uses a hashed device ID and random install ID to identify this wallet. Cloudflare also provides an IP address for refill-abuse limits; ProtoFlow stores only a keyed hash of it, not the raw address.
         </p>
         <div className="wallet-dialog-actions">
           <button className="button button-quiet" onClick={onClose}>Close</button>
