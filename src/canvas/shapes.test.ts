@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { createEmptyProject } from "../project/schema";
 import { ELEMENT_LIBRARY_TOOL_TYPES } from "./shapeTools";
+import { CANVAS_ICON_NAMES, renderCanvasIconSvg } from "./iconLibrary";
 import {
   createShapeWidget,
   getShapeDefinition,
@@ -119,6 +120,61 @@ describe("canvas shape registry", () => {
       "List item 2",
       "List item 3",
     ]);
+  });
+
+  it("provides an editable avatar and modern app-element defaults", () => {
+    expect(getShapeDefinition("avatar")?.props).toMatchObject({
+      label: "Alex Morgan",
+      initials: "AM",
+    });
+    expect(getShapeDefinition("icon-button")?.props.iconName).toBe("Plus");
+    expect(getShapeDefinition("select")?.props).toMatchObject({
+      placeholder: "Select...",
+    });
+    expect(getShapeDefinition("textarea")?.props).toMatchObject({
+      placeholder: "Write something...",
+    });
+    expect(getShapeDefinition("file-upload")?.props).toMatchObject({
+      placeholder: "Browse or drop a file",
+    });
+    expect(getShapeDefinition("slider")?.props.value).toBe(65);
+    expect(getShapeDefinition("stepper")?.props.value).toBe(2);
+    expect(getShapeDefinition("metric-card")?.props).toMatchObject({
+      value: "$24,800",
+      trend: "+12.8%",
+    });
+    expect(getShapeDefinition("profile-card")?.props).toMatchObject({
+      label: "Alex Morgan",
+      initials: "AM",
+    });
+    for (const type of [
+      "toast",
+      "notification",
+      "metric-card",
+      "profile-card",
+      "empty-state",
+      "code-block",
+      "segmented-control",
+      "step-indicator",
+      "bottom-nav",
+      "pricing-card",
+    ] as const) {
+      expect(ELEMENT_LIBRARY_TOOL_TYPES).toContain(type);
+      expect(createShapeWidget(type, 10, 20).width).toBeGreaterThan(0);
+    }
+  });
+
+  it("renders a broad set of valid Lucide SVGs for canvas icons", () => {
+    expect(CANVAS_ICON_NAMES.length).toBeGreaterThanOrEqual(60);
+    const camera = renderCanvasIconSvg("Camera", "#f0abfc", 2);
+    expect(camera).toContain("<svg");
+    expect(camera).toContain("<path");
+    expect(camera).toContain("#f0abfc");
+    expect(renderCanvasIconSvg("not-an-icon", "#ffffff", 2)).toContain("<svg");
+    for (const name of CANVAS_ICON_NAMES) {
+      expect(renderCanvasIconSvg(name, "#ffffff", 2), `invalid canvas icon: ${name}`)
+        .toMatch(/<(?:path|circle|line|polyline|polygon|rect|ellipse)\b/);
+    }
   });
 
   it("creates UUID-backed unlocked widgets with isolated registry defaults", () => {

@@ -1,14 +1,15 @@
-import { useEffect, useRef, useState, type ComponentType, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type ComponentType, type ReactNode } from "react";
 import { invoke, isTauri } from "@tauri-apps/api/core";
 import {
   Arrow,
+  Arc,
   Circle,
   Ellipse,
   Group,
   Image as KonvaImage,
   Line,
-  Path,
   Rect,
+  Star as KonvaStar,
   Text as KonvaText,
 } from "react-konva";
 import type Konva from "konva";
@@ -24,6 +25,7 @@ import {
 } from "./shapeTools";
 import { MAX_WIDGET_TEXT_LENGTH } from "./textMeasurement";
 import { getSafeBlendMode, normalizeListItems, styleColorToRgba } from "./styleInspector";
+import { renderCanvasIconSvg } from "./iconLibrary";
 export { measureTextBounds } from "./textMeasurement";
 export { SHAPE_TOOLS };
 export type { ShapeTool };
@@ -186,49 +188,93 @@ function ArrowShape({ widget, stroke, strokeWidth }: ShapeComponentProps) {
   );
 }
 
-const LUCIDE_PATHS: Record<string, string[]> = {
-  Activity: [
-    "M22 12h-2.48a2 2 0 0 0-1.93 1.46l-2.35 8.36a.25.25 0 0 1-.48 0L9.24 2.18a.25.25 0 0 0-.48 0l-2.35 8.36A2 2 0 0 1 4.49 12H2",
-  ],
-  Heart: [
-    "M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z",
-  ],
-  Search: ["m21 21-4.3-4.3", "M11 19a8 8 0 1 0 0-16 8 8 0 0 0 0 16Z"],
-  Star: [
-    "M11.525 2.295a.53.53 0 0 1 .95 0l2.31 4.679a2.123 2.123 0 0 0 1.595 1.16l5.166.756a.53.53 0 0 1 .294.904l-3.736 3.638a2.123 2.123 0 0 0-.611 1.878l.882 5.14a.53.53 0 0 1-.771.56l-4.618-2.428a2.122 2.122 0 0 0-1.973 0L6.396 21.01a.53.53 0 0 1-.77-.56l.881-5.139a2.122 2.122 0 0 0-.611-1.879L2.16 9.795a.53.53 0 0 1 .294-.906l5.165-.755a2.122 2.122 0 0 0 1.597-1.16z",
-  ],
-  Zap: [
-    "M4 14a1 1 0 0 1-.78-1.63l9.9-10.2a.5.5 0 0 1 .86.46l-1.92 6.02A1 1 0 0 0 13 10h7a1 1 0 0 1 .78 1.63l-9.9 10.2a.5.5 0 0 1-.86-.46l1.92-6.02A1 1 0 0 0 11 14z",
-  ],
-};
+function CanvasIcon({
+  name,
+  color,
+  strokeWidth,
+  x = 0,
+  y = 0,
+  width,
+  height,
+}: {
+  name: string;
+  color: string;
+  strokeWidth: number;
+  x?: number;
+  y?: number;
+  width: number;
+  height: number;
+}) {
+  const [image, setImage] = useState<HTMLImageElement | null>(null);
+  const [failed, setFailed] = useState(false);
+  const source = useMemo(
+    () =>
+      `data:image/svg+xml;charset=utf-8,${encodeURIComponent(
+        renderCanvasIconSvg(name, color, strokeWidth),
+      )}`,
+    [color, name, strokeWidth],
+  );
+
+  useEffect(() => {
+    let active = true;
+    const element = new window.Image();
+    element.onload = () => {
+      if (active) {
+        setImage(element);
+        setFailed(false);
+      }
+    };
+    element.onerror = () => {
+      if (active) {
+        console.error(`Could not render the "${name}" canvas icon.`);
+        setImage(null);
+        setFailed(true);
+      }
+    };
+    element.src = source;
+    return () => {
+      active = false;
+    };
+  }, [name, source]);
+
+  if (image) {
+    return (
+      <KonvaImage
+        image={image}
+        x={x}
+        y={y}
+        width={width}
+        height={height}
+        perfectDrawEnabled={false}
+      />
+    );
+  }
+  if (failed) {
+    return (
+      <KonvaStar
+        x={x + width / 2}
+        y={y + height / 2}
+        numPoints={5}
+        innerRadius={Math.min(width, height) * 0.22}
+        outerRadius={Math.min(width, height) * 0.45}
+        stroke={color}
+        strokeWidth={strokeWidth}
+        perfectDrawEnabled={false}
+      />
+    );
+  }
+  return null;
+}
 
 function IconShape({ widget, stroke, strokeWidth }: ShapeComponentProps) {
-  const iconName =
-    typeof widget.props.iconName === "string" && LUCIDE_PATHS[widget.props.iconName]
-      ? widget.props.iconName
-      : "Star";
-  const color = stroke ?? DEFAULT_STROKE;
-
   return (
-    <Group
-      x={0}
-      y={0}
-      scaleX={widget.width / 24}
-      scaleY={widget.height / 24}
-    >
-      {LUCIDE_PATHS[iconName].map((data, index) => (
-        <Path
-          key={`${iconName}-${index}`}
-          data={data}
-          fill="transparent"
-          stroke={color}
-          strokeWidth={strokeWidth}
-          lineCap="round"
-          lineJoin="round"
-          perfectDrawEnabled={false}
-        />
-      ))}
-    </Group>
+    <CanvasIcon
+      name={getWidgetProp(widget, "iconName", "Star")}
+      color={stroke ?? DEFAULT_STROKE}
+      strokeWidth={strokeWidth}
+      width={widget.width}
+      height={widget.height}
+    />
   );
 }
 
@@ -663,6 +709,1156 @@ function ImageShape({ widget, stroke, strokeWidth, onThumbnailReady }: ShapeComp
   );
 }
 
+function AvatarShape({ widget, fill, stroke, strokeWidth }: ShapeComponentProps) {
+  const label = getWidgetProp(widget, "initials", "").trim();
+  const initials =
+    label ||
+    getWidgetProp(widget, "label", "User")
+      .split(/\s+/)
+      .filter(Boolean)
+      .slice(0, 2)
+      .map((part) => part[0]?.toUpperCase() ?? "")
+      .join("") ||
+    "U";
+  const radius = Math.min(widget.width, widget.height) / 2;
+  return (
+    <Group>
+      <Circle
+        x={widget.width / 2}
+        y={widget.height / 2}
+        radius={radius}
+        fill={fill ?? "#6366f1"}
+        stroke={stroke}
+        strokeWidth={strokeWidth}
+        perfectDrawEnabled={false}
+      />
+      <KonvaText
+        width={widget.width}
+        height={widget.height}
+        text={initials.slice(0, 3)}
+        fontFamily="Arial"
+        fontSize={Math.max(10, radius * 0.72)}
+        fontStyle="bold"
+        fill="#ffffff"
+        align="center"
+        verticalAlign="middle"
+        perfectDrawEnabled={false}
+      />
+    </Group>
+  );
+}
+
+function IconButtonShape({ widget, fill, stroke, strokeWidth }: ShapeComponentProps) {
+  const iconSize = Math.min(widget.width, widget.height) * 0.56;
+  return (
+    <Group>
+      <Rect
+        width={widget.width}
+        height={widget.height}
+        fill={fill ?? "#272431"}
+        stroke={stroke ?? "#5d5277"}
+        strokeWidth={strokeWidth}
+        cornerRadius={widget.style.cornerRadius ?? 8}
+        perfectDrawEnabled={false}
+      />
+      <CanvasIcon
+        name={getWidgetProp(widget, "iconName", "Plus")}
+        color="#e9e4f5"
+        strokeWidth={2}
+        x={(widget.width - iconSize) / 2}
+        y={(widget.height - iconSize) / 2}
+        width={iconSize}
+        height={iconSize}
+      />
+    </Group>
+  );
+}
+
+function PillShape({ widget, fill, stroke, strokeWidth }: ShapeComponentProps) {
+  return (
+    <Group>
+      <Rect
+        width={widget.width}
+        height={widget.height}
+        fill={fill ?? "#283345"}
+        stroke={stroke}
+        strokeWidth={strokeWidth}
+        cornerRadius={widget.height / 2}
+        perfectDrawEnabled={false}
+      />
+      {widget.type === "badge" && (
+        <Circle
+          x={Math.max(8, widget.height * 0.42)}
+          y={widget.height / 2}
+          radius={Math.max(2, widget.height * 0.09)}
+          fill={stroke ?? "#60a5fa"}
+          perfectDrawEnabled={false}
+        />
+      )}
+      <KonvaText
+        x={widget.type === "badge" ? widget.height * 0.7 : 8}
+        width={Math.max(1, widget.width - (widget.type === "badge" ? widget.height : 16))}
+        height={widget.height}
+        text={getWidgetProp(widget, "label", widget.type === "tag" ? "Tag" : "New")}
+        fontFamily="Arial"
+        fontSize={Math.max(10, Math.min(14, widget.height * 0.42))}
+        fontStyle="bold"
+        fill="#e5e7eb"
+        align="center"
+        verticalAlign="middle"
+        ellipsis
+        perfectDrawEnabled={false}
+      />
+    </Group>
+  );
+}
+
+const NOTICE_ICONS: Record<string, string> = {
+  alert: "AlertCircle",
+  banner: "Info",
+  toast: "CheckCircle2",
+  notification: "Bell",
+  tooltip: "CircleHelp",
+  popover: "MessageCircle",
+};
+
+function NoticeShape({ widget, fill, stroke, strokeWidth }: ShapeComponentProps) {
+  const iconColor = stroke ?? "#60a5fa";
+  const iconSize = Math.min(22, Math.max(16, widget.height * 0.24));
+  const hasSubtitle = typeof widget.props.subtitle === "string";
+  return (
+    <Group>
+      <Rect
+        width={widget.width}
+        height={widget.height}
+        fill={fill ?? "#202838"}
+        stroke={stroke ?? "#34445d"}
+        strokeWidth={strokeWidth}
+        cornerRadius={widget.style.cornerRadius ?? 8}
+        perfectDrawEnabled={false}
+      />
+      <Rect
+        width={4}
+        height={widget.height}
+        fill={iconColor}
+        cornerRadius={2}
+        perfectDrawEnabled={false}
+      />
+      <CanvasIcon
+        name={NOTICE_ICONS[widget.type] ?? "Info"}
+        color={iconColor}
+        strokeWidth={2}
+        x={12}
+        y={(widget.height - iconSize) / 2}
+        width={iconSize}
+        height={iconSize}
+      />
+      <KonvaText
+        x={iconSize + 22}
+        y={hasSubtitle ? 12 : 0}
+        width={Math.max(1, widget.width - iconSize - 34)}
+        height={hasSubtitle ? widget.height * 0.45 : widget.height}
+        text={getWidgetProp(widget, "label", getShapeDefinition(widget.type)?.label ?? "Message")}
+        fontFamily="Arial"
+        fontSize={Math.max(11, Math.min(15, widget.height * 0.2))}
+        fontStyle="bold"
+        fill="#f3f4f6"
+        verticalAlign={hasSubtitle ? "middle" : "middle"}
+        ellipsis
+        perfectDrawEnabled={false}
+      />
+      {hasSubtitle && widget.height > 48 && (
+        <KonvaText
+          x={iconSize + 22}
+          y={widget.height * 0.52}
+          width={Math.max(1, widget.width - iconSize - 34)}
+          height={widget.height * 0.3}
+          text={getWidgetProp(widget, "subtitle")}
+          fontFamily="Arial"
+          fontSize={Math.max(9, Math.min(12, widget.height * 0.15))}
+          fill="#aab4c4"
+          ellipsis
+          perfectDrawEnabled={false}
+        />
+      )}
+    </Group>
+  );
+}
+
+function ProgressBarShape({ widget, fill, stroke, strokeWidth }: ShapeComponentProps) {
+  const progress = typeof widget.props.value === "number"
+    ? Math.min(100, Math.max(0, widget.props.value))
+    : 68;
+  const barHeight = Math.min(12, Math.max(6, widget.height * 0.25));
+  const barY = (widget.height - barHeight) / 2;
+  return (
+    <Group>
+      <Rect
+        y={barY}
+        width={widget.width}
+        height={barHeight}
+        fill="#30333d"
+        cornerRadius={barHeight / 2}
+        perfectDrawEnabled={false}
+      />
+      <Rect
+        y={barY}
+        width={widget.width * progress / 100}
+        height={barHeight}
+        fill={fill ?? "#8b69ed"}
+        stroke={stroke}
+        strokeWidth={strokeWidth}
+        cornerRadius={barHeight / 2}
+        perfectDrawEnabled={false}
+      />
+      {widget.height > 40 && (
+        <KonvaText
+          y={0}
+          width={widget.width}
+          height={Math.max(14, barY - 3)}
+          text={`${getWidgetProp(widget, "label", "Progress")}  ${progress}%`}
+          fontFamily="Arial"
+          fontSize={12}
+          fill="#cbd5e1"
+          verticalAlign="middle"
+          perfectDrawEnabled={false}
+        />
+      )}
+    </Group>
+  );
+}
+
+function SpinnerShape({ widget, stroke, strokeWidth }: ShapeComponentProps) {
+  const radius = Math.min(widget.width, widget.height) / 2 - strokeWidth;
+  const x = widget.width / 2;
+  const y = widget.height / 2;
+  return (
+    <Group>
+      <Arc
+        x={x}
+        y={y}
+        innerRadius={Math.max(0, radius - strokeWidth)}
+        outerRadius={radius}
+        angle={360}
+        fill="#393b45"
+        perfectDrawEnabled={false}
+      />
+      <Arc
+        x={x}
+        y={y}
+        innerRadius={Math.max(0, radius - strokeWidth)}
+        outerRadius={radius}
+        angle={260}
+        rotation={-70}
+        fill={stroke ?? "#a78bfa"}
+        perfectDrawEnabled={false}
+      />
+    </Group>
+  );
+}
+
+function SkeletonShape({ widget, fill }: ShapeComponentProps) {
+  const gap = Math.max(4, widget.height * 0.06);
+  const avatarSize = Math.min(widget.height * 0.72, widget.width * 0.24);
+  const lineX = avatarSize + gap * 2;
+  const lineWidth = Math.max(1, widget.width - lineX);
+  const lineHeight = Math.max(5, Math.min(10, widget.height * 0.14));
+  return (
+    <Group>
+      <Rect
+        x={4}
+        y={(widget.height - avatarSize) / 2}
+        width={avatarSize}
+        height={avatarSize}
+        fill={fill ?? "#3a3d48"}
+        cornerRadius={avatarSize / 2}
+        perfectDrawEnabled={false}
+      />
+      {[0, 1, 2].map((line) => (
+        <Rect
+          key={line}
+          x={lineX}
+          y={widget.height * 0.2 + line * (lineHeight + gap)}
+          width={line === 2 ? lineWidth * 0.62 : lineWidth}
+          height={lineHeight}
+          fill={fill ?? "#3a3d48"}
+          cornerRadius={lineHeight / 2}
+          perfectDrawEnabled={false}
+        />
+      ))}
+    </Group>
+  );
+}
+
+function RatingShape({ widget, fill }: ShapeComponentProps) {
+  const rating = typeof widget.props.value === "number"
+    ? Math.min(5, Math.max(0, widget.props.value))
+    : 4;
+  const gap = 3;
+  const starSize = Math.min(widget.height * 0.78, (widget.width - gap * 4) / 5);
+  return (
+    <Group>
+      {Array.from({ length: 5 }, (_, index) => {
+        const x = index * (starSize + gap) + starSize / 2;
+        const y = widget.height / 2;
+        const selected = index < Math.round(rating);
+        return (
+          <KonvaStar
+            key={index}
+            x={x}
+            y={y}
+            numPoints={5}
+            innerRadius={starSize * 0.42}
+            outerRadius={starSize / 2}
+            fill={selected ? fill ?? "#fbbf24" : "#454751"}
+            perfectDrawEnabled={false}
+          />
+        );
+      })}
+    </Group>
+  );
+}
+
+function MetricCardShape({ widget, fill, stroke, strokeWidth }: ShapeComponentProps) {
+  const iconSize = 18;
+  return (
+    <Group>
+      <Rect
+        width={widget.width}
+        height={widget.height}
+        fill={fill ?? "#20232c"}
+        stroke={stroke ?? "#3a3e49"}
+        strokeWidth={strokeWidth}
+        cornerRadius={widget.style.cornerRadius ?? 9}
+        perfectDrawEnabled={false}
+      />
+      <KonvaText
+        x={12}
+        y={10}
+        width={widget.width - 38}
+        height={20}
+        text={getWidgetProp(widget, "label", "Revenue")}
+        fontFamily="Arial"
+        fontSize={12}
+        fill="#aeb6c4"
+        ellipsis
+        perfectDrawEnabled={false}
+      />
+      <CanvasIcon
+        name="TrendingUp"
+        color={stroke ?? "#8b69ed"}
+        strokeWidth={2}
+        x={widget.width - iconSize - 12}
+        y={10}
+        width={iconSize}
+        height={iconSize}
+      />
+      <KonvaText
+        x={12}
+        y={32}
+        width={widget.width - 24}
+        height={34}
+        text={getWidgetProp(widget, "value", "$24,800")}
+        fontFamily="Arial"
+        fontSize={Math.max(18, Math.min(25, widget.height * 0.25))}
+        fontStyle="bold"
+        fill="#f3f4f6"
+        ellipsis
+        perfectDrawEnabled={false}
+      />
+      <KonvaText
+        x={12}
+        y={widget.height - 25}
+        width={widget.width - 24}
+        height={16}
+        text={`${getWidgetProp(widget, "trend", "+12.8%")} this month`}
+        fontFamily="Arial"
+        fontSize={10}
+        fill="#4ade80"
+        ellipsis
+        perfectDrawEnabled={false}
+      />
+    </Group>
+  );
+}
+
+function ProfileCardShape({ widget, fill, stroke, strokeWidth }: ShapeComponentProps) {
+  const avatarSize = Math.min(44, widget.height * 0.34);
+  const avatar: Widget = {
+    ...widget,
+    width: avatarSize,
+    height: avatarSize,
+    props: {
+      ...widget.props,
+      initials: getWidgetProp(widget, "initials", "AM"),
+    },
+  };
+  return (
+    <Group>
+      <Rect
+        width={widget.width}
+        height={widget.height}
+        fill={fill ?? "#20232c"}
+        stroke={stroke ?? "#3a3e49"}
+        strokeWidth={strokeWidth}
+        cornerRadius={widget.style.cornerRadius ?? 9}
+        perfectDrawEnabled={false}
+      />
+      <Group x={14} y={14}>
+        <AvatarShape widget={avatar} fill="#6366f1" stroke={undefined} strokeWidth={0} />
+      </Group>
+      <KonvaText
+        x={avatarSize + 24}
+        y={widget.height * 0.18}
+        width={Math.max(1, widget.width - avatarSize - 38)}
+        height={20}
+        text={getWidgetProp(widget, "label", "Alex Morgan")}
+        fontFamily="Arial"
+        fontSize={14}
+        fontStyle="bold"
+        fill="#f3f4f6"
+        ellipsis
+        perfectDrawEnabled={false}
+      />
+      <KonvaText
+        x={avatarSize + 24}
+        y={widget.height * 0.18 + 21}
+        width={Math.max(1, widget.width - avatarSize - 38)}
+        height={18}
+        text={getWidgetProp(widget, "subtitle", "Product designer")}
+        fontFamily="Arial"
+        fontSize={11}
+        fill="#aab4c4"
+        ellipsis
+        perfectDrawEnabled={false}
+      />
+      <Line
+        points={[12, widget.height * 0.62, widget.width - 12, widget.height * 0.62]}
+        stroke="#3a3e49"
+        strokeWidth={1}
+        perfectDrawEnabled={false}
+      />
+      <KonvaText
+        x={14}
+        y={widget.height * 0.68}
+        width={widget.width - 28}
+        height={24}
+        text="View profile   ·   Message"
+        fontFamily="Arial"
+        fontSize={11}
+        fill="#a78bfa"
+        verticalAlign="middle"
+        perfectDrawEnabled={false}
+      />
+    </Group>
+  );
+}
+
+function FormPreviewShape({ widget, fill, stroke, strokeWidth }: ShapeComponentProps) {
+  const title = getWidgetProp(widget, "label", getShapeDefinition(widget.type)?.label ?? "Control");
+  const placeholder = getWidgetProp(widget, "placeholder", title);
+  const radius = widget.style.cornerRadius ?? 6;
+
+  if (widget.type === "slider") {
+    const value = typeof widget.props.value === "number"
+      ? Math.min(100, Math.max(0, widget.props.value))
+      : 65;
+    const trackY = widget.height * 0.62;
+    return (
+      <Group>
+        <KonvaText
+          x={2}
+          y={0}
+          width={widget.width - 4}
+          height={Math.max(14, widget.height * 0.38)}
+          text={title}
+          fontFamily="Arial"
+          fontSize={11}
+          fill="#d7d6dd"
+          perfectDrawEnabled={false}
+        />
+        <Line
+          points={[2, trackY, widget.width - 2, trackY]}
+          stroke="#454853"
+          strokeWidth={6}
+          lineCap="round"
+          perfectDrawEnabled={false}
+        />
+        <Line
+          points={[2, trackY, 2 + (widget.width - 4) * value / 100, trackY]}
+          stroke={stroke ?? "#8b69ed"}
+          strokeWidth={6}
+          lineCap="round"
+          perfectDrawEnabled={false}
+        />
+        <Circle
+          x={2 + (widget.width - 4) * value / 100}
+          y={trackY}
+          radius={7}
+          fill="#ffffff"
+          stroke={stroke ?? "#8b69ed"}
+          strokeWidth={2}
+          perfectDrawEnabled={false}
+        />
+      </Group>
+    );
+  }
+
+  if (widget.type === "file-upload") {
+    const iconSize = Math.min(24, widget.height * 0.3);
+    return (
+      <Group>
+        <Rect
+          width={widget.width}
+          height={widget.height}
+          fill={fill ?? "#20232c"}
+          stroke={stroke ?? "#56515f"}
+          strokeWidth={strokeWidth}
+          dash={[6, 4]}
+          cornerRadius={radius}
+          perfectDrawEnabled={false}
+        />
+        <CanvasIcon
+          name="Upload"
+          color={stroke ?? "#a78bfa"}
+          strokeWidth={2}
+          x={(widget.width - iconSize) / 2}
+          y={widget.height * 0.16}
+          width={iconSize}
+          height={iconSize}
+        />
+        <KonvaText
+          x={8}
+          y={widget.height * 0.52}
+          width={widget.width - 16}
+          height={Math.max(18, widget.height * 0.24)}
+          text={title}
+          fontFamily="Arial"
+          fontSize={11}
+          fill="#e5e7eb"
+          align="center"
+          ellipsis
+          perfectDrawEnabled={false}
+        />
+        {widget.height > 58 && (
+          <KonvaText
+            x={8}
+            y={widget.height * 0.76}
+            width={widget.width - 16}
+            height={16}
+            text={placeholder}
+            fontFamily="Arial"
+            fontSize={9}
+            fill="#aab4c4"
+            align="center"
+            ellipsis
+            perfectDrawEnabled={false}
+          />
+        )}
+      </Group>
+    );
+  }
+
+  if (widget.type === "stepper") {
+    const value = typeof widget.props.value === "number" ? widget.props.value : 2;
+    const buttonWidth = Math.min(32, widget.width * 0.24);
+    return (
+      <Group>
+        <KonvaText
+          x={0}
+          y={0}
+          width={widget.width}
+          height={18}
+          text={title}
+          fontFamily="Arial"
+          fontSize={11}
+          fill="#d7d6dd"
+          perfectDrawEnabled={false}
+        />
+        <Rect
+          y={20}
+          width={widget.width}
+          height={widget.height - 20}
+          fill={fill ?? "#20232c"}
+          stroke={stroke ?? "#454853"}
+          strokeWidth={strokeWidth}
+          cornerRadius={radius}
+          perfectDrawEnabled={false}
+        />
+        <Line
+          points={[buttonWidth, 20, buttonWidth, widget.height]}
+          stroke="#454853"
+          strokeWidth={1}
+          perfectDrawEnabled={false}
+        />
+        <Line
+          points={[widget.width - buttonWidth, 20, widget.width - buttonWidth, widget.height]}
+          stroke="#454853"
+          strokeWidth={1}
+          perfectDrawEnabled={false}
+        />
+        <KonvaText
+          y={20}
+          width={buttonWidth}
+          height={widget.height - 20}
+          text="−"
+          fontFamily="Arial"
+          fontSize={16}
+          fill="#d7d6dd"
+          align="center"
+          verticalAlign="middle"
+          perfectDrawEnabled={false}
+        />
+        <KonvaText
+          x={buttonWidth}
+          y={20}
+          width={Math.max(1, widget.width - buttonWidth * 2)}
+          height={widget.height - 20}
+          text={String(value)}
+          fontFamily="Arial"
+          fontSize={12}
+          fill="#f3f4f6"
+          align="center"
+          verticalAlign="middle"
+          perfectDrawEnabled={false}
+        />
+        <KonvaText
+          x={widget.width - buttonWidth}
+          y={20}
+          width={buttonWidth}
+          height={widget.height - 20}
+          text="+"
+          fontFamily="Arial"
+          fontSize={16}
+          fill="#d7d6dd"
+          align="center"
+          verticalAlign="middle"
+          perfectDrawEnabled={false}
+        />
+      </Group>
+    );
+  }
+
+  const iconName = widget.type === "search" || widget.type === "search-bar"
+    ? "Search"
+    : widget.type === "date-picker"
+      ? "CalendarDays"
+      : widget.type === "select" || widget.type === "dropdown"
+        ? "ChevronDown"
+        : "";
+  const isTextarea = widget.type === "textarea" || widget.type === "text-area";
+  const iconSize = Math.min(16, widget.height * 0.42);
+  return (
+    <Group>
+      {isTextarea ? (
+        <Group>
+          <Rect
+            width={widget.width}
+            height={widget.height}
+            fill={fill ?? "#20232c"}
+            stroke={stroke ?? "#454853"}
+            strokeWidth={strokeWidth}
+            cornerRadius={radius}
+            perfectDrawEnabled={false}
+          />
+          <KonvaText
+            x={10}
+            y={8}
+            width={widget.width - 20}
+            height={widget.height - 16}
+            text={placeholder}
+            fontFamily="Arial"
+            fontSize={11}
+            fill="#aab4c4"
+            verticalAlign="top"
+            wrap="word"
+            perfectDrawEnabled={false}
+          />
+        </Group>
+      ) : (
+        <Group>
+          <Rect
+            width={widget.width}
+            height={widget.height}
+            fill={fill ?? "#20232c"}
+            stroke={stroke ?? "#454853"}
+            strokeWidth={strokeWidth}
+            cornerRadius={radius}
+            perfectDrawEnabled={false}
+          />
+          {iconName && (
+            <CanvasIcon
+              name={iconName}
+              color="#aab4c4"
+              strokeWidth={1.8}
+              x={10}
+              y={(widget.height - iconSize) / 2}
+              width={iconSize}
+              height={iconSize}
+            />
+          )}
+          <KonvaText
+            x={iconName ? iconSize + 18 : 10}
+            width={Math.max(1, widget.width - (iconName ? iconSize + 28 : 20))}
+            height={widget.height}
+            text={placeholder}
+            fontFamily="Arial"
+            fontSize={11}
+            fill="#aab4c4"
+            verticalAlign="middle"
+            ellipsis
+            perfectDrawEnabled={false}
+          />
+        </Group>
+      )}
+    </Group>
+  );
+}
+
+function EmptyStateShape({ widget, fill, stroke, strokeWidth }: ShapeComponentProps) {
+  const iconSize = Math.min(28, widget.height * 0.28);
+  const hasSubtitle = widget.height > 70;
+  return (
+    <Group>
+      <Rect
+        width={widget.width}
+        height={widget.height}
+        fill={fill ?? "#20232c"}
+        stroke={stroke ?? "#3a3e49"}
+        strokeWidth={strokeWidth}
+        dash={[5, 4]}
+        cornerRadius={widget.style.cornerRadius ?? 9}
+        perfectDrawEnabled={false}
+      />
+      <CanvasIcon
+        name="Inbox"
+        color={stroke ?? "#8b69ed"}
+        strokeWidth={2}
+        x={(widget.width - iconSize) / 2}
+        y={widget.height * 0.12}
+        width={iconSize}
+        height={iconSize}
+      />
+      <KonvaText
+        y={widget.height * 0.49}
+        width={widget.width - 16}
+        height={20}
+        x={8}
+        text={getWidgetProp(widget, "label", "Nothing here yet")}
+        fontFamily="Arial"
+        fontSize={12}
+        fontStyle="bold"
+        fill="#e5e7eb"
+        align="center"
+        ellipsis
+        perfectDrawEnabled={false}
+      />
+      {hasSubtitle && (
+        <KonvaText
+          y={widget.height * 0.72}
+          width={widget.width - 16}
+          height={18}
+          x={8}
+          text={getWidgetProp(widget, "subtitle", "New items will appear here.")}
+          fontFamily="Arial"
+          fontSize={10}
+          fill="#aab4c4"
+          align="center"
+          ellipsis
+          perfectDrawEnabled={false}
+        />
+      )}
+    </Group>
+  );
+}
+
+function CodeBlockShape({ widget, fill, stroke, strokeWidth }: ShapeComponentProps) {
+  const code = getWidgetProp(widget, "label", "const app = 'Proto Flow';");
+  return (
+    <Group>
+      <Rect
+        width={widget.width}
+        height={widget.height}
+        fill={fill ?? "#171923"}
+        stroke={stroke ?? "#3a3e49"}
+        strokeWidth={strokeWidth}
+        cornerRadius={widget.style.cornerRadius ?? 8}
+        perfectDrawEnabled={false}
+      />
+      <Circle x={13} y={13} radius={3} fill="#fb7185" perfectDrawEnabled={false} />
+      <Circle x={24} y={13} radius={3} fill="#fbbf24" perfectDrawEnabled={false} />
+      <Circle x={35} y={13} radius={3} fill="#4ade80" perfectDrawEnabled={false} />
+      <KonvaText
+        x={12}
+        y={30}
+        width={widget.width - 24}
+        height={widget.height - 38}
+        text={code}
+        fontFamily="Consolas, monospace"
+        fontSize={12}
+        fill="#a5b4fc"
+        wrap="word"
+        perfectDrawEnabled={false}
+      />
+    </Group>
+  );
+}
+
+function SegmentedControlShape({ widget, fill, stroke, strokeWidth }: ShapeComponentProps) {
+  const segments = getWidgetProp(widget, "label", "Overview | Activity | Settings")
+    .split("|")
+    .map((segment) => segment.trim())
+    .filter(Boolean)
+    .slice(0, 5);
+  const selected = typeof widget.props.selected === "number" ? widget.props.selected : 0;
+  const segmentWidth = widget.width / Math.max(1, segments.length);
+  return (
+    <Group>
+      <Rect
+        width={widget.width}
+        height={widget.height}
+        fill={fill ?? "#252630"}
+        stroke={stroke ?? "#41424c"}
+        strokeWidth={strokeWidth}
+        cornerRadius={widget.height / 2}
+        perfectDrawEnabled={false}
+      />
+      {segments.map((segment, index) => (
+        <Group key={`${segment}-${index}`} x={index * segmentWidth}>
+          {index === selected && (
+            <Rect
+              x={3}
+              y={3}
+              width={Math.max(1, segmentWidth - 6)}
+              height={widget.height - 6}
+              fill="#484052"
+              cornerRadius={widget.height / 2}
+              perfectDrawEnabled={false}
+            />
+          )}
+          <KonvaText
+            width={segmentWidth}
+            height={widget.height}
+            text={segment}
+            fontFamily="Arial"
+            fontSize={Math.max(9, Math.min(12, widget.height * 0.32))}
+            fill={index === selected ? "#f3f4f6" : "#aab4c4"}
+            align="center"
+            verticalAlign="middle"
+            ellipsis
+            perfectDrawEnabled={false}
+          />
+        </Group>
+      ))}
+    </Group>
+  );
+}
+
+function StepIndicatorShape({ widget, stroke }: ShapeComponentProps) {
+  const steps = getWidgetProp(widget, "label", "Details | Shipping | Review")
+    .split("|")
+    .map((step) => step.trim())
+    .filter(Boolean)
+    .slice(0, 5);
+  const current = typeof widget.props.step === "number" ? widget.props.step : 1;
+  const segmentWidth = widget.width / Math.max(1, steps.length);
+  return (
+    <Group>
+      {steps.map((step, index) => (
+        <Group key={`${step}-${index}`} x={index * segmentWidth}>
+          <Circle
+            x={segmentWidth / 2}
+            y={10}
+            radius={9}
+            fill={index <= current ? stroke ?? "#8b69ed" : "#343640"}
+            perfectDrawEnabled={false}
+          />
+          <KonvaText
+            x={segmentWidth / 2 - 6}
+            y={4}
+            width={12}
+            height={12}
+            text={index < current ? "✓" : String(index + 1)}
+            fontFamily="Arial"
+            fontSize={9}
+            fontStyle="bold"
+            fill="#ffffff"
+            align="center"
+            verticalAlign="middle"
+            perfectDrawEnabled={false}
+          />
+          <KonvaText
+            y={23}
+            width={segmentWidth}
+            height={18}
+            text={step}
+            fontFamily="Arial"
+            fontSize={9}
+            fill={index <= current ? "#d7d6dd" : "#85858f"}
+            align="center"
+            ellipsis
+            perfectDrawEnabled={false}
+          />
+          {index < steps.length - 1 && (
+            <Line
+              points={[segmentWidth / 2 + 10, 10, segmentWidth + segmentWidth / 2 - 10, 10]}
+              stroke={index < current ? stroke ?? "#8b69ed" : "#343640"}
+              strokeWidth={2}
+              perfectDrawEnabled={false}
+            />
+          )}
+        </Group>
+      ))}
+    </Group>
+  );
+}
+
+function PricingCardShape({ widget, fill, stroke, strokeWidth }: ShapeComponentProps) {
+  return (
+    <Group>
+      <Rect
+        width={widget.width}
+        height={widget.height}
+        fill={fill ?? "#20232c"}
+        stroke={stroke ?? "#8b69ed"}
+        strokeWidth={strokeWidth}
+        cornerRadius={widget.style.cornerRadius ?? 9}
+        perfectDrawEnabled={false}
+      />
+      <KonvaText
+        x={14}
+        y={12}
+        width={widget.width - 28}
+        height={22}
+        text={getWidgetProp(widget, "label", "Pro")}
+        fontFamily="Arial"
+        fontSize={15}
+        fontStyle="bold"
+        fill="#f3f4f6"
+        perfectDrawEnabled={false}
+      />
+      <KonvaText
+        x={14}
+        y={38}
+        width={widget.width - 28}
+        height={28}
+        text={getWidgetProp(widget, "subtitle", "$19 / month")}
+        fontFamily="Arial"
+        fontSize={20}
+        fontStyle="bold"
+        fill="#c4b5fd"
+        perfectDrawEnabled={false}
+      />
+      <KonvaText
+        x={14}
+        y={72}
+        width={widget.width - 28}
+        height={Math.max(20, widget.height - 82)}
+        text="✓  Unlimited projects\n✓  Shared components"
+        fontFamily="Arial"
+        fontSize={11}
+        lineHeight={1.5}
+        fill="#cbd5e1"
+        perfectDrawEnabled={false}
+      />
+    </Group>
+  );
+}
+
+const GENERIC_ICON_NAMES: Record<string, string> = {
+  polygon: "Triangle",
+  star: "Star",
+  divider: "Minus",
+  vector: "Pencil",
+  path: "Activity",
+  heading: "FileText",
+  paragraph: "AlignLeft",
+  link: "Link",
+  label: "Tag",
+  frame: "Frame",
+  group: "Layers",
+  card: "Square",
+  modal: "Square",
+  overlay: "Layers",
+  drawer: "PanelRightOpen",
+  section: "LayoutPanelTop",
+  panel: "PanelLeft",
+  "dynamic-panel": "PanelLeft",
+  repeater: "Repeat",
+  accordion: "ChevronsUpDown",
+  carousel: "GalleryHorizontal",
+  "tabs-container": "PanelTop",
+  textarea: "AlignJustify",
+  "text-area": "AlignJustify",
+  select: "ChevronDown",
+  dropdown: "ChevronDown",
+  checkbox: "CheckSquare",
+  radio: "CircleDot",
+  toggle: "ToggleRight",
+  switch: "ToggleRight",
+  slider: "SlidersHorizontal",
+  stepper: "ListOrdered",
+  "date-picker": "CalendarDays",
+  "file-upload": "Upload",
+  search: "Search",
+  "search-bar": "Search",
+  form: "FileText",
+  video: "Video",
+  tooltip: "CircleHelp",
+  popover: "MessageCircle",
+  navbar: "PanelTop",
+  sidebar: "PanelLeft",
+  tabs: "PanelTop",
+  breadcrumb: "ChevronRight",
+  pagination: "MoreHorizontal",
+  menu: "Menu",
+  "dropdown-menu": "ChevronDown",
+  footer: "PanelBottom",
+  table: "Table",
+  list: "List",
+  grid: "Grid3X3",
+  chart: "BarChart3",
+  stat: "TrendingUp",
+  kpi: "TrendingUp",
+  timeline: "GitCommitHorizontal",
+  calendar: "CalendarDays",
+  symbol: "Puzzle",
+  "symbol-instance": "Puzzle",
+  "component-master": "Component",
+};
+
+function DataElementShape({ widget, fill, stroke, strokeWidth }: ShapeComponentProps) {
+  const title = getWidgetProp(widget, "label", getShapeDefinition(widget.type)?.label ?? "Data");
+  const frameFill = fill ?? "#20232c";
+  return (
+    <Group>
+      <Rect
+        width={widget.width}
+        height={widget.height}
+        fill={frameFill}
+        stroke={stroke ?? "#3a3e49"}
+        strokeWidth={strokeWidth}
+        cornerRadius={widget.style.cornerRadius ?? 8}
+        perfectDrawEnabled={false}
+      />
+      <KonvaText
+        x={10}
+        y={7}
+        width={widget.width - 20}
+        height={18}
+        text={title}
+        fontFamily="Arial"
+        fontSize={11}
+        fontStyle="bold"
+        fill="#d7d6dd"
+        ellipsis
+        perfectDrawEnabled={false}
+      />
+      {widget.type === "chart" ? (
+        <Group>
+          <Line
+            points={[12, widget.height - 12, widget.width - 10, widget.height - 12]}
+            stroke="#454853"
+            strokeWidth={1}
+            perfectDrawEnabled={false}
+          />
+          {[0.38, 0.68, 0.5, 0.88, 0.62].map((height, index) => {
+            const barWidth = Math.max(5, (widget.width - 36) / 7);
+            return (
+              <Rect
+                key={index}
+                x={18 + index * (barWidth + 5)}
+                y={widget.height - 14 - (widget.height - 52) * height}
+                width={barWidth}
+                height={(widget.height - 52) * height}
+                fill={index === 3 ? stroke ?? "#8b69ed" : "#56516f"}
+                cornerRadius={[3, 3, 0, 0]}
+                perfectDrawEnabled={false}
+              />
+            );
+          })}
+        </Group>
+      ) : widget.type === "table" ? (
+        <Group>
+          {[0, 1, 2].map((row) => (
+            <Group key={row}>
+              <Rect
+                x={10}
+                y={30 + row * Math.max(15, (widget.height - 38) / 3)}
+                width={widget.width - 20}
+                height={Math.max(1, (widget.height - 38) / 3 - 1)}
+                fill={row === 0 ? "#343744" : "rgba(255,255,255,0.025)"}
+                perfectDrawEnabled={false}
+              />
+              {[0, 1, 2].map((column) => (
+                <Line
+                  key={column}
+                  points={[
+                    10 + (widget.width - 20) * column / 3,
+                    30 + row * Math.max(15, (widget.height - 38) / 3),
+                    10 + (widget.width - 20) * column / 3,
+                    30 + (row + 1) * Math.max(15, (widget.height - 38) / 3),
+                  ]}
+                  stroke="#454853"
+                  strokeWidth={1}
+                  perfectDrawEnabled={false}
+                />
+              ))}
+            </Group>
+          ))}
+        </Group>
+      ) : widget.type === "calendar" ? (
+        <Group>
+          {Array.from({ length: 14 }, (_, index) => (
+            <Rect
+              key={index}
+              x={12 + (index % 7) * Math.max(13, (widget.width - 28) / 7)}
+              y={31 + Math.floor(index / 7) * Math.max(14, (widget.height - 40) / 3)}
+              width={Math.max(7, Math.min(12, (widget.width - 34) / 8))}
+              height={Math.max(7, Math.min(12, (widget.height - 42) / 4))}
+              fill={index === 10 ? stroke ?? "#8b69ed" : "#454853"}
+              cornerRadius={2}
+              perfectDrawEnabled={false}
+            />
+          ))}
+        </Group>
+      ) : (
+        <Group>
+          <KonvaText
+            x={10}
+            y={31}
+            width={widget.width - 20}
+            height={Math.max(18, widget.height * 0.32)}
+            text={getWidgetProp(widget, "value", "$24,800")}
+            fontFamily="Arial"
+            fontSize={Math.min(24, widget.height * 0.3)}
+            fontStyle="bold"
+            fill="#f3f4f6"
+            perfectDrawEnabled={false}
+          />
+          <Line
+            points={[
+              12,
+              widget.height - 12,
+              widget.width * 0.35,
+              widget.height * 0.58,
+              widget.width * 0.58,
+              widget.height * 0.74,
+              widget.width - 12,
+              widget.height * 0.48,
+            ]}
+            stroke={stroke ?? "#8b69ed"}
+            strokeWidth={2}
+            lineCap="round"
+            lineJoin="round"
+            perfectDrawEnabled={false}
+          />
+        </Group>
+      )}
+    </Group>
+  );
+}
+
 function GenericElementShape({
   widget,
   fill,
@@ -674,32 +1870,134 @@ function GenericElementShape({
     typeof widget.props.label === "string"
       ? widget.props.label
       : fallbackLabel;
+  if (["textarea", "text-area", "select", "dropdown", "date-picker", "search", "search-bar", "file-upload", "slider", "stepper"].includes(widget.type)) {
+    return <FormPreviewShape widget={widget} fill={fill} stroke={stroke} strokeWidth={strokeWidth} />;
+  }
+  if (widget.type === "avatar") {
+    return <AvatarShape widget={widget} fill={fill} stroke={stroke} strokeWidth={strokeWidth} />;
+  }
+  if (widget.type === "icon" || widget.type === "custom-icon") {
+    return <IconShape widget={widget} fill={fill} stroke={stroke} strokeWidth={strokeWidth} />;
+  }
+  if (widget.type === "icon-button") {
+    return <IconButtonShape widget={widget} fill={fill} stroke={stroke} strokeWidth={strokeWidth} />;
+  }
+  if (widget.type === "badge" || widget.type === "chip" || widget.type === "tag") {
+    return <PillShape widget={widget} fill={fill} stroke={stroke} strokeWidth={strokeWidth} />;
+  }
+  if (["alert", "banner", "toast", "notification", "tooltip", "popover"].includes(widget.type)) {
+    return <NoticeShape widget={widget} fill={fill} stroke={stroke} strokeWidth={strokeWidth} />;
+  }
+  if (widget.type === "progress" || widget.type === "progress-bar") {
+    return <ProgressBarShape widget={widget} fill={fill} stroke={stroke} strokeWidth={strokeWidth} />;
+  }
+  if (widget.type === "spinner") return <SpinnerShape widget={widget} fill={undefined} stroke={stroke} strokeWidth={strokeWidth} />;
+  if (widget.type === "skeleton") return <SkeletonShape widget={widget} fill={fill} stroke={stroke} strokeWidth={strokeWidth} />;
+  if (widget.type === "rating") return <RatingShape widget={widget} fill={fill} stroke={stroke} strokeWidth={strokeWidth} />;
+  if (widget.type === "metric-card" || widget.type === "stat" || widget.type === "kpi") {
+    return <MetricCardShape widget={widget} fill={fill} stroke={stroke} strokeWidth={strokeWidth} />;
+  }
+  if (widget.type === "profile-card") {
+    return <ProfileCardShape widget={widget} fill={fill} stroke={stroke} strokeWidth={strokeWidth} />;
+  }
+  if (widget.type === "empty-state") {
+    return <EmptyStateShape widget={widget} fill={fill} stroke={stroke} strokeWidth={strokeWidth} />;
+  }
+  if (widget.type === "code-block") {
+    return <CodeBlockShape widget={widget} fill={fill} stroke={stroke} strokeWidth={strokeWidth} />;
+  }
+  if (widget.type === "segmented-control") {
+    return <SegmentedControlShape widget={widget} fill={fill} stroke={stroke} strokeWidth={strokeWidth} />;
+  }
+  if (widget.type === "step-indicator") {
+    return <StepIndicatorShape widget={widget} fill={undefined} stroke={stroke} strokeWidth={strokeWidth} />;
+  }
+  if (widget.type === "bottom-nav") {
+    return <SegmentedControlShape widget={widget} fill={fill} stroke={stroke} strokeWidth={strokeWidth} />;
+  }
+  if (widget.type === "pricing-card") {
+    return <PricingCardShape widget={widget} fill={fill} stroke={stroke} strokeWidth={strokeWidth} />;
+  }
+  if (widget.type === "chart" || widget.type === "table" || widget.type === "grid" || widget.type === "calendar") {
+    return <DataElementShape widget={widget} fill={fill} stroke={stroke} strokeWidth={strokeWidth} />;
+  }
   return (
     <Group>
       <Rect
         width={widget.width}
         height={widget.height}
-        fill={fill}
+        fill={fill ?? "#20232c"}
         stroke={stroke}
         strokeWidth={strokeWidth}
         cornerRadius={widget.style.cornerRadius ?? 5}
         perfectDrawEnabled={false}
       />
-      <KonvaText
-        x={8}
-        y={4}
-        width={Math.max(1, widget.width - 16)}
-        height={Math.max(1, widget.height - 8)}
-        text={label}
-        fontSize={Math.min(14, Math.max(10, widget.height * 0.32))}
-        fontFamily="Arial"
-        fill={stroke ?? "#d7d7de"}
-        align="center"
-        verticalAlign="middle"
-        ellipsis
-        wrap="none"
-        perfectDrawEnabled={false}
-      />
+      {["frame", "group", "card", "modal", "overlay", "drawer", "section", "panel", "dynamic-panel", "repeater", "accordion", "carousel", "tabs-container", "navbar", "sidebar", "tabs", "menu", "dropdown-menu", "footer", "form"].includes(widget.type) ? (
+        <Group>
+          <Rect
+            x={8}
+            y={8}
+            width={Math.max(1, widget.width - 16)}
+            height={Math.min(24, widget.height - 12)}
+            fill="#2b2e39"
+            cornerRadius={4}
+            perfectDrawEnabled={false}
+          />
+          <KonvaText
+            x={12}
+            y={8}
+            width={Math.max(1, widget.width - 24)}
+            height={24}
+            text={label}
+            fontSize={12}
+            fontFamily="Arial"
+            fontStyle="bold"
+            fill="#d7d7de"
+            verticalAlign="middle"
+            ellipsis
+            perfectDrawEnabled={false}
+          />
+          {[0, 1].map((line) => (
+            <Rect
+              key={line}
+              x={12}
+              y={42 + line * 14}
+              width={Math.max(1, widget.width * (line === 0 ? 0.7 : 0.48))}
+              height={4}
+              fill="#454853"
+              cornerRadius={2}
+              perfectDrawEnabled={false}
+            />
+          ))}
+        </Group>
+      ) : (
+        <Group>
+          <CanvasIcon
+            name={GENERIC_ICON_NAMES[widget.type] ?? "Sparkles"}
+            color={stroke ?? "#a78bfa"}
+            strokeWidth={1.8}
+            x={10}
+            y={Math.max(6, (widget.height - 20) / 2)}
+            width={20}
+            height={20}
+          />
+          <KonvaText
+            x={38}
+            y={4}
+            width={Math.max(1, widget.width - 46)}
+            height={Math.max(1, widget.height - 8)}
+            text={label}
+            fontSize={Math.min(14, Math.max(10, widget.height * 0.32))}
+            fontFamily="Arial"
+            fill="#e5e7eb"
+            align="left"
+            verticalAlign="middle"
+            ellipsis
+            wrap="none"
+            perfectDrawEnabled={false}
+          />
+        </Group>
+      )}
     </Group>
   );
 }
