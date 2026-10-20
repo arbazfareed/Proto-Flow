@@ -209,14 +209,113 @@ describe("Worker API gateway", () => {
     });
   });
 
-  it("keeps future email auth flows explicitly unimplemented", async () => {
-    for (const path of ["/auth/email/start", "/auth/email/verify"]) {
+  it("requires authentication for account-linking endpoints", async () => {
+    for (const path of [
+      "/auth/email/start",
+      "/auth/email/verify",
+      "/auth/google/start",
+      "/auth/google/verify",
+      "/auth/sign-out",
+    ]) {
       const response = await app.request(path, { method: "POST" }, environment());
-      expect(response.status).toBe(501);
+      expect(response.status).toBe(401);
       expect(await response.json()).toMatchObject({
-        error: { code: "AUTH_NOT_IMPLEMENTED" },
+        error: { code: "MISSING_TOKEN" },
       });
     }
+  });
+
+  it("validates email sign-in inputs and reports missing provider configuration", async () => {
+    const token = await signToken(validClaims());
+    const database = {
+      prepare(sql: string) {
+        const statement = {
+          bind() {
+            return statement;
+          },
+          async first() {
+            return sql.toLowerCase().includes("select id from accounts")
+              ? { id: "account-123" }
+              : null;
+          },
+        };
+        return statement;
+      },
+    } as unknown as D1Database;
+    const request = (body: unknown) =>
+      app.request(
+        "/auth/email/start",
+        {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${token}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify(body),
+        },
+        environment({ DB: database }),
+      );
+
+    const invalid = await request({
+      email: "not-an-email",
+      accountId: "account-123",
+      callbackUri: "protoflow://auth/verify",
+    });
+    expect(invalid.status).toBe(400);
+
+    const unsafeCallback = await request({
+      email: "person@example.com",
+      accountId: "account-123",
+      callbackUri: "https://tauri.localhost/?redirect=unsafe",
+    });
+    expect(unsafeCallback.status).toBe(400);
+
+    const notConfigured = await request({
+      email: "person@example.com",
+      accountId: "account-123",
+      callbackUri: "protoflow://auth/verify",
+    });
+    expect(notConfigured.status).toBe(503);
+    expect(await notConfigured.json()).toMatchObject({
+      error: { code: "SERVICE_NOT_CONFIGURED" },
+    });
+  });
+
+  it("reports missing Google OAuth configuration without accepting arbitrary callbacks", async () => {
+    const token = await signToken(validClaims());
+    const database = {
+      prepare() {
+        return {
+          bind() {
+            return this;
+          },
+          async first() {
+            return { id: "account-123" };
+          },
+        };
+      },
+    } as unknown as D1Database;
+    const request = (callbackUri: string) =>
+      app.request(
+        "/auth/google/start",
+        {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${token}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ callbackUri }),
+        },
+        environment({ DB: database }),
+      );
+
+    const unsafe = await request("https://attacker.example/callback");
+    expect(unsafe.status).toBe(400);
+    const notConfigured = await request("protoflow://auth/google-callback");
+    expect(notConfigured.status).toBe(503);
+    expect(await notConfigured.json()).toMatchObject({
+      error: { code: "SERVICE_NOT_CONFIGURED" },
+    });
   });
 
   it("returns a consistent not-found error for unknown routes", async () => {

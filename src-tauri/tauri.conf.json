@@ -25,6 +25,11 @@
     }
   },
   "plugins": {
+    "deep-link": {
+      "desktop": {
+        "schemes": ["protoflow"]
+      }
+    },
     "updater": {
       "endpoints": [
         "https://releases.protoflow.app/{{target}}/{{arch}}/{{current_version}}"

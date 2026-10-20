@@ -143,6 +143,7 @@ export function TopBar({
   const claimable = useWalletStore((state) => state.claimable);
   const nextClaimAt = useWalletStore((state) => state.nextClaimAt);
   const walletError = useWalletStore((state) => state.error);
+  const walletEmail = useWalletStore((state) => state.email);
   const syncWallet = useWalletStore((state) => state.sync);
   const claimDaily = useWalletStore((state) => state.claimDaily);
   const [walletMenuOpen, setWalletMenuOpen] = useState(false);
@@ -330,10 +331,12 @@ export function TopBar({
                 )}
               <button
                 className="wallet-menu-link"
-                title="Email sign-in will be available in Task PF-T307"
-                disabled
+                onClick={() => {
+                  setWalletMenuOpen(false);
+                  onOpenWallet();
+                }}
               >
-                Sign in to sync <span>Coming soon</span>
+                {walletEmail ? `Signed in as ${walletEmail}` : "Sign in to sync across devices"}
               </button>
               <button
                 className="wallet-menu-link"

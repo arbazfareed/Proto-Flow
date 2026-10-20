@@ -144,6 +144,26 @@ export const requireJwt: MiddlewareHandler<{ Bindings: WorkerEnv; Variables: { a
       return errorResponse(context, 401, "INVALID_TOKEN", "The Bearer token is invalid.");
     }
 
+    try {
+      const account = await context.env.DB
+        .prepare("SELECT id FROM accounts WHERE id = ? AND merged_into IS NULL")
+        .bind(claims.accountId)
+        .first<{ id: string }>();
+      if (!account) {
+        return errorResponse(context, 401, "INVALID_TOKEN", "The wallet session is no longer active.");
+      }
+    } catch (error) {
+      console.error("Could not verify wallet account status.", {
+        message: error instanceof Error ? error.message : "Unknown database error.",
+      });
+      return errorResponse(
+        context,
+        503,
+        "DATABASE_UNAVAILABLE",
+        "The wallet service is temporarily unavailable.",
+      );
+    }
+
     context.set("auth", claims);
     await next();
   };

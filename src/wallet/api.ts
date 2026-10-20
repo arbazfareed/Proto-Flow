@@ -12,6 +12,7 @@ export interface WalletIdentity {
 
 export interface WalletSnapshot {
   accountId: string;
+  email: string | null;
   balance: number;
   lifetimeGranted: number;
   lifetimeSpent: number;
@@ -40,6 +41,7 @@ interface AnonymousWalletResponse {
 
 interface WalletResponse {
   accountId: string;
+  email?: string | null;
   balance: number;
   lifetimeGranted: number;
   lifetimeSpent: number;
@@ -70,7 +72,7 @@ export interface MeteredActionResponse<T = unknown> {
   wallet: WalletSnapshot;
 }
 
-interface CachedWallet extends Omit<WalletSnapshot, "recentLedger" | "claimable" | "nextClaimAt"> {
+interface CachedWallet extends Omit<WalletSnapshot, "email" | "recentLedger" | "claimable" | "nextClaimAt"> {
   recentLedger?: LedgerEntry[];
   claimable?: boolean;
   nextClaimAt?: string | null;
@@ -81,6 +83,13 @@ interface ApiErrorResponse {
   error?: { code?: string; message?: string };
   nextClaimAt?: string | null;
   balance?: number;
+}
+
+interface LinkedAccountResponse {
+  accountId: string;
+  email: string;
+  token: string;
+  tokenExpiresAt: string;
 }
 
 function isNonNegativeSafeInteger(value: unknown): value is number {
@@ -228,6 +237,7 @@ export function getCachedWallet(): WalletSnapshot | null {
   }
   return {
     accountId: cached.accountId,
+    email: null,
     balance: cached.balance,
     lifetimeGranted: cached.lifetimeGranted,
     lifetimeSpent: cached.lifetimeSpent,
@@ -349,6 +359,7 @@ export async function provisionAnonymousWallet(
   await setCachedToken(result.token);
   const snapshot = {
     accountId: result.accountId,
+    email: null,
     balance: result.balance,
     lifetimeGranted: result.lifetimeGranted,
     lifetimeSpent: result.lifetimeSpent,
@@ -458,6 +469,7 @@ function toSnapshot(response: WalletResponse): WalletSnapshot {
   });
   return {
     accountId: response.accountId,
+    email: typeof response.email === "string" ? response.email : null,
     balance: response.balance,
     lifetimeGranted: response.lifetimeGranted,
     lifetimeSpent: response.lifetimeSpent,
@@ -471,6 +483,101 @@ function toSnapshot(response: WalletResponse): WalletSnapshot {
 export async function fetchWalletMe(token: string): Promise<WalletSnapshot> {
   const response = await authenticatedRequest<WalletResponse>("/wallet/me", token);
   return toSnapshot(response);
+}
+
+export async function startEmailSignIn(
+  token: string,
+  accountId: string,
+  email: string,
+  callbackUri: string,
+): Promise<void> {
+  await authenticatedRequest<{ sent: boolean; expiresIn: number }>("/auth/email/start", token, {
+    method: "POST",
+    body: JSON.stringify({ email, accountId, callbackUri }),
+  });
+}
+
+export async function verifyEmailSignIn(
+  token: string,
+  magicToken: string,
+): Promise<{ token: string; snapshot: WalletSnapshot }> {
+  const linked = await authenticatedRequest<LinkedAccountResponse>("/auth/email/verify", token, {
+    method: "POST",
+    body: JSON.stringify({ token: magicToken }),
+  });
+  return completeAccountLink(linked);
+}
+
+export async function startGoogleSignIn(
+  token: string,
+  callbackUri: string,
+): Promise<string> {
+  const response = await authenticatedRequest<{ authorizationUrl: string }>("/auth/google/start", token, {
+    method: "POST",
+    body: JSON.stringify({ callbackUri }),
+  });
+  let authorizationUrl: URL;
+  try {
+    authorizationUrl = new URL(response.authorizationUrl);
+  } catch {
+    throw new Error("The cloud service returned an invalid Google sign-in URL.");
+  }
+  if (
+    authorizationUrl.protocol !== "https:" ||
+    authorizationUrl.hostname !== "accounts.google.com" ||
+    authorizationUrl.pathname !== "/o/oauth2/v2/auth"
+  ) {
+    throw new Error("The cloud service returned an untrusted Google sign-in URL.");
+  }
+  return authorizationUrl.toString();
+}
+
+export async function verifyGoogleSignIn(
+  token: string,
+  ticket: string,
+): Promise<{ token: string; snapshot: WalletSnapshot }> {
+  const linked = await authenticatedRequest<LinkedAccountResponse>("/auth/google/verify", token, {
+    method: "POST",
+    body: JSON.stringify({ ticket }),
+  });
+  return completeAccountLink(linked);
+}
+
+async function completeAccountLink(
+  linked: LinkedAccountResponse,
+): Promise<{ token: string; snapshot: WalletSnapshot }> {
+  if (typeof linked !== "object" || linked === null || Array.isArray(linked)) {
+    throw new Error("The cloud service returned an invalid linked-account response.");
+  }
+  const expiresAt = typeof linked.token === "string" ? tokenExpiration(linked.token) : null;
+  if (
+    typeof linked.accountId !== "string" ||
+    linked.accountId.length === 0 ||
+    typeof linked.email !== "string" ||
+    !EMAIL_PATTERN.test(linked.email) ||
+    !linked.token ||
+    expiresAt === null ||
+    expiresAt <= Date.now() ||
+    !Number.isFinite(Date.parse(linked.tokenExpiresAt))
+  ) {
+    throw new Error("The cloud service returned an invalid linked-account response.");
+  }
+  const snapshot = await fetchWalletMe(linked.token);
+  if (snapshot.accountId !== linked.accountId || snapshot.email !== linked.email) {
+    throw new Error("The cloud service returned inconsistent linked-account details.");
+  }
+  return { token: linked.token, snapshot };
+}
+
+const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+export async function signOutAccount(token: string): Promise<void> {
+  const response = await authenticatedRequest<{ signedOut: boolean }>("/auth/sign-out", token, {
+    method: "POST",
+  });
+  if (response.signedOut !== true) {
+    throw new Error("The cloud service did not confirm sign-out.");
+  }
 }
 
 export async function claimDailyCredits(

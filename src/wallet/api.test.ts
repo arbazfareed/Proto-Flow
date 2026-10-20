@@ -8,9 +8,15 @@ import {
   provisionAnonymousWallet,
   resetWalletIdentity,
   runMeteredAction,
+  signOutAccount,
+  startEmailSignIn,
+  startGoogleSignIn,
+  verifyEmailSignIn,
+  verifyGoogleSignIn,
   WalletApiError,
   type WalletSnapshot,
 } from "./api";
+import { useWalletStore } from "./store";
 
 const now = 1_800_000_000_000;
 
@@ -22,6 +28,7 @@ function token(expiresAt: number): string {
 function wallet(syncedAt: number): WalletSnapshot {
   return {
     accountId: "account-1",
+    email: null,
     balance: 50,
     lifetimeGranted: 50,
     lifetimeSpent: 0,
@@ -104,6 +111,17 @@ describe("wallet persistence", () => {
     expect(values.get("protoflow.wallet.install-id")).toBe(identity.installId);
   });
 
+  it("does not persist a linked email or JWT in the local wallet cache", () => {
+    const values = stubStorage();
+    const linkedWallet = { ...wallet(now), email: "person@example.com" };
+    useWalletStore.getState().setWallet(linkedWallet, "sensitive-jwt");
+    expect(getCachedWallet()?.email).toBeNull();
+    expect(values.get("protoflow.wallet.cache")).not.toContain("person@example.com");
+    expect(values.get("protoflow.wallet.cache")).not.toContain("sensitive-jwt");
+    expect(useWalletStore.getState().jwt).toBe("sensitive-jwt");
+    useWalletStore.setState({ email: null, jwt: null });
+  });
+
   it("reports cloud health only for a successful health response", async () => {
     const fetchMock = vi.fn()
       .mockResolvedValueOnce(new Response(JSON.stringify({ status: "ok" }), { status: 200 }))
@@ -116,6 +134,115 @@ describe("wallet persistence", () => {
     await expect(checkCloudHealth()).resolves.toBe(false);
     expect(fetchMock).toHaveBeenCalledTimes(3);
     expect(fetchMock.mock.calls[0]?.[0]).toBe("http://127.0.0.1:8790/health");
+  });
+
+  describe("optional account sign-in API", () => {
+    it("sends email-link requests for the authenticated account", async () => {
+      const fetchMock = vi.fn().mockResolvedValue(
+        new Response(JSON.stringify({ sent: true, expiresIn: 900 }), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        }),
+      );
+      vi.stubGlobal("fetch", fetchMock);
+
+      await startEmailSignIn("session-token", "account-1", "person@example.com", "protoflow://auth/verify");
+
+      const [url, request] = fetchMock.mock.calls[0] as [string, RequestInit];
+      expect(url).toBe("http://127.0.0.1:8790/auth/email/start");
+      expect(request.headers).toMatchObject({ Authorization: "Bearer session-token" });
+      expect(JSON.parse(request.body as string)).toEqual({
+        email: "person@example.com",
+        accountId: "account-1",
+        callbackUri: "protoflow://auth/verify",
+      });
+    });
+
+    it("verifies email and Google callbacks then refreshes the cloud wallet", async () => {
+      const linkedToken = token(now + 60 * 60 * 1000);
+      const walletResponse = {
+        accountId: "account-1",
+        email: "person@example.com",
+        balance: 55,
+        lifetimeGranted: 55,
+        lifetimeSpent: 0,
+        recentLedger: [],
+        claimable: false,
+        syncedAt: now,
+      };
+      const fetchMock = vi.fn()
+        .mockResolvedValueOnce(new Response(JSON.stringify({
+          accountId: "account-1",
+          email: "person@example.com",
+          token: linkedToken,
+          tokenExpiresAt: new Date(now + 60 * 60 * 1000).toISOString(),
+        }), { status: 200, headers: { "Content-Type": "application/json" } }))
+        .mockResolvedValueOnce(new Response(JSON.stringify(walletResponse), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        }))
+        .mockResolvedValueOnce(new Response(JSON.stringify({
+          accountId: "account-1",
+          email: "person@example.com",
+          token: linkedToken,
+          tokenExpiresAt: new Date(now + 60 * 60 * 1000).toISOString(),
+        }), { status: 200, headers: { "Content-Type": "application/json" } }))
+        .mockResolvedValueOnce(new Response(JSON.stringify(walletResponse), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        }));
+      vi.stubGlobal("fetch", fetchMock);
+
+      const emailLink = await verifyEmailSignIn("session-token", "magic-token");
+      const googleLink = await verifyGoogleSignIn("session-token", "google-ticket");
+
+      expect(emailLink.snapshot.email).toBe("person@example.com");
+      expect(googleLink.snapshot.balance).toBe(55);
+      expect(JSON.parse((fetchMock.mock.calls[0]?.[1] as RequestInit).body as string)).toEqual({
+        token: "magic-token",
+      });
+      expect(JSON.parse((fetchMock.mock.calls[2]?.[1] as RequestInit).body as string)).toEqual({
+        ticket: "google-ticket",
+      });
+    });
+
+    it("accepts only Google authorization URLs on Google's OAuth endpoint", async () => {
+      vi.stubGlobal(
+        "fetch",
+        vi.fn().mockResolvedValue(
+          new Response(JSON.stringify({ authorizationUrl: "https://accounts.google.com/o/oauth2/v2/auth?state=test" }), {
+            status: 200,
+            headers: { "Content-Type": "application/json" },
+          }),
+        ),
+      );
+      await expect(startGoogleSignIn("session-token", "protoflow://auth/google-callback"))
+        .resolves.toContain("accounts.google.com/o/oauth2/v2/auth");
+
+      vi.stubGlobal(
+        "fetch",
+        vi.fn().mockResolvedValue(
+          new Response(JSON.stringify({ authorizationUrl: "https://attacker.example/" }), {
+            status: 200,
+            headers: { "Content-Type": "application/json" },
+          }),
+        ),
+      );
+      await expect(startGoogleSignIn("session-token", "protoflow://auth/google-callback"))
+        .rejects.toThrow("untrusted Google sign-in URL");
+    });
+
+    it("requires server confirmation before signing out", async () => {
+      const fetchMock = vi.fn().mockResolvedValue(
+        new Response(JSON.stringify({ signedOut: true }), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        }),
+      );
+      vi.stubGlobal("fetch", fetchMock);
+      await signOutAccount("session-token");
+      expect((fetchMock.mock.calls[0]?.[1] as RequestInit).method).toBe("POST");
+    });
   });
 
   it("reads next refill timestamps and preserves server claim cooldown responses", async () => {

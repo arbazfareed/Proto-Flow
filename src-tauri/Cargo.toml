@@ -30,6 +30,9 @@ sha2 = "0.10"
 uuid = { version = "1", features = ["v4"] }
 keyring = "3"
 tauri-plugin-process = "2.4.0"
+tauri-plugin-deep-link = "2.6.2"
+tauri-plugin-shell = "2.5.0"
+tauri-plugin-single-instance = "2.5.4"
 
 [target.'cfg(windows)'.dependencies]
 windows-sys = { version = "0.61", features = ["Win32_Storage_FileSystem"] }

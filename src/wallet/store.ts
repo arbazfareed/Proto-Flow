@@ -8,8 +8,13 @@ import {
   getWalletIdentity,
   provisionAnonymousWallet,
   resetWalletIdentity as resetStoredWalletIdentity,
+  signOutAccount,
+  startEmailSignIn,
+  startGoogleSignIn,
   setCachedToken,
   tokenExpiration,
+  verifyEmailSignIn,
+  verifyGoogleSignIn,
   WalletApiError,
   type LedgerEntry,
   type WalletSnapshot,
@@ -26,6 +31,7 @@ interface WalletState {
   lifetimeSpent: number;
   jwt: string | null;
   accountId: string | null;
+  email: string | null;
   recentLedger: LedgerEntry[];
   lastSyncedAt: number | null;
   claimable: boolean;
@@ -41,6 +47,11 @@ interface WalletState {
   initialize: () => Promise<number>;
   claimDaily: () => Promise<boolean>;
   resetIdentity: () => Promise<void>;
+  startEmailSignIn: (email: string, callbackUri: string) => Promise<void>;
+  verifyEmailSignIn: (token: string) => Promise<void>;
+  startGoogleSignIn: (callbackUri: string) => Promise<string>;
+  verifyGoogleSignIn: (ticket: string) => Promise<void>;
+  signOut: () => Promise<void>;
 }
 
 const CACHE_KEY = "protoflow.wallet.cache";
@@ -52,7 +63,14 @@ function persistWallet(snapshot: WalletSnapshot): void {
   localStorage.setItem(
     CACHE_KEY,
     JSON.stringify({
-      ...snapshot,
+      accountId: snapshot.accountId,
+      balance: snapshot.balance,
+      lifetimeGranted: snapshot.lifetimeGranted,
+      lifetimeSpent: snapshot.lifetimeSpent,
+      syncedAt: snapshot.syncedAt,
+      recentLedger: snapshot.recentLedger,
+      claimable: snapshot.claimable,
+      nextClaimAt: snapshot.nextClaimAt,
       lastSyncedAt: snapshot.syncedAt,
     }),
   );
@@ -61,6 +79,7 @@ function persistWallet(snapshot: WalletSnapshot): void {
 function toSnapshot(state: WalletState, syncedAt = state.lastSyncedAt ?? Date.now()): WalletSnapshot {
   return {
     accountId: state.accountId ?? "",
+    email: state.email,
     balance: state.balance,
     lifetimeGranted: state.lifetimeGranted,
     lifetimeSpent: state.lifetimeSpent,
@@ -81,6 +100,7 @@ function setSnapshot(snapshot: WalletSnapshot, jwt?: string | null): void {
     lifetimeSpent: snapshot.lifetimeSpent,
     jwt: jwt === undefined ? useWalletStore.getState().jwt : jwt,
     accountId: snapshot.accountId,
+    email: snapshot.email,
     recentLedger: snapshot.recentLedger.slice(0, MAX_LEDGER_ENTRIES),
     lastSyncedAt: snapshot.syncedAt,
     claimable: snapshot.claimable,
@@ -99,6 +119,7 @@ async function refreshToken(): Promise<string> {
     lifetimeGranted: snapshot.lifetimeGranted,
     lifetimeSpent: snapshot.lifetimeSpent,
     accountId: snapshot.accountId,
+    email: snapshot.email,
     recentLedger: snapshot.recentLedger,
     lastSyncedAt: snapshot.syncedAt,
     claimable: snapshot.claimable,
@@ -121,6 +142,7 @@ async function loadCachedWallet(): Promise<void> {
     lifetimeSpent: cached.lifetimeSpent,
     jwt: null,
     accountId: cached.accountId,
+    email: null,
     recentLedger: cached.recentLedger.slice(0, MAX_LEDGER_ENTRIES),
     lastSyncedAt: cached.syncedAt,
     claimable: false,
@@ -172,6 +194,7 @@ async function syncWallet(): Promise<void> {
           lifetimeSpent: 0,
           jwt: null,
           accountId: null,
+          email: null,
           recentLedger: [],
           lastSyncedAt: null,
           claimable: false,
@@ -206,6 +229,7 @@ export const useWalletStore = create<WalletState>((set, get) => ({
   lifetimeSpent: 0,
   jwt: null,
   accountId: null,
+  email: null,
   recentLedger: [],
   lastSyncedAt: null,
   claimable: false,
@@ -242,6 +266,7 @@ export const useWalletStore = create<WalletState>((set, get) => ({
       lifetimeSpent: 0,
       jwt: null,
       accountId: null,
+      email: null,
       recentLedger: [],
       lastSyncedAt: null,
       claimable: false,
@@ -319,6 +344,7 @@ export const useWalletStore = create<WalletState>((set, get) => ({
         lifetimeSpent: 0,
         jwt: null,
         accountId: null,
+        email: null,
         recentLedger: [],
         lastSyncedAt: null,
         claimable: false,
@@ -333,6 +359,41 @@ export const useWalletStore = create<WalletState>((set, get) => ({
       });
       throw error;
     }
+  },
+  startEmailSignIn: async (email, callbackUri) => {
+    const { jwt, accountId, status, networkStatus } = get();
+    if (!jwt || !accountId || status !== "online" || networkStatus !== "online") {
+      throw new Error("Connect to the cloud before signing in.");
+    }
+    await startEmailSignIn(jwt, accountId, email, callbackUri);
+  },
+  verifyEmailSignIn: async (token) => {
+    const currentToken = get().jwt;
+    if (!currentToken) throw new Error("Your wallet session is unavailable. Reconnect and try again.");
+    const linked = await verifyEmailSignIn(currentToken, token);
+    await setCachedToken(linked.token);
+    setSnapshot(linked.snapshot, linked.token);
+  },
+  startGoogleSignIn: async (callbackUri) => {
+    const { jwt, status, networkStatus } = get();
+    if (!jwt || status !== "online" || networkStatus !== "online") {
+      throw new Error("Connect to the cloud before signing in.");
+    }
+    return startGoogleSignIn(jwt, callbackUri);
+  },
+  verifyGoogleSignIn: async (ticket) => {
+    const currentToken = get().jwt;
+    if (!currentToken) throw new Error("Your wallet session is unavailable. Reconnect and try again.");
+    const linked = await verifyGoogleSignIn(currentToken, ticket);
+    await setCachedToken(linked.token);
+    setSnapshot(linked.snapshot, linked.token);
+  },
+  signOut: async () => {
+    const token = get().jwt;
+    if (!token) return;
+    await signOutAccount(token);
+    await setCachedToken(null);
+    set({ jwt: null, email: null });
   },
 }));
 
