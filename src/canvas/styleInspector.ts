@@ -115,12 +115,15 @@ export function getTextPropertyUpdates(
   widgets: readonly Widget[],
   patch: Record<string, unknown>,
 ): Array<{ id: string; props: Record<string, unknown> }> {
+  return getWidgetPropertyUpdates(widgets.filter(isTextStyleWidget), patch);
+}
+
+export function getWidgetPropertyUpdates(
+  widgets: readonly Widget[],
+  patch: Record<string, unknown>,
+): Array<{ id: string; props: Record<string, unknown> }> {
   return widgets
-    .filter(
-      (widget) =>
-        !widget.locked &&
-        isTextStyleWidget(widget),
-    )
+    .filter((widget) => !widget.locked)
     .map((widget) => ({ id: widget.id, props: { ...widget.props, ...patch } }));
 }
 

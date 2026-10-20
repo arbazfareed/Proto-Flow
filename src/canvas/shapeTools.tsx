@@ -71,6 +71,7 @@ export const GENERIC_ELEMENT_TOOL_LABELS = {
   video: "Video",
   badge: "Badge",
   chip: "Chip",
+  tag: "Tag",
   tooltip: "Tooltip",
   popover: "Popover",
   alert: "Alert",
@@ -96,6 +97,16 @@ export const GENERIC_ELEMENT_TOOL_LABELS = {
   calendar: "Calendar",
   "symbol-instance": "Symbol instance",
   "component-master": "Component master",
+  toast: "Toast",
+  notification: "Notification",
+  "metric-card": "Metric card",
+  "profile-card": "Profile card",
+  "empty-state": "Empty state",
+  "code-block": "Code block",
+  "segmented-control": "Segmented control",
+  "step-indicator": "Step indicator",
+  "bottom-nav": "Bottom navigation",
+  "pricing-card": "Pricing card",
 } as const;
 
 export type GenericElementTool = keyof typeof GENERIC_ELEMENT_TOOL_LABELS;
@@ -263,9 +274,25 @@ const CONTAINER_ELEMENT_TOOLS = new Set<GenericElementTool>([
   "menu",
   "dropdown-menu",
   "footer",
+  "bottom-nav",
+  "pricing-card",
 ]);
 
 function genericElementDimensions(type: GenericElementTool): [number, number] {
+  if (type === "icon-button") return [40, 40];
+  if (type === "custom-icon") return [32, 32];
+  if (type === "badge") return [88, 28];
+  if (type === "chip" || type === "tag") return [96, 32];
+  if (type === "spinner") return [40, 40];
+  if (type === "profile-card" || type === "pricing-card") return [240, 160];
+  if (type === "toast" || type === "notification" || type === "empty-state") {
+    return [240, 96];
+  }
+  if (type === "metric-card") return [180, 104];
+  if (type === "code-block") return [240, 120];
+  if (type === "segmented-control") return [220, 40];
+  if (type === "step-indicator") return [240, 48];
+  if (type === "bottom-nav") return [240, 64];
   if (CONTAINER_ELEMENT_TOOLS.has(type)) return [240, 140];
   if (type === "avatar") return [56, 56];
   if (type === "video" || type === "chart" || type === "table" || type === "grid") {
@@ -289,6 +316,10 @@ function genericElementDefinition(
     strokeWidth: isText ? 0 : 1,
     cornerRadius: isText ? 0 : CONTAINER_ELEMENT_TOOLS.has(type) ? 8 : 5,
   };
+  if (type === "avatar") {
+    style.fillOpacity = 1;
+    style.stroke = null;
+  }
   const props = TEXT_ELEMENT_TOOLS.has(type)
     ? {
         text: label,
@@ -298,6 +329,44 @@ function genericElementDefinition(
         align: "left",
         lineHeight: 1.2,
       }
+    : type === "avatar"
+      ? { label: "Alex Morgan", initials: "AM" }
+      : type === "icon-button"
+        ? { label: "", iconName: "Plus" }
+        : type === "textarea"
+          ? { label: "Message", placeholder: "Write something..." }
+          : type === "select"
+            ? { label: "Choose an option", placeholder: "Select..." }
+            : type === "date-picker"
+              ? { label: "Select date", placeholder: "MM/DD/YYYY" }
+              : type === "search"
+                ? { label: "Search", placeholder: "Search..." }
+                : type === "file-upload"
+                  ? { label: "Upload file", placeholder: "Browse or drop a file" }
+                  : type === "slider"
+                    ? { label: "Volume", value: 65 }
+                    : type === "stepper"
+                      ? { label: "Quantity", value: 2 }
+        : type === "custom-icon"
+          ? { label, iconName: "Star" }
+          : type === "metric-card"
+            ? { label: "Revenue", value: "$24,800", trend: "+12.8%" }
+            : type === "profile-card"
+              ? { label: "Alex Morgan", subtitle: "Product designer", initials: "AM" }
+              : type === "empty-state"
+                ? { label: "Nothing here yet", subtitle: "New items will appear here." }
+                : type === "code-block"
+                  ? { label: "const app = 'Proto Flow';", language: "JavaScript" }
+                  : type === "segmented-control"
+                    ? { label: "Overview  |  Activity  |  Settings", selected: 0 }
+                    : type === "step-indicator"
+                      ? { label: "Details  |  Shipping  |  Review", step: 1 }
+                      : type === "bottom-nav"
+                        ? { label: "Home  |  Search  |  Profile", selected: 0 }
+                        : type === "pricing-card"
+                          ? { label: "Pro", subtitle: "$19 / month" }
+                          : type === "toast" || type === "notification"
+                            ? { label: type === "toast" ? "Changes saved" : "New message", subtitle: "Just now" }
     : type === "list"
       ? {
           items: ["List item 1", "List item 2", "List item 3"],

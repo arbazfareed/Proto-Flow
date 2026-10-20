@@ -55,6 +55,7 @@ import {
   getDefaultTextProperties,
   getStyleUpdates,
   getTextPropertyUpdates,
+  getWidgetPropertyUpdates,
   isTextStyleWidget,
   normalizeListItems,
   parseStyleColor,
@@ -65,6 +66,7 @@ import {
   type ShapeTool,
 } from "../canvas/shapeTools";
 import { ElementLibrary } from "./ElementLibrary";
+import { CANVAS_ICON_NAMES } from "../canvas/iconLibrary";
 
 const CanvasStage = lazy(() =>
   import("../canvas/CanvasStage").then((module) => ({
@@ -725,6 +727,41 @@ function StyleSection({ widgets }: { widgets: Widget[] }) {
     [editableWidgets, beginStyleEdit, finishEditSession],
   );
 
+  const applyProps = useCallback(
+    (patch: Record<string, unknown>) => {
+      if (editableWidgets.length === 0) return;
+      beginStyleEdit();
+      const session = editSessionRef.current;
+      if (!session) return;
+      const current = useStore.getState();
+      const screen = current.project.screens.find((item) => item.id === session.screenId);
+      const targetWidgets =
+        screen?.widgets.filter((widget) => session.widgetIds.includes(widget.id)) ?? [];
+      const updates = new Map(
+        getWidgetPropertyUpdates(targetWidgets, patch).map((update) => [update.id, update.props]),
+      );
+      const project: Project = {
+        ...current.project,
+        updatedAt: new Date().toISOString(),
+        screens: current.project.screens.map((item) =>
+          item.id !== session.screenId
+            ? item
+            : {
+                ...item,
+                widgets: item.widgets.map((widget) => {
+                  const props = updates.get(widget.id);
+                  return props ? { ...widget, props } : widget;
+                }),
+              },
+        ),
+      };
+      useStore.setState({ project, isDirty: true });
+      if (session.timer !== null) window.clearTimeout(session.timer);
+      session.timer = window.setTimeout(finishEditSession, 500);
+    },
+    [editableWidgets, beginStyleEdit, finishEditSession],
+  );
+
   useEffect(() => () => finishEditSession(), [finishEditSession]);
 
   const colorValue = (field: StyleColorField): StyleColorValue => {
@@ -916,6 +953,13 @@ function StyleSection({ widgets }: { widgets: Widget[] }) {
     selectedBlendMode && SAFE_BLEND_MODES.includes(selectedBlendMode)
       ? selectedBlendMode
       : "source-over";
+  const iconWidgets = editableWidgets.filter(
+    (widget) => widget.type === "icon" || widget.type === "custom-icon",
+  );
+  const iconNames = iconWidgets.map((widget) =>
+    typeof widget.props.iconName === "string" ? widget.props.iconName : "Star",
+  );
+  const iconName = iconNames.length > 0 && !mixed(iconNames) ? iconNames[0] : "";
 
   return (
     <section className="style-section" aria-label="Style">
@@ -925,6 +969,21 @@ function StyleSection({ widgets }: { widgets: Widget[] }) {
         {colorInput("stroke", "Stroke")}
       </div>
       <div className="style-control-grid">
+        {iconWidgets.length > 0 && (
+          <label className="style-control">
+            <span>Icon</span>
+            <select
+              aria-label="Canvas icon"
+              value={iconName}
+              disabled={iconWidgets.length !== editableWidgets.length}
+              onChange={(event) => applyProps({ iconName: event.currentTarget.value })}
+              onBlur={finishEditSession}
+            >
+              {iconName === "" && <option value="" disabled>Mixed</option>}
+              {CANVAS_ICON_NAMES.map((name) => <option key={name} value={name}>{name}</option>)}
+            </select>
+          </label>
+        )}
         <label className="style-control">
           <span>Stroke width <button type="button" className="icon-button small-icon" aria-label="Reset stroke" onClick={() => resetSection("stroke")}><RotateCcw size={11} /></button></span>
           <input type="number" min="0" max="50" step="1" aria-label="Stroke width" value={strokeWidthMixed ? "" : strokeWidth} placeholder={strokeWidthMixed ? "Mixed" : undefined} disabled={!editableWidgets.length} onChange={(event) => applyStyle({ strokeWidth: Math.min(50, Math.max(0, Number(event.currentTarget.value))) })} onBlur={finishEditSession} />

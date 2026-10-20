@@ -5,6 +5,7 @@ import {
   getSafeBlendMode,
   getStyleUpdates,
   getTextPropertyUpdates,
+  getWidgetPropertyUpdates,
   isTextStyleWidget,
   normalizeListItems,
   parseStyleColor,
@@ -50,6 +51,12 @@ describe("style inspector helpers", () => {
       {
         id: button.id,
         props: { ...button.props, fontSize: 18 },
+      },
+    ]);
+    expect(getWidgetPropertyUpdates([unlocked, locked], { iconName: "Camera" })).toEqual([
+      {
+        id: unlocked.id,
+        props: { ...unlocked.props, iconName: "Camera" },
       },
     ]);
   });
