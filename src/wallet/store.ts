@@ -25,6 +25,7 @@ interface WalletState {
   recentLedger: LedgerEntry[];
   lastSyncedAt: number | null;
   claimable: boolean;
+  nextClaimAt: string | null;
   error: string | null;
   setWallet: (snapshot: WalletSnapshot, jwt?: string | null) => void;
   setBalance: (balance: number) => void;
@@ -33,7 +34,7 @@ interface WalletState {
   clear: () => Promise<void>;
   optimisticSpend: (amount: number) => boolean;
   sync: () => Promise<void>;
-  initialize: () => Promise<void>;
+  initialize: () => Promise<number>;
   claimDaily: () => Promise<boolean>;
   resetIdentity: () => Promise<void>;
 }
@@ -62,6 +63,7 @@ function toSnapshot(state: WalletState, syncedAt = state.lastSyncedAt ?? Date.no
     syncedAt,
     recentLedger: state.recentLedger,
     claimable: state.claimable,
+    nextClaimAt: state.nextClaimAt,
   };
 }
 
@@ -77,6 +79,7 @@ function setSnapshot(snapshot: WalletSnapshot, jwt?: string | null): void {
     recentLedger: snapshot.recentLedger.slice(0, MAX_LEDGER_ENTRIES),
     lastSyncedAt: snapshot.syncedAt,
     claimable: snapshot.claimable,
+    nextClaimAt: snapshot.nextClaimAt,
     error: null,
   });
 }
@@ -93,6 +96,7 @@ async function refreshToken(): Promise<string> {
     recentLedger: snapshot.recentLedger,
     lastSyncedAt: snapshot.syncedAt,
     claimable: snapshot.claimable,
+    nextClaimAt: snapshot.nextClaimAt,
     jwt: token,
     error: null,
   });
@@ -117,6 +121,7 @@ async function loadCachedWallet(): Promise<void> {
     recentLedger: cached.recentLedger.slice(0, MAX_LEDGER_ENTRIES),
     lastSyncedAt: cached.syncedAt,
     claimable: false,
+    nextClaimAt: cached.nextClaimAt,
     error: null,
   });
 }
@@ -188,6 +193,7 @@ export const useWalletStore = create<WalletState>((set, get) => ({
   recentLedger: [],
   lastSyncedAt: null,
   claimable: false,
+  nextClaimAt: null,
   error: null,
   setWallet: (snapshot, jwt) => setSnapshot(snapshot, jwt),
   setBalance: (balance) => {
@@ -223,6 +229,7 @@ export const useWalletStore = create<WalletState>((set, get) => ({
       recentLedger: [],
       lastSyncedAt: null,
       claimable: false,
+      nextClaimAt: null,
       error: null,
     });
   },
@@ -250,7 +257,14 @@ export const useWalletStore = create<WalletState>((set, get) => ({
     }
     return syncPromise;
   },
-  initialize: () => get().sync(),
+  initialize: async () => {
+    await get().sync();
+    const wallet = get();
+    if (wallet.status !== "online" || !wallet.claimable) return 0;
+    const previousBalance = wallet.balance;
+    const claimed = await get().claimDaily();
+    return claimed ? Math.max(0, get().balance - previousBalance) : 0;
+  },
   claimDaily: async () => {
     const state = get();
     if (!state.claimable || state.status !== "online" || !state.jwt) return false;
@@ -261,6 +275,16 @@ export const useWalletStore = create<WalletState>((set, get) => ({
     } catch (error) {
       if (error instanceof WalletApiError && error.code === "INVALID_TOKEN") {
         await get().sync();
+      } else if (
+        error instanceof WalletApiError &&
+        ["DAILY_ALREADY_CLAIMED", "DAILY_IP_LIMIT", "WALLET_FULL"].includes(error.code ?? "")
+      ) {
+        set({
+          claimable: false,
+          nextClaimAt: error.nextClaimAt ?? get().nextClaimAt,
+          ...(error.balance === undefined ? {} : { balance: error.balance }),
+          error: null,
+        });
       } else {
         set({
           error: error instanceof Error ? error.message : "Could not claim daily credits.",

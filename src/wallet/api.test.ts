@@ -1,6 +1,8 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   canUseOfflineWallet,
+  claimDailyCredits,
+  fetchWalletMe,
   getCachedWallet,
   provisionAnonymousWallet,
   runMeteredAction,
@@ -24,6 +26,7 @@ function wallet(syncedAt: number): WalletSnapshot {
     syncedAt,
     recentLedger: [],
     claimable: false,
+    nextClaimAt: null,
   };
 }
 
@@ -79,7 +82,47 @@ describe("wallet persistence", () => {
       balance: 50,
       recentLedger: [],
       claimable: false,
+      nextClaimAt: null,
       syncedAt: now - 60_000,
+    });
+  });
+
+  it("reads next refill timestamps and preserves server claim cooldown responses", async () => {
+    const nextClaimAt = new Date(now + 24 * 60 * 60 * 1000).toISOString();
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            accountId: "account-1",
+            balance: 50,
+            lifetimeGranted: 50,
+            lifetimeSpent: 0,
+            recentLedger: [],
+            claimable: false,
+            nextClaimAt,
+            syncedAt: now,
+          }),
+          { status: 200, headers: { "Content-Type": "application/json" } },
+        ),
+      )
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            error: { code: "DAILY_ALREADY_CLAIMED", message: "Already claimed." },
+            nextClaimAt,
+            balance: 50,
+          }),
+          { status: 409, headers: { "Content-Type": "application/json" } },
+        ),
+      );
+    vi.stubGlobal("fetch", fetchMock);
+
+    const snapshot = await fetchWalletMe("session-token");
+    expect(snapshot.nextClaimAt).toBe(nextClaimAt);
+    await expect(claimDailyCredits("session-token")).rejects.toMatchObject({
+      code: "DAILY_ALREADY_CLAIMED",
+      nextClaimAt,
+      balance: 50,
     });
   });
 

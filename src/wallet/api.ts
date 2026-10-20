@@ -18,6 +18,7 @@ export interface WalletSnapshot {
   syncedAt: number;
   recentLedger: LedgerEntry[];
   claimable: boolean;
+  nextClaimAt: string | null;
 }
 
 export interface LedgerEntry {
@@ -50,6 +51,7 @@ interface WalletResponse {
     created_at: string;
   }>;
   claimable: boolean;
+  nextClaimAt?: string | null;
   syncedAt: number;
 }
 
@@ -68,14 +70,17 @@ export interface MeteredActionResponse<T = unknown> {
   wallet: WalletSnapshot;
 }
 
-interface CachedWallet extends Omit<WalletSnapshot, "recentLedger" | "claimable"> {
+interface CachedWallet extends Omit<WalletSnapshot, "recentLedger" | "claimable" | "nextClaimAt"> {
   recentLedger?: LedgerEntry[];
   claimable?: boolean;
+  nextClaimAt?: string | null;
   lastSyncedAt?: number;
 }
 
 interface ApiErrorResponse {
   error?: { code?: string; message?: string };
+  nextClaimAt?: string | null;
+  balance?: number;
 }
 
 function isNonNegativeSafeInteger(value: unknown): value is number {
@@ -106,6 +111,8 @@ export class WalletApiError extends Error {
     readonly retryable: boolean,
     readonly code?: string,
     readonly retryAfterSeconds?: number,
+    readonly nextClaimAt?: string | null,
+    readonly balance?: number,
   ) {
     super(message);
     this.name = "WalletApiError";
@@ -190,6 +197,10 @@ export function getCachedWallet(): WalletSnapshot | null {
     !isNonNegativeSafeInteger(cached.lifetimeSpent) ||
     !isNonNegativeSafeInteger(cached.syncedAt) ||
     (cached.lastSyncedAt !== undefined && !isNonNegativeSafeInteger(cached.lastSyncedAt)) ||
+    (cached.nextClaimAt !== undefined &&
+      cached.nextClaimAt !== null &&
+      (typeof cached.nextClaimAt !== "string" ||
+        !Number.isFinite(Date.parse(cached.nextClaimAt)))) ||
     (cached.recentLedger !== undefined &&
       (!Array.isArray(cached.recentLedger) || !cached.recentLedger.every(isCachedLedgerEntry))) ||
     (cached.claimable !== undefined && typeof cached.claimable !== "boolean")
@@ -204,6 +215,7 @@ export function getCachedWallet(): WalletSnapshot | null {
     syncedAt: cached.lastSyncedAt ?? cached.syncedAt,
     recentLedger: cached.recentLedger ?? [],
     claimable: cached.claimable ?? false,
+    nextClaimAt: cached.nextClaimAt ?? null,
   };
 }
 
@@ -294,6 +306,7 @@ export async function provisionAnonymousWallet(
     syncedAt: Date.now(),
     recentLedger: [],
     claimable: false,
+    nextClaimAt: null,
   };
   localStorage.setItem(CACHED_WALLET_KEY, JSON.stringify(snapshot));
   return { snapshot, token: result.token };
@@ -337,6 +350,11 @@ async function authenticatedRequest<T>(
       response.status === 429
         ? Math.max(0, Number(response.headers.get("Retry-After")) || 0)
         : undefined,
+      typeof payload.nextClaimAt === "string" &&
+        Number.isFinite(Date.parse(payload.nextClaimAt))
+        ? payload.nextClaimAt
+        : null,
+      isNonNegativeSafeInteger(payload.balance) ? payload.balance : undefined,
     );
   }
   return (await response.json()) as T;
@@ -351,6 +369,10 @@ function toSnapshot(response: WalletResponse): WalletSnapshot {
     !isNonNegativeSafeInteger(response.lifetimeSpent) ||
     !isNonNegativeSafeInteger(response.syncedAt) ||
     typeof response.claimable !== "boolean" ||
+    (response.nextClaimAt !== undefined &&
+      response.nextClaimAt !== null &&
+      (typeof response.nextClaimAt !== "string" ||
+        !Number.isFinite(Date.parse(response.nextClaimAt)))) ||
     !Array.isArray(response.recentLedger) ||
     response.recentLedger.length > 20
   ) {
@@ -393,6 +415,7 @@ function toSnapshot(response: WalletResponse): WalletSnapshot {
     syncedAt: response.syncedAt,
     recentLedger,
     claimable: response.claimable,
+    nextClaimAt: response.nextClaimAt ?? null,
   };
 }
 
@@ -401,11 +424,17 @@ export async function fetchWalletMe(token: string): Promise<WalletSnapshot> {
   return toSnapshot(response);
 }
 
-export async function claimDailyCredits(token: string): Promise<WalletSnapshot> {
+export async function claimDailyCredits(
+  token: string,
+  turnstileToken?: string,
+): Promise<WalletSnapshot> {
   const response = await authenticatedRequest<DailyClaimResponse>(
     "/wallet/claim-daily",
     token,
-    { method: "POST" },
+    {
+      method: "POST",
+      ...(turnstileToken ? { headers: { "X-Turnstile-Token": turnstileToken } } : {}),
+    },
   );
   if (
     typeof response.claimed !== "boolean" ||

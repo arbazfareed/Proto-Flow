@@ -27,7 +27,10 @@ app.use("*", async (context, next) => {
     context.header("Access-Control-Allow-Origin", origin);
     context.header("Vary", "Origin");
     context.header("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
-    context.header("Access-Control-Allow-Headers", "Authorization, Content-Type");
+    context.header(
+      "Access-Control-Allow-Headers",
+      "Authorization, Content-Type, X-Turnstile-Token",
+    );
     context.header("Access-Control-Max-Age", "86400");
   }
 
@@ -77,6 +80,7 @@ interface LedgerRow {
 
 interface WalletMeRow extends WalletRow {
   claimable: number;
+  last_granted_at: string | null;
 }
 
 class IdentityConflictError extends Error {}
@@ -84,6 +88,9 @@ class IdentityConflictError extends Error {}
 const STARTER_CREDITS = 50;
 const DAILY_CREDITS = 20;
 const MAX_WALLET_BALANCE = 100;
+const MAX_CATCH_UP_CREDITS = 60;
+const IP_ABUSE_IDENTITY_THRESHOLD = 5;
+const DAILY_WINDOW_DAYS = 1;
 const TOKEN_LIFETIME_SECONDS = 24 * 60 * 60;
 const MAX_ACTION_BODY_BYTES = 64 * 1024;
 const DEVICE_ID_PATTERN = /^[a-f\d]{64}$/i;
@@ -296,17 +303,18 @@ async function loadWallet(
   const wallet = await database
     .prepare(
       `SELECT balance, lifetime_granted, lifetime_spent,
+         (SELECT MAX(granted_at) FROM daily_grants WHERE account_id = ?) AS last_granted_at,
          CASE
            WHEN balance < ? AND NOT EXISTS (
              SELECT 1 FROM daily_grants
-             WHERE account_id = ? AND julianday(granted_at) > julianday(?) - 1
+             WHERE account_id = ? AND julianday(granted_at) > julianday(?) - ?
            ) THEN 1
            ELSE 0
          END AS claimable
        FROM wallets
        WHERE account_id = ?`,
     )
-    .bind(MAX_WALLET_BALANCE, accountId, now, accountId)
+    .bind(accountId, MAX_WALLET_BALANCE, accountId, now, DAILY_WINDOW_DAYS, accountId)
     .first<WalletMeRow>();
   if (!wallet) throw new Error("The requested wallet does not exist.");
 
@@ -325,6 +333,44 @@ async function loadWallet(
   return { wallet, recentLedger: ledgerResult.results };
 }
 
+async function hashClientIp(ipAddress: string, secret: string): Promise<string> {
+  const key = await crypto.subtle.importKey(
+    "raw",
+    new TextEncoder().encode(secret),
+    { name: "HMAC", hash: "SHA-256" },
+    false,
+    ["sign"],
+  );
+  const digest = await crypto.subtle.sign(
+    "HMAC",
+    key,
+    new TextEncoder().encode(`protoflow-wallet-ip:${ipAddress}`),
+  );
+  return Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, "0")).join("");
+}
+
+async function verifyTurnstileToken(token: string, secret: string): Promise<boolean> {
+  const body = new URLSearchParams({ secret, response: token });
+  const response = await fetch("https://challenges.cloudflare.com/turnstile/v0/siteverify", {
+    method: "POST",
+    body,
+  });
+  if (!response.ok) throw new Error("Turnstile verification is unavailable.");
+  const result: unknown = await response.json();
+  return (
+    typeof result === "object" &&
+    result !== null &&
+    !Array.isArray(result) &&
+    "success" in result &&
+    result.success === true
+  );
+}
+
+function nextClaimAt(lastGrantedAt: string | null): string | null {
+  if (!lastGrantedAt) return null;
+  return new Date(Date.parse(lastGrantedAt) + 24 * 60 * 60 * 1000).toISOString();
+}
+
 app.get("/wallet/me", requireJwt, async (context) => {
   try {
     const now = new Date().toISOString();
@@ -340,6 +386,7 @@ app.get("/wallet/me", requireJwt, async (context) => {
       lifetimeSpent: wallet.lifetime_spent,
       recentLedger,
       claimable: wallet.claimable === 1,
+      nextClaimAt: nextClaimAt(wallet.last_granted_at),
       syncedAt: Date.now(),
     });
   } catch (error) {
@@ -363,30 +410,148 @@ app.post("/wallet/claim-daily", requireJwt, async (context) => {
   const accountId = context.get("auth").accountId;
   const now = new Date().toISOString();
   const grantId = crypto.randomUUID();
+  const clientIp = context.req.header("CF-Connecting-IP");
+  const ipHash = clientIp
+    ? await hashClientIp(clientIp, context.env.JWT_SECRET ?? "")
+    : null;
 
   try {
+    let suspiciousIp = false;
+    if (ipHash) {
+      await context.env.DB.batch([
+        context.env.DB
+          .prepare("DELETE FROM wallet_ip_activity WHERE julianday(last_seen_at) < julianday(?) - 30")
+          .bind(now),
+        context.env.DB
+          .prepare("DELETE FROM daily_ip_grants WHERE julianday(granted_at) < julianday(?) - 30")
+          .bind(now),
+        context.env.DB
+          .prepare(
+            `INSERT INTO wallet_ip_activity (ip_hash, account_id, last_seen_at)
+             VALUES (?, ?, ?)
+             ON CONFLICT (ip_hash, account_id)
+             DO UPDATE SET last_seen_at = excluded.last_seen_at`,
+          )
+          .bind(ipHash, accountId, now),
+      ]);
+      const activity = await context.env.DB
+        .prepare(
+          `SELECT COUNT(*) AS identity_count
+           FROM wallet_ip_activity
+           WHERE ip_hash = ? AND julianday(last_seen_at) > julianday(?) - ?`,
+        )
+        .bind(ipHash, now, DAILY_WINDOW_DAYS)
+        .first<{ identity_count: number }>();
+      suspiciousIp = (activity?.identity_count ?? 0) >= IP_ABUSE_IDENTITY_THRESHOLD;
+    }
+
+    if (suspiciousIp && context.env.TURNSTILE_SECRET_KEY) {
+      const turnstileToken = context.req.header("X-Turnstile-Token");
+      if (!turnstileToken) {
+        return context.json(
+          {
+            error: {
+              code: "TURNSTILE_REQUIRED",
+              message: "Complete the anti-abuse verification before claiming a daily refill.",
+            },
+          },
+          403,
+        );
+      }
+      try {
+        if (!(await verifyTurnstileToken(turnstileToken, context.env.TURNSTILE_SECRET_KEY))) {
+          return errorResponse(
+            context,
+            403,
+            "TURNSTILE_INVALID",
+            "The anti-abuse verification could not be confirmed.",
+          );
+        }
+      } catch (error) {
+        console.error("Turnstile verification failed.", {
+          message: error instanceof Error ? error.message : "Unknown verification error.",
+        });
+        return errorResponse(
+          context,
+          503,
+          "TURNSTILE_UNAVAILABLE",
+          "Anti-abuse verification is temporarily unavailable.",
+        );
+      }
+    }
+
     const results = await context.env.DB.batch([
       context.env.DB
         .prepare(
           `INSERT OR IGNORE INTO daily_grants (account_id, granted_at, amount)
-           SELECT ?, ?, MIN(?, ? - balance)
+           SELECT ?, ?, MIN(
+             ? * CASE
+               WHEN latest.last_granted_at IS NULL THEN 1
+               ELSE MIN(?, MAX(1, CAST(julianday(?) - julianday(latest.last_granted_at) AS INTEGER)))
+             END,
+             ? - wallets.balance
+           )
            FROM wallets
-           WHERE account_id = ?
-             AND balance < ?
+           LEFT JOIN (
+             SELECT MAX(granted_at) AS last_granted_at
+             FROM daily_grants
+             WHERE account_id = ?
+           ) AS latest ON 1 = 1
+           WHERE wallets.account_id = ?
+             AND wallets.balance < ?
              AND NOT EXISTS (
                SELECT 1 FROM daily_grants
-               WHERE account_id = ? AND julianday(granted_at) > julianday(?) - 1
+               WHERE account_id = ? AND julianday(granted_at) > julianday(?) - ?
+             )
+             AND (
+               ? IS NULL
+               OR (
+                 (SELECT COUNT(*) FROM wallet_ip_activity
+                  WHERE ip_hash = ? AND julianday(last_seen_at) > julianday(?) - ?) < ?
+                 OR (
+                   NOT EXISTS (
+                     SELECT 1 FROM daily_ip_grants
+                     WHERE ip_hash = ? AND julianday(granted_at) > julianday(?) - ?
+                   )
+                   AND NOT EXISTS (
+                     SELECT 1
+                     FROM daily_grants AS ip_daily_grants
+                     JOIN wallet_ip_activity AS activity
+                       ON activity.account_id = ip_daily_grants.account_id
+                     WHERE activity.ip_hash = ?
+                       AND julianday(activity.last_seen_at) > julianday(?) - ?
+                       AND julianday(ip_daily_grants.granted_at) > julianday(?) - ?
+                   )
+                 )
+               )
              )`,
         )
         .bind(
           accountId,
           now,
           DAILY_CREDITS,
+          MAX_CATCH_UP_CREDITS / DAILY_CREDITS,
+          now,
           MAX_WALLET_BALANCE,
+          accountId,
           accountId,
           MAX_WALLET_BALANCE,
           accountId,
           now,
+          DAILY_WINDOW_DAYS,
+          ipHash,
+          ipHash,
+          now,
+          DAILY_WINDOW_DAYS,
+          IP_ABUSE_IDENTITY_THRESHOLD,
+          ipHash,
+          now,
+          DAILY_WINDOW_DAYS,
+          ipHash,
+          now,
+          DAILY_WINDOW_DAYS,
+          now,
+          DAILY_WINDOW_DAYS,
         ),
       context.env.DB
         .prepare(
@@ -413,6 +578,30 @@ app.post("/wallet/claim-daily", requireJwt, async (context) => {
            WHERE account_id = ? AND granted_at = ? AND changes() = 1`,
         )
         .bind(grantId, accountId, now, accountId, now),
+      ...(ipHash
+        ? [
+            context.env.DB
+              .prepare(
+                `INSERT INTO daily_ip_grants (ip_hash, account_id, granted_at)
+                 SELECT ?, ?, ?
+                 WHERE changes() = 1
+                   AND (SELECT COUNT(*) FROM wallet_ip_activity
+                        WHERE ip_hash = ? AND julianday(last_seen_at) > julianday(?) - ?) >= ?
+                 ON CONFLICT (ip_hash) DO UPDATE SET
+                   account_id = excluded.account_id,
+                   granted_at = excluded.granted_at`,
+              )
+              .bind(
+                ipHash,
+                accountId,
+                now,
+                ipHash,
+                now,
+                DAILY_WINDOW_DAYS,
+                IP_ABUSE_IDENTITY_THRESHOLD,
+              ),
+          ]
+        : []),
     ]);
     if (results.some((result) => !result.success)) {
       throw new Error("The daily grant transaction did not complete.");
@@ -420,15 +609,61 @@ app.post("/wallet/claim-daily", requireJwt, async (context) => {
 
     const { wallet, recentLedger } = await loadWallet(context.env.DB, accountId, now);
     const grant = recentLedger.find((entry) => entry.id === grantId);
+    const accountNextClaimAt = nextClaimAt(wallet.last_granted_at);
+    if (!grant) {
+      const hasRecentAccountGrant =
+        accountNextClaimAt !== null && Date.parse(accountNextClaimAt) > Date.parse(now);
+      const isWalletFull = wallet.balance >= MAX_WALLET_BALANCE;
+      let ipNextClaimAt: string | null = null;
+      if (ipHash && !hasRecentAccountGrant && !isWalletFull) {
+        const ipGrant = await context.env.DB
+          .prepare(
+            `SELECT MAX(ip_daily_grants.granted_at) AS last_granted_at
+             FROM daily_grants AS ip_daily_grants
+             JOIN wallet_ip_activity AS activity
+               ON activity.account_id = ip_daily_grants.account_id
+             WHERE activity.ip_hash = ?
+               AND julianday(activity.last_seen_at) > julianday(?) - ?
+               AND julianday(ip_daily_grants.granted_at) > julianday(?) - ?`,
+          )
+          .bind(ipHash, now, DAILY_WINDOW_DAYS, now, DAILY_WINDOW_DAYS)
+          .first<{ last_granted_at: string | null }>();
+        ipNextClaimAt = nextClaimAt(ipGrant?.last_granted_at ?? null);
+      }
+      const ipLimited =
+        ipNextClaimAt !== null && Date.parse(ipNextClaimAt) > Date.parse(now);
+      const code = hasRecentAccountGrant
+        ? "DAILY_ALREADY_CLAIMED"
+        : isWalletFull
+          ? "WALLET_FULL"
+          : ipLimited
+            ? "DAILY_IP_LIMIT"
+            : "DAILY_ALREADY_CLAIMED";
+      const message =
+        code === "WALLET_FULL"
+          ? "Your wallet is at the daily refill balance cap."
+          : code === "DAILY_IP_LIMIT"
+            ? "A daily refill was already claimed from this network. Try again after the cooldown."
+            : "A daily refill was already claimed recently.";
+      return context.json(
+        {
+          error: { code, message },
+          nextClaimAt: hasRecentAccountGrant ? accountNextClaimAt : ipNextClaimAt ?? accountNextClaimAt,
+          balance: wallet.balance,
+        },
+        409,
+      );
+    }
     return context.json({
       accountId,
-      claimed: Boolean(grant),
-      granted: grant?.delta ?? 0,
+      claimed: true,
+      granted: grant.delta,
       balance: wallet.balance,
       lifetimeGranted: wallet.lifetime_granted,
       lifetimeSpent: wallet.lifetime_spent,
       recentLedger,
       claimable: wallet.claimable === 1,
+      nextClaimAt: nextClaimAt(wallet.last_granted_at),
       syncedAt: Date.now(),
     });
   } catch (error) {

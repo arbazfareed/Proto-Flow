@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { isTauri } from "@tauri-apps/api/core";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { Check, CircleAlert } from "lucide-react";
@@ -43,26 +43,34 @@ function AppShell() {
   const [updateCheckRequest, setUpdateCheckRequest] = useState(0);
   const [activeTool, setActiveTool] = useState<ShapeTool | null>(null);
   const [walletOpen, setWalletOpen] = useState(false);
+  const walletInitializationStarted = useRef(false);
   const syncWallet = useWalletStore((state) => state.sync);
-
-  useEffect(() => {
-    const syncWhenVisible = () => {
-      if (!document.hidden) void syncWallet();
-    };
-    syncWhenVisible();
-    const interval = window.setInterval(syncWhenVisible, 60_000);
-    document.addEventListener("visibilitychange", syncWhenVisible);
-    return () => {
-      window.clearInterval(interval);
-      document.removeEventListener("visibilitychange", syncWhenVisible);
-    };
-  }, [syncWallet]);
+  const initializeWallet = useWalletStore((state) => state.initialize);
 
   const notify = useCallback((message: string, isError = false) => {
     setNotice(message);
     setNoticeIsError(isError);
     window.setTimeout(() => setNotice(""), 4000);
   }, []);
+
+  useEffect(() => {
+    if (!walletInitializationStarted.current) {
+      walletInitializationStarted.current = true;
+      void initializeWallet().then((granted) => {
+        if (granted > 0) notify(`Daily refill: +${granted} credits`);
+      });
+    }
+
+    const syncWhenVisible = () => {
+      if (!document.hidden) void syncWallet();
+    };
+    const interval = window.setInterval(syncWhenVisible, 60_000);
+    document.addEventListener("visibilitychange", syncWhenVisible);
+    return () => {
+      window.clearInterval(interval);
+      document.removeEventListener("visibilitychange", syncWhenVisible);
+    };
+  }, [initializeWallet, notify, syncWallet, walletInitializationStarted]);
 
   useEffect(
     () => subscribeAutosaveErrors((message) => notify(message, true)),
@@ -250,6 +258,7 @@ function AppShell() {
         onRedo={redo}
         onOpenPalette={() => setPaletteOpen(true)}
         onOpenWallet={() => setWalletOpen(true)}
+        onNotify={notify}
         onStartDragging={startWindowDragging}
         onWindowAction={runWindowAction}
       />

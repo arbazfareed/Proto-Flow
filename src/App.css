@@ -635,6 +635,8 @@
 .wallet-menu-history { max-height:220px; overflow:auto; border-top:1px solid #303137; }
 .wallet-menu-section-title { padding:9px 0 5px; color:#aaaab3; font-size:10px; font-weight:650; }
 .wallet-menu-empty { margin:4px 0 9px; color:#8e8e98; font-size:10px; }
+.wallet-menu-refill-countdown { margin:7px 0; color:#aaaab3; font-size:10px; }
+.wallet-menu-refill-countdown time { color:#d0cfda; }
 .wallet-ledger-entry { display:grid; grid-template-columns:minmax(0,1fr) auto auto; align-items:center; gap:9px; padding:6px 0; border-top:1px solid #292a30; font-size:10px; }
 .wallet-ledger-entry>span { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; text-transform:capitalize; }
 .wallet-ledger-entry time { color:#85858f; font-size:9px; }

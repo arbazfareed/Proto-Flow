@@ -105,6 +105,7 @@ describe("Worker API gateway", () => {
     );
     expect(response.status).toBe(204);
     expect(response.headers.get("Access-Control-Allow-Methods")).toBe("GET, POST, OPTIONS");
+    expect(response.headers.get("Access-Control-Allow-Headers")).toContain("X-Turnstile-Token");
   });
 
   it("requires a bearer token for wallet, metered-action, and admin routes", async () => {
