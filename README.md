@@ -48,7 +48,7 @@ The element library includes dedicated canvas visuals for avatars, icon buttons,
 
 ### Phase 3 — Cloud API gateway scaffold
 
-`cloud/` contains the Cloudflare Workers/Hono API scaffold for PF-T301. It defines local Wrangler bindings for D1 (`DB`), KV (`CACHE`), and R2 (`ASSETS`), a repeatable D1 migration plus standalone `schema.sql`, Tauri-origin CORS allowlisting, consistent JSON errors, and HS256 Bearer JWT verification for wallet, metered-action, and admin route groups. Wallet provisioning, wallet operations, metered actions, email authentication, and admin handlers deliberately return `501` until their follow-up tasks implement those behaviors.
+`cloud/` contains the Cloudflare Workers/Hono API scaffold for PF-T301. It defines local Wrangler bindings for D1 (`DB`), KV (`CACHE`), and R2 (`ASSETS`), a repeatable D1 migration plus standalone `schema.sql`, Tauri-origin CORS allowlisting, consistent JSON errors, and HS256 Bearer JWT verification for wallet, metered-action, and admin route groups. Anonymous wallet provisioning is implemented; wallet reads, daily claims, metered actions, email authentication, and admin handlers remain explicit `501` stubs for later tasks.
 
 Use Node.js 20.19+ or 22.12+:
 
@@ -64,6 +64,12 @@ npm run dev
 ```
 
 Before production deployment, create the named D1 database, KV namespace, and R2 bucket, replace the placeholder binding IDs in `cloud/wrangler.toml`, authenticate Wrangler, and set the JWT secret with `npx wrangler secret put JWT_SECRET`. Apply the migration remotely before `npm run deploy`. Do not commit `.dev.vars` or production secrets. Configure production `ALLOWED_ORIGINS` only with the shipped Tauri origins. Production deployment requires an authenticated Cloudflare account and account-specific resources.
+
+### PF-T302 — Anonymous wallet
+
+On startup, the desktop app reads the locally hashed device ID and a random UUID install ID, then calls `POST /auth/anonymous`. The Worker reuses an account found by either identifier or creates an account and a one-time 50-credit starter wallet and ledger grant. The signed 24-hour JWT is stored in the operating system credential store; the last balance is cached locally for display during up to 24 hours offline. Offline mode is display-only; cloud actions still require the server. The wallet button in the top bar opens wallet status and the identity reset action. Reset refreshes credentials without replacing the account or granting another starter balance.
+
+For local development, start the Worker with `cd cloud; npm run dev`, then start the desktop app in another terminal with `npm run tauri dev`. Provide `cloud/.dev.vars` with a non-production `JWT_SECRET` of at least 32 characters. Production builds need `VITE_CLOUD_API_URL` configured to the deployed Worker URL. Technical details of data sent and stored are documented in [PRIVACY.md](./PRIVACY.md).
 
 ### PF-T218 — Layer tree behavior and implementation notes
 

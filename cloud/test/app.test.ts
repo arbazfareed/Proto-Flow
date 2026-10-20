@@ -166,8 +166,43 @@ describe("Worker API gateway", () => {
     });
   });
 
-  it("keeps future auth flows explicitly unimplemented", async () => {
-    for (const path of ["/auth/anonymous", "/auth/email/start", "/auth/email/verify"]) {
+  it("validates the device hash and installation ID before wallet provisioning", async () => {
+    const response = await app.request(
+      "/auth/anonymous",
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ deviceId: "hostname", installId: "not-a-uuid" }),
+      },
+      environment(),
+    );
+    expect(response.status).toBe(400);
+    expect(await response.json()).toMatchObject({
+      error: { code: "BAD_REQUEST" },
+    });
+  });
+
+  it("requires a configured signing secret before wallet provisioning", async () => {
+    const response = await app.request(
+      "/auth/anonymous",
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          deviceId: "a".repeat(64),
+          installId: "123e4567-e89b-42d3-a456-426614174000",
+        }),
+      },
+      environment({ JWT_SECRET: undefined }),
+    );
+    expect(response.status).toBe(503);
+    expect(await response.json()).toMatchObject({
+      error: { code: "SERVICE_NOT_CONFIGURED" },
+    });
+  });
+
+  it("keeps future email auth flows explicitly unimplemented", async () => {
+    for (const path of ["/auth/email/start", "/auth/email/verify"]) {
       const response = await app.request(path, { method: "POST" }, environment());
       expect(response.status).toBe(501);
       expect(await response.json()).toMatchObject({

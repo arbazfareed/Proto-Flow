@@ -67,6 +67,7 @@ import {
 } from "../canvas/shapeTools";
 import { ElementLibrary } from "./ElementLibrary";
 import { CANVAS_ICON_NAMES } from "../canvas/iconLibrary";
+import { useWalletStore } from "../wallet/store";
 
 const CanvasStage = lazy(() =>
   import("../canvas/CanvasStage").then((module) => ({
@@ -82,6 +83,7 @@ interface TopBarProps {
   onUndo: () => void;
   onRedo: () => void;
   onOpenPalette: () => void;
+  onOpenWallet: () => void;
   onStartDragging: () => void;
   onWindowAction: (action: "minimize" | "maximize" | "close") => void;
 }
@@ -94,6 +96,7 @@ export function TopBar({
   onUndo,
   onRedo,
   onOpenPalette,
+  onOpenWallet,
   onStartDragging,
   onWindowAction,
 }: TopBarProps) {
@@ -101,6 +104,7 @@ export function TopBar({
   const isDirty = useStore((state) => state.isDirty);
   const canUndo = useStore((state) => state.past.length > 0);
   const canRedo = useStore((state) => state.future.length > 0);
+  const walletBalance = useWalletStore((state) => state.balance);
 
   return (
     <header
@@ -151,7 +155,9 @@ export function TopBar({
         <button className="button button-primary" onClick={onSave}>
           Save <kbd>Ctrl S</kbd>
         </button>
-        <span className="wallet-placeholder" aria-label="Wallet balance available in Phase 3">Wallet · Phase 3</span>
+        <button className="wallet-placeholder" onClick={onOpenWallet} aria-label="Open wallet">
+          {walletBalance === null ? "Wallet" : `${walletBalance} credits`}
+        </button>
         {isTauri() && (
           <div className="window-controls" aria-label="Window controls">
             <button className="window-control" aria-label="Minimize window" onClick={() => onWindowAction("minimize")}><Minus size={14} /></button>

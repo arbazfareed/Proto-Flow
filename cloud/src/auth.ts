@@ -13,6 +13,32 @@ function decodeBase64Url(segment: string): Uint8Array | null {
   }
 }
 
+function encodeBase64Url(bytes: Uint8Array): string {
+  let binary = "";
+  for (const byte of bytes) binary += String.fromCharCode(byte);
+  return btoa(binary).replaceAll("+", "-").replaceAll("/", "_").replace(/=+$/, "");
+}
+
+export async function signJwt(claims: AuthClaims, secret: string): Promise<string> {
+  const encodedHeader = encodeBase64Url(
+    new TextEncoder().encode(JSON.stringify({ alg: "HS256", typ: "JWT" })),
+  );
+  const encodedClaims = encodeBase64Url(new TextEncoder().encode(JSON.stringify(claims)));
+  const key = await crypto.subtle.importKey(
+    "raw",
+    new TextEncoder().encode(secret),
+    { name: "HMAC", hash: "SHA-256" },
+    false,
+    ["sign"],
+  );
+  const signature = await crypto.subtle.sign(
+    "HMAC",
+    key,
+    new TextEncoder().encode(`${encodedHeader}.${encodedClaims}`),
+  );
+  return `${encodedHeader}.${encodedClaims}.${encodeBase64Url(new Uint8Array(signature))}`;
+}
+
 function decodeClaims(segment: string): AuthClaims | null {
   const bytes = decodeBase64Url(segment);
   if (!bytes) return null;

@@ -15,7 +15,10 @@ pub fn run() {
             commands::file_io::save_image_asset,
             commands::file_io::read_image_asset,
             commands::file_io::read_dropped_image,
-            commands::file_io::get_device_id
+            commands::file_io::get_device_id,
+            commands::wallet::get_wallet_identity,
+            commands::wallet::get_wallet_jwt,
+            commands::wallet::save_wallet_jwt
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

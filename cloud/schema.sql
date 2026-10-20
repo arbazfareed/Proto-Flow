@@ -3,6 +3,7 @@ PRAGMA foreign_keys = ON;
 CREATE TABLE IF NOT EXISTS accounts (
   id TEXT PRIMARY KEY NOT NULL,
   device_fingerprint TEXT NOT NULL UNIQUE,
+  install_id TEXT UNIQUE,
   email TEXT,
   created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
   last_seen_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
@@ -44,3 +45,7 @@ CREATE INDEX IF NOT EXISTS ledger_account_created_idx
 
 CREATE INDEX IF NOT EXISTS accounts_email_idx
   ON accounts (email) WHERE email IS NOT NULL;
+
+CREATE UNIQUE INDEX IF NOT EXISTS ledger_starter_grant_once_idx
+  ON ledger (account_id)
+  WHERE reason = 'starter_grant';
