@@ -3,9 +3,11 @@ import {
   ArrowDownToLine,
   ArrowRight,
   Bell,
+  CircleAlert,
   ChevronDown,
   ChevronUp,
   CircleHelp,
+  Coins,
   FilePlus2,
   FileText,
   FolderOpen,
@@ -20,10 +22,13 @@ import {
   Plus,
   Redo2,
   RotateCw,
+  RefreshCw,
   Sparkles,
   Square,
   Undo2,
   RotateCcw,
+  WifiOff,
+  Zap,
   X,
 } from "lucide-react";
 import { isTauri } from "@tauri-apps/api/core";
@@ -88,6 +93,14 @@ interface TopBarProps {
   onWindowAction: (action: "minimize" | "maximize" | "close") => void;
 }
 
+function formatWalletSyncAge(timestamp: number): string {
+  const minutes = Math.max(0, Math.floor((Date.now() - timestamp) / 60_000));
+  if (minutes < 1) return "just now";
+  if (minutes < 60) return `${minutes} min ago`;
+  const hours = Math.floor(minutes / 60);
+  return `${hours} hr${hours === 1 ? "" : "s"} ago`;
+}
+
 export function TopBar({
   onNew,
   onOpen,
@@ -105,6 +118,45 @@ export function TopBar({
   const canUndo = useStore((state) => state.past.length > 0);
   const canRedo = useStore((state) => state.future.length > 0);
   const walletBalance = useWalletStore((state) => state.balance);
+  const walletStatus = useWalletStore((state) => state.status);
+  const lifetimeGranted = useWalletStore((state) => state.lifetimeGranted);
+  const lifetimeSpent = useWalletStore((state) => state.lifetimeSpent);
+  const recentLedger = useWalletStore((state) => state.recentLedger);
+  const lastSyncedAt = useWalletStore((state) => state.lastSyncedAt);
+  const claimable = useWalletStore((state) => state.claimable);
+  const walletError = useWalletStore((state) => state.error);
+  const syncWallet = useWalletStore((state) => state.sync);
+  const claimDaily = useWalletStore((state) => state.claimDaily);
+  const [walletMenuOpen, setWalletMenuOpen] = useState(false);
+  const [claimingDaily, setClaimingDaily] = useState(false);
+  const walletMenuRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!walletMenuOpen) return;
+    const closeOnOutsideClick = (event: MouseEvent) => {
+      if (event.target instanceof Node && !walletMenuRef.current?.contains(event.target)) {
+        setWalletMenuOpen(false);
+      }
+    };
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setWalletMenuOpen(false);
+    };
+    document.addEventListener("mousedown", closeOnOutsideClick);
+    document.addEventListener("keydown", closeOnEscape);
+    return () => {
+      document.removeEventListener("mousedown", closeOnOutsideClick);
+      document.removeEventListener("keydown", closeOnEscape);
+    };
+  }, [walletMenuOpen]);
+
+  const claimDailyCredits = async () => {
+    setClaimingDaily(true);
+    try {
+      await claimDaily();
+    } finally {
+      setClaimingDaily(false);
+    }
+  };
 
   return (
     <header
@@ -114,7 +166,7 @@ export function TopBar({
         if (
           event.button === 0 &&
           !(event.target instanceof HTMLElement &&
-            event.target.closest("button, input, a, [role='button']"))
+            event.target.closest("button, input, a, [role='button'], [role='dialog']"))
         ) {
           onStartDragging();
         }
@@ -155,9 +207,95 @@ export function TopBar({
         <button className="button button-primary" onClick={onSave}>
           Save <kbd>Ctrl S</kbd>
         </button>
-        <button className="wallet-placeholder" onClick={onOpenWallet} aria-label="Open wallet">
-          {walletBalance === null ? "Wallet" : `${walletBalance} credits`}
-        </button>
+        <div className="wallet-menu-anchor" ref={walletMenuRef}>
+          <button
+            className={`wallet-balance-pill wallet-balance-${walletBalance < 5 ? "low" : walletBalance < 20 ? "medium" : "healthy"}`}
+            onClick={() => setWalletMenuOpen((open) => !open)}
+            aria-label={`${walletBalance} credits; open wallet details`}
+            aria-expanded={walletMenuOpen}
+            aria-controls="wallet-balance-menu"
+          >
+            <Zap size={13} />
+            <span>{walletBalance} Credits</span>
+            <ChevronDown size={12} />
+          </button>
+          {walletMenuOpen && (
+            <section
+              className="wallet-balance-menu"
+              id="wallet-balance-menu"
+              role="dialog"
+              aria-label="Wallet balance and usage"
+              onMouseDown={(event) => event.stopPropagation()}
+            >
+              <header className="wallet-menu-heading">
+                <div>
+                  <span className="eyebrow">FREE WALLET</span>
+                  <strong><Coins size={15} /> {walletBalance} credits</strong>
+                </div>
+                <button
+                  className="icon-button small-icon"
+                  title="Refresh balance"
+                  aria-label="Refresh wallet balance"
+                  onClick={() => void syncWallet()}
+                  disabled={walletStatus === "loading"}
+                >
+                  <RefreshCw size={14} />
+                </button>
+              </header>
+              <div className="wallet-menu-totals">
+                <span>Lifetime granted <strong>{lifetimeGranted}</strong></span>
+                <span>Lifetime spent <strong>{lifetimeSpent}</strong></span>
+              </div>
+              {walletStatus === "offline" && (
+                <p className="wallet-menu-status"><WifiOff size={13} /> Offline — last synced {lastSyncedAt ? formatWalletSyncAge(lastSyncedAt) : "unknown"}</p>
+              )}
+              {walletStatus === "online" && lastSyncedAt && (
+                <p className="wallet-menu-status">Last synced {formatWalletSyncAge(lastSyncedAt)}</p>
+              )}
+              {walletStatus === "loading" && <p className="wallet-menu-status">Syncing wallet…</p>}
+              {walletError && <p className="wallet-menu-error" role="status"><CircleAlert size={13} /> {walletError}</p>}
+              <div className="wallet-menu-history">
+                <div className="wallet-menu-section-title">Recent activity</div>
+                {recentLedger.length === 0 ? (
+                  <p className="wallet-menu-empty">No wallet activity yet.</p>
+                ) : recentLedger.slice(0, 20).map((entry) => (
+                  <div className="wallet-ledger-entry" key={entry.id}>
+                    <span>{entry.reason.replaceAll("_", " ")}</span>
+                    <strong className={entry.delta > 0 ? "is-credit" : "is-debit"}>
+                      {entry.delta > 0 ? "+" : ""}{entry.delta}
+                    </strong>
+                    <time dateTime={entry.createdAt}>{new Date(entry.createdAt).toLocaleDateString()}</time>
+                  </div>
+                ))}
+              </div>
+              {claimable && (
+                <button
+                  className="button button-primary wallet-claim-button"
+                  onClick={() => void claimDailyCredits()}
+                  disabled={claimingDaily || walletStatus !== "online"}
+                >
+                  {claimingDaily ? "Claiming…" : "Claim Daily +20"}
+                </button>
+              )}
+              <button
+                className="wallet-menu-link"
+                title="Email sign-in will be available in Task PF-T307"
+                disabled
+              >
+                Sign in to sync <span>Coming soon</span>
+              </button>
+              <button
+                className="wallet-menu-link"
+                onClick={() => {
+                  setWalletMenuOpen(false);
+                  onOpenWallet();
+                }}
+              >
+                Wallet settings
+              </button>
+            </section>
+          )}
+        </div>
         {isTauri() && (
           <div className="window-controls" aria-label="Window controls">
             <button className="window-control" aria-label="Minimize window" onClick={() => onWindowAction("minimize")}><Minus size={14} /></button>

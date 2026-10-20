@@ -617,7 +617,33 @@
 .geometry-expression-error { padding:0 15px; color:#e98a94; }
 @media (max-width:1000px) { .breakpoint-toolbar-label { display:none; } .breakpoint-toolbar select { max-width:160px; } }
 @media (max-width:700px) { .breakpoint-modal { max-height:95vh; overflow-y:auto; } .breakpoint-edit-row { grid-template-columns:repeat(2,minmax(0,1fr)) 25px; } .breakpoint-edit-row legend { grid-column:1/-1; } .breakpoint-edit-row .icon-button { grid-column:3; grid-row:2; } }
-.wallet-placeholder { padding:5px 8px; border:1px solid #34313c; border-radius:5px; color:#aca2c1; background:#211f27; cursor:pointer; font-size:9px; white-space:nowrap; }
+.wallet-menu-anchor { position:relative; }
+.wallet-balance-pill { display:inline-flex; align-items:center; gap:5px; min-height:29px; padding:0 8px; border:1px solid; border-radius:999px; font-size:10px; font-weight:650; white-space:nowrap; cursor:pointer; }
+.wallet-balance-healthy { color:#9be3b0; border-color:#337849; background:#163321; }
+.wallet-balance-medium { color:#f0d17b; border-color:#796329; background:#332c18; }
+.wallet-balance-low { color:#f2a1a1; border-color:#793c42; background:#351c20; }
+.wallet-balance-pill:hover { filter:brightness(1.15); }
+.wallet-balance-menu { position:absolute; z-index:50; top:calc(100% + 9px); right:0; width:min(330px,calc(100vw - 16px)); max-height:min(75vh,560px); overflow:auto; padding:13px; border:1px solid #393a42; border-radius:9px; color:#d9d8df; background:#1c1d21; box-shadow:0 14px 40px #0009; cursor:default; }
+.wallet-menu-heading { display:flex; align-items:center; justify-content:space-between; padding-bottom:10px; border-bottom:1px solid #303137; }
+.wallet-menu-heading>div { display:grid; gap:5px; }
+.wallet-menu-heading strong { display:flex; align-items:center; gap:6px; font-size:14px; }
+.wallet-menu-totals { display:grid; grid-template-columns:1fr 1fr; gap:8px; padding:10px 0; color:#9999a3; font-size:10px; }
+.wallet-menu-totals span { display:flex; justify-content:space-between; gap:6px; }
+.wallet-menu-totals strong { color:#dedde4; }
+.wallet-menu-status,.wallet-menu-error { display:flex; align-items:center; gap:5px; margin:4px 0 8px; color:#a5a5ae; font-size:10px; }
+.wallet-menu-error { align-items:flex-start; color:#ef9a9a; }
+.wallet-menu-history { max-height:220px; overflow:auto; border-top:1px solid #303137; }
+.wallet-menu-section-title { padding:9px 0 5px; color:#aaaab3; font-size:10px; font-weight:650; }
+.wallet-menu-empty { margin:4px 0 9px; color:#8e8e98; font-size:10px; }
+.wallet-ledger-entry { display:grid; grid-template-columns:minmax(0,1fr) auto auto; align-items:center; gap:9px; padding:6px 0; border-top:1px solid #292a30; font-size:10px; }
+.wallet-ledger-entry>span { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; text-transform:capitalize; }
+.wallet-ledger-entry time { color:#85858f; font-size:9px; }
+.wallet-ledger-entry .is-credit { color:#8cdda4; }
+.wallet-ledger-entry .is-debit { color:#ee9b9f; }
+.wallet-claim-button { width:100%; justify-content:center; margin:8px 0 4px; }
+.wallet-menu-link { display:flex; width:100%; justify-content:space-between; padding:8px 2px 4px; border:0; color:#c1b0fb; background:transparent; text-align:left; font-size:10px; cursor:pointer; }
+.wallet-menu-link:disabled { color:#777780; cursor:not-allowed; }
+.wallet-menu-link span { color:#777780; }
 .shortcut-link { padding:0 3px; border:1px solid #414149; border-radius:4px; color:#aaaab4; background:#27282d; font:9px ui-monospace,SFMono-Regular,Consolas,monospace; cursor:pointer; }
 .app-statusbar { height:24px; min-height:24px; display:flex; align-items:center; gap:16px; padding:0 13px; border-top:1px solid var(--border); color:var(--text-muted); background:var(--surface-panel); font-size:9px; }
 .app-statusbar>span { display:flex; align-items:center; gap:6px; }
@@ -681,9 +707,10 @@
   .inspector { display:none; }
   .topbar { gap:6px; padding:0 8px; }
   .brand-lockup { flex:0 0 auto; }
-  .brand-name,.topbar-divider,.document-heading,.topbar-actions>.icon-button,.command-trigger,.topbar-actions>.button-secondary,.wallet-placeholder { display:none; }
+  .brand-name,.topbar-divider,.document-heading,.topbar-actions>.icon-button,.command-trigger,.topbar-actions>.button-secondary { display:none; }
   .topbar-actions { gap:0; margin-left:auto; }
   .topbar-actions>.button-primary { padding:0 8px; }
+  .wallet-balance-pill { min-height:27px; padding:0 6px; font-size:9px; }
   .canvas-toolbar { justify-content:flex-end; padding:0 8px; }
   .breadcrumb { display:none; }
   .canvas-toolbar-actions { gap:5px; }

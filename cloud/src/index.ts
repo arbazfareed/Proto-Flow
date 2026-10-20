@@ -67,9 +67,23 @@ interface WalletRow {
   lifetime_spent: number;
 }
 
+interface LedgerRow {
+  id: string;
+  delta: number;
+  reason: string;
+  metadata_json: string;
+  created_at: string;
+}
+
+interface WalletMeRow extends WalletRow {
+  claimable: number;
+}
+
 class IdentityConflictError extends Error {}
 
 const STARTER_CREDITS = 50;
+const DAILY_CREDITS = 20;
+const MAX_WALLET_BALANCE = 100;
 const TOKEN_LIFETIME_SECONDS = 24 * 60 * 60;
 const DEVICE_ID_PATTERN = /^[a-f\d]{64}$/i;
 const INSTALL_ID_PATTERN =
@@ -245,23 +259,165 @@ app.post("/auth/anonymous", async (context) => {
   }
 });
 
-app.get("/wallet/me", requireJwt, (context) =>
-  errorResponse(
-    context,
-    501,
-    "WALLET_NOT_IMPLEMENTED",
-    "Wallet reads are scheduled for a later task.",
-  ),
-);
+async function loadWallet(
+  database: D1Database,
+  accountId: string,
+  now: string,
+): Promise<{ wallet: WalletMeRow; recentLedger: LedgerRow[] }> {
+  const wallet = await database
+    .prepare(
+      `SELECT balance, lifetime_granted, lifetime_spent,
+         CASE
+           WHEN balance < ? AND NOT EXISTS (
+             SELECT 1 FROM daily_grants
+             WHERE account_id = ? AND julianday(granted_at) > julianday(?) - 1
+           ) THEN 1
+           ELSE 0
+         END AS claimable
+       FROM wallets
+       WHERE account_id = ?`,
+    )
+    .bind(MAX_WALLET_BALANCE, accountId, now, accountId)
+    .first<WalletMeRow>();
+  if (!wallet) throw new Error("The requested wallet does not exist.");
 
-app.post("/wallet/claim-daily", requireJwt, (context) =>
-  errorResponse(
-    context,
-    501,
-    "WALLET_NOT_IMPLEMENTED",
-    "Daily wallet grants are scheduled for a later task.",
-  ),
-);
+  const ledgerResult = await database
+    .prepare(
+      `SELECT id, delta, reason, metadata_json, created_at
+       FROM ledger
+       WHERE account_id = ?
+       ORDER BY created_at DESC, id DESC
+       LIMIT 20`,
+    )
+    .bind(accountId)
+    .all<LedgerRow>();
+  if (!ledgerResult.success) throw new Error("Could not read wallet ledger entries.");
+
+  return { wallet, recentLedger: ledgerResult.results };
+}
+
+app.get("/wallet/me", requireJwt, async (context) => {
+  try {
+    const now = new Date().toISOString();
+    const { wallet, recentLedger } = await loadWallet(
+      context.env.DB,
+      context.get("auth").accountId,
+      now,
+    );
+    return context.json({
+      accountId: context.get("auth").accountId,
+      balance: wallet.balance,
+      lifetimeGranted: wallet.lifetime_granted,
+      lifetimeSpent: wallet.lifetime_spent,
+      recentLedger,
+      claimable: wallet.claimable === 1,
+      syncedAt: Date.now(),
+    });
+  } catch (error) {
+    if (error instanceof Error && error.message === "The requested wallet does not exist.") {
+      return errorResponse(context, 404, "WALLET_NOT_FOUND", error.message);
+    }
+    console.error("Wallet read failed.", {
+      accountId: context.get("auth").accountId,
+      message: error instanceof Error ? error.message : "Unknown database error.",
+    });
+    return errorResponse(
+      context,
+      503,
+      "DATABASE_UNAVAILABLE",
+      "The wallet service is temporarily unavailable.",
+    );
+  }
+});
+
+app.post("/wallet/claim-daily", requireJwt, async (context) => {
+  const accountId = context.get("auth").accountId;
+  const now = new Date().toISOString();
+  const grantId = crypto.randomUUID();
+
+  try {
+    const results = await context.env.DB.batch([
+      context.env.DB
+        .prepare(
+          `INSERT OR IGNORE INTO daily_grants (account_id, granted_at, amount)
+           SELECT ?, ?, MIN(?, ? - balance)
+           FROM wallets
+           WHERE account_id = ?
+             AND balance < ?
+             AND NOT EXISTS (
+               SELECT 1 FROM daily_grants
+               WHERE account_id = ? AND julianday(granted_at) > julianday(?) - 1
+             )`,
+        )
+        .bind(
+          accountId,
+          now,
+          DAILY_CREDITS,
+          MAX_WALLET_BALANCE,
+          accountId,
+          MAX_WALLET_BALANCE,
+          accountId,
+          now,
+        ),
+      context.env.DB
+        .prepare(
+          `UPDATE wallets
+           SET balance = balance + (
+                 SELECT amount FROM daily_grants WHERE account_id = ? AND granted_at = ?
+               ),
+               lifetime_granted = lifetime_granted + (
+                 SELECT amount FROM daily_grants WHERE account_id = ? AND granted_at = ?
+               ),
+               updated_at = ?
+           WHERE account_id = ?
+             AND changes() = 1
+             AND EXISTS (
+               SELECT 1 FROM daily_grants WHERE account_id = ? AND granted_at = ?
+             )`,
+        )
+        .bind(accountId, now, accountId, now, now, accountId, accountId, now),
+      context.env.DB
+        .prepare(
+          `INSERT INTO ledger (id, account_id, delta, reason, metadata_json, created_at)
+           SELECT ?, ?, amount, 'daily_grant', '{}', ?
+           FROM daily_grants
+           WHERE account_id = ? AND granted_at = ? AND changes() = 1`,
+        )
+        .bind(grantId, accountId, now, accountId, now),
+    ]);
+    if (results.some((result) => !result.success)) {
+      throw new Error("The daily grant transaction did not complete.");
+    }
+
+    const { wallet, recentLedger } = await loadWallet(context.env.DB, accountId, now);
+    const grant = recentLedger.find((entry) => entry.id === grantId);
+    return context.json({
+      accountId,
+      claimed: Boolean(grant),
+      granted: grant?.delta ?? 0,
+      balance: wallet.balance,
+      lifetimeGranted: wallet.lifetime_granted,
+      lifetimeSpent: wallet.lifetime_spent,
+      recentLedger,
+      claimable: wallet.claimable === 1,
+      syncedAt: Date.now(),
+    });
+  } catch (error) {
+    if (error instanceof Error && error.message === "The requested wallet does not exist.") {
+      return errorResponse(context, 404, "WALLET_NOT_FOUND", error.message);
+    }
+    console.error("Daily wallet claim failed.", {
+      accountId,
+      message: error instanceof Error ? error.message : "Unknown database error.",
+    });
+    return errorResponse(
+      context,
+      503,
+      "DATABASE_UNAVAILABLE",
+      "The wallet service is temporarily unavailable.",
+    );
+  }
+});
 
 app.post("/action/run", requireJwt, (context) =>
   errorResponse(

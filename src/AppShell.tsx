@@ -43,11 +43,20 @@ function AppShell() {
   const [updateCheckRequest, setUpdateCheckRequest] = useState(0);
   const [activeTool, setActiveTool] = useState<ShapeTool | null>(null);
   const [walletOpen, setWalletOpen] = useState(false);
-  const initializeWallet = useWalletStore((state) => state.initialize);
+  const syncWallet = useWalletStore((state) => state.sync);
 
   useEffect(() => {
-    void initializeWallet();
-  }, [initializeWallet]);
+    const syncWhenVisible = () => {
+      if (!document.hidden) void syncWallet();
+    };
+    syncWhenVisible();
+    const interval = window.setInterval(syncWhenVisible, 60_000);
+    document.addEventListener("visibilitychange", syncWhenVisible);
+    return () => {
+      window.clearInterval(interval);
+      document.removeEventListener("visibilitychange", syncWhenVisible);
+    };
+  }, [syncWallet]);
 
   const notify = useCallback((message: string, isError = false) => {
     setNotice(message);

@@ -48,7 +48,7 @@ The element library includes dedicated canvas visuals for avatars, icon buttons,
 
 ### Phase 3 — Cloud API gateway scaffold
 
-`cloud/` contains the Cloudflare Workers/Hono API scaffold for PF-T301. It defines local Wrangler bindings for D1 (`DB`), KV (`CACHE`), and R2 (`ASSETS`), a repeatable D1 migration plus standalone `schema.sql`, Tauri-origin CORS allowlisting, consistent JSON errors, and HS256 Bearer JWT verification for wallet, metered-action, and admin route groups. Anonymous wallet provisioning is implemented; wallet reads, daily claims, metered actions, email authentication, and admin handlers remain explicit `501` stubs for later tasks.
+`cloud/` contains the Cloudflare Workers/Hono API scaffold for PF-T301. It defines local Wrangler bindings for D1 (`DB`), KV (`CACHE`), and R2 (`ASSETS`), a repeatable D1 migration plus standalone `schema.sql`, Tauri-origin CORS allowlisting, consistent JSON errors, and HS256 Bearer JWT verification for wallet, metered-action, and admin route groups. Anonymous wallet provisioning, authenticated wallet reads, and daily claims are implemented; metered actions, email authentication, and admin handlers remain explicit `501` stubs for later tasks.
 
 Use Node.js 20.19+ or 22.12+:
 
@@ -67,9 +67,13 @@ Before production deployment, create the named D1 database, KV namespace, and R2
 
 ### PF-T302 — Anonymous wallet
 
-On startup, the desktop app reads the locally hashed device ID and a random UUID install ID, then calls `POST /auth/anonymous`. The Worker reuses an account found by either identifier or creates an account and a one-time 50-credit starter wallet and ledger grant. The signed 24-hour JWT is stored in the operating system credential store; the last balance is cached locally for display during up to 24 hours offline. Offline mode is display-only; cloud actions still require the server. The wallet button in the top bar opens wallet status and the identity reset action. Reset refreshes credentials without replacing the account or granting another starter balance.
+On startup, the desktop app reads the locally hashed device ID and a random UUID install ID, then calls `POST /auth/anonymous`. The Worker reuses an account found by either identifier or creates an account and a one-time 50-credit starter wallet and ledger grant. The signed 24-hour JWT is stored in the operating system credential store; the last balance is cached locally for display during up to 24 hours offline. Offline mode is display-only; cloud actions still require the server. The wallet button in the top bar opens the balance and usage dropdown. Wallet settings can refresh credentials without replacing the account or granting another starter balance.
 
 For local development, start the Worker with `cd cloud; npm run dev`, then start the desktop app in another terminal with `npm run tauri dev`. Provide `cloud/.dev.vars` with a non-production `JWT_SECRET` of at least 32 characters. Production builds need `VITE_CLOUD_API_URL` configured to the deployed Worker URL. Technical details of data sent and stored are documented in [PRIVACY.md](./PRIVACY.md).
+
+### PF-T303 — Client wallet and balance pill
+
+The always-visible top-bar pill uses green for 20+ credits, yellow for 5–19, and red for fewer than 5. Its dropdown shows lifetime totals, the latest 20 ledger entries, sync/offline status, refresh, and a daily claim when available. A daily claim grants up to 20 credits once per rolling 24 hours and never raises a wallet above 100 credits. Wallet snapshots (not JWTs) are cached in local storage; desktop JWTs stay in the operating system credential store, and browser-preview JWTs use session storage. The UI syncs on launch, when the app becomes visible, and every 60 seconds while active. Email sign-in remains a Task PF-T307 placeholder; metered actions are not yet implemented and remain unavailable offline.
 
 ### PF-T218 — Layer tree behavior and implementation notes
 

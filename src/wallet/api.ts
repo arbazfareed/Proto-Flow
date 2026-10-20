@@ -16,6 +16,16 @@ export interface WalletSnapshot {
   lifetimeGranted: number;
   lifetimeSpent: number;
   syncedAt: number;
+  recentLedger: LedgerEntry[];
+  claimable: boolean;
+}
+
+export interface LedgerEntry {
+  id: string;
+  delta: number;
+  reason: string;
+  metadata: Record<string, unknown>;
+  createdAt: string;
 }
 
 interface AnonymousWalletResponse {
@@ -27,18 +37,64 @@ interface AnonymousWalletResponse {
   lifetimeSpent: number;
 }
 
-interface CachedWallet extends WalletSnapshot {
-  tokenExpiresAt: string;
+interface WalletResponse {
+  accountId: string;
+  balance: number;
+  lifetimeGranted: number;
+  lifetimeSpent: number;
+  recentLedger: Array<{
+    id: string;
+    delta: number;
+    reason: string;
+    metadata_json: string;
+    created_at: string;
+  }>;
+  claimable: boolean;
+  syncedAt: number;
+}
+
+interface DailyClaimResponse extends WalletResponse {
+  claimed: boolean;
+  granted: number;
+}
+
+interface CachedWallet extends Omit<WalletSnapshot, "recentLedger" | "claimable"> {
+  recentLedger?: LedgerEntry[];
+  claimable?: boolean;
+  lastSyncedAt?: number;
 }
 
 interface ApiErrorResponse {
   error?: { code?: string; message?: string };
 }
 
+function isNonNegativeSafeInteger(value: unknown): value is number {
+  return Number.isSafeInteger(value) && typeof value === "number" && value >= 0;
+}
+
+function isCachedLedgerEntry(value: unknown): value is LedgerEntry {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) return false;
+  const entry = value as Partial<LedgerEntry>;
+  return (
+    typeof entry.id === "string" &&
+    entry.id.length > 0 &&
+    Number.isSafeInteger(entry.delta) &&
+    typeof entry.delta === "number" &&
+    entry.delta !== 0 &&
+    typeof entry.reason === "string" &&
+    typeof entry.createdAt === "string" &&
+    Number.isFinite(Date.parse(entry.createdAt)) &&
+    typeof entry.metadata === "object" &&
+    entry.metadata !== null &&
+    !Array.isArray(entry.metadata)
+  );
+}
+
 export class WalletApiError extends Error {
   constructor(
     message: string,
     readonly retryable: boolean,
+    readonly code?: string,
   ) {
     super(message);
     this.name = "WalletApiError";
@@ -49,7 +105,11 @@ function apiBaseUrl(): string {
   const configured = import.meta.env.VITE_CLOUD_API_URL?.trim();
   if (configured) return configured.replace(/\/+$/, "");
   if (import.meta.env.DEV) return "http://127.0.0.1:8790";
-  throw new WalletApiError("The cloud wallet service has not been configured.", false);
+  throw new WalletApiError(
+    "The cloud wallet service has not been configured.",
+    false,
+    "SERVICE_NOT_CONFIGURED",
+  );
 }
 
 async function createBrowserIdentity(): Promise<WalletIdentity> {
@@ -86,11 +146,19 @@ export async function getCachedToken(): Promise<string | null> {
     : sessionStorage.getItem(JWT_SESSION_KEY);
 }
 
-async function storeToken(token: string): Promise<void> {
+export async function setCachedToken(token: string | null): Promise<void> {
   if (isTauri()) {
-    await invoke("save_wallet_jwt", { token });
+    if (token === null) {
+      await invoke("clear_wallet_jwt");
+    } else {
+      await invoke("save_wallet_jwt", { token });
+    }
   } else {
-    sessionStorage.setItem(JWT_SESSION_KEY, token);
+    if (token === null) {
+      sessionStorage.removeItem(JWT_SESSION_KEY);
+    } else {
+      sessionStorage.setItem(JWT_SESSION_KEY, token);
+    }
   }
 }
 
@@ -105,15 +173,27 @@ export function getCachedWallet(): WalletSnapshot | null {
   }
   if (
     typeof cached.accountId !== "string" ||
-    !Number.isSafeInteger(cached.balance) ||
-    !Number.isSafeInteger(cached.lifetimeGranted) ||
-    !Number.isSafeInteger(cached.lifetimeSpent) ||
-    !Number.isSafeInteger(cached.syncedAt) ||
-    typeof cached.tokenExpiresAt !== "string"
+    cached.accountId.length === 0 ||
+    !isNonNegativeSafeInteger(cached.balance) ||
+    !isNonNegativeSafeInteger(cached.lifetimeGranted) ||
+    !isNonNegativeSafeInteger(cached.lifetimeSpent) ||
+    !isNonNegativeSafeInteger(cached.syncedAt) ||
+    (cached.lastSyncedAt !== undefined && !isNonNegativeSafeInteger(cached.lastSyncedAt)) ||
+    (cached.recentLedger !== undefined &&
+      (!Array.isArray(cached.recentLedger) || !cached.recentLedger.every(isCachedLedgerEntry))) ||
+    (cached.claimable !== undefined && typeof cached.claimable !== "boolean")
   ) {
     throw new Error("The locally cached wallet data is invalid.");
   }
-  return cached;
+  return {
+    accountId: cached.accountId,
+    balance: cached.balance,
+    lifetimeGranted: cached.lifetimeGranted,
+    lifetimeSpent: cached.lifetimeSpent,
+    syncedAt: cached.lastSyncedAt ?? cached.syncedAt,
+    recentLedger: cached.recentLedger ?? [],
+    claimable: cached.claimable ?? false,
+  };
 }
 
 function tokenExpiration(token: string): number | null {
@@ -132,15 +212,11 @@ function tokenExpiration(token: string): number | null {
 }
 
 export function canUseOfflineWallet(
-  token: string | null,
   cached: WalletSnapshot | null,
   now = Date.now(),
 ): cached is WalletSnapshot {
-  const expiresAt = token ? tokenExpiration(token) : null;
   return Boolean(
     cached &&
-      expiresAt &&
-      expiresAt > now &&
       cached.syncedAt <= now &&
       now - cached.syncedAt <= OFFLINE_GRACE_MS,
   );
@@ -148,7 +224,7 @@ export function canUseOfflineWallet(
 
 export async function provisionAnonymousWallet(
   identity: WalletIdentity,
-): Promise<WalletSnapshot> {
+): Promise<{ snapshot: WalletSnapshot; token: string }> {
   const url = `${apiBaseUrl()}/auth/anonymous`;
   let response: Response;
   try {
@@ -173,33 +249,148 @@ export async function provisionAnonymousWallet(
     throw new WalletApiError(
       payload.error?.message ?? `Wallet request failed (${response.status}).`,
       response.status >= 500,
+      payload.error?.code,
     );
   }
 
   const result = (await response.json()) as AnonymousWalletResponse;
+  const expiresAt = typeof result.token === "string" ? tokenExpiration(result.token) : null;
   if (
     typeof result.accountId !== "string" ||
+    result.accountId.length === 0 ||
     typeof result.token !== "string" ||
-    tokenExpiration(result.token) === null ||
-    !Number.isSafeInteger(result.balance) ||
-    !Number.isSafeInteger(result.lifetimeGranted) ||
-    !Number.isSafeInteger(result.lifetimeSpent) ||
-    typeof result.tokenExpiresAt !== "string"
+    expiresAt === null ||
+    expiresAt <= Date.now() ||
+    !isNonNegativeSafeInteger(result.balance) ||
+    !isNonNegativeSafeInteger(result.lifetimeGranted) ||
+    !isNonNegativeSafeInteger(result.lifetimeSpent) ||
+    typeof result.tokenExpiresAt !== "string" ||
+    !Number.isFinite(Date.parse(result.tokenExpiresAt))
   ) {
     throw new Error("The cloud wallet service returned an invalid response.");
   }
 
-  await storeToken(result.token);
+  await setCachedToken(result.token);
   const snapshot = {
     accountId: result.accountId,
     balance: result.balance,
     lifetimeGranted: result.lifetimeGranted,
     lifetimeSpent: result.lifetimeSpent,
     syncedAt: Date.now(),
+    recentLedger: [],
+    claimable: false,
   };
-  localStorage.setItem(
-    CACHED_WALLET_KEY,
-    JSON.stringify({ ...snapshot, tokenExpiresAt: result.tokenExpiresAt }),
+  localStorage.setItem(CACHED_WALLET_KEY, JSON.stringify(snapshot));
+  return { snapshot, token: result.token };
+}
+
+async function authenticatedRequest<T>(
+  path: string,
+  token: string,
+  init: RequestInit = {},
+): Promise<T> {
+  let response: Response;
+  try {
+    response = await fetch(`${apiBaseUrl()}${path}`, {
+      ...init,
+      headers: {
+        Authorization: `Bearer ${token}`,
+        ...(init.body ? { "Content-Type": "application/json" } : {}),
+        ...init.headers,
+      },
+    });
+  } catch {
+    throw new WalletApiError("Could not reach the cloud wallet service.", true);
+  }
+  if (!response.ok) {
+    let payload: ApiErrorResponse = {};
+    try {
+      payload = (await response.json()) as ApiErrorResponse;
+    } catch {
+      if (response.status >= 500) {
+        throw new WalletApiError("The cloud wallet service is temporarily unavailable.", true);
+      }
+    }
+    throw new WalletApiError(
+      payload.error?.message ?? `Wallet request failed (${response.status}).`,
+      response.status >= 500,
+      payload.error?.code,
+    );
+  }
+  return (await response.json()) as T;
+}
+
+function toSnapshot(response: WalletResponse): WalletSnapshot {
+  if (
+    typeof response.accountId !== "string" ||
+    response.accountId.length === 0 ||
+    !isNonNegativeSafeInteger(response.balance) ||
+    !isNonNegativeSafeInteger(response.lifetimeGranted) ||
+    !isNonNegativeSafeInteger(response.lifetimeSpent) ||
+    !isNonNegativeSafeInteger(response.syncedAt) ||
+    typeof response.claimable !== "boolean" ||
+    !Array.isArray(response.recentLedger) ||
+    response.recentLedger.length > 20
+  ) {
+    throw new Error("The cloud wallet service returned invalid wallet data.");
+  }
+
+  const recentLedger = response.recentLedger.map((entry) => {
+    let metadata: unknown;
+    try {
+      metadata = JSON.parse(entry.metadata_json);
+    } catch {
+      throw new Error("The cloud wallet service returned invalid ledger metadata.");
+    }
+    if (
+      typeof entry.id !== "string" ||
+      !Number.isSafeInteger(entry.delta) ||
+      entry.delta === 0 ||
+      typeof entry.reason !== "string" ||
+      typeof metadata !== "object" ||
+      metadata === null ||
+      Array.isArray(metadata) ||
+      typeof entry.created_at !== "string" ||
+      !Number.isFinite(Date.parse(entry.created_at))
+    ) {
+      throw new Error("The cloud wallet service returned an invalid ledger entry.");
+    }
+    return {
+      id: entry.id,
+      delta: entry.delta,
+      reason: entry.reason,
+      metadata: metadata as Record<string, unknown>,
+      createdAt: entry.created_at,
+    };
+  });
+  return {
+    accountId: response.accountId,
+    balance: response.balance,
+    lifetimeGranted: response.lifetimeGranted,
+    lifetimeSpent: response.lifetimeSpent,
+    syncedAt: response.syncedAt,
+    recentLedger,
+    claimable: response.claimable,
+  };
+}
+
+export async function fetchWalletMe(token: string): Promise<WalletSnapshot> {
+  const response = await authenticatedRequest<WalletResponse>("/wallet/me", token);
+  return toSnapshot(response);
+}
+
+export async function claimDailyCredits(token: string): Promise<WalletSnapshot> {
+  const response = await authenticatedRequest<DailyClaimResponse>(
+    "/wallet/claim-daily",
+    token,
+    { method: "POST" },
   );
-  return snapshot;
+  if (
+    typeof response.claimed !== "boolean" ||
+    !Number.isSafeInteger(response.granted) ||
+    response.granted < 0
+  ) {
+    throw new Error("The cloud wallet service returned an invalid daily claim response.");
+  }
+  return toSnapshot(response);
 }
