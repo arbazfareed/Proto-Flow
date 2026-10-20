@@ -1,1 +1,5 @@
 JWT_SECRET=replace-with-a-random-secret-of-at-least-32-characters
+# Optional: configure both the Worker secret and VITE_TURNSTILE_SITE_KEY to enable challenges.
+# TURNSTILE_SECRET_KEY=
+# Optional weekly abuse digest; requires Resend credentials and AUTH_EMAIL_FROM.
+# ABUSE_DIGEST_EMAIL=

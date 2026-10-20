@@ -3,6 +3,9 @@ main = "src/index.ts"
 compatibility_date = "2026-10-20"
 workers_dev = true
 
+[triggers]
+crons = ["0 9 * * 1"]
+
 [vars]
 ALLOWED_ORIGINS = "tauri://localhost,https://tauri.localhost,http://tauri.localhost"
 

@@ -71,6 +71,10 @@ describe("Worker API gateway", () => {
     expect(response.status).toBe(200);
     expect(response.headers.get("Access-Control-Allow-Origin")).toBe("tauri://localhost");
     expect(response.headers.get("Vary")).toBe("Origin");
+    expect(response.headers.get("X-RateLimit-Limit")).toBe("1000");
+    expect(response.headers.get("X-RateLimit-Remaining")).toBe("1000");
+    expect(response.headers.get("X-RateLimit-Reset")).toMatch(/^\d+$/);
+    expect(response.headers.get("Access-Control-Expose-Headers")).toContain("Retry-After");
   });
 
   it("rejects disallowed origins and preflight requests", async () => {
@@ -106,6 +110,7 @@ describe("Worker API gateway", () => {
     expect(response.status).toBe(204);
     expect(response.headers.get("Access-Control-Allow-Methods")).toBe("GET, POST, OPTIONS");
     expect(response.headers.get("Access-Control-Allow-Headers")).toContain("X-Turnstile-Token");
+    expect(response.headers.get("Access-Control-Expose-Headers")).toContain("X-RateLimit-Remaining");
   });
 
   it("requires a bearer token for wallet, metered-action, and admin routes", async () => {
@@ -284,13 +289,15 @@ describe("Worker API gateway", () => {
   it("reports missing Google OAuth configuration without accepting arbitrary callbacks", async () => {
     const token = await signToken(validClaims());
     const database = {
-      prepare() {
+      prepare(sql: string) {
         return {
           bind() {
             return this;
           },
           async first() {
-            return { id: "account-123" };
+            return sql.toLowerCase().includes("select id from accounts")
+              ? { id: "account-123" }
+              : null;
           },
         };
       },

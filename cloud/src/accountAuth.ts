@@ -1,5 +1,6 @@
 import type { Hono } from "hono";
 import type { Context } from "hono";
+import { enforceRateLimit, hashWithSecret } from "./abuse";
 import { requireJwt, signJwt } from "./auth";
 import type { AuthClaims, WorkerEnv } from "./env";
 import { errorResponse } from "./errors";
@@ -319,6 +320,29 @@ export function registerAccountAuthRoutes(app: AccountAuthApp): void {
         return errorResponse(context, 401, "INVALID_TOKEN", "The wallet session is no longer active.");
       }
       const emailHash = await hmacHex(email, context.env.JWT_SECRET!);
+      const emailLimit = await enforceRateLimit(
+        context,
+        `email:start:${emailHash}`,
+        EMAIL_LIMIT,
+        EMAIL_WINDOW_SECONDS,
+        "email",
+      );
+      if (emailLimit) return emailLimit;
+      const clientIp = context.req.header("CF-Connecting-IP");
+      if (clientIp) {
+        const ipHash = await hashWithSecret(
+          `protoflow-wallet-ip:${clientIp}`,
+          context.env.JWT_SECRET!,
+        );
+        const ipLimit = await enforceRateLimit(
+          context,
+          `ip:email:${ipHash}`,
+          100,
+          60 * 60,
+          "ip",
+        );
+        if (ipLimit) return ipLimit;
+      }
       const limit = await context.env.DB
         .prepare(
           `INSERT INTO auth_email_rate_limits (email_hash, window_start, count)

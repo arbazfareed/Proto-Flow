@@ -1,4 +1,5 @@
 import type { MiddlewareHandler } from "hono";
+import { enforceAbuseFlag } from "./abuse";
 import { errorResponse } from "./errors";
 import type { AuthClaims, WorkerEnv } from "./env";
 
@@ -7,7 +8,8 @@ function decodeBase64Url(segment: string): Uint8Array | null {
   const base64 = segment.replaceAll("-", "+").replaceAll("_", "/");
   try {
     const binary = atob(base64.padEnd(Math.ceil(base64.length / 4) * 4, "="));
-    return Uint8Array.from(binary, (character) => character.charCodeAt(0));
+    const bytes = Uint8Array.from(binary, (character) => character.charCodeAt(0));
+    return encodeBase64Url(bytes) === segment ? bytes : null;
   } catch {
     return null;
   }
@@ -152,6 +154,8 @@ export const requireJwt: MiddlewareHandler<{ Bindings: WorkerEnv; Variables: { a
       if (!account) {
         return errorResponse(context, 401, "INVALID_TOKEN", "The wallet session is no longer active.");
       }
+      const abuseResponse = await enforceAbuseFlag(context, claims.accountId);
+      if (abuseResponse) return abuseResponse;
     } catch (error) {
       console.error("Could not verify wallet account status.", {
         message: error instanceof Error ? error.message : "Unknown database error.",
