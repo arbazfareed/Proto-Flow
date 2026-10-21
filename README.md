@@ -52,6 +52,8 @@ The element library includes dedicated canvas visuals for avatars, icon buttons,
 
 Use Node.js 20.19+ or 22.12+:
 
+**PF-T405 status update:** Cloud preview publishing is implemented in addition to PF-T404. The older phase-summary sentence above saying publish is unavailable is superseded by the PF-T405 section below.
+
 ```sh
 cd cloud
 npm install
@@ -63,7 +65,7 @@ npm run typecheck
 npm run dev
 ```
 
-Before production deployment, create the named D1 database, KV namespace, and R2 bucket, replace the placeholder binding IDs in `cloud/wrangler.toml`, authenticate Wrangler, and set the JWT secret with `npx wrangler secret put JWT_SECRET`. Apply migrations remotely before `npm run deploy`. Do not commit `.dev.vars` or production secrets. Configure `ALLOWED_ORIGINS` with the shipped Tauri origins and any web-app origin that should be permitted. Production deployment requires an authenticated Cloudflare account and account-specific resources.
+Before production deployment, create the named D1 database, KV namespace, and R2 bucket, replace the placeholder binding IDs in `cloud/wrangler.toml`, authenticate Wrangler, and set the JWT secret with `npx wrangler secret put JWT_SECRET`. Apply migrations remotely before `npm run deploy`. Do not commit `.dev.vars` or production secrets. Configure `ALLOWED_ORIGINS` with the shipped Tauri origins and any web-app origin that should be permitted. Set `PREVIEW_PUBLIC_BASE_URL` to the HTTPS origin used for public `/p/{id}` preview links when that differs from the Worker request origin. Production deployment requires an authenticated Cloudflare account and account-specific resources.
 
 ### PF-T302 — Anonymous wallet
 
@@ -126,7 +128,11 @@ Use `useMeteredAction` from `src/wallet/meteredActions.tsx` for cloud actions. I
 
 Choose **Generate with AI** in the selected widget's Interactions tab, describe the behavior, and choose whether to include the current screen or only that widget as context. Prompt examples are available. The Worker rate-limits AI requests, strips HTML/script markup, rejects likely instruction overrides, and calls the currently supported Gemini 2.5 Flash model in JSON mode (the requested Gemini 1.5 Flash model is no longer listed in Google's current model catalog). It retries malformed output at most twice, validates the generated rule against the shared `InteractionRuleSchema` and supplied variables/screens/widgets, and then atomically records the one-credit ledger debit and provider token counts. Provider errors and invalid output do not deduct credits. The generated rule is highlighted, editable, and unsaved until the user explicitly saves interactions. Thumbs feedback is stored separately without charging credits.
 
-For local tests, AI provider calls are mocked; no live Gemini request is made. To try real generation, configure your own key in ignored `cloud/.dev.vars`, apply migration `0008_ai_interaction_feedback.sql` with the other Worker migrations, and restart the Worker. Publish and export handlers remain unavailable and do not deduct credits.
+For local tests, AI provider calls are mocked; no live Gemini request is made. To try real generation, configure your own key in ignored `cloud/.dev.vars`, apply migration `0008_ai_interaction_feedback.sql` with the other Worker migrations, and restart the Worker.
+
+### PF-T405 — Cloud web preview publisher
+
+Choose **Publish** in the top bar to generate a self-contained HTML preview and upload it to R2. Publishing costs 2 credits only after the bundle is stored and the wallet/ledger transaction succeeds. Bundles are limited to 10 MiB, expire after 30 days, and are served in a script-only sandbox with network, form, cookie, and storage access denied. The dialog shows the share link, QR code, expiry, view count, and recent previews; an owner can unpublish a preview without a refund. The Worker limits publishing to 10 requests per device per hour and removes expired R2 objects, KV mappings, and D1 metadata on its hourly scheduled cleanup. Apply migration `0009_cloud_previews.sql` before deploying this feature. Set `PREVIEW_PUBLIC_BASE_URL` when public preview URLs must use a separate HTTPS origin.
 
 ### PF-T218 — Layer tree behavior and implementation notes
 

@@ -13,6 +13,16 @@ import { requireJwt, signJwt } from "./auth";
 import { registerAdminRoutes, runOperationalAlerts } from "./admin";
 import type { AuthClaims, WorkerEnv } from "./env";
 import { errorResponse } from "./errors";
+import {
+  buildSandboxedPreviewDocument,
+  generatePreviewId,
+  isPreviewBundle,
+  MAX_PREVIEW_BUNDLE_BYTES,
+  PREVIEW_EXPIRY_SECONDS,
+  PREVIEW_ID_PATTERN,
+  purgeExpiredPreviews,
+  removePreviewObjects,
+} from "./previews";
 
 type AppEnvironment = { Bindings: WorkerEnv; Variables: { auth: AuthClaims } };
 
@@ -88,6 +98,168 @@ app.notFound((context) =>
 
 app.get("/health", (context) => context.json({ status: "ok" }));
 
+function getPreviewBaseUrl(requestUrl: string, configuredUrl?: string): string {
+  const baseUrl = configuredUrl?.trim() || new URL(requestUrl).origin;
+  const parsed = new URL(baseUrl);
+  const localHttp = parsed.protocol === "http:" &&
+    ["localhost", "127.0.0.1", "[::1]"].includes(parsed.hostname);
+  if (
+    (parsed.protocol !== "https:" && !localHttp) ||
+    parsed.username ||
+    parsed.password ||
+    parsed.search ||
+    parsed.hash ||
+    (parsed.pathname !== "/" && parsed.pathname !== "")
+  ) {
+    throw new Error("The public preview base URL is not a valid HTTPS origin.");
+  }
+  return parsed.origin;
+}
+
+app.get("/p/:id", async (context) => {
+  const id = context.req.param("id");
+  if (!PREVIEW_ID_PATTERN.test(id)) {
+    return errorResponse(context, 404, "PREVIEW_NOT_FOUND", "This published preview does not exist.");
+  }
+
+  context.header("Cache-Control", "private, no-store, max-age=0");
+  context.header("Referrer-Policy", "no-referrer");
+  context.header("X-Content-Type-Options", "nosniff");
+  context.header("Permissions-Policy", "camera=(), microphone=(), geolocation=()");
+  context.header(
+    "Content-Security-Policy",
+    "default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data: blob:; media-src data: blob:; font-src data:; connect-src 'none'; frame-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'; sandbox allow-scripts",
+  );
+
+  try {
+    const now = new Date().toISOString();
+    const preview = await context.env.DB.prepare(
+      "SELECT id, project_name, object_key, expires_at FROM published_previews WHERE id = ?",
+    ).bind(id).first<{
+      id: string;
+      project_name: string;
+      object_key: string;
+      expires_at: string;
+    }>();
+    if (!preview) {
+      return context.html("<!doctype html><title>Preview not found</title><h1>This preview is unavailable.</h1>", 404);
+    }
+    if (Date.parse(preview.expires_at) <= Date.parse(now)) {
+      return context.html("<!doctype html><title>Preview expired</title><h1>This preview has expired.</h1>", 410);
+    }
+
+    const expectedKey = `previews/${id}/index.html`;
+    if (preview.object_key !== expectedKey) {
+      console.error("Published preview metadata has an unexpected object key.", { previewId: id });
+      return context.html("<!doctype html><title>Preview unavailable</title><h1>This preview is unavailable.</h1>", 503);
+    }
+    const shortLink = await context.env.CACHE.get(`short:${id}`);
+    if (shortLink !== expectedKey) {
+      if (shortLink !== null) {
+        console.error("Published preview short-link mapping is invalid.", { previewId: id });
+        return context.html("<!doctype html><title>Preview unavailable</title><h1>This preview is unavailable.</h1>", 503);
+      }
+      await context.env.CACHE.put(`short:${id}`, expectedKey, {
+        expirationTtl: PREVIEW_EXPIRY_SECONDS,
+      });
+    }
+    const object = await context.env.ASSETS.get(expectedKey);
+    if (!object) {
+      return context.html("<!doctype html><title>Preview unavailable</title><h1>This preview is unavailable.</h1>", 404);
+    }
+    const viewResult = await context.env.DB.prepare(
+      "UPDATE published_previews SET view_count = view_count + 1 WHERE id = ? AND expires_at > ?",
+    ).bind(id, now).run();
+    if (!viewResult.success || (viewResult.meta.changes ?? 0) !== 1) {
+      return context.html("<!doctype html><title>Preview expired</title><h1>This preview has expired.</h1>", 410);
+    }
+    const bundle = await object.text();
+    if (!isPreviewBundle(bundle)) {
+      console.error("Published preview bundle failed storage validation.", { previewId: id });
+      return context.html("<!doctype html><title>Preview unavailable</title><h1>This preview is unavailable.</h1>", 503);
+    }
+    return context.html(buildSandboxedPreviewDocument(bundle));
+  } catch (error) {
+    console.error("Published preview could not be served.", {
+      previewId: id,
+      message: error instanceof Error ? error.message : "Unknown preview storage error.",
+    });
+    return errorResponse(context, 503, "PREVIEW_UNAVAILABLE", "This preview is temporarily unavailable.");
+  }
+});
+
+app.get("/previews", requireJwt, async (context) => {
+  const accountId = context.get("auth").accountId;
+  try {
+    const now = new Date().toISOString();
+    const result = await context.env.DB.prepare(
+      `SELECT id, project_name, created_at, expires_at, size_bytes, view_count
+       FROM published_previews
+       WHERE account_id = ? AND expires_at > ?
+       ORDER BY created_at DESC LIMIT 50`,
+    ).bind(accountId, now).all<{
+      id: string;
+      project_name: string;
+      created_at: string;
+      expires_at: string;
+      size_bytes: number;
+      view_count: number;
+    }>();
+    const baseUrl = getPreviewBaseUrl(context.req.url, context.env.PREVIEW_PUBLIC_BASE_URL);
+    return context.json({
+      previews: result.results.map((preview) => ({
+        id: preview.id,
+        projectName: preview.project_name,
+        url: `${baseUrl}/p/${preview.id}`,
+        createdAt: preview.created_at,
+        expiresAt: preview.expires_at,
+        sizeBytes: preview.size_bytes,
+        viewCount: preview.view_count,
+      })),
+    });
+  } catch (error) {
+    console.error("Published preview history could not be loaded.", {
+      accountId,
+      message: error instanceof Error ? error.message : "Unknown database error.",
+    });
+    return errorResponse(context, 503, "DATABASE_UNAVAILABLE", "Published previews could not be loaded.");
+  }
+});
+
+app.delete("/previews/:id", requireJwt, async (context) => {
+  const id = context.req.param("id");
+  if (!PREVIEW_ID_PATTERN.test(id)) {
+    return errorResponse(context, 404, "PREVIEW_NOT_FOUND", "This published preview does not exist.");
+  }
+  const accountId = context.get("auth").accountId;
+  try {
+    const preview = await context.env.DB.prepare(
+      "SELECT object_key FROM published_previews WHERE id = ? AND account_id = ?",
+    ).bind(id, accountId).first<{ object_key: string }>();
+    if (!preview) {
+      return errorResponse(context, 404, "PREVIEW_NOT_FOUND", "This published preview does not exist.");
+    }
+    if (preview.object_key !== `previews/${id}/index.html`) {
+      throw new Error("The published preview object key is invalid.");
+    }
+    await removePreviewObjects(context.env, id, preview.object_key);
+    const result = await context.env.DB.prepare(
+      "DELETE FROM published_previews WHERE id = ? AND account_id = ?",
+    ).bind(id, accountId).run();
+    if (!result.success || (result.meta.changes ?? 0) !== 1) {
+      throw new Error("The published preview metadata could not be removed.");
+    }
+    return context.json({ success: true });
+  } catch (error) {
+    console.error("Published preview could not be unpublished.", {
+      accountId,
+      previewId: id,
+      message: error instanceof Error ? error.message : "Unknown preview storage error.",
+    });
+    return errorResponse(context, 503, "PREVIEW_UNAVAILABLE", "The preview could not be unpublished. Try again.");
+  }
+});
+
 interface AnonymousRequest {
   deviceId: string;
   installId: string;
@@ -153,6 +325,7 @@ const IP_ABUSE_IDENTITY_THRESHOLD = 5;
 const DAILY_WINDOW_DAYS = 1;
 const TOKEN_LIFETIME_SECONDS = 24 * 60 * 60;
 const MAX_ACTION_BODY_BYTES = 64 * 1024;
+const MAX_PUBLISH_REQUEST_BYTES = 2 * MAX_PREVIEW_BUNDLE_BYTES + 64 * 1024;
 const DEVICE_ID_PATTERN = /^[a-f\d]{64}$/i;
 const INSTALL_ID_PATTERN =
   /^[a-f\d]{8}-[a-f\d]{4}-4[a-f\d]{3}-[89ab][a-f\d]{3}-[a-f\d]{12}$/i;
@@ -1025,7 +1198,7 @@ app.post("/wallet/claim-daily", requireJwt, async (context) => {
 
 app.post("/action/run", requireJwt, async (context) => {
   const contentLength = Number(context.req.header("Content-Length") ?? 0);
-  if (contentLength > MAX_ACTION_BODY_BYTES) {
+  if (contentLength > MAX_PUBLISH_REQUEST_BYTES) {
     return errorResponse(context, 400, "INVALID_PAYLOAD", "The action payload is too large.");
   }
 
@@ -1035,7 +1208,8 @@ app.post("/action/run", requireJwt, async (context) => {
   } catch {
     return errorResponse(context, 400, "INVALID_PAYLOAD", "A valid JSON request body is required.");
   }
-  if (new TextEncoder().encode(rawBody).byteLength > MAX_ACTION_BODY_BYTES) {
+  const requestSize = new TextEncoder().encode(rawBody).byteLength;
+  if (requestSize > MAX_PUBLISH_REQUEST_BYTES) {
     return errorResponse(context, 400, "INVALID_PAYLOAD", "The action payload is too large.");
   }
 
@@ -1053,18 +1227,24 @@ app.post("/action/run", requireJwt, async (context) => {
       "Provide a supported action type and an object payload. Costs are determined by the server.",
     );
   }
+  if (body.type !== "cloud_preview_publish" && requestSize > MAX_ACTION_BODY_BYTES) {
+    return errorResponse(context, 400, "INVALID_PAYLOAD", "The action payload is too large.");
+  }
 
   const accountId = context.get("auth").accountId;
   const deviceId = context.get("auth").deviceId;
   const cost = METERED_ACTION_COSTS[body.type];
+  let uploadedPreview: { id: string; objectKey: string } | null = null;
+  let publishCharged = false;
   try {
     const actionLimit = body.type === "ai_interaction_generator" ? 30 : 10;
+    const actionWindowSeconds = body.type === "cloud_preview_publish" ? 60 * 60 : 60;
     const deviceHash = await hashWithSecret(`protoflow-device:${deviceId}`, context.env.JWT_SECRET!);
     const deviceLimit = await enforceRateLimit(
       context,
       `device:action:${body.type}:${deviceHash}`,
       actionLimit,
-      60,
+      actionWindowSeconds,
       "device",
     );
     if (deviceLimit) return deviceLimit;
@@ -1137,6 +1317,167 @@ app.post("/action/run", requireJwt, async (context) => {
         },
         402,
       );
+    }
+
+    if (body.type === "cloud_preview_publish") {
+      const { bundle, projectName } = body.payload;
+      const payloadKeys = Object.keys(body.payload);
+      if (
+        payloadKeys.length !== 2 ||
+        !payloadKeys.includes("bundle") ||
+        !payloadKeys.includes("projectName") ||
+        typeof projectName !== "string" ||
+        !projectName.trim() ||
+        projectName.trim().length > 120 ||
+        !isPreviewBundle(bundle)
+      ) {
+        return errorResponse(
+          context,
+          400,
+          "INVALID_PAYLOAD",
+          `Provide a project name and standalone HTML bundle no larger than ${MAX_PREVIEW_BUNDLE_BYTES} bytes.`,
+        );
+      }
+      let baseUrl: string;
+      try {
+        baseUrl = getPreviewBaseUrl(context.req.url, context.env.PREVIEW_PUBLIC_BASE_URL);
+      } catch {
+        return errorResponse(context, 503, "PREVIEW_NOT_CONFIGURED", "Public preview hosting is not configured.");
+      }
+
+      const projectNameValue = projectName.trim();
+      const sizeBytes = new TextEncoder().encode(bundle).byteLength;
+      let previewId = "";
+      for (let attempt = 0; attempt < 5; attempt += 1) {
+        const candidate = generatePreviewId();
+        const existing = await context.env.DB.prepare(
+          "SELECT id FROM published_previews WHERE id = ?",
+        ).bind(candidate).first<{ id: string }>();
+        if (!existing) {
+          previewId = candidate;
+          break;
+        }
+      }
+      if (!previewId) {
+        throw new Error("A unique preview ID could not be generated.");
+      }
+      const objectKey = `previews/${previewId}/index.html`;
+      const now = new Date();
+      const createdAt = now.toISOString();
+      const expiresAt = new Date(now.getTime() + PREVIEW_EXPIRY_SECONDS * 1000).toISOString();
+      const usageMetadata = JSON.stringify({ assetBytes: sizeBytes });
+      uploadedPreview = { id: previewId, objectKey };
+
+      try {
+        await context.env.ASSETS.put(objectKey, bundle, {
+          httpMetadata: {
+            contentType: "text/html; charset=utf-8",
+            cacheControl: "private, no-store, max-age=0",
+          },
+        });
+        await context.env.CACHE.put(`short:${previewId}`, objectKey, {
+          expirationTtl: PREVIEW_EXPIRY_SECONDS,
+        });
+        const ledgerId = crypto.randomUUID();
+        const chargeResults = await context.env.DB.batch([
+          context.env.DB.prepare(
+            `UPDATE wallets
+             SET balance = balance - ?, lifetime_spent = lifetime_spent + ?, updated_at = ?
+             WHERE account_id = ? AND balance >= ?`,
+          ).bind(cost, cost, createdAt, accountId, cost),
+          context.env.DB.prepare(
+            `INSERT INTO published_previews
+               (id, account_id, project_name, object_key, created_at, expires_at, size_bytes)
+             SELECT ?, ?, ?, ?, ?, ?, ? WHERE changes() = 1`,
+          ).bind(previewId, accountId, projectNameValue, objectKey, createdAt, expiresAt, sizeBytes),
+          context.env.DB.prepare(
+            `INSERT INTO ledger (id, account_id, delta, reason, metadata_json, created_at)
+             SELECT ?, ?, -?, 'action:cloud_publish', ?, ? WHERE changes() = 1`,
+          ).bind(ledgerId, accountId, cost, usageMetadata, createdAt),
+          context.env.DB.prepare(
+            `INSERT INTO usage_events (id, account_id, event_type, metadata_json)
+             SELECT ?, ?, 'cloud_publish', ? WHERE changes() = 1`,
+          ).bind(crypto.randomUUID(), accountId, usageMetadata),
+        ]);
+        if (chargeResults.some((result) => !result.success)) {
+          throw new Error("The published preview charge transaction did not complete.");
+        }
+        if (chargeResults[0]?.meta?.changes !== 1) {
+          await removePreviewObjects(context.env, previewId, objectKey);
+          uploadedPreview = null;
+          const latestWallet = await context.env.DB.prepare(
+            "SELECT balance FROM wallets WHERE account_id = ?",
+          ).bind(accountId).first<{ balance: number }>();
+          return context.json(
+            {
+              error: {
+                code: "INSUFFICIENT_BALANCE",
+                message: "Your wallet balance changed before this action completed. No credits were deducted.",
+              },
+              balance: latestWallet?.balance ?? 0,
+              required: cost,
+            },
+            402,
+          );
+        }
+        publishCharged = true;
+
+        const { wallet: updatedWallet, recentLedger } = await loadWallet(
+          context.env.DB,
+          accountId,
+          createdAt,
+        );
+        return context.json({
+          success: true,
+          type: body.type,
+          result: {
+            id: previewId,
+            projectName: projectNameValue,
+            url: `${baseUrl}/p/${previewId}`,
+            createdAt,
+            expiresAt,
+            sizeBytes,
+            viewCount: 0,
+          },
+          wallet: {
+            accountId,
+            email: null,
+            balance: updatedWallet.balance,
+            lifetimeGranted: updatedWallet.lifetime_granted,
+            lifetimeSpent: updatedWallet.lifetime_spent,
+            recentLedger,
+            claimable: updatedWallet.claimable === 1,
+            nextClaimAt: nextClaimAt(updatedWallet.last_granted_at),
+            syncedAt: Date.now(),
+          },
+        });
+      } catch (error) {
+        if (!publishCharged && uploadedPreview) {
+          const failedPreview = uploadedPreview;
+          try {
+            await removePreviewObjects(context.env, failedPreview.id, failedPreview.objectKey);
+            uploadedPreview = null;
+          } catch (cleanupError) {
+            console.error("Failed preview upload cleanup after publish failure.", {
+              previewId: failedPreview.id,
+              message: cleanupError instanceof Error ? cleanupError.message : "Unknown cleanup error.",
+            });
+          }
+        }
+        console.error("Cloud preview publishing failed.", {
+          accountId,
+          previewId,
+          message: error instanceof Error ? error.message : "Unknown preview publish error.",
+        });
+        return errorResponse(
+          context,
+          503,
+          "PREVIEW_PUBLISH_FAILED",
+          publishCharged
+            ? "The preview was published and charged, but its response could not be completed. Refresh your wallet and preview history."
+            : "The preview could not be published. No credits were deducted.",
+        );
+      }
     }
 
     if (body.type !== "ai_interaction_generator") {
@@ -1421,8 +1762,14 @@ export default {
   fetch: (request: Request, env: WorkerEnv, executionContext: ExecutionContext) =>
     app.fetch(request, env, executionContext),
   scheduled: (event: ScheduledController, env: WorkerEnv, executionContext: ExecutionContext) => {
-    executionContext.waitUntil(event.cron === "0 * * * *"
-      ? runOperationalAlerts(env)
-      : runScheduledTasks(env));
+    const previewCleanup = purgeExpiredPreviews(env, new Date().toISOString()).catch((error: unknown) => {
+      console.error("Scheduled cloud preview cleanup failed.", {
+        message: error instanceof Error ? error.message : "Unknown preview cleanup error.",
+      });
+    });
+    executionContext.waitUntil(Promise.all([
+      previewCleanup,
+      event.cron === "0 * * * *" ? runOperationalAlerts(env) : runScheduledTasks(env),
+    ]).then(() => undefined));
   },
 };

@@ -4,6 +4,17 @@ const INSTALL_ID_KEY = "protoflow.wallet.install-id";
 const JWT_SESSION_KEY = "protoflow.wallet.jwt";
 const CACHED_WALLET_KEY = "protoflow.wallet.cache";
 const OFFLINE_GRACE_MS = 24 * 60 * 60 * 1000;
+const MAX_PREVIEW_ACTION_REQUEST_BYTES = 2 * 10 * 1024 * 1024 + 64 * 1024;
+
+export interface PublishedPreview {
+  id: string;
+  projectName: string;
+  url: string;
+  createdAt: string;
+  expiresAt: string;
+  sizeBytes: number;
+  viewCount: number;
+}
 
 export interface WalletIdentity {
   deviceId: string;
@@ -902,7 +913,10 @@ export async function runMeteredAction<T = unknown>(
   } catch {
     throw new WalletApiError("The action payload must contain valid JSON values.", false, "INVALID_PAYLOAD");
   }
-  if (new TextEncoder().encode(body).byteLength > 64 * 1024) {
+  const maximumBytes = type === "cloud_preview_publish"
+    ? MAX_PREVIEW_ACTION_REQUEST_BYTES
+    : 64 * 1024;
+  if (new TextEncoder().encode(body).byteLength > maximumBytes) {
     throw new WalletApiError("The action payload is too large.", false, "INVALID_PAYLOAD");
   }
 
@@ -934,6 +948,70 @@ export async function runMeteredAction<T = unknown>(
     result: result.result as T,
     wallet: toSnapshot(result.wallet as WalletResponse),
   };
+}
+
+function parsePublishedPreview(value: unknown): PublishedPreview {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) {
+    throw new Error("The cloud service returned invalid published preview data.");
+  }
+  const preview = value as Partial<PublishedPreview>;
+  let url: URL | null = null;
+  try {
+    if (typeof preview.url === "string") url = new URL(preview.url);
+  } catch {
+    url = null;
+  }
+  if (
+    typeof preview.id !== "string" ||
+    !/^[A-Za-z0-9]{8}$/.test(preview.id) ||
+    typeof preview.projectName !== "string" ||
+    !preview.projectName ||
+    !url ||
+    !["https:", "http:"].includes(url.protocol) ||
+    typeof preview.createdAt !== "string" ||
+    !Number.isFinite(Date.parse(preview.createdAt)) ||
+    typeof preview.expiresAt !== "string" ||
+    !Number.isFinite(Date.parse(preview.expiresAt)) ||
+    !isNonNegativeSafeInteger(preview.sizeBytes) ||
+    preview.sizeBytes > 10 * 1024 * 1024 ||
+    !isNonNegativeSafeInteger(preview.viewCount)
+  ) {
+    throw new Error("The cloud service returned invalid published preview data.");
+  }
+  return preview as PublishedPreview;
+}
+
+export async function fetchPublishedPreviews(token: string): Promise<PublishedPreview[]> {
+  const response = await authenticatedRequest<unknown>("/previews", token);
+  if (
+    typeof response !== "object" ||
+    response === null ||
+    Array.isArray(response) ||
+    !("previews" in response) ||
+    !Array.isArray(response.previews) ||
+    response.previews.length > 50
+  ) {
+    throw new Error("The cloud service returned invalid preview history.");
+  }
+  return response.previews.map(parsePublishedPreview);
+}
+
+export async function unpublishPreview(token: string, id: string): Promise<void> {
+  if (!/^[A-Za-z0-9]{8}$/.test(id)) {
+    throw new Error("The published preview ID is invalid.");
+  }
+  const response = await authenticatedRequest<unknown>(`/previews/${encodeURIComponent(id)}`, token, {
+    method: "DELETE",
+  });
+  if (
+    typeof response !== "object" ||
+    response === null ||
+    Array.isArray(response) ||
+    !("success" in response) ||
+    response.success !== true
+  ) {
+    throw new Error("The cloud service returned an invalid unpublish response.");
+  }
 }
 
 export async function submitInteractionFeedback(

@@ -5,6 +5,7 @@ export interface WorkerEnv {
   JWT_SECRET?: string;
   TURNSTILE_SECRET_KEY?: string;
   GEMINI_API_KEY?: string;
+  PREVIEW_PUBLIC_BASE_URL?: string;
   RESEND_API_KEY?: string;
   AUTH_EMAIL_FROM?: string;
   GOOGLE_CLIENT_ID?: string;

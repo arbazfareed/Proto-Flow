@@ -8,6 +8,7 @@ import {
   ChevronDown,
   ChevronUp,
   CircleHelp,
+  CloudUpload,
   Coins,
   FilePlus2,
   FileText,
@@ -95,6 +96,7 @@ interface TopBarProps {
   onRedo: () => void;
   onOpenPalette: () => void;
   onOpenPreview: () => void;
+  onPublishCloudPreview: () => void;
   onOpenWallet: () => void;
   onNotify: (message: string, isError?: boolean) => void;
   onStartDragging: () => void;
@@ -131,6 +133,7 @@ export function TopBar({
   onRedo,
   onOpenPalette,
   onOpenPreview,
+  onPublishCloudPreview,
   onOpenWallet,
   onNotify,
   onStartDragging,
@@ -250,6 +253,9 @@ export function TopBar({
         </button>
         <button className="button button-secondary" aria-label="Open preview" title="Open live preview" onClick={onOpenPreview}>
           <MonitorPlay size={14} /> Preview
+        </button>
+        <button className="button button-secondary" aria-label="Publish to cloud" title="Publish a shareable cloud preview" onClick={onPublishCloudPreview}>
+          <CloudUpload size={14} /> Publish
         </button>
         <div className="wallet-menu-anchor" ref={walletMenuRef}>
           <button

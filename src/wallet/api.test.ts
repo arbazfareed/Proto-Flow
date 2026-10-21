@@ -6,6 +6,7 @@ import {
   deleteCloudWalletData,
   exportWalletData,
   fetchAllLedgerEntries,
+  fetchPublishedPreviews,
   fetchLedgerPage,
   fetchWalletMe,
   getCachedWallet,
@@ -13,6 +14,7 @@ import {
   resetWalletIdentity,
   runMeteredAction,
   submitInteractionFeedback,
+  unpublishPreview,
   signOutAccount,
   startEmailSignIn,
   startGoogleSignIn,
@@ -357,6 +359,66 @@ describe("wallet persistence", () => {
         feedback: "positive",
       });
       expect(JSON.stringify(request.body)).not.toContain("prompt");
+    });
+
+    it("allows bounded 10 MiB cloud publish bundles through the metered API", async () => {
+      const fetchMock = vi.fn().mockResolvedValue(
+        new Response(
+          JSON.stringify({
+            success: true,
+            type: "cloud_preview_publish",
+            result: { id: "AbC123xY" },
+            wallet: {
+              accountId: "account-1",
+              balance: 48,
+              lifetimeGranted: 50,
+              lifetimeSpent: 2,
+              syncedAt: now,
+              recentLedger: [],
+              claimable: false,
+            },
+          }),
+          { status: 200, headers: { "Content-Type": "application/json" } },
+        ),
+      );
+      vi.stubGlobal("fetch", fetchMock);
+
+      await expect(
+        runMeteredAction(
+          "session-token",
+          "cloud_preview_publish",
+          { projectName: "Large preview", bundle: `<!doctype html>${"x".repeat(100_000)}</html>` },
+        ),
+      ).resolves.toMatchObject({ wallet: { balance: 48 } });
+      expect(new TextEncoder().encode(fetchMock.mock.calls[0][1].body as string).byteLength).toBeGreaterThan(64 * 1024);
+    });
+
+    it("loads validated publish history and confirms unpublishing", async () => {
+      const preview = {
+        id: "AbC123xY",
+        projectName: "Checkout",
+        url: "https://protoflow.link/p/AbC123xY",
+        createdAt: new Date(now).toISOString(),
+        expiresAt: new Date(now + 30 * 24 * 60 * 60 * 1000).toISOString(),
+        sizeBytes: 900,
+        viewCount: 3,
+      };
+      const fetchMock = vi.fn()
+        .mockResolvedValueOnce(new Response(JSON.stringify({ previews: [preview] }), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        }))
+        .mockResolvedValueOnce(new Response(JSON.stringify({ success: true }), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        }));
+      vi.stubGlobal("fetch", fetchMock);
+
+      await expect(fetchPublishedPreviews("session-token")).resolves.toEqual([preview]);
+      await expect(unpublishPreview("session-token", preview.id)).resolves.toBeUndefined();
+      expect(fetchMock.mock.calls[0][0]).toContain("/previews");
+      expect(fetchMock.mock.calls[1][0]).toContain(`/previews/${preview.id}`);
+      expect((fetchMock.mock.calls[1][1] as RequestInit).method).toBe("DELETE");
     });
 
     it("surfaces insufficient balance and Retry-After responses as structured errors", async () => {

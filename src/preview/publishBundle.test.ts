@@ -1,0 +1,82 @@
+import { describe, expect, it } from "vitest";
+import { createEmptyProject, type Widget } from "../project/schema";
+import {
+  generatePublishedPreviewHtml,
+  getPublishedProjectData,
+  publishedBundleSize,
+} from "./publishBundle";
+
+describe("standalone published preview bundle", () => {
+  it("embeds the project data and runtime without external requests or browser storage", () => {
+    const project = createEmptyProject("Published prototype");
+    const widget: Widget = {
+      id: crypto.randomUUID(),
+      type: "button",
+      x: 24,
+      y: 32,
+      width: 160,
+      height: 48,
+      rotation: 0,
+      opacity: 1,
+      visible: true,
+      locked: false,
+      zIndex: 0,
+      style: {},
+      props: { label: "Open {{status}}" },
+    };
+    project.screens[0].widgets.push(widget);
+    project.variables.push({
+      id: crypto.randomUUID(),
+      name: "status",
+      type: "string",
+      initial: "ready",
+      scope: "project",
+    });
+
+    const html = generatePublishedPreviewHtml(project);
+    const serialized = getPublishedProjectData(html);
+
+    expect(html).toContain("<!doctype html>");
+    expect(serialized).not.toBeNull();
+    expect(JSON.parse(serialized!)).toEqual(project);
+    expect(html).toContain("{{status}}");
+    expect(html).not.toMatch(/<script\s+src=/i);
+    expect(html).not.toMatch(/https?:\/\//i);
+    expect(html).not.toMatch(/\b(?:fetch|XMLHttpRequest|localStorage|sessionStorage)\b/);
+    expect(publishedBundleSize(html)).toBe(new TextEncoder().encode(html).byteLength);
+  });
+
+  it("escapes script terminators and project titles before embedding user data", () => {
+    const project = createEmptyProject("</title><script>attack()</script>");
+    project.screens[0].widgets.push({
+      id: crypto.randomUUID(),
+      type: "text",
+      x: 0,
+      y: 0,
+      width: 100,
+      height: 30,
+      rotation: 0,
+      opacity: 1,
+      visible: true,
+      locked: false,
+      zIndex: 0,
+      style: {},
+      props: { text: "</script><script>attack()</script>" },
+    });
+
+    const html = generatePublishedPreviewHtml(project);
+    const serialized = getPublishedProjectData(html);
+
+    expect(html).not.toContain("</title><script>attack()");
+    expect(html).not.toContain("</script><script>attack()");
+    expect(JSON.parse(serialized!).screens[0].widgets[0].props.text).toBe("</script><script>attack()</script>");
+  });
+
+  it("fires touch-tap rules and evaluates each screen load rule only once", () => {
+    const html = generatePublishedPreviewHtml(createEmptyProject("Runtime checks"));
+
+    expect(html).toContain('fire(widget, "onTap")');
+    expect(html).toContain('for (const rule of activeScreen.interactionRules.filter((item) => item.event === "onLoad"))');
+    expect(html).not.toContain("for (const widget of activeScreen.widgets)");
+  });
+});

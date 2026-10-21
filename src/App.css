@@ -890,3 +890,29 @@
   .canvas-mode { display:none; }
   .shape-tools { max-width:calc(100vw - 44px); overflow-x:auto; }
 }
+
+.cloud-preview-dialog { width:min(680px,calc(100vw - 32px)); max-height:min(88vh,820px); overflow:auto; }
+.cloud-preview-dialog h2 { margin-bottom:14px; }
+.cloud-preview-publish-form,.cloud-preview-result { display:grid; gap:10px; }
+.cloud-preview-publish-form>label,.cloud-preview-result>label { font-size:12px; font-weight:650; color:var(--text-secondary); }
+.cloud-preview-publish-form input,.cloud-preview-link-row input { min-width:0; width:100%; height:38px; padding:0 10px; color:var(--text-primary); background:var(--surface-raised); border:1px solid var(--border); border-radius:7px; }
+.cloud-preview-summary,.cloud-preview-balance,.cloud-preview-views { margin:0; font-size:12px; color:var(--text-muted); }
+.cloud-preview-result { padding:12px; border:1px solid var(--border); border-radius:10px; background:var(--surface-raised); }
+.cloud-preview-success { display:flex; align-items:center; gap:6px; margin:0; color:var(--success); }
+.cloud-preview-link-row { display:flex; align-items:center; gap:7px; }
+.cloud-preview-link-row .button { flex:0 0 auto; text-decoration:none; }
+.cloud-preview-qr { width:156px; height:156px; padding:8px; justify-self:center; background:#fff; border-radius:8px; }
+.cloud-preview-message { margin:10px 0 0; font-size:12px; color:var(--text-secondary); }
+.cloud-preview-history { display:grid; gap:7px; margin-top:18px; padding-top:14px; border-top:1px solid var(--border); }
+.cloud-preview-history-heading { display:flex; align-items:center; justify-content:space-between; }
+.cloud-preview-history-heading h3 { margin:0; font-size:13px; }
+.cloud-preview-history>p { margin:0; color:var(--text-muted); font-size:12px; }
+.cloud-preview-history-item { display:flex; align-items:center; gap:6px; min-width:0; padding:7px 8px; border:1px solid var(--border); border-radius:8px; }
+.cloud-preview-history-link { display:grid; gap:3px; min-width:0; flex:1; text-align:left; color:var(--text-primary); background:none; border:0; cursor:pointer; }
+.cloud-preview-history-link strong { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size:12px; }
+.cloud-preview-history-link span { color:var(--text-muted); font-size:11px; }
+.cloud-preview-balance { margin-top:12px; text-align:right; }
+@media(max-width:600px) {
+  .cloud-preview-link-row { flex-wrap:wrap; }
+  .cloud-preview-link-row input { flex-basis:100%; }
+}

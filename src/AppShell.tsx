@@ -11,6 +11,7 @@ import { useStore } from "./store";
 import { RestoreModal } from "./layout/RestoreModal";
 import { UpdateToast } from "./layout/UpdateToast";
 import { WalletDialog } from "./layout/WalletDialog";
+import { CloudPreviewDialog } from "./layout/CloudPreviewDialog";
 import { CommandPalette } from "./layout/CommandPalette";
 import { commandRegistry, createCoreCommands } from "./commands/registry";
 import { handleGlobalShortcut } from "./commands/shortcuts";
@@ -49,6 +50,7 @@ function AppShell() {
   const [updateCheckRequest, setUpdateCheckRequest] = useState(0);
   const [activeTool, setActiveTool] = useState<ShapeTool | null>(null);
   const [walletOpen, setWalletOpen] = useState(false);
+  const [cloudPreviewOpen, setCloudPreviewOpen] = useState(false);
   const walletInitializationStarted = useRef(false);
   const previewConnected = useRef(false);
   const syncWallet = useWalletStore((state) => state.sync);
@@ -466,6 +468,7 @@ function AppShell() {
         onRedo={redo}
         onOpenPalette={() => setPaletteOpen(true)}
         onOpenPreview={() => void openPreview()}
+        onPublishCloudPreview={() => setCloudPreviewOpen(true)}
         onOpenWallet={() => setWalletOpen(true)}
         onNotify={notify}
         onStartDragging={startWindowDragging}
@@ -503,6 +506,7 @@ function AppShell() {
       <UpdateToast requestId={updateCheckRequest} />
       <CommandPalette />
       {walletOpen && <WalletDialog onClose={() => setWalletOpen(false)} />}
+      {cloudPreviewOpen && <CloudPreviewDialog onClose={() => setCloudPreviewOpen(false)} />}
 
       {notice && (
         <div className={`toast${noticeIsError ? " toast-error" : ""}`} role={noticeIsError ? "alert" : "status"}>

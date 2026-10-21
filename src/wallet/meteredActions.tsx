@@ -389,9 +389,12 @@ export function useMeteredAction<T = unknown>(
     let requestPayload: Record<string, unknown>;
     try {
       const serializedPayload = JSON.stringify(payload);
+      const maxPayloadBytes = actionType === "cloud_preview_publish"
+        ? 2 * 10 * 1024 * 1024 + 64 * 1024
+        : 64 * 1024;
       if (
         typeof serializedPayload !== "string" ||
-        new TextEncoder().encode(serializedPayload).byteLength > 64 * 1024
+        new TextEncoder().encode(serializedPayload).byteLength > maxPayloadBytes
       ) {
         throw new Error("The action payload is too large.");
       }
