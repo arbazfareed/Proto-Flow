@@ -1,5 +1,10 @@
 import { Hono } from "hono";
 import { AiInteractionError, generateInteractionRule } from "./aiInteraction";
+import {
+  CodeExportInputError,
+  generateReactCodeArchive,
+  MAX_CODE_EXPORT_PROJECT_BYTES,
+} from "./codeExport";
 import { registerAccountAuthRoutes } from "./accountAuth";
 import {
   activeAbuseFlag,
@@ -325,7 +330,7 @@ const IP_ABUSE_IDENTITY_THRESHOLD = 5;
 const DAILY_WINDOW_DAYS = 1;
 const TOKEN_LIFETIME_SECONDS = 24 * 60 * 60;
 const MAX_ACTION_BODY_BYTES = 64 * 1024;
-const MAX_PUBLISH_REQUEST_BYTES = 2 * MAX_PREVIEW_BUNDLE_BYTES + 64 * 1024;
+const MAX_CODE_EXPORT_REQUEST_BYTES = 2 * MAX_CODE_EXPORT_PROJECT_BYTES + 64 * 1024;
 const DEVICE_ID_PATTERN = /^[a-f\d]{64}$/i;
 const INSTALL_ID_PATTERN =
   /^[a-f\d]{8}-[a-f\d]{4}-4[a-f\d]{3}-[89ab][a-f\d]{3}-[a-f\d]{12}$/i;
@@ -1198,7 +1203,7 @@ app.post("/wallet/claim-daily", requireJwt, async (context) => {
 
 app.post("/action/run", requireJwt, async (context) => {
   const contentLength = Number(context.req.header("Content-Length") ?? 0);
-  if (contentLength > MAX_PUBLISH_REQUEST_BYTES) {
+  if (contentLength > MAX_CODE_EXPORT_REQUEST_BYTES) {
     return errorResponse(context, 400, "INVALID_PAYLOAD", "The action payload is too large.");
   }
 
@@ -1209,7 +1214,7 @@ app.post("/action/run", requireJwt, async (context) => {
     return errorResponse(context, 400, "INVALID_PAYLOAD", "A valid JSON request body is required.");
   }
   const requestSize = new TextEncoder().encode(rawBody).byteLength;
-  if (requestSize > MAX_PUBLISH_REQUEST_BYTES) {
+  if (requestSize > MAX_CODE_EXPORT_REQUEST_BYTES) {
     return errorResponse(context, 400, "INVALID_PAYLOAD", "The action payload is too large.");
   }
 
@@ -1227,7 +1232,11 @@ app.post("/action/run", requireJwt, async (context) => {
       "Provide a supported action type and an object payload. Costs are determined by the server.",
     );
   }
-  if (body.type !== "cloud_preview_publish" && requestSize > MAX_ACTION_BODY_BYTES) {
+  if (
+    body.type !== "cloud_preview_publish" &&
+    body.type !== "react_tailwind_code_export" &&
+    requestSize > MAX_ACTION_BODY_BYTES
+  ) {
     return errorResponse(context, 400, "INVALID_PAYLOAD", "The action payload is too large.");
   }
 
@@ -1238,7 +1247,10 @@ app.post("/action/run", requireJwt, async (context) => {
   let publishCharged = false;
   try {
     const actionLimit = body.type === "ai_interaction_generator" ? 30 : 10;
-    const actionWindowSeconds = body.type === "cloud_preview_publish" ? 60 * 60 : 60;
+    const actionWindowSeconds =
+      body.type === "cloud_preview_publish" || body.type === "react_tailwind_code_export"
+        ? 60 * 60
+        : 60;
     const deviceHash = await hashWithSecret(`protoflow-device:${deviceId}`, context.env.JWT_SECRET!);
     const deviceLimit = await enforceRateLimit(
       context,
@@ -1478,6 +1490,88 @@ app.post("/action/run", requireJwt, async (context) => {
             : "The preview could not be published. No credits were deducted.",
         );
       }
+    }
+
+    if (body.type === "react_tailwind_code_export") {
+      const payload = body.payload;
+      if (
+        Object.keys(payload).length !== 2 ||
+        !Object.hasOwn(payload, "projectJson") ||
+        !Object.hasOwn(payload, "options") ||
+        typeof payload.projectJson !== "string"
+      ) {
+        return errorResponse(context, 400, "INVALID_PAYLOAD", "Provide an encoded ProtoFlow project and export settings.");
+      }
+      let archive: Awaited<ReturnType<typeof generateReactCodeArchive>>;
+      try {
+        archive = await generateReactCodeArchive(payload.projectJson, payload.options);
+      } catch (error) {
+        if (error instanceof CodeExportInputError) {
+          return errorResponse(context, 400, "INVALID_PAYLOAD", error.message);
+        }
+        throw error;
+      }
+      const chargedAt = new Date().toISOString();
+      const ledgerId = crypto.randomUUID();
+      const usageMetadata = JSON.stringify({
+        archiveBytes: archive.sizeBytes,
+        projectBytes: Math.floor((payload.projectJson.length * 3) / 4),
+      });
+      const chargeResults = await context.env.DB.batch([
+        context.env.DB.prepare(
+          `UPDATE wallets
+           SET balance = balance - ?, lifetime_spent = lifetime_spent + ?, updated_at = ?
+           WHERE account_id = ? AND balance >= ?`,
+        ).bind(cost, cost, chargedAt, accountId, cost),
+        context.env.DB.prepare(
+          `INSERT INTO ledger (id, account_id, delta, reason, metadata_json, created_at)
+           SELECT ?, ?, -?, 'action:code_export', ?, ? WHERE changes() = 1`,
+        ).bind(ledgerId, accountId, cost, usageMetadata, chargedAt),
+        context.env.DB.prepare(
+          `INSERT INTO usage_events (id, account_id, event_type, metadata_json)
+           SELECT ?, ?, 'code_export', ? WHERE changes() = 1`,
+        ).bind(crypto.randomUUID(), accountId, usageMetadata),
+      ]);
+      if (chargeResults.some((result) => !result.success)) {
+        throw new Error("The code export charge transaction did not complete.");
+      }
+      if (chargeResults[0]?.meta?.changes !== 1) {
+        const latestWallet = await context.env.DB.prepare(
+          "SELECT balance FROM wallets WHERE account_id = ?",
+        ).bind(accountId).first<{ balance: number }>();
+        return context.json(
+          {
+            error: {
+              code: "INSUFFICIENT_BALANCE",
+              message: "Your wallet balance changed before this export completed. No credits were deducted.",
+            },
+            balance: latestWallet?.balance ?? 0,
+            required: cost,
+          },
+          402,
+        );
+      }
+      const { wallet: updatedWallet, recentLedger } = await loadWallet(
+        context.env.DB,
+        accountId,
+        chargedAt,
+      );
+      return context.json({
+        success: true,
+        type: body.type,
+        result: archive,
+        wallet: {
+          accountId,
+          email: null,
+          balance: updatedWallet.balance,
+          lifetimeGranted: updatedWallet.lifetime_granted,
+          lifetimeSpent: updatedWallet.lifetime_spent,
+          recentLedger,
+          claimable: updatedWallet.claimable === 1,
+          nextClaimAt: nextClaimAt(updatedWallet.last_granted_at),
+          syncedAt: Date.now(),
+        },
+      });
     }
 
     if (body.type !== "ai_interaction_generator") {

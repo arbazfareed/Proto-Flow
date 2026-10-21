@@ -4,7 +4,7 @@ const INSTALL_ID_KEY = "protoflow.wallet.install-id";
 const JWT_SESSION_KEY = "protoflow.wallet.jwt";
 const CACHED_WALLET_KEY = "protoflow.wallet.cache";
 const OFFLINE_GRACE_MS = 24 * 60 * 60 * 1000;
-const MAX_PREVIEW_ACTION_REQUEST_BYTES = 2 * 10 * 1024 * 1024 + 64 * 1024;
+export const MAX_LARGE_ACTION_REQUEST_BYTES = 2 * 10 * 1024 * 1024 + 64 * 1024;
 
 export interface PublishedPreview {
   id: string;
@@ -109,6 +109,12 @@ export type MeteredActionType =
   | "ai_interaction_generator"
   | "cloud_preview_publish"
   | "react_tailwind_code_export";
+
+export interface ReactCodeArchive {
+  fileName: string;
+  zipBase64: string;
+  sizeBytes: number;
+}
 
 export interface MeteredActionResponse<T = unknown> {
   result: T;
@@ -913,9 +919,10 @@ export async function runMeteredAction<T = unknown>(
   } catch {
     throw new WalletApiError("The action payload must contain valid JSON values.", false, "INVALID_PAYLOAD");
   }
-  const maximumBytes = type === "cloud_preview_publish"
-    ? MAX_PREVIEW_ACTION_REQUEST_BYTES
-    : 64 * 1024;
+  const maximumBytes =
+    type === "cloud_preview_publish" || type === "react_tailwind_code_export"
+      ? MAX_LARGE_ACTION_REQUEST_BYTES
+      : 64 * 1024;
   if (new TextEncoder().encode(body).byteLength > maximumBytes) {
     throw new WalletApiError("The action payload is too large.", false, "INVALID_PAYLOAD");
   }
@@ -944,8 +951,33 @@ export async function runMeteredAction<T = unknown>(
     throw new Error("The cloud action service returned an invalid success response.");
   }
 
+  let actionResult = result.result;
+  if (type === "react_tailwind_code_export") {
+    if (
+      typeof actionResult !== "object" ||
+      actionResult === null ||
+      Array.isArray(actionResult)
+    ) {
+      throw new Error("The cloud service returned an invalid React export archive.");
+    }
+    const archive = actionResult as Partial<ReactCodeArchive>;
+    if (
+      typeof archive.fileName !== "string" ||
+      !/^[a-z0-9-]+-react-export\.zip$/.test(archive.fileName) ||
+      typeof archive.zipBase64 !== "string" ||
+      archive.zipBase64.length === 0 ||
+      archive.zipBase64.length > 20 * 1024 * 1024 ||
+      !/^[A-Za-z0-9+/]+={0,2}$/.test(archive.zipBase64) ||
+      !isNonNegativeSafeInteger(archive.sizeBytes) ||
+      archive.sizeBytes > 15 * 1024 * 1024
+    ) {
+      throw new Error("The cloud service returned an invalid React export archive.");
+    }
+    actionResult = archive;
+  }
+
   return {
-    result: result.result as T,
+    result: actionResult as T,
     wallet: toSnapshot(result.wallet as WalletResponse),
   };
 }

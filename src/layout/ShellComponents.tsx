@@ -8,6 +8,7 @@ import {
   ChevronDown,
   ChevronUp,
   CircleHelp,
+  Code2,
   CloudUpload,
   Coins,
   FilePlus2,
@@ -97,6 +98,7 @@ interface TopBarProps {
   onOpenPalette: () => void;
   onOpenPreview: () => void;
   onPublishCloudPreview: () => void;
+  onExportReactCode: () => void;
   onOpenWallet: () => void;
   onNotify: (message: string, isError?: boolean) => void;
   onStartDragging: () => void;
@@ -134,6 +136,7 @@ export function TopBar({
   onOpenPalette,
   onOpenPreview,
   onPublishCloudPreview,
+  onExportReactCode,
   onOpenWallet,
   onNotify,
   onStartDragging,
@@ -256,6 +259,9 @@ export function TopBar({
         </button>
         <button className="button button-secondary" aria-label="Publish to cloud" title="Publish a shareable cloud preview" onClick={onPublishCloudPreview}>
           <CloudUpload size={14} /> Publish
+        </button>
+        <button className="button button-secondary" aria-label="Export React code" title="Export a React and Tailwind project" onClick={onExportReactCode}>
+          <Code2 size={14} /> Export code
         </button>
         <div className="wallet-menu-anchor" ref={walletMenuRef}>
           <button

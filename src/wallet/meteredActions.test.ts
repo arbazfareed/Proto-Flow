@@ -3,6 +3,7 @@ import {
   confirmationWasSkipped,
   isUsageTelemetryEnabled,
   METERED_ACTIONS,
+  normalizeMeteredActionPayload,
   recordLocalActionUsage,
   saveConfirmationPreference,
   setUsageTelemetryEnabled,
@@ -58,5 +59,12 @@ describe("metered action preferences", () => {
       cloud_preview_publish: { cost: 2 },
       react_tailwind_code_export: { cost: 3 },
     });
+  });
+
+  it("allows large project exports while retaining the small AI payload limit", () => {
+    const payload = { projectJson: "A".repeat(100_000), options: { scope: "all" } };
+    expect(normalizeMeteredActionPayload("react_tailwind_code_export", payload)).toEqual(payload);
+    expect(() => normalizeMeteredActionPayload("ai_interaction_generator", payload))
+      .toThrow("The action payload is too large.");
   });
 });

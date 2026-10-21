@@ -48,11 +48,9 @@ The element library includes dedicated canvas visuals for avatars, icon buttons,
 
 ### Phase 3 — Cloud API gateway scaffold
 
-`cloud/` contains the Cloudflare Workers/Hono API scaffold for PF-T301. It defines local Wrangler bindings for D1 (`DB`), KV (`CACHE`), and R2 (`ASSETS`), repeatable D1 migrations plus standalone `schema.sql`, origin allowlisting, consistent JSON errors, and HS256 Bearer JWT verification for wallet routes. Anonymous wallet provisioning, authenticated wallet reads, daily claims, optional email/Google account linking, and Cloudflare Access-protected admin endpoints are implemented. PF-T404 AI interaction generation is metered and enabled; publish and export actions still return an explicit `501` without deducting credits. Admin endpoints fail closed until Access settings are configured.
+`cloud/` contains the Cloudflare Workers/Hono API scaffold for PF-T301. It defines local Wrangler bindings for D1 (`DB`), KV (`CACHE`), and R2 (`ASSETS`), repeatable D1 migrations plus standalone `schema.sql`, origin allowlisting, consistent JSON errors, and HS256 Bearer JWT verification for wallet routes. Anonymous wallet provisioning, authenticated wallet reads, daily claims, optional email/Google account linking, PF-T404 AI interaction generation, PF-T405 cloud preview publishing, PF-T406 React/Tailwind code export, and Cloudflare Access-protected admin endpoints are implemented. Admin endpoints fail closed until Access settings are configured.
 
 Use Node.js 20.19+ or 22.12+:
-
-**PF-T405 status update:** Cloud preview publishing is implemented in addition to PF-T404. The older phase-summary sentence above saying publish is unavailable is superseded by the PF-T405 section below.
 
 ```sh
 cd cloud
@@ -86,6 +84,8 @@ The Worker observes only Cloudflare's `CF-Connecting-IP` header and stores an HM
 ### PF-T308 — Rate limiting and abuse prevention
 
 The Worker uses KV-backed approximate sliding-window counters: anonymous provisioning is limited to 10 requests/hour/device and 100/hour/IP; AI requests to 30/minute/device; publish/export requests to 10/minute/device; email-link sends to 3/hour/email; and metered-action IP traffic to 500/hour/IP. A global 1,000-request/hour/IP safeguard applies to all routes. Daily claims retain their database-enforced 24-hour cooldown and IP safeguards. Rate-limited responses return structured `429` errors, `Retry-After`, and `X-RateLimit-*` headers, which are exposed to configured browser origins. KV counters are best-effort under concurrent requests because KV is eventually consistent.
+
+Cloud preview publishing and React/Tailwind code exports use a separate limit of 10 requests per device per hour.
 
 The Worker stores HMAC-hashed IP signup activity for 30 days and flags an address after five wallet signups in 24 hours. Repeated identical AI prompts and accounts spending 100+ credits in an hour are flagged; repeated account flags escalate to read-only access for 24 hours. Abuse flags are persisted in D1 for the future PF-T310 admin dashboard. Configure Cloudflare Turnstile using the Worker secret `TURNSTILE_SECRET_KEY` and build-time client variable `VITE_TURNSTILE_SITE_KEY`; the client only loads the invisible challenge when the Worker requests it. Without those values, challenged requests fail with a clear configuration/review error rather than bypassing the challenge. An optional weekly aggregate email digest can be enabled with `ABUSE_DIGEST_EMAIL`, `RESEND_API_KEY`, and `AUTH_EMAIL_FROM`; the scheduled report includes counts and reasons, not IP or account identifiers.
 
@@ -133,6 +133,10 @@ For local tests, AI provider calls are mocked; no live Gemini request is made. T
 ### PF-T405 — Cloud web preview publisher
 
 Choose **Publish** in the top bar to generate a self-contained HTML preview and upload it to R2. Publishing costs 2 credits only after the bundle is stored and the wallet/ledger transaction succeeds. Bundles are limited to 10 MiB, expire after 30 days, and are served in a script-only sandbox with network, form, cookie, and storage access denied. The dialog shows the share link, QR code, expiry, view count, and recent previews; an owner can unpublish a preview without a refund. The Worker limits publishing to 10 requests per device per hour and removes expired R2 objects, KV mappings, and D1 metadata on its hourly scheduled cleanup. Apply migration `0009_cloud_previews.sql` before deploying this feature. Set `PREVIEW_PUBLIC_BASE_URL` when public preview URLs must use a separate HTTPS origin.
+
+### PF-T406 — React/Tailwind code generator
+
+Choose **Export code** in the top bar to download a generated Vite + React + TypeScript + Tailwind ZIP for all screens or the selected screen, with controls for interactions, variables, embedded assets, and Tailwind CSS 3 or 4. The Worker validates the `.pflow` schema, builds screen components, React Router routes, widget renderers, and variable/interaction hooks, and charges 3 credits only after archive generation succeeds. Export input is capped at 10 MiB and requests are limited to 10 per device per hour. The free **Export as JSX** option downloads a single TSX component without a package manifest. Extract ZIPs and run `npm install` followed by `npm run dev`.
 
 ### PF-T218 — Layer tree behavior and implementation notes
 

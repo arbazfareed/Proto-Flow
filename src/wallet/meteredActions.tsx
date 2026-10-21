@@ -8,7 +8,12 @@ import {
   type ReactNode,
 } from "react";
 import { CircleAlert, Coins, X } from "lucide-react";
-import { runMeteredAction, WalletApiError, type MeteredActionType } from "./api";
+import {
+  MAX_LARGE_ACTION_REQUEST_BYTES,
+  runMeteredAction,
+  WalletApiError,
+  type MeteredActionType,
+} from "./api";
 import { useWalletStore } from "./store";
 
 const CONFIRMATION_KEY_PREFIX = "protoflow.metered.skip-confirmation.";
@@ -56,6 +61,28 @@ interface MeteredActionContextValue {
 
 export interface UseMeteredActionOptions {
   skipConfirmation?: boolean;
+}
+
+export function normalizeMeteredActionPayload(
+  actionType: MeteredActionType,
+  payload: Record<string, unknown>,
+): Record<string, unknown> {
+  const serializedPayload = JSON.stringify(payload);
+  const maxPayloadBytes =
+    actionType === "cloud_preview_publish" || actionType === "react_tailwind_code_export"
+      ? MAX_LARGE_ACTION_REQUEST_BYTES
+      : 64 * 1024;
+  if (
+    typeof serializedPayload !== "string" ||
+    new TextEncoder().encode(serializedPayload).byteLength > maxPayloadBytes
+  ) {
+    throw new Error("The action payload is too large.");
+  }
+  const normalizedPayload: unknown = JSON.parse(serializedPayload);
+  if (typeof normalizedPayload !== "object" || normalizedPayload === null || Array.isArray(normalizedPayload)) {
+    throw new Error("The action payload must be a JSON object.");
+  }
+  return normalizedPayload as Record<string, unknown>;
 }
 
 interface MeteredActionProviderProps {
@@ -374,7 +401,7 @@ export function useMeteredAction<T = unknown>(
   actionType: MeteredActionType,
   payload: Record<string, unknown>,
   options: UseMeteredActionOptions = {},
-): { run: () => Promise<T | undefined>; isRunning: boolean; error: string | null } {
+): { run: (payloadOverride?: Record<string, unknown>) => Promise<T | undefined>; isRunning: boolean; error: string | null } {
   const context = useContext(MeteredActionContext);
   if (!context) {
     throw new Error("useMeteredAction must be used within MeteredActionProvider.");
@@ -382,27 +409,13 @@ export function useMeteredAction<T = unknown>(
   const [isRunning, setIsRunning] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const run = useCallback(async (): Promise<T | undefined> => {
+  const run = useCallback(async (payloadOverride?: Record<string, unknown>): Promise<T | undefined> => {
     if (isRunning) return undefined;
     setError(null);
 
     let requestPayload: Record<string, unknown>;
     try {
-      const serializedPayload = JSON.stringify(payload);
-      const maxPayloadBytes = actionType === "cloud_preview_publish"
-        ? 2 * 10 * 1024 * 1024 + 64 * 1024
-        : 64 * 1024;
-      if (
-        typeof serializedPayload !== "string" ||
-        new TextEncoder().encode(serializedPayload).byteLength > maxPayloadBytes
-      ) {
-        throw new Error("The action payload is too large.");
-      }
-      const normalizedPayload: unknown = JSON.parse(serializedPayload);
-      if (typeof normalizedPayload !== "object" || normalizedPayload === null || Array.isArray(normalizedPayload)) {
-        throw new Error("The action payload must be a JSON object.");
-      }
-      requestPayload = normalizedPayload as Record<string, unknown>;
+      requestPayload = normalizeMeteredActionPayload(actionType, payloadOverride ?? payload);
     } catch (cause) {
       const message = cause instanceof Error ? cause.message : "The action payload is invalid.";
       setError(message);

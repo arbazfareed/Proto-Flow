@@ -393,6 +393,44 @@ describe("wallet persistence", () => {
       expect(new TextEncoder().encode(fetchMock.mock.calls[0][1].body as string).byteLength).toBeGreaterThan(64 * 1024);
     });
 
+    it("allows a bounded encoded project export and validates the returned ZIP", async () => {
+      const archive = {
+        fileName: "checkout-react-export.zip",
+        zipBase64: "UEsFBgAAAAAAAAAAAAAAAAAAAAAAAA==",
+        sizeBytes: 22,
+      };
+      const fetchMock = vi.fn().mockResolvedValue(
+        new Response(
+          JSON.stringify({
+            success: true,
+            type: "react_tailwind_code_export",
+            result: archive,
+            wallet: {
+              accountId: "account-1",
+              balance: 47,
+              lifetimeGranted: 50,
+              lifetimeSpent: 3,
+              syncedAt: now,
+              recentLedger: [],
+              claimable: false,
+            },
+          }),
+          { status: 200, headers: { "Content-Type": "application/json" } },
+        ),
+      );
+      vi.stubGlobal("fetch", fetchMock);
+
+      const result = await runMeteredAction<{ fileName: string }>(
+        "session-token",
+        "react_tailwind_code_export",
+        { projectJson: "A".repeat(100_000), options: { scope: "all" } },
+      );
+
+      expect(result.result.fileName).toBe("checkout-react-export.zip");
+      expect(result.wallet.balance).toBe(47);
+      expect(new TextEncoder().encode(fetchMock.mock.calls[0][1].body as string).byteLength).toBeGreaterThan(64 * 1024);
+    });
+
     it("loads validated publish history and confirms unpublishing", async () => {
       const preview = {
         id: "AbC123xY",
@@ -460,7 +498,7 @@ describe("wallet persistence", () => {
         runMeteredAction("session-token", "react_tailwind_code_export", cyclic),
       ).rejects.toMatchObject<Partial<WalletApiError>>({ code: "INVALID_PAYLOAD" });
       await expect(
-        runMeteredAction("session-token", "react_tailwind_code_export", { source: "x".repeat(70_000) }),
+        runMeteredAction("session-token", "ai_interaction_generator", { source: "x".repeat(70_000) }),
       ).rejects.toMatchObject<Partial<WalletApiError>>({ code: "INVALID_PAYLOAD" });
       expect(fetchMock).not.toHaveBeenCalled();
     });

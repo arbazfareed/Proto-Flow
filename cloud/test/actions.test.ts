@@ -113,7 +113,7 @@ describe("metered action dispatcher", () => {
     });
   });
 
-  it("does not deduct credits when an action has no execution handler", async () => {
+  it("rejects malformed export requests without deducting credits", async () => {
     const database = new ActionTestDatabase(10);
     const response = await authorizedRequest(
       database,
@@ -123,9 +123,9 @@ describe("metered action dispatcher", () => {
       }),
     );
 
-    expect(response.status).toBe(501);
+    expect(response.status).toBe(400);
     expect(await response.json()).toMatchObject({
-      error: { code: "ACTION_NOT_IMPLEMENTED" },
+      error: { code: "INVALID_PAYLOAD" },
     });
     expect(database.balance).toBe(10);
     expect(database.reads).toBe(2);
@@ -146,6 +146,23 @@ describe("metered action dispatcher", () => {
     expect(response?.status).toBe(429);
     expect(response?.headers.get("X-RateLimit-Limit")).toBe("30");
     expect(response?.headers.get("X-RateLimit-Remaining")).toBe("0");
+    expect(await response?.json()).toMatchObject({ error: { code: "RATE_LIMITED" } });
+  });
+
+  it("limits code exports to ten requests per device per hour", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-10-21T12:00:00.000Z"));
+    const database = new ActionTestDatabase(50);
+    const request = () =>
+      authorizedRequest(
+        database,
+        JSON.stringify({ type: "react_tailwind_code_export", payload: {} }),
+      );
+    let response: Response | undefined;
+    for (let attempt = 0; attempt < 11; attempt += 1) response = await request();
+
+    expect(response?.status).toBe(429);
+    expect(response?.headers.get("X-RateLimit-Limit")).toBe("10");
     expect(await response?.json()).toMatchObject({ error: { code: "RATE_LIMITED" } });
   });
 

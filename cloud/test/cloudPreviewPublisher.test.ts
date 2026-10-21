@@ -2,6 +2,8 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { signJwt } from "../src/auth";
 import { app } from "../src";
 import type { WorkerEnv } from "../src/env";
+import { createEmptyProject } from "../../src/project/schema";
+import { encodeProjectForCodeExport } from "../../src/preview/codeExport";
 
 const secret = "test-secret-that-is-long-enough-for-hmac-validation";
 const bundle = "<!doctype html><html><head></head><body><script>document.body.textContent='preview'</script></body></html>";
@@ -130,13 +132,13 @@ class PreviewDatabase {
       } else if (query.includes("insert into ledger") && previousChanges) {
         this.ledger.push({
           delta: -Number(statement.values[2]),
-          reason: "action:cloud_publish",
+          reason: query.includes("action:code_export") ? "action:code_export" : "action:cloud_publish",
           metadata_json: String(statement.values[3]),
         });
         changes = 1;
       } else if (query.includes("insert into usage_events") && previousChanges) {
         this.usage.push({
-          event_type: "cloud_publish",
+          event_type: query.includes("'code_export'") ? "code_export" : "cloud_publish",
           metadata_json: String(statement.values[2]),
         });
         changes = 1;
@@ -261,6 +263,71 @@ describe("metered cloud preview publishing", () => {
     expect(document).toContain('sandbox="allow-scripts"');
     expect(document).not.toContain("allow-same-origin");
     expect(database.previews.get(body.result.id)?.view_count).toBe(1);
+  });
+
+  describe("metered React code export", () => {
+    const exportOptions = {
+      scope: "all",
+      includeInteractions: true,
+      includeVariables: true,
+      includeAssets: true,
+      tailwindVersion: "4",
+    };
+
+    it("generates a ZIP and charges three credits only after generation succeeds", async () => {
+      const database = new PreviewDatabase();
+      const assets = new PreviewAssets();
+      const project = createEmptyProject("Checkout");
+      const response = await request(database, assets, "/action/run", {
+        payload: {
+          type: "react_tailwind_code_export",
+          payload: {
+            projectJson: encodeProjectForCodeExport(project),
+            options: exportOptions,
+          },
+        },
+      });
+      const body = await response.json() as {
+        result: { fileName: string; zipBase64: string; sizeBytes: number };
+        wallet: { balance: number; lifetimeSpent: number };
+      };
+
+      expect(response.status).toBe(200);
+      expect(body.result).toMatchObject({ fileName: "checkout-react-export.zip" });
+      expect(body.result.zipBase64).toMatch(/^[A-Za-z0-9+/]+=*$/);
+      expect(body.result.sizeBytes).toBeGreaterThan(0);
+      expect(body.wallet).toMatchObject({ balance: 47, lifetimeSpent: 3 });
+      expect(database.ledger).toMatchObject([{ delta: -3, reason: "action:code_export" }]);
+      expect(database.usage[0]?.event_type).toBe("code_export");
+    });
+
+    it("rejects invalid projects and does not charge when the wallet changed", async () => {
+      const database = new PreviewDatabase();
+      const assets = new PreviewAssets();
+      const invalidProject = await request(database, assets, "/action/run", {
+        payload: {
+          type: "react_tailwind_code_export",
+          payload: { projectJson: "invalid", options: exportOptions },
+        },
+      });
+      expect(invalidProject.status).toBe(400);
+      expect(database.balance).toBe(50);
+      expect(database.ledger).toHaveLength(0);
+
+      database.balance = 2;
+      const insufficient = await request(database, assets, "/action/run", {
+        payload: {
+          type: "react_tailwind_code_export",
+          payload: {
+            projectJson: encodeProjectForCodeExport(createEmptyProject("Needs credits")),
+            options: exportOptions,
+          },
+        },
+      });
+      expect(insufficient.status).toBe(402);
+      expect(database.balance).toBe(2);
+      expect(database.ledger).toHaveLength(0);
+    });
   });
 
   it("does not charge if R2 or the atomic D1 charge transaction fails", async () => {
