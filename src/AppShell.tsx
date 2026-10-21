@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { isTauri } from "@tauri-apps/api/core";
-import { getCurrentWindow } from "@tauri-apps/api/window";
+import { currentMonitor, getCurrentWindow } from "@tauri-apps/api/window";
+import { emitTo, listen } from "@tauri-apps/api/event";
+import { WebviewWindow } from "@tauri-apps/api/webviewWindow";
 import { getCurrent, onOpenUrl } from "@tauri-apps/plugin-deep-link";
 import { Check, CircleAlert } from "lucide-react";
 import { clearAutosave, subscribeAutosaveErrors } from "./project/autosave";
@@ -16,6 +18,7 @@ import { formatProjectValidationError, SchemaValidationError } from "./project/s
 import type { Screen } from "./project/schema";
 import { createDefaultBreakpoints } from "./project/responsive";
 import { DEVICE_PRESETS, toScreenDevice } from "./devices/catalog";
+import { getPreviewWindowSize } from "./preview/windowSizing";
 import { useWalletStore } from "./wallet/store";
 import { checkCloudHealth } from "./wallet/api";
 import { startNetworkMonitor } from "./wallet/network";
@@ -47,6 +50,7 @@ function AppShell() {
   const [activeTool, setActiveTool] = useState<ShapeTool | null>(null);
   const [walletOpen, setWalletOpen] = useState(false);
   const walletInitializationStarted = useRef(false);
+  const previewConnected = useRef(false);
   const syncWallet = useWalletStore((state) => state.sync);
   const initializeWallet = useWalletStore((state) => state.initialize);
 
@@ -55,6 +59,71 @@ function AppShell() {
     setNoticeIsError(isError);
     window.setTimeout(() => setNotice(""), 4000);
   }, []);
+
+  useEffect(() => {
+    if (isTauri()) {
+      let disposed = false;
+      let unlisten: (() => void) | undefined;
+      const setup = async () => {
+        const stop = await listen("preview:ready", () => {
+          previewConnected.current = true;
+          void emitTo("preview", "preview:project", useStore.getState().project).catch((error: unknown) => {
+            previewConnected.current = false;
+            console.error("Could not send the current project to preview.", error);
+            notify(error instanceof Error ? error.message : "Could not sync the project to preview.", true);
+          });
+        });
+        const stopClosed = await listen("preview:closed", () => {
+          previewConnected.current = false;
+        });
+        if (disposed) {
+          stop();
+          stopClosed();
+          return;
+        }
+        unlisten = () => {
+          stop();
+          stopClosed();
+        };
+      };
+      void setup().catch((error: unknown) => {
+        console.error("Could not initialize preview synchronization.", error);
+        notify(error instanceof Error ? error.message : "Could not initialize preview synchronization.", true);
+      });
+      const unsubscribe = useStore.subscribe((state, previous) => {
+        if (state.project === previous.project || !previewConnected.current) return;
+        void emitTo("preview", "preview:project", state.project).catch((error: unknown) => {
+          previewConnected.current = false;
+          console.error("Could not hot-reload the preview project.", error);
+          notify(error instanceof Error ? error.message : "Could not hot-reload preview.", true);
+        });
+      });
+      return () => {
+        disposed = true;
+        unlisten?.();
+        unsubscribe();
+      };
+    }
+
+    const channel = new BroadcastChannel("protoflow-preview");
+    channel.onmessage = (event: MessageEvent<{ type?: string }>) => {
+      if (event.data?.type === "preview-ready") {
+        previewConnected.current = true;
+        channel.postMessage({ type: "project", project: useStore.getState().project });
+      } else if (event.data?.type === "preview-closed") {
+        previewConnected.current = false;
+      }
+    };
+    const unsubscribe = useStore.subscribe((state, previous) => {
+      if (state.project !== previous.project && previewConnected.current) {
+        channel.postMessage({ type: "project", project: state.project });
+      }
+    });
+    return () => {
+      unsubscribe();
+      channel.close();
+    };
+  }, [notify]);
 
   const processAuthCallback = useCallback(async (value: string) => {
     let callback: URL;
@@ -309,6 +378,59 @@ function AppShell() {
     });
   }, [notify]);
 
+  const openPreview = useCallback(async () => {
+    const state = useStore.getState();
+    const screen = state.project.screens.find((item) => item.id === state.getActiveScreenId());
+    const width = screen?.device?.width ?? 1280;
+    const height = screen?.device?.height ?? 800;
+    try {
+      if (!isTauri()) {
+        const previewUrl = new URL(window.location.href);
+        previewUrl.searchParams.set("preview", "1");
+        const preview = window.open(
+          previewUrl.toString(),
+          "protoflow-preview",
+          `popup=yes,width=${Math.max(360, width)},height=${Math.max(320, height + 72)}`,
+        );
+        if (!preview) throw new Error("The preview window was blocked by the browser.");
+        previewConnected.current = true;
+        return;
+      }
+
+      const existing = await WebviewWindow.getByLabel("preview");
+      if (existing) {
+        await existing.show();
+        await existing.setFocus();
+        await emitTo("preview", "preview:project", state.project);
+        previewConnected.current = true;
+        return;
+      }
+
+      const monitor = await currentMonitor();
+      const previewSize = getPreviewWindowSize({ width, height }, monitor);
+      const preview = new WebviewWindow("preview", {
+        url: "/?preview=1",
+        title: "ProtoFlow Preview",
+        width: previewSize.width,
+        height: previewSize.height,
+        minWidth: Math.min(360, previewSize.width),
+        minHeight: Math.min(320, previewSize.height),
+        resizable: true,
+        center: true,
+      });
+      await new Promise<void>((resolve, reject) => {
+        void preview.once("tauri://created", () => resolve()).catch(reject);
+        void preview.once<{ message?: string }>("tauri://error", (event) => {
+          reject(new Error(event.payload.message ?? "Could not create the preview window."));
+        }).catch(reject);
+      });
+      previewConnected.current = true;
+    } catch (error) {
+      console.error("Could not open the preview window.", error);
+      notify(error instanceof Error ? error.message : "Could not open preview.", true);
+    }
+  }, [notify]);
+
   const addLibraryScreen = useCallback((category: DeviceCategory) => {
     const preset = DEVICE_PRESETS.find((device) => device.category === category);
     if (!preset) {
@@ -343,6 +465,7 @@ function AppShell() {
         onUndo={undo}
         onRedo={redo}
         onOpenPalette={() => setPaletteOpen(true)}
+        onOpenPreview={() => void openPreview()}
         onOpenWallet={() => setWalletOpen(true)}
         onNotify={notify}
         onStartDragging={startWindowDragging}

@@ -290,7 +290,7 @@ export type RuntimeVariableValue = string | number | boolean;
 
 export class VariableRuntimeStore {
   private readonly values = new Map<string, RuntimeVariableValue>();
-  private readonly definitions: VariableDefinition[];
+  private definitions: VariableDefinition[];
 
   constructor(definitions: VariableDefinition[]) {
     this.definitions = structuredClone(definitions);
@@ -302,6 +302,33 @@ export class VariableRuntimeStore {
     for (const variable of this.definitions) {
       this.values.set(variable.id, variable.initial);
     }
+  }
+
+  updateDefinitions(definitions: VariableDefinition[]): void {
+    const previousValues = new Map(this.values);
+    this.definitions = structuredClone(definitions);
+    this.values.clear();
+    for (const variable of this.definitions) {
+      const previousValue = previousValues.get(variable.id);
+      this.values.set(
+        variable.id,
+        previousValue !== undefined && typeof previousValue === variable.type
+          ? previousValue
+          : variable.initial,
+      );
+    }
+  }
+
+  entries(screenId?: string): Array<{ variable: VariableDefinition; value: RuntimeVariableValue }> {
+    return this.definitions
+      .filter((variable) =>
+        variable.scope === "project" ||
+        (screenId !== undefined && variable.screenId === screenId),
+      )
+      .map((variable) => ({
+        variable,
+        value: this.values.get(variable.id) ?? variable.initial,
+      }));
   }
 
   get(name: string, screenId?: string): RuntimeVariableValue | undefined {

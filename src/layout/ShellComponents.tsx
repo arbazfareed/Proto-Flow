@@ -15,6 +15,7 @@ import {
   Keyboard,
   Lock,
   Layers2,
+  MonitorPlay,
   MoreHorizontal,
   Minus,
   PanelLeftClose,
@@ -93,6 +94,7 @@ interface TopBarProps {
   onUndo: () => void;
   onRedo: () => void;
   onOpenPalette: () => void;
+  onOpenPreview: () => void;
   onOpenWallet: () => void;
   onNotify: (message: string, isError?: boolean) => void;
   onStartDragging: () => void;
@@ -128,6 +130,7 @@ export function TopBar({
   onUndo,
   onRedo,
   onOpenPalette,
+  onOpenPreview,
   onOpenWallet,
   onNotify,
   onStartDragging,
@@ -244,6 +247,9 @@ export function TopBar({
         </button>
         <button className="button button-primary" onClick={onSave}>
           Save <kbd>Ctrl S</kbd>
+        </button>
+        <button className="button button-secondary" aria-label="Open preview" title="Open live preview" onClick={onOpenPreview}>
+          <MonitorPlay size={14} /> Preview
         </button>
         <div className="wallet-menu-anchor" ref={walletMenuRef}>
           <button

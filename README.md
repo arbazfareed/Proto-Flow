@@ -194,6 +194,10 @@ Use the Variables tab in the left sidebar to create, edit, rename, and delete pr
 
 Select a widget and choose **Interactions** in the inspector to bind click, hover, change, load, tap, and touch-start/end triggers. Rules support ordered conditions with all/any matching and ordered navigate, show/hide, variable, panel-state, and repeater-data actions. The editor validates targets and variable types, warns about navigation loops and a trigger hiding itself, supports templates and rule testing against the variables' initial values, and saves changes as a single undoable project edit. Interactions persist in the `.pflow` schema; legacy rules without a widget binding remain readable and migrate with all-condition matching.
 
+### PF-T403 — Local preview runtime
+
+Choose **Preview** in the editor toolbar to open the current prototype in a separate Tauri window (or a browser popup during web development). The preview renders widgets as DOM elements, listens for project edits over Tauri events or a local `BroadcastChannel`, and preserves runtime values while a project hot-reloads. Its toolbar supports screen navigation/back, restart, desktop/tablet/mobile device sizes, device-frame toggling, and a live variable inspector. Triggered rules execute in order and support navigation, visibility, typed variable, panel-state, and repeater-data actions; runtime errors are logged and shown in the preview rather than terminating it.
+
 Project files are opened and saved through Rust Tauri commands. Saves stage data in the destination directory, sync it to disk, then atomically replace the target; the frontend validates project data with the shared Zod schema before saving and after opening.
 
 ### State management
