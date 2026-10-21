@@ -76,7 +76,7 @@ describe("ProtoFlow project schema", () => {
   it("creates a valid starter project with a UUID start screen", () => {
     const project = createEmptyProject("Checkout flow");
 
-    expect(project.schemaVersion).toBe("1.2.0");
+    expect(project.schemaVersion).toBe("1.3.0");
     expect(project.name).toBe("Checkout flow");
     expect(project.screens).toHaveLength(1);
     expect(project.screens[0].id).toBe(project.startScreenId);
@@ -97,7 +97,7 @@ describe("ProtoFlow project schema", () => {
     const project = createCompleteProject();
     const { symbols: _symbols, ...legacy } = project;
     const migrated = parseProject({ ...legacy, schemaVersion: "1.0.0" });
-    expect(migrated.schemaVersion).toBe("1.2.0");
+    expect(migrated.schemaVersion).toBe("1.3.0");
     expect(migrated.symbols).toEqual([]);
   });
 
@@ -121,6 +121,14 @@ describe("ProtoFlow project schema", () => {
       initial: 2,
       scope: "project",
     }]);
+  });
+
+  it("migrates version 1.2 interaction rules to the current format", () => {
+    const project = createCompleteProject();
+    const migrated = parseProject({ ...project, schemaVersion: "1.2.0" });
+    expect(migrated.schemaVersion).toBe("1.3.0");
+    expect(migrated.screens[0].interactionRules[0].conditionMode).toBe("all");
+    expect(migrated.screens[0].interactionRules[0].widgetId).toBeUndefined();
   });
 
   it("requires valid names, unique scope names, and a screen for local variables", () => {

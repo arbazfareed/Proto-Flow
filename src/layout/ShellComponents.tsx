@@ -77,6 +77,7 @@ import { CANVAS_ICON_NAMES } from "../canvas/iconLibrary";
 import { useWalletStore } from "../wallet/store";
 import { WalletHistoryDialog } from "./WalletHistoryDialog";
 import { VariablesPanel } from "./VariablesPanel";
+import { InteractionBuilder } from "./InteractionBuilder";
 
 const CanvasStage = lazy(() =>
   import("../canvas/CanvasStage").then((module) => ({
@@ -1935,7 +1936,7 @@ function TextSizeControl({ widgets }: { widgets: Widget[] }) {
 }
 
 export function RightInspector({ onToggle, onUpdates, onRename }: RightInspectorProps) {
-  const [inspectorTab, setInspectorTab] = useState<"design" | "responsive">("design");
+  const [inspectorTab, setInspectorTab] = useState<"design" | "responsive" | "interactions">("design");
   const project = useStore((state) => state.project);
   const activeScreenId = useStore((state) => state.getActiveScreenId());
   const selectedIds = useStore((state) => state.selectedIds);
@@ -2016,15 +2017,30 @@ export function RightInspector({ onToggle, onUpdates, onRename }: RightInspector
           >
             Responsive
           </button>
+          <button
+            id="inspector-interactions-tab"
+            role="tab"
+            aria-selected={inspectorTab === "interactions"}
+            aria-controls="inspector-interactions-panel"
+            className={inspectorTab === "interactions" ? "inspector-tab is-active" : "inspector-tab"}
+            onClick={() => setInspectorTab("interactions")}
+            disabled={!selectedWidget}
+          >
+            Interactions
+          </button>
         </div>
         {inspectorTab === "design" ? (
           <div id="inspector-design-panel" role="tabpanel" aria-labelledby="inspector-design-tab">
             <GeometrySection widgets={selectedWidgets} />
             <StyleSection widgets={selectedWidgets} />
           </div>
-        ) : selectedWidget && selectedScreen ? (
+        ) : inspectorTab === "responsive" && selectedWidget && selectedScreen ? (
           <div id="inspector-responsive-panel" role="tabpanel" aria-labelledby="inspector-responsive-tab">
             <ResponsivePanel screen={selectedScreen} widget={selectedWidget} />
+          </div>
+        ) : selectedWidget && selectedScreen ? (
+          <div id="inspector-interactions-panel" role="tabpanel" aria-labelledby="inspector-interactions-tab">
+            <InteractionBuilder project={project} screen={selectedScreen} widget={selectedWidget} />
           </div>
         ) : null}
         <div className="inspector-rule" />

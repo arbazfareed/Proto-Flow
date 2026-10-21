@@ -3,8 +3,8 @@ import { DEFAULT_DEVICE_PRESET, toScreenDevice } from "../devices/catalog";
 import { ScreenDeviceSchema } from "../devices/schema";
 import type { ScreenDevice } from "../devices/types";
 
-export const PROJECT_SCHEMA_VERSION = "1.2.0";
-const LEGACY_PROJECT_SCHEMA_VERSIONS = new Set(["1.0.0", "1.1.0"]);
+export const PROJECT_SCHEMA_VERSION = "1.3.0";
+const LEGACY_PROJECT_SCHEMA_VERSIONS = new Set(["1.0.0", "1.1.0", "1.2.0"]);
 const COORDINATE_LIMIT = 100_000;
 const HexColorSchema = z
   .string()
@@ -86,7 +86,17 @@ export const InteractionActionSchema = z
 export const InteractionRuleSchema = z
   .object({
     id: z.string().uuid(),
-    event: z.enum(["onClick", "onHover", "onChange", "onLoad"]),
+    widgetId: z.string().uuid().optional(),
+    event: z.enum([
+      "onClick",
+      "onHover",
+      "onChange",
+      "onLoad",
+      "onTap",
+      "onTouchStart",
+      "onTouchEnd",
+    ]),
+    conditionMode: z.enum(["all", "any"]).optional(),
     conditions: z.array(InteractionConditionSchema),
     actions: z.array(InteractionActionSchema).min(1),
   })
@@ -398,13 +408,37 @@ export function parseProject(raw: unknown): Project {
           }
           const oldVariable = variable as Record<string, unknown>;
           const { defaultValue, ...rest } = oldVariable;
-          return {
-            ...rest,
-            scope: oldVariable.scope ?? "project",
-            initial: oldVariable.initial ?? defaultValue ?? (
+          const migratedVariable = { ...rest };
+          if (!("scope" in migratedVariable)) migratedVariable.scope = "project";
+          if (!("initial" in migratedVariable)) {
+            migratedVariable.initial = defaultValue ?? (
               oldVariable.type === "string" ? "" :
                 oldVariable.type === "number" ? 0 : false
-            ),
+            );
+          }
+          return migratedVariable;
+        })
+      : [];
+    const screens = "screens" in value && Array.isArray(value.screens)
+      ? value.screens.map((screen: unknown) => {
+          if (typeof screen !== "object" || screen === null || Array.isArray(screen)) {
+            return screen;
+          }
+          const oldScreen = screen as Record<string, unknown>;
+          return {
+            ...oldScreen,
+            interactionRules: Array.isArray(oldScreen.interactionRules)
+              ? oldScreen.interactionRules.map((rule: unknown) => {
+                  if (typeof rule !== "object" || rule === null || Array.isArray(rule)) {
+                    return rule;
+                  }
+                  const oldRule = rule as Record<string, unknown>;
+                  return {
+                    ...oldRule,
+                    conditionMode: oldRule.conditionMode ?? "all",
+                  };
+                })
+              : oldScreen.interactionRules,
           };
         })
       : [];
@@ -413,6 +447,7 @@ export function parseProject(raw: unknown): Project {
       schemaVersion: PROJECT_SCHEMA_VERSION,
       symbols: "symbols" in value && Array.isArray(value.symbols) ? value.symbols : [],
       variables,
+      screens,
     };
   }
 
