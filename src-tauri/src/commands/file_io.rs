@@ -12,8 +12,11 @@ use tauri_plugin_dialog::{DialogExt, FilePath};
 use uuid::Uuid;
 
 const MAX_PROJECT_FILE_BYTES: u64 = 10 * 1024 * 1024;
+const MAX_HTML_EXPORT_FILE_BYTES: usize = 100 * 1024 * 1024;
 const PROJECT_EXTENSION: &str = "pflow";
 const PROJECT_FILTER_NAME: &str = "Proto Flow project";
+const HTML_EXPORT_EXTENSION: &str = "zip";
+const HTML_EXPORT_FILTER_NAME: &str = "HTML bundle archive";
 const MAX_IMAGE_FILE_BYTES: u64 = 25 * 1024 * 1024;
 const IMAGE_ASSET_DIRECTORY: &str = "assets";
 
@@ -93,7 +96,7 @@ struct StagedProjectFile {
 }
 
 impl StagedProjectFile {
-    fn create(target: &Path, content: &str) -> Result<Self, String> {
+    fn create(target: &Path, content: &[u8]) -> Result<Self, String> {
         let parent = target
             .parent()
             .filter(|parent| !parent.as_os_str().is_empty())
@@ -111,7 +114,7 @@ impl StagedProjectFile {
                 .open(&temp_path)
             {
                 Ok(mut file) => {
-                    if let Err(error) = write_and_sync(&mut file, content.as_bytes()) {
+                    if let Err(error) = write_and_sync(&mut file, content) {
                         let _ = fs::remove_file(&temp_path);
                         return Err(format!("Could not write temporary project file: {error}"));
                     }
@@ -200,7 +203,70 @@ fn atomic_write_project(path: &Path, content: &str) -> Result<(), String> {
     if content.len() as u64 > MAX_PROJECT_FILE_BYTES {
         return Err("This project file exceeds the 10 MB limit.".into());
     }
-    StagedProjectFile::create(path, content)?.commit(path)
+    StagedProjectFile::create(path, content.as_bytes())?.commit(path)
+}
+
+fn with_html_export_extension(path: PathBuf) -> Result<PathBuf, String> {
+    match path.extension().and_then(|extension| extension.to_str()) {
+        None => Ok(path.with_extension(HTML_EXPORT_EXTENSION)),
+        Some(extension) if extension.eq_ignore_ascii_case(HTML_EXPORT_EXTENSION) => Ok(path),
+        Some(_) => Err("HTML bundle exports must use the .zip extension.".into()),
+    }
+}
+
+fn safe_html_export_filename(filename: &str) -> String {
+    let file_name = Path::new(filename)
+        .file_name()
+        .and_then(|name| name.to_str())
+        .unwrap_or("prototype-html-export");
+    let sanitized: String = file_name
+        .chars()
+        .map(|character| {
+            if character.is_control() || r#"<>:"/\|?*"#.contains(character) {
+                '-'
+            } else {
+                character
+            }
+        })
+        .collect();
+    let stem = Path::new(&sanitized)
+        .file_stem()
+        .and_then(|stem| stem.to_str())
+        .filter(|stem| !stem.is_empty())
+        .unwrap_or("prototype-html-export");
+    format!("{stem}.{HTML_EXPORT_EXTENSION}")
+}
+
+fn html_export_save_dialog(app: &AppHandle, default_filename: &str) -> Result<Option<PathBuf>, String> {
+    let selected = app
+        .dialog()
+        .file()
+        .add_filter(HTML_EXPORT_FILTER_NAME, &[HTML_EXPORT_EXTENSION])
+        .set_file_name(default_filename)
+        .blocking_save_file();
+    selected
+        .map(|file| {
+            file.into_path()
+                .map_err(|error| format!("Could not resolve the selected export path: {error}"))
+        })
+        .transpose()
+}
+
+fn atomic_write_html_export(path: &Path, bytes: &[u8]) -> Result<(), String> {
+    if bytes.is_empty() {
+        return Err("The generated HTML bundle is empty.".into());
+    }
+    if bytes.len() > MAX_HTML_EXPORT_FILE_BYTES {
+        return Err("The generated HTML bundle exceeds the 100 MiB export limit.".into());
+    }
+    if !path
+        .extension()
+        .and_then(|extension| extension.to_str())
+        .is_some_and(|extension| extension.eq_ignore_ascii_case(HTML_EXPORT_EXTENSION))
+    {
+        return Err("HTML bundle exports must use the .zip extension.".into());
+    }
+    StagedProjectFile::create(path, bytes)?.commit(path)
 }
 
 fn safe_default_filename(filename: &str) -> String {
@@ -293,6 +359,30 @@ pub fn pick_project_save_path(
         return Ok(None);
     };
     path_to_string(&with_project_extension(path)).map(Some)
+}
+
+#[tauri::command]
+pub fn save_html_export(
+    app: AppHandle,
+    default_filename: String,
+    base64: String,
+) -> Result<Option<String>, String> {
+    if base64.len() > MAX_HTML_EXPORT_FILE_BYTES.div_ceil(3) * 4 {
+        return Err("The generated HTML bundle exceeds the 100 MiB export limit.".into());
+    }
+    let bytes = BASE64
+        .decode(base64)
+        .map_err(|error| format!("Could not decode the HTML bundle: {error}"))?;
+    if bytes.len() > MAX_HTML_EXPORT_FILE_BYTES {
+        return Err("The generated HTML bundle exceeds the 100 MiB export limit.".into());
+    }
+    let Some(path) = html_export_save_dialog(&app, &safe_html_export_filename(&default_filename))?
+    else {
+        return Ok(None);
+    };
+    let path = with_html_export_extension(path)?;
+    atomic_write_html_export(&path, &bytes)?;
+    path_to_string(&path).map(Some)
 }
 
 fn project_assets_directory(project_path: &Path) -> Result<PathBuf, String> {
@@ -544,6 +634,35 @@ mod tests {
     }
 
     #[test]
+    fn appends_html_export_extension_only_when_missing() {
+        assert_eq!(
+            with_html_export_extension(PathBuf::from("prototype"))
+                .unwrap()
+                .as_os_str(),
+            Path::new("prototype.zip").as_os_str()
+        );
+        assert_eq!(
+            with_html_export_extension(PathBuf::from("prototype.ZIP"))
+                .unwrap()
+                .as_os_str(),
+            Path::new("prototype.ZIP").as_os_str()
+        );
+        assert!(with_html_export_extension(PathBuf::from("prototype.html")).is_err());
+    }
+
+    #[test]
+    fn sanitizes_html_export_dialog_filename() {
+        assert_eq!(
+            safe_html_export_filename(r"..\unsafe/name?.zip"),
+            "name-.zip"
+        );
+        assert_eq!(
+            safe_html_export_filename("Untitled project.zip"),
+            "Untitled project.zip"
+        );
+    }
+
+    #[test]
     fn sanitizes_dialog_default_filename() {
         assert_eq!(
             safe_default_filename(r"..\unsafe/name?.json"),
@@ -590,7 +709,7 @@ mod tests {
         fs::write(&target, "original content").unwrap();
 
         {
-            let _staged = StagedProjectFile::create(&target, "replacement content").unwrap();
+            let _staged = StagedProjectFile::create(&target, b"replacement content").unwrap();
         }
 
         assert_eq!(fs::read_to_string(&target).unwrap(), "original content");
@@ -604,6 +723,31 @@ mod tests {
         let oversized = "x".repeat(MAX_PROJECT_FILE_BYTES as usize + 1);
 
         assert!(atomic_write_project(&target, &oversized).is_err());
+        assert!(!target.exists());
+    }
+
+    #[test]
+    fn atomically_writes_binary_html_export_archives() {
+        let directory = tempfile::tempdir().unwrap();
+        let target = directory.path().join("prototype.zip");
+        let archive = [0, 1, 2, 255, 0, 128];
+
+        atomic_write_html_export(&target, &archive).unwrap();
+
+        assert_eq!(fs::read(&target).unwrap(), archive);
+        assert_eq!(fs::read_dir(directory.path()).unwrap().count(), 1);
+    }
+
+    #[test]
+    fn rejects_invalid_or_oversized_html_export_archives() {
+        let directory = tempfile::tempdir().unwrap();
+        let invalid_target = directory.path().join("prototype.html");
+        let target = directory.path().join("large.zip");
+        let oversized = vec![0; MAX_HTML_EXPORT_FILE_BYTES + 1];
+
+        assert!(atomic_write_html_export(&invalid_target, b"zip").is_err());
+        assert!(atomic_write_html_export(&target, &oversized).is_err());
+        assert!(!invalid_target.exists());
         assert!(!target.exists());
     }
 

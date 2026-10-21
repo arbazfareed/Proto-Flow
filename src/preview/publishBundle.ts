@@ -1,6 +1,6 @@
 import type { Project } from "../project/schema";
 
-const RUNTIME = String.raw`
+export const PREVIEW_RUNTIME_SCRIPT = String.raw`
 const project = JSON.parse(document.getElementById("project-data").textContent);
 const stage = document.getElementById("stage");
 const screenPicker = document.getElementById("screen-picker");
@@ -125,7 +125,7 @@ function renderWidget(widget, activeScreen) {
     element.append(input, document.createTextNode(shownText));
   } else if (widget.type === "image") {
     const src = typeof widget.props.src === "string" ? widget.props.src : "";
-    if (src.startsWith("data:image/")) {
+    if (src.startsWith("data:image/") || src.startsWith("assets/")) {
       const image = document.createElement("img");
       image.src = src;
       image.alt = text(widget.props.alt || shownText, activeScreen.id);
@@ -175,8 +175,9 @@ function render() {
   }
   backButton.disabled = backStack.length === 0;
   stage.replaceChildren();
-  stage.style.width = activeScreen.device.width + "px";
-  stage.style.height = activeScreen.device.height + "px";
+  const device = activeScreen.device || { width: 1280, height: 800 };
+  stage.style.width = device.width + "px";
+  stage.style.height = device.height + "px";
   for (const widget of [...activeScreen.widgets].sort((a, b) => a.zIndex - b.zIndex)) {
     if (visibility.get(widget.id) === false || widget.visible === false) continue;
     stage.append(renderWidget(widget, activeScreen));
@@ -221,6 +222,12 @@ document.getElementById("restart").addEventListener("click", () => {
 render();
 `;
 
+export const PREVIEW_RUNTIME_STYLES = `*{box-sizing:border-box}html,body{margin:0;min-height:100%;font:14px system-ui,sans-serif;background:#15131b;color:#f5f3fa}
+.toolbar{position:sticky;top:0;z-index:2147483647;display:flex;gap:8px;align-items:center;padding:10px;background:#211e29;border-bottom:1px solid #37323f}
+.toolbar button,.toolbar select{min-height:32px;border:1px solid #494353;border-radius:6px;padding:5px 9px;background:#302b39;color:inherit}
+.toolbar button:disabled{opacity:.45}.stage-wrap{padding:28px;overflow:auto}.stage{position:relative;margin:0 auto;background:#fff;color:#24212b;overflow:hidden;box-shadow:0 12px 42px #0007}
+.widget{position:absolute;overflow:hidden;white-space:pre-wrap}.widget img{width:100%;height:100%;object-fit:cover}.widget textarea,.widget input{max-width:100%;font:inherit}ul{margin:0;padding-left:20px}`;
+
 function escapeHtml(value: string): string {
   return value
     .replaceAll("&", "&amp;")
@@ -251,19 +258,13 @@ export function generatePublishedPreviewHtml(project: Project): string {
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <meta name="referrer" content="no-referrer">
 <title>${title} — ProtoFlow preview</title>
-<style>
-*{box-sizing:border-box}html,body{margin:0;min-height:100%;font:14px system-ui,sans-serif;background:#15131b;color:#f5f3fa}
-.toolbar{position:sticky;top:0;z-index:2147483647;display:flex;gap:8px;align-items:center;padding:10px;background:#211e29;border-bottom:1px solid #37323f}
-.toolbar button,.toolbar select{min-height:32px;border:1px solid #494353;border-radius:6px;padding:5px 9px;background:#302b39;color:inherit}
-.toolbar button:disabled{opacity:.45}.stage-wrap{padding:28px;overflow:auto}.stage{position:relative;margin:0 auto;background:#fff;color:#24212b;overflow:hidden;box-shadow:0 12px 42px #0007}
-.widget{position:absolute;overflow:hidden;white-space:pre-wrap}.widget img{width:100%;height:100%;object-fit:cover}.widget textarea,.widget input{max-width:100%;font:inherit}ul{margin:0;padding-left:20px}
-</style>
+<style>${PREVIEW_RUNTIME_STYLES}</style>
 </head>
 <body>
 <header class="toolbar"><button id="back" type="button" aria-label="Back">Back</button><select id="screen-picker" aria-label="Preview screen"></select><button id="restart" type="button">Restart</button><span>Published with ProtoFlow</span></header>
 <main class="stage-wrap"><section id="stage" class="stage" aria-label="Prototype preview"></section></main>
 <script id="project-data" type="application/json">${projectData}</script>
-<script>${RUNTIME}</script>
+<script>${PREVIEW_RUNTIME_SCRIPT}</script>
 </body>
 </html>`;
 }

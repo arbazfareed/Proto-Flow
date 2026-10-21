@@ -138,6 +138,10 @@ Choose **Publish** in the top bar to generate a self-contained HTML preview and 
 
 Choose **Export code** in the top bar to download a generated Vite + React + TypeScript + Tailwind ZIP for all screens or the selected screen, with controls for interactions, variables, embedded assets, and Tailwind CSS 3 or 4. The Worker validates the `.pflow` schema, builds screen components, React Router routes, widget renderers, and variable/interaction hooks, and charges 3 credits only after archive generation succeeds. Export input is capped at 10 MiB and requests are limited to 10 per device per hour. The free **Export as JSX** option downloads a single TSX component without a package manifest. Extract ZIPs and run `npm install` followed by `npm run dev`.
 
+### PF-T407 — Free local HTML bundle exporter
+
+Choose **Export HTML** to create an offline ZIP entirely on the client, with no cloud request, rate limit, or credit cost. The archive contains `index.html`, `runtime.js`, `style.css`, and an `assets/` folder. Project image assets are packaged as local files, and supported interaction rules, variable interpolation, screen navigation, and runtime controls reuse the local preview renderer. In the desktop app, the native save dialog writes the archive; in a browser, it downloads the ZIP. Remote image URLs are rejected when embedding images so the bundle remains offline and private; disable image assets to omit them.
+
 ### PF-T218 — Layer tree behavior and implementation notes
 
 The layer tree should make the canvas structure and stacking order understandable without rendering miniature shapes or images in each row. Each active screen is a root; its rows distinguish containers, direct screen children, and descendants. The hierarchy view is the default, while category, type, and z-order views remain available. Rows use the shared Lucide element icon mapping, short labels, expandable parent controls, child counts, and CSS-drawn tree branches. Indentation is 16px per level, capped at 80px, and branch lines close at the last visible descendant.

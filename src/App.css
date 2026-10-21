@@ -930,3 +930,8 @@
 .react-export-actions .button { display:flex; align-items:center; gap:6px; }
 .react-export-message { color:var(--text-secondary); }
 .react-export-help code { padding:2px 4px; border-radius:4px; background:var(--surface-raised); }
+.html-export-dialog { width:min(560px,calc(100vw - 32px)); max-height:min(88vh,820px); overflow:auto; }
+.html-export-dialog h2 { margin:7px 0 8px; }
+.html-export-description,.html-export-summary { margin:8px 0 0; color:var(--text-muted); font-size:12px; line-height:1.5; }
+.html-export-summary { font-size:11px; }
+.html-export-dialog .react-export-message { display:flex; align-items:flex-start; gap:6px; overflow-wrap:anywhere; }

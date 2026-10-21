@@ -99,6 +99,7 @@ interface TopBarProps {
   onOpenPreview: () => void;
   onPublishCloudPreview: () => void;
   onExportReactCode: () => void;
+  onExportHtml: () => void;
   onOpenWallet: () => void;
   onNotify: (message: string, isError?: boolean) => void;
   onStartDragging: () => void;
@@ -137,6 +138,7 @@ export function TopBar({
   onOpenPreview,
   onPublishCloudPreview,
   onExportReactCode,
+  onExportHtml,
   onOpenWallet,
   onNotify,
   onStartDragging,
@@ -262,6 +264,9 @@ export function TopBar({
         </button>
         <button className="button button-secondary" aria-label="Export React code" title="Export a React and Tailwind project" onClick={onExportReactCode}>
           <Code2 size={14} /> Export code
+        </button>
+        <button className="button button-secondary" aria-label="Export HTML bundle" title="Export a free offline HTML bundle" onClick={onExportHtml}>
+          <ArrowDownToLine size={14} /> Export HTML
         </button>
         <div className="wallet-menu-anchor" ref={walletMenuRef}>
           <button
