@@ -216,6 +216,12 @@ Select a widget and choose **Interactions** in the inspector to bind click, hove
 
 Choose **Preview** in the editor toolbar to open the current prototype in a separate Tauri window (or a browser popup during web development). The preview renders widgets as DOM elements, listens for project edits over Tauri events or a local `BroadcastChannel`, and preserves runtime values while a project hot-reloads. Its toolbar supports screen navigation/back, restart, desktop/tablet/mobile device sizes, device-frame toggling, and a live variable inspector. Triggered rules execute in order and support navigation, visibility, typed variable, panel-state, and repeater-data actions; runtime errors are logged and shown in the preview rather than terminating it.
 
+### PF-T408 — Real-time collaboration
+
+Choose **Collaborate** to start a session for one credit or join an existing session for free. Collaboration requires a synced cloud wallet and an available Cloudflare Worker with the D1 migration, KV, R2, and Durable Object bindings configured. The host can enable view-only access or end the session; participants share project edits, presence, selections, and cursors over a Yjs-backed WebSocket. Sessions end after four hours without activity, and project snapshots are saved to R2. Browser invite links open ProtoFlow with the session ID; desktop invites use the `protoflow://collaboration/<id>` deep link.
+
+For local development, apply Worker migrations from `cloud/` with `npm run db:apply:local`, then run `npm run dev -- --port 8790`. The local Wrangler environment binds the collaboration Durable Object and allows the Vite origin on port `1420`.
+
 Project files are opened and saved through Rust Tauri commands. Saves stage data in the destination directory, sync it to disk, then atomically replace the target; the frontend validates project data with the shared Zod schema before saving and after opening.
 
 ### State management

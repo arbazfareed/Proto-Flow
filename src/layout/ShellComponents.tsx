@@ -34,6 +34,7 @@ import {
   Wifi,
   WifiOff,
   Zap,
+  UsersRound,
   X,
 } from "lucide-react";
 import { isTauri } from "@tauri-apps/api/core";
@@ -98,6 +99,7 @@ interface TopBarProps {
   onOpenPalette: () => void;
   onOpenPreview: () => void;
   onPublishCloudPreview: () => void;
+  onOpenCollaboration: () => void;
   onExportReactCode: () => void;
   onExportHtml: () => void;
   onOpenWallet: () => void;
@@ -137,6 +139,7 @@ export function TopBar({
   onOpenPalette,
   onOpenPreview,
   onPublishCloudPreview,
+  onOpenCollaboration,
   onExportReactCode,
   onExportHtml,
   onOpenWallet,
@@ -261,6 +264,9 @@ export function TopBar({
         </button>
         <button className="button button-secondary" aria-label="Publish to cloud" title="Publish a shareable cloud preview" onClick={onPublishCloudPreview}>
           <CloudUpload size={14} /> Publish
+        </button>
+        <button className="button button-secondary" aria-label="Open collaboration" title="Start or join a real-time collaboration session" onClick={onOpenCollaboration}>
+          <UsersRound size={14} /> Collaborate
         </button>
         <button className="button button-secondary" aria-label="Export React code" title="Export a React and Tailwind project" onClick={onExportReactCode}>
           <Code2 size={14} /> Export code

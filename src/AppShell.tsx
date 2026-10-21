@@ -14,6 +14,7 @@ import { WalletDialog } from "./layout/WalletDialog";
 import { CloudPreviewDialog } from "./layout/CloudPreviewDialog";
 import { ReactCodeExportDialog } from "./layout/ReactCodeExportDialog";
 import { HtmlExportDialog } from "./layout/HtmlExportDialog";
+import { CollaborationDialog } from "./layout/CollaborationDialog";
 import { CommandPalette } from "./layout/CommandPalette";
 import { commandRegistry, createCoreCommands } from "./commands/registry";
 import { handleGlobalShortcut } from "./commands/shortcuts";
@@ -55,6 +56,9 @@ function AppShell() {
   const [cloudPreviewOpen, setCloudPreviewOpen] = useState(false);
   const [reactExportOpen, setReactExportOpen] = useState(false);
   const [htmlExportOpen, setHtmlExportOpen] = useState(false);
+  const [collaborationMounted, setCollaborationMounted] = useState(false);
+  const [collaborationOpen, setCollaborationOpen] = useState(false);
+  const [collaborationInviteId, setCollaborationInviteId] = useState<string | null>(null);
   const walletInitializationStarted = useRef(false);
   const previewConnected = useRef(false);
   const syncWallet = useWalletStore((state) => state.sync);
@@ -64,6 +68,24 @@ function AppShell() {
     setNotice(message);
     setNoticeIsError(isError);
     window.setTimeout(() => setNotice(""), 4000);
+  }, []);
+
+  const openCollaboration = useCallback(() => {
+    setCollaborationMounted(true);
+    setCollaborationOpen(true);
+  }, []);
+  const closeCollaboration = useCallback(() => setCollaborationOpen(false), []);
+  const setActiveCollaboration = useCallback((sessionId: string | null) => {
+    setCollaborationInviteId(sessionId);
+    if (!sessionId) setCollaborationMounted(false);
+  }, []);
+
+  useEffect(() => {
+    const sessionId = new URLSearchParams(window.location.search).get("collab");
+    if (!sessionId || !/^[A-Za-z0-9_-]{24}$/.test(sessionId)) return;
+    setCollaborationInviteId(sessionId);
+    setCollaborationMounted(true);
+    setCollaborationOpen(true);
   }, []);
 
   useEffect(() => {
@@ -136,6 +158,18 @@ function AppShell() {
     try {
       callback = new URL(value);
     } catch {
+      return;
+    }
+
+    const collaborationMatch =
+      callback.protocol === "protoflow:" &&
+      callback.hostname === "collaboration" &&
+      /^\/[A-Za-z0-9_-]{24}$/.test(callback.pathname);
+    if (collaborationMatch) {
+      const sessionId = callback.pathname.slice(1);
+      setCollaborationInviteId(sessionId);
+      setCollaborationMounted(true);
+      setCollaborationOpen(true);
       return;
     }
 
@@ -473,6 +507,7 @@ function AppShell() {
         onOpenPalette={() => setPaletteOpen(true)}
         onOpenPreview={() => void openPreview()}
         onPublishCloudPreview={() => setCloudPreviewOpen(true)}
+        onOpenCollaboration={openCollaboration}
         onExportReactCode={() => setReactExportOpen(true)}
         onExportHtml={() => setHtmlExportOpen(true)}
         onOpenWallet={() => setWalletOpen(true)}
@@ -515,6 +550,14 @@ function AppShell() {
       {cloudPreviewOpen && <CloudPreviewDialog onClose={() => setCloudPreviewOpen(false)} />}
       {reactExportOpen && <ReactCodeExportDialog onClose={() => setReactExportOpen(false)} />}
       {htmlExportOpen && <HtmlExportDialog onClose={() => setHtmlExportOpen(false)} />}
+      {collaborationMounted && (
+        <CollaborationDialog
+          open={collaborationOpen}
+          initialSessionId={collaborationInviteId}
+          onClose={closeCollaboration}
+          onSessionActive={setActiveCollaboration}
+        />
+      )}
 
       {notice && (
         <div className={`toast${noticeIsError ? " toast-error" : ""}`} role={noticeIsError ? "alert" : "status"}>

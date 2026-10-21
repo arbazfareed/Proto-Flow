@@ -52,6 +52,7 @@ export type LedgerReason =
   | "sign_in_bonus"
   | "account_merge_cap"
   | "action:ai_generate"
+  | "action:collaboration"
   | "action:cloud_publish"
   | "action:code_export"
   | "admin_adjust";
@@ -107,6 +108,7 @@ interface DailyClaimResponse extends WalletResponse {
 
 export type MeteredActionType =
   | "ai_interaction_generator"
+  | "collaboration_session"
   | "cloud_preview_publish"
   | "react_tailwind_code_export";
 
@@ -114,6 +116,14 @@ export interface ReactCodeArchive {
   fileName: string;
   zipBase64: string;
   sizeBytes: number;
+}
+
+export interface CollaborationSession {
+  id: string;
+  projectName: string;
+  createdAt: string;
+  expiresAt: string;
+  viewOnly: boolean;
 }
 
 export interface MeteredActionResponse<T = unknown> {
@@ -920,7 +930,9 @@ export async function runMeteredAction<T = unknown>(
     throw new WalletApiError("The action payload must contain valid JSON values.", false, "INVALID_PAYLOAD");
   }
   const maximumBytes =
-    type === "cloud_preview_publish" || type === "react_tailwind_code_export"
+    type === "cloud_preview_publish" ||
+    type === "collaboration_session" ||
+    type === "react_tailwind_code_export"
       ? MAX_LARGE_ACTION_REQUEST_BYTES
       : 64 * 1024;
   if (new TextEncoder().encode(body).byteLength > maximumBytes) {
@@ -1043,6 +1055,87 @@ export async function unpublishPreview(token: string, id: string): Promise<void>
     response.success !== true
   ) {
     throw new Error("The cloud service returned an invalid unpublish response.");
+  }
+}
+
+export async function createCollaborationConnectTicket(
+  token: string,
+  sessionId: string,
+  displayName: string,
+): Promise<string> {
+  if (!/^[A-Za-z0-9_-]{24}$/.test(sessionId) || !displayName.trim() || displayName.length > 40) {
+    throw new Error("The collaboration session or display name is invalid.");
+  }
+  const response = await authenticatedRequest<unknown>(
+    `/collaboration/${encodeURIComponent(sessionId)}/connect-ticket`,
+    token,
+    { method: "POST", body: JSON.stringify({ displayName: displayName.trim() }) },
+  );
+  if (
+    typeof response !== "object" ||
+    response === null ||
+    Array.isArray(response) ||
+    !("ticket" in response) ||
+    typeof response.ticket !== "string" ||
+    response.ticket.length < 40 ||
+    response.ticket.length > 100
+  ) {
+    throw new Error("The collaboration service returned an invalid connection ticket.");
+  }
+  return response.ticket;
+}
+
+export function collaborationSocketUrl(sessionId: string, ticket: string): string {
+  if (!/^[A-Za-z0-9_-]{24}$/.test(sessionId) || ticket.length < 40 || ticket.length > 100) {
+    throw new Error("The collaboration connection details are invalid.");
+  }
+  const url = new URL(`${apiBaseUrl()}/collaboration/${encodeURIComponent(sessionId)}/socket`);
+  url.protocol = url.protocol === "https:" ? "wss:" : "ws:";
+  url.searchParams.set("ticket", ticket);
+  return url.toString();
+}
+
+export async function updateCollaborationPermissions(
+  token: string,
+  sessionId: string,
+  viewOnly: boolean,
+): Promise<void> {
+  if (!/^[A-Za-z0-9_-]{24}$/.test(sessionId)) {
+    throw new Error("The collaboration session ID is invalid.");
+  }
+  const response = await authenticatedRequest<unknown>(
+    `/collaboration/${encodeURIComponent(sessionId)}/permissions`,
+    token,
+    { method: "POST", body: JSON.stringify({ viewOnly }) },
+  );
+  if (
+    typeof response !== "object" ||
+    response === null ||
+    Array.isArray(response) ||
+    !("viewOnly" in response) ||
+    response.viewOnly !== viewOnly
+  ) {
+    throw new Error("The collaboration service returned an invalid permission response.");
+  }
+}
+
+export async function endCollaborationSession(token: string, sessionId: string): Promise<void> {
+  if (!/^[A-Za-z0-9_-]{24}$/.test(sessionId)) {
+    throw new Error("The collaboration session ID is invalid.");
+  }
+  const response = await authenticatedRequest<unknown>(
+    `/collaboration/${encodeURIComponent(sessionId)}/end`,
+    token,
+    { method: "POST" },
+  );
+  if (
+    typeof response !== "object" ||
+    response === null ||
+    Array.isArray(response) ||
+    !("ended" in response) ||
+    response.ended !== true
+  ) {
+    throw new Error("The collaboration service returned an invalid end-session response.");
   }
 }
 

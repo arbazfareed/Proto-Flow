@@ -2,6 +2,7 @@ export interface WorkerEnv {
   DB: D1Database;
   CACHE: KVNamespace;
   ASSETS: R2Bucket;
+  COLLABORATION?: DurableObjectNamespace;
   JWT_SECRET?: string;
   TURNSTILE_SECRET_KEY?: string;
   GEMINI_API_KEY?: string;

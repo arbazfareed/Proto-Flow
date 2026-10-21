@@ -22,6 +22,7 @@ const TELEMETRY_COUNTS_KEY = "protoflow.metered.telemetry.counts";
 
 export const METERED_ACTIONS: Record<MeteredActionType, { name: string; cost: number }> = {
   ai_interaction_generator: { name: "AI interaction generator", cost: 1 },
+  collaboration_session: { name: "real-time collaboration session", cost: 1 },
   cloud_preview_publish: { name: "cloud preview publish", cost: 2 },
   react_tailwind_code_export: { name: "React/Tailwind code export", cost: 3 },
 };
@@ -69,7 +70,9 @@ export function normalizeMeteredActionPayload(
 ): Record<string, unknown> {
   const serializedPayload = JSON.stringify(payload);
   const maxPayloadBytes =
-    actionType === "cloud_preview_publish" || actionType === "react_tailwind_code_export"
+    actionType === "cloud_preview_publish" ||
+    actionType === "collaboration_session" ||
+    actionType === "react_tailwind_code_export"
       ? MAX_LARGE_ACTION_REQUEST_BYTES
       : 64 * 1024;
   if (

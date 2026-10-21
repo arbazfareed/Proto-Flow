@@ -15,6 +15,7 @@ import {
   verifyTurnstileToken,
 } from "./abuse";
 import { requireJwt, signJwt } from "./auth";
+import { CollaborationRoom } from "./collaborationRoom";
 import { registerAdminRoutes, runOperationalAlerts } from "./admin";
 import type { AuthClaims, WorkerEnv } from "./env";
 import { errorResponse } from "./errors";
@@ -97,11 +98,49 @@ app.onError((error, context) => {
   return errorResponse(context, 500, "INTERNAL_ERROR", "An unexpected server error occurred.");
 });
 
+export { CollaborationRoom };
+
 app.notFound((context) =>
   errorResponse(context, 404, "NOT_FOUND", "The requested route does not exist."),
 );
 
 app.get("/health", (context) => context.json({ status: "ok" }));
+
+function generateCollaborationId(): string {
+  const bytes = crypto.getRandomValues(new Uint8Array(18));
+  return btoa(String.fromCharCode(...bytes))
+    .replaceAll("+", "-")
+    .replaceAll("/", "_")
+    .replaceAll("=", "");
+}
+
+function parseCollaborationProject(value: unknown): Record<string, unknown> | null {
+  if (typeof value !== "string") return null;
+  const bytes = new TextEncoder().encode(value);
+  if (bytes.byteLength === 0 || bytes.byteLength > MAX_COLLABORATION_PROJECT_BYTES) return null;
+  let project: unknown;
+  try {
+    project = JSON.parse(value);
+  } catch {
+    return null;
+  }
+  if (
+    typeof project !== "object" ||
+    project === null ||
+    Array.isArray(project)
+  ) {
+    return null;
+  }
+  const projectRecord = project as Record<string, unknown>;
+  if (
+    typeof projectRecord.id !== "string" ||
+    typeof projectRecord.name !== "string" ||
+    !Array.isArray(projectRecord.screens) ||
+    projectRecord.screens.length === 0 ||
+    !Array.isArray(projectRecord.variables)
+  ) return null;
+  return projectRecord;
+}
 
 function getPreviewBaseUrl(requestUrl: string, configuredUrl?: string): string {
   const baseUrl = configuredUrl?.trim() || new URL(requestUrl).origin;
@@ -331,6 +370,8 @@ const DAILY_WINDOW_DAYS = 1;
 const TOKEN_LIFETIME_SECONDS = 24 * 60 * 60;
 const MAX_ACTION_BODY_BYTES = 64 * 1024;
 const MAX_CODE_EXPORT_REQUEST_BYTES = 2 * MAX_CODE_EXPORT_PROJECT_BYTES + 64 * 1024;
+const MAX_COLLABORATION_PROJECT_BYTES = 10 * 1024 * 1024;
+const COLLABORATION_ID_PATTERN = /^[A-Za-z0-9_-]{24}$/;
 const DEVICE_ID_PATTERN = /^[a-f\d]{64}$/i;
 const INSTALL_ID_PATTERN =
   /^[a-f\d]{8}-[a-f\d]{4}-4[a-f\d]{3}-[89ab][a-f\d]{3}-[a-f\d]{12}$/i;
@@ -338,6 +379,7 @@ const UUID_PATTERN =
   /^[a-f\d]{8}-[a-f\d]{4}-[1-8][a-f\d]{3}-[89ab][a-f\d]{3}-[a-f\d]{12}$/i;
 const METERED_ACTION_COSTS = {
   ai_interaction_generator: 1,
+  collaboration_session: 1,
   cloud_preview_publish: 2,
   react_tailwind_code_export: 3,
 } as const;
@@ -1234,6 +1276,7 @@ app.post("/action/run", requireJwt, async (context) => {
   }
   if (
     body.type !== "cloud_preview_publish" &&
+    body.type !== "collaboration_session" &&
     body.type !== "react_tailwind_code_export" &&
     requestSize > MAX_ACTION_BODY_BYTES
   ) {
@@ -1246,9 +1289,16 @@ app.post("/action/run", requireJwt, async (context) => {
   let uploadedPreview: { id: string; objectKey: string } | null = null;
   let publishCharged = false;
   try {
-    const actionLimit = body.type === "ai_interaction_generator" ? 30 : 10;
+    const actionLimit =
+      body.type === "ai_interaction_generator"
+        ? 30
+        : body.type === "collaboration_session"
+          ? 5
+          : 10;
     const actionWindowSeconds =
-      body.type === "cloud_preview_publish" || body.type === "react_tailwind_code_export"
+      body.type === "collaboration_session"
+        ? 24 * 60 * 60
+        : body.type === "cloud_preview_publish" || body.type === "react_tailwind_code_export"
         ? 60 * 60
         : 60;
     const deviceHash = await hashWithSecret(`protoflow-device:${deviceId}`, context.env.JWT_SECRET!);
@@ -1329,6 +1379,135 @@ app.post("/action/run", requireJwt, async (context) => {
         },
         402,
       );
+    }
+
+    if (body.type === "collaboration_session") {
+      const { projectJson, projectName, viewOnly } = body.payload;
+      const project = parseCollaborationProject(projectJson);
+      if (
+        Object.keys(body.payload).length !== 3 ||
+        !Object.hasOwn(body.payload, "projectJson") ||
+        !Object.hasOwn(body.payload, "projectName") ||
+        !Object.hasOwn(body.payload, "viewOnly") ||
+        typeof projectJson !== "string" ||
+        !project ||
+        typeof projectName !== "string" ||
+        !projectName.trim() ||
+        projectName.trim().length > 120 ||
+        typeof viewOnly !== "boolean"
+      ) {
+        return errorResponse(
+          context,
+          400,
+          "INVALID_PAYLOAD",
+          "Provide a valid project under 10 MiB, a project name, and a view-only setting.",
+        );
+      }
+      const sessionId = generateCollaborationId();
+      const objectKey = `collaboration/${sessionId}/initial.json`;
+      const createdAt = new Date().toISOString();
+      const expiresAt = new Date(Date.now() + 4 * 60 * 60 * 1000).toISOString();
+      const projectBytes = new TextEncoder().encode(projectJson).byteLength;
+      const metadata = JSON.stringify({
+        projectBytes,
+        viewOnly,
+      });
+      let sessionCharged = false;
+      try {
+        await context.env.ASSETS.put(objectKey, projectJson, {
+          httpMetadata: { contentType: "application/json" },
+        });
+        const ledgerId = crypto.randomUUID();
+        const results = await context.env.DB.batch([
+          context.env.DB.prepare(
+            `UPDATE wallets
+             SET balance = balance - ?, lifetime_spent = lifetime_spent + ?, updated_at = ?
+             WHERE account_id = ? AND balance >= ?`,
+          ).bind(cost, cost, createdAt, accountId, cost),
+          context.env.DB.prepare(
+            `INSERT INTO collaboration_sessions
+               (id, account_id, project_name, object_key, created_at, last_activity_at, expires_at, view_only)
+             SELECT ?, ?, ?, ?, ?, ?, ?, ? WHERE changes() = 1`,
+          ).bind(
+            sessionId,
+            accountId,
+            projectName.trim(),
+            objectKey,
+            createdAt,
+            createdAt,
+            expiresAt,
+            viewOnly ? 1 : 0,
+          ),
+          context.env.DB.prepare(
+            `INSERT INTO ledger (id, account_id, delta, reason, metadata_json, created_at)
+             SELECT ?, ?, -?, 'action:collaboration', ?, ? WHERE changes() = 1`,
+          ).bind(ledgerId, accountId, cost, metadata, createdAt),
+          context.env.DB.prepare(
+            `INSERT INTO usage_events (id, account_id, event_type, metadata_json)
+             SELECT ?, ?, 'collaboration_session', ? WHERE changes() = 1`,
+          ).bind(crypto.randomUUID(), accountId, metadata),
+        ]);
+        if (results.some((result) => !result.success)) {
+          throw new Error("The collaboration session charge transaction did not complete.");
+        }
+        if (results[0]?.meta?.changes !== 1) {
+          await context.env.ASSETS.delete(objectKey);
+          const latestWallet = await context.env.DB.prepare(
+            "SELECT balance FROM wallets WHERE account_id = ?",
+          ).bind(accountId).first<{ balance: number }>();
+          return context.json(
+            {
+              error: {
+                code: "INSUFFICIENT_BALANCE",
+                message: "Your wallet balance changed before this session started. No credits were deducted.",
+              },
+              balance: latestWallet?.balance ?? 0,
+              required: cost,
+            },
+            402,
+          );
+        }
+        sessionCharged = true;
+        const { wallet: updatedWallet, recentLedger } = await loadWallet(
+          context.env.DB,
+          accountId,
+          createdAt,
+        );
+        return context.json({
+          success: true,
+          type: body.type,
+          result: {
+            id: sessionId,
+            projectName: projectName.trim(),
+            createdAt,
+            expiresAt,
+            viewOnly,
+          },
+          wallet: {
+            accountId,
+            email: null,
+            balance: updatedWallet.balance,
+            lifetimeGranted: updatedWallet.lifetime_granted,
+            lifetimeSpent: updatedWallet.lifetime_spent,
+            recentLedger,
+            claimable: updatedWallet.claimable === 1,
+            nextClaimAt: nextClaimAt(updatedWallet.last_granted_at),
+            syncedAt: Date.now(),
+          },
+        });
+      } catch (error) {
+        if (!sessionCharged) {
+          try {
+            await context.env.ASSETS.delete(objectKey);
+          } catch (cleanupError) {
+            console.error("Could not remove an uncharged collaboration project.", {
+              sessionId,
+              message: cleanupError instanceof Error ? cleanupError.message : "Unknown storage error.",
+            });
+          }
+        }
+        throw error;
+      }
     }
 
     if (body.type === "cloud_preview_publish") {
@@ -1681,6 +1860,243 @@ app.post("/action/run", requireJwt, async (context) => {
   }
 });
 
+interface CollaborationTicket {
+  sessionId: string;
+  accountId: string;
+  displayName: string;
+}
+
+function randomTicket(): string {
+  return btoa(String.fromCharCode(...crypto.getRandomValues(new Uint8Array(32))))
+    .replaceAll("+", "-")
+    .replaceAll("/", "_")
+    .replaceAll("=", "");
+}
+
+app.post("/collaboration/:id/connect-ticket", requireJwt, async (context) => {
+  const sessionId = context.req.param("id");
+  if (!COLLABORATION_ID_PATTERN.test(sessionId)) {
+    return errorResponse(context, 404, "SESSION_NOT_FOUND", "This collaboration session does not exist.");
+  }
+  let body: unknown;
+  try {
+    body = await context.req.json();
+  } catch {
+    return errorResponse(context, 400, "INVALID_PAYLOAD", "A display name is required.");
+  }
+  if (typeof body !== "object" || body === null || Array.isArray(body)) {
+    return errorResponse(context, 400, "INVALID_PAYLOAD", "Choose a display name up to 40 characters.");
+  }
+  const ticketBody = body as Record<string, unknown>;
+  if (
+    Object.keys(body).length !== 1 ||
+    typeof ticketBody.displayName !== "string" ||
+    !ticketBody.displayName.trim() ||
+    ticketBody.displayName.trim().length > 40
+  ) {
+    return errorResponse(context, 400, "INVALID_PAYLOAD", "Choose a display name up to 40 characters.");
+  }
+  const accountId = context.get("auth").accountId;
+  const deviceHash = await hashWithSecret(
+    `protoflow-device:${context.get("auth").deviceId}`,
+    context.env.JWT_SECRET!,
+  );
+  const rateLimit = await enforceRateLimit(
+    context,
+    `device:collaboration-join:${deviceHash}`,
+    60,
+    60,
+    "device",
+  );
+  if (rateLimit) return rateLimit;
+  try {
+    const session = await context.env.DB.prepare(
+      `SELECT account_id, ended_at, expires_at
+       FROM collaboration_sessions WHERE id = ?`,
+    ).bind(sessionId).first<{
+      account_id: string;
+      ended_at: string | null;
+      expires_at: string;
+    }>();
+    if (!session || session.ended_at || Date.parse(session.expires_at) <= Date.now()) {
+      return errorResponse(context, 410, "SESSION_ENDED", "This collaboration session has ended.");
+    }
+    const ticket = randomTicket();
+    const key = `collaboration-ticket:${await hashWithSecret(ticket, context.env.JWT_SECRET!)}`;
+    const value: CollaborationTicket = {
+      sessionId,
+      accountId,
+      displayName: ticketBody.displayName.trim(),
+    };
+    await context.env.CACHE.put(key, JSON.stringify(value), { expirationTtl: 60 });
+    return context.json({ ticket, expiresIn: 60 });
+  } catch (error) {
+    console.error("Could not create a collaboration connection ticket.", {
+      sessionId,
+      message: error instanceof Error ? error.message : "Unknown ticket error.",
+    });
+    return errorResponse(context, 503, "COLLABORATION_UNAVAILABLE", "Could not join this session. Please try again.");
+  }
+});
+
+app.get("/collaboration/:id/socket", async (context) => {
+  const sessionId = context.req.param("id");
+  const ticket = context.req.query("ticket");
+  if (
+    !COLLABORATION_ID_PATTERN.test(sessionId) ||
+    !ticket ||
+    ticket.length > 100 ||
+    context.req.header("Upgrade")?.toLowerCase() !== "websocket"
+  ) {
+    return errorResponse(context, 400, "INVALID_CONNECTION", "A valid collaboration WebSocket ticket is required.");
+  }
+  const secret = context.env.JWT_SECRET;
+  if (!secret || !context.env.COLLABORATION) {
+    return errorResponse(context, 503, "SERVICE_NOT_CONFIGURED", "Collaboration is not configured.");
+  }
+  try {
+    const ticketKey = `collaboration-ticket:${await hashWithSecret(ticket, secret)}`;
+    const serialized = await context.env.CACHE.get(ticketKey);
+    await context.env.CACHE.delete(ticketKey);
+    if (!serialized) {
+      return errorResponse(context, 401, "INVALID_TICKET", "This collaboration link expired. Rejoin from the editor.");
+    }
+    const claims = JSON.parse(serialized) as CollaborationTicket;
+    if (claims.sessionId !== sessionId) {
+      return errorResponse(context, 401, "INVALID_TICKET", "This collaboration ticket is invalid.");
+    }
+    const session = await context.env.DB.prepare(
+      `SELECT account_id, object_key, view_only, ended_at, expires_at
+       FROM collaboration_sessions WHERE id = ?`,
+    ).bind(sessionId).first<{
+      account_id: string;
+      object_key: string;
+      view_only: number;
+      ended_at: string | null;
+      expires_at: string;
+    }>();
+    if (!session || session.ended_at || Date.parse(session.expires_at) <= Date.now()) {
+      return errorResponse(context, 410, "SESSION_ENDED", "This collaboration session has ended.");
+    }
+    const account = await context.env.DB.prepare(
+      "SELECT id FROM accounts WHERE id = ? AND merged_into IS NULL AND deleted_at IS NULL",
+    ).bind(claims.accountId).first<{ id: string }>();
+    if (!account) return errorResponse(context, 401, "INVALID_TICKET", "The collaboration account is no longer active.");
+
+    const role = claims.accountId === session.account_id
+      ? "host"
+      : session.view_only === 1 ? "viewer" : "editor";
+    const displayName = claims.displayName.replace(/[\u0000-\u001f\u007f]/g, "").slice(0, 40);
+    const stub = context.env.COLLABORATION.get(context.env.COLLABORATION.idFromName(sessionId));
+    const headers = new Headers({
+      Upgrade: "websocket",
+      "X-Collab-Room": sessionId,
+      "X-Collab-Object-Key": session.object_key,
+      "X-Collab-Account": claims.accountId,
+      "X-Collab-Role": role,
+      "X-Collab-Name": displayName || "Designer",
+    });
+    return await stub.fetch(new Request("https://collaboration.internal/connect", {
+      method: "GET",
+      headers,
+    }));
+  } catch (error) {
+    console.error("Could not open a collaboration WebSocket.", {
+      sessionId,
+      message: error instanceof Error ? error.message : "Unknown connection error.",
+    });
+    return errorResponse(context, 503, "COLLABORATION_UNAVAILABLE", "The collaboration service could not connect.");
+  }
+});
+
+app.post("/collaboration/:id/permissions", requireJwt, async (context) => {
+  const sessionId = context.req.param("id");
+  if (!COLLABORATION_ID_PATTERN.test(sessionId)) {
+    return errorResponse(context, 404, "SESSION_NOT_FOUND", "This collaboration session does not exist.");
+  }
+  const accountId = context.get("auth").accountId;
+  let body: unknown;
+  try {
+    body = await context.req.json();
+  } catch {
+    return errorResponse(context, 400, "INVALID_PAYLOAD", "Provide a valid view-only setting.");
+  }
+  if (typeof body !== "object" || body === null || Array.isArray(body)) {
+    return errorResponse(context, 400, "INVALID_PAYLOAD", "Provide a valid view-only setting.");
+  }
+  const permissionsBody = body as Record<string, unknown>;
+  if (
+    Object.keys(body).length !== 1 ||
+    typeof permissionsBody.viewOnly !== "boolean"
+  ) {
+    return errorResponse(context, 400, "INVALID_PAYLOAD", "Provide a valid view-only setting.");
+  }
+  try {
+    const session = await context.env.DB.prepare(
+      "SELECT account_id, ended_at FROM collaboration_sessions WHERE id = ?",
+    ).bind(sessionId).first<{ account_id: string; ended_at: string | null }>();
+    if (!session || session.ended_at) {
+      return errorResponse(context, 410, "SESSION_ENDED", "This collaboration session has ended.");
+    }
+    if (session.account_id !== accountId) {
+      return errorResponse(context, 403, "HOST_REQUIRED", "Only the session host can change participant permissions.");
+    }
+    const viewOnly = permissionsBody.viewOnly as boolean;
+    const result = await context.env.DB.prepare(
+      "UPDATE collaboration_sessions SET view_only = ? WHERE id = ? AND ended_at IS NULL",
+    ).bind(viewOnly ? 1 : 0, sessionId).run();
+    if (!result.success) throw new Error("The session permissions could not be saved.");
+    if (!context.env.COLLABORATION) {
+      return errorResponse(context, 503, "COLLABORATION_UNAVAILABLE", "The collaboration service is not configured.");
+    }
+    const stub = context.env.COLLABORATION.get(context.env.COLLABORATION.idFromName(sessionId));
+    const response = await stub.fetch(new Request("https://collaboration.internal/permissions", {
+      method: "POST",
+      headers: { "X-Collab-Role": "host", "Content-Type": "application/json" },
+      body: JSON.stringify({ viewOnly }),
+    }));
+    if (!response.ok) throw new Error("The collaboration room could not update permissions.");
+    return context.json({ viewOnly });
+  } catch (error) {
+    console.error("Could not update collaboration permissions.", {
+      sessionId,
+      message: error instanceof Error ? error.message : "Unknown permission error.",
+    });
+    return errorResponse(context, 503, "COLLABORATION_UNAVAILABLE", "The session permissions could not be updated.");
+  }
+});
+
+app.post("/collaboration/:id/end", requireJwt, async (context) => {
+  const sessionId = context.req.param("id");
+  if (!COLLABORATION_ID_PATTERN.test(sessionId)) {
+    return errorResponse(context, 404, "SESSION_NOT_FOUND", "This collaboration session does not exist.");
+  }
+  try {
+    const session = await context.env.DB.prepare(
+      "SELECT account_id, ended_at FROM collaboration_sessions WHERE id = ?",
+    ).bind(sessionId).first<{ account_id: string; ended_at: string | null }>();
+    if (!session) return errorResponse(context, 404, "SESSION_NOT_FOUND", "This collaboration session does not exist.");
+    if (session.account_id !== context.get("auth").accountId) {
+      return errorResponse(context, 403, "HOST_REQUIRED", "Only the session host can end this collaboration.");
+    }
+    if (!session.ended_at) {
+      if (!context.env.COLLABORATION) {
+        return errorResponse(context, 503, "COLLABORATION_UNAVAILABLE", "The collaboration service is not configured.");
+      }
+      const stub = context.env.COLLABORATION.get(context.env.COLLABORATION.idFromName(sessionId));
+      const response = await stub.fetch(new Request("https://collaboration.internal/end", { method: "POST" }));
+      if (!response.ok) throw new Error("The collaboration room could not be closed.");
+    }
+    return context.json({ ended: true });
+  } catch (error) {
+    console.error("Could not end collaboration session.", {
+      sessionId,
+      message: error instanceof Error ? error.message : "Unknown session error.",
+    });
+    return errorResponse(context, 503, "COLLABORATION_UNAVAILABLE", "The collaboration session could not be ended.");
+  }
+});
+
 app.post("/action/feedback", requireJwt, async (context) => {
   let body: unknown;
   try {
@@ -1852,6 +2268,33 @@ export async function runScheduledTasks(env: WorkerEnv): Promise<void> {
   if (new Date().getUTCDay() === 1) await sendAbuseDigest(env);
 }
 
+async function endInactiveCollaborationSessions(env: WorkerEnv): Promise<number> {
+  const collaboration = env.COLLABORATION;
+  if (!collaboration) return 0;
+  const cutoff = new Date(Date.now() - 4 * 60 * 60 * 1000).toISOString();
+  const sessions = await env.DB.prepare(
+    "SELECT id FROM collaboration_sessions WHERE ended_at IS NULL AND last_activity_at <= ? LIMIT 100",
+  ).bind(cutoff).all<{ id: string }>();
+  if (!sessions.success) throw new Error("Could not find inactive collaboration sessions.");
+  let ended = 0;
+  for (const { id } of sessions.results) {
+    try {
+      const room = collaboration.get(collaboration.idFromName(id));
+      const response = await room.fetch(new Request("https://collaboration.internal/end", {
+        method: "POST",
+      }));
+      if (!response.ok) throw new Error(`Session finalization returned ${response.status}.`);
+      ended += 1;
+    } catch (error) {
+      console.error("Could not automatically end an inactive collaboration session.", {
+        sessionId: id,
+        message: error instanceof Error ? error.message : "Unknown cleanup error.",
+      });
+    }
+  }
+  return ended;
+}
+
 export default {
   fetch: (request: Request, env: WorkerEnv, executionContext: ExecutionContext) =>
     app.fetch(request, env, executionContext),
@@ -1861,8 +2304,14 @@ export default {
         message: error instanceof Error ? error.message : "Unknown preview cleanup error.",
       });
     });
+    const collaborationCleanup = endInactiveCollaborationSessions(env).catch((error: unknown) => {
+      console.error("Scheduled collaboration cleanup failed.", {
+        message: error instanceof Error ? error.message : "Unknown cleanup error.",
+      });
+    });
     executionContext.waitUntil(Promise.all([
       previewCleanup,
+      collaborationCleanup,
       event.cron === "0 * * * *" ? runOperationalAlerts(env) : runScheduledTasks(env),
     ]).then(() => undefined));
   },

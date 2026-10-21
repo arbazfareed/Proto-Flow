@@ -23,11 +23,19 @@ id = "00000000000000000000000000000000"
 binding = "ASSETS"
 bucket_name = "protoflow-assets"
 
+[[durable_objects.bindings]]
+name = "COLLABORATION"
+class_name = "CollaborationRoom"
+
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["CollaborationRoom"]
+
 [observability]
 enabled = true
 
 [env.local.vars]
-ALLOWED_ORIGINS = "tauri://localhost,https://tauri.localhost,http://tauri.localhost,http://localhost:1420"
+ALLOWED_ORIGINS = "tauri://localhost,https://tauri.localhost,http://tauri.localhost,http://localhost:1420,http://127.0.0.1:1420"
 ADMIN_ALLOWED_ORIGINS = "http://localhost:1422"
 
 [[env.local.d1_databases]]
@@ -43,3 +51,11 @@ id = "00000000000000000000000000000000"
 [[env.local.r2_buckets]]
 binding = "ASSETS"
 bucket_name = "protoflow-assets"
+
+[[env.local.durable_objects.bindings]]
+name = "COLLABORATION"
+class_name = "CollaborationRoom"
+
+[[env.local.migrations]]
+tag = "v1"
+new_sqlite_classes = ["CollaborationRoom"]
