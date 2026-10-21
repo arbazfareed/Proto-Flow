@@ -4,6 +4,7 @@ export interface WorkerEnv {
   ASSETS: R2Bucket;
   JWT_SECRET?: string;
   TURNSTILE_SECRET_KEY?: string;
+  GEMINI_API_KEY?: string;
   RESEND_API_KEY?: string;
   AUTH_EMAIL_FROM?: string;
   GOOGLE_CLIENT_ID?: string;

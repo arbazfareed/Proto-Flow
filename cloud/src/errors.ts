@@ -7,6 +7,8 @@ export type ErrorCode =
   | "ADMIN_NOT_IMPLEMENTED"
   | "ADMIN_OPERATION_FAILED"
   | "ACTION_NOT_IMPLEMENTED"
+  | "AI_PROVIDER_UNAVAILABLE"
+  | "AI_RESPONSE_INVALID"
   | "ADJUSTMENT_REJECTED"
   | "AUTH_NOT_IMPLEMENTED"
   | "ABUSE_REVIEW_REQUIRED"
@@ -25,6 +27,7 @@ export type ErrorCode =
   | "MISSING_TOKEN"
   | "NOT_FOUND"
   | "ORIGIN_NOT_ALLOWED"
+  | "PROMPT_REJECTED"
   | "SERVICE_NOT_CONFIGURED"
   | "TURNSTILE_INVALID"
   | "TURNSTILE_REQUIRED"
@@ -38,7 +41,7 @@ export type ErrorCode =
 
 export function errorResponse(
   context: Context,
-  status: 400 | 401 | 402 | 403 | 404 | 405 | 409 | 410 | 429 | 500 | 501 | 503,
+  status: 400 | 401 | 402 | 403 | 404 | 405 | 409 | 410 | 422 | 429 | 500 | 501 | 502 | 503,
   code: ErrorCode,
   message: string,
 ) {

@@ -12,6 +12,7 @@ import {
   provisionAnonymousWallet,
   resetWalletIdentity,
   runMeteredAction,
+  submitInteractionFeedback,
   signOutAccount,
   startEmailSignIn,
   startGoogleSignIn,
@@ -328,11 +329,34 @@ describe("wallet persistence", () => {
         type: "ai_interaction_generator",
         payload: { screenId: "screen-1" },
       });
+
       expect(request.headers).toMatchObject({ Authorization: "Bearer session-token" });
       expect(result).toMatchObject({
         result: { prompt: "ready" },
         wallet: { balance: 49, lifetimeSpent: 1, recentLedger: [{ delta: -1 }] },
       });
+    });
+
+    it("submits AI feedback without including the prompt or charging credits", async () => {
+      const fetchMock = vi.fn().mockResolvedValue(
+        new Response(JSON.stringify({ success: true }), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        }),
+      );
+      vi.stubGlobal("fetch", fetchMock);
+
+      await expect(
+        submitInteractionFeedback("session-token", "20000000-0000-4000-8000-000000000002", "positive"),
+      ).resolves.toBeUndefined();
+
+      const [url, request] = fetchMock.mock.calls[0] as [string, RequestInit];
+      expect(url).toContain("/action/feedback");
+      expect(JSON.parse(request.body as string)).toEqual({
+        ruleId: "20000000-0000-4000-8000-000000000002",
+        feedback: "positive",
+      });
+      expect(JSON.stringify(request.body)).not.toContain("prompt");
     });
 
     it("surfaces insufficient balance and Retry-After responses as structured errors", async () => {

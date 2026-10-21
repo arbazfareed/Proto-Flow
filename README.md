@@ -48,7 +48,7 @@ The element library includes dedicated canvas visuals for avatars, icon buttons,
 
 ### Phase 3 — Cloud API gateway scaffold
 
-`cloud/` contains the Cloudflare Workers/Hono API scaffold for PF-T301. It defines local Wrangler bindings for D1 (`DB`), KV (`CACHE`), and R2 (`ASSETS`), repeatable D1 migrations plus standalone `schema.sql`, origin allowlisting, consistent JSON errors, and HS256 Bearer JWT verification for wallet routes. Anonymous wallet provisioning, authenticated wallet reads, daily claims, optional email/Google account linking, and Cloudflare Access-protected admin endpoints are implemented. Metered action execution remains an explicit `501` stub; admin endpoints fail closed until Access settings are configured.
+`cloud/` contains the Cloudflare Workers/Hono API scaffold for PF-T301. It defines local Wrangler bindings for D1 (`DB`), KV (`CACHE`), and R2 (`ASSETS`), repeatable D1 migrations plus standalone `schema.sql`, origin allowlisting, consistent JSON errors, and HS256 Bearer JWT verification for wallet routes. Anonymous wallet provisioning, authenticated wallet reads, daily claims, optional email/Google account linking, and Cloudflare Access-protected admin endpoints are implemented. PF-T404 AI interaction generation is metered and enabled; publish and export actions still return an explicit `501` without deducting credits. Admin endpoints fail closed until Access settings are configured.
 
 Use Node.js 20.19+ or 22.12+:
 
@@ -73,7 +73,7 @@ For local development, start the Worker with `cd cloud; npm run dev`, then start
 
 ### PF-T303 — Client wallet and balance pill
 
-The always-visible top-bar pill uses green for 20+ credits, yellow for 5–19, and red for fewer than 5. Its dropdown shows lifetime totals, the latest 20 ledger entries, sync/offline status, refresh, and a daily claim when available. Wallet snapshots (not JWTs) are cached in local storage; desktop JWTs stay in the operating system credential store, and browser-preview JWTs use session storage. The UI syncs on launch, when the app becomes visible, and every 60 seconds while active. Email and Google sign-in are optional and available from wallet settings; metered actions are not yet implemented and remain unavailable offline.
+The always-visible top-bar pill uses green for 20+ credits, yellow for 5–19, and red for fewer than 5. Its dropdown shows lifetime totals, the latest 20 ledger entries, sync/offline status, refresh, and a daily claim when available. Wallet snapshots (not JWTs) are cached in local storage; desktop JWTs stay in the operating system credential store, and browser-preview JWTs use session storage. The UI syncs on launch, when the app becomes visible, and every 60 seconds while active. Email and Google sign-in are optional and available from wallet settings; metered actions remain unavailable offline.
 
 ### PF-T305 — Daily refill and abuse limits
 
@@ -97,7 +97,7 @@ The Worker exposes the authenticated wallet ledger at `GET /wallet/ledger` with 
 
 `cloud/admin/` is a separate React/Vite static dashboard for Cloudflare Pages. Configure the Pages project root as `cloud/admin`, build command `npm run build`, and output directory `dist`. Protect the Pages hostname with a Cloudflare Access self-hosted application and an exact-email Allow policy; also protect the Worker API hostname with Access. The Worker independently verifies `Cf-Access-Jwt-Assertion` using the Access JWKS issuer, app audience, and `ADMIN_ALLOWED_EMAILS`, and fails closed when those values are absent.
 
-The dashboard provides account search/detail, ledger and flag review, bounded manual adjustments, temporary read-only flags, bulk unflag/daily refill reissue, 30-day usage/cost estimates, and an audit log. Usage data does not store prompts, raw device identifiers, or IP addresses. Metered action handlers remain unavailable; current usage counts are request attempts and do not imply completed provider calls or charges. Hourly anomaly checks can send deduplicated alerts to a configured Resend email and/or HTTPS webhook. Configure Access, origins, alert destinations, and rough service rates in Worker environment variables; never commit their values. Apply `0007_admin_audit_usage.sql` before enabling the dashboard against D1. Setup details are in `cloud/admin/README.md`.
+The dashboard provides account search/detail, ledger and flag review, bounded manual adjustments, temporary read-only flags, bulk unflag/daily refill reissue, 30-day usage/cost estimates, and an audit log. AI usage records token counts only; prompts, raw device identifiers, and IP addresses are not stored. AI credits are charged only after provider output passes rule and context-reference validation. Publish and code export are not implemented and do not charge credits. Hourly anomaly checks can send deduplicated alerts to a configured Resend email and/or HTTPS webhook. Configure Access, origins, alert destinations, and rough service rates in Worker environment variables; never commit their values. Apply `0007_admin_audit_usage.sql` before enabling the dashboard against D1. Setup details are in `cloud/admin/README.md`.
 
 ### PF-T306 — Device identity and offline resilience
 
@@ -122,7 +122,11 @@ For local development, put provider values in the ignored `cloud/.dev.vars` file
 
 Use `useMeteredAction` from `src/wallet/meteredActions.tsx` for cloud actions. It checks the online wallet and balance, requires confirmation for paid actions unless the user has opted out for that action and account, and sends only the action type and JSON payload. The Worker owns the action cost map (1 credit for AI interaction generation, 2 for cloud preview publish, and 3 for React/Tailwind export); the client never sends a cost. Insufficient funds prompt the user to claim the daily refill. Rate-limit, network, invalid-request, and server-error responses have separate user-facing messages. Usage telemetry is an on-device aggregate, disabled until the user opts in.
 
-The AI, publish, and export execution handlers are intentionally out of scope for this task. Until a later task implements them, the Worker validates the action and wallet balance, then returns an explicit not-available response without deducting credits. No current app feature invokes a metered cloud action yet.
+### PF-T404 — AI interaction generator
+
+Choose **Generate with AI** in the selected widget's Interactions tab, describe the behavior, and choose whether to include the current screen or only that widget as context. Prompt examples are available. The Worker rate-limits AI requests, strips HTML/script markup, rejects likely instruction overrides, and calls the currently supported Gemini 2.5 Flash model in JSON mode (the requested Gemini 1.5 Flash model is no longer listed in Google's current model catalog). It retries malformed output at most twice, validates the generated rule against the shared `InteractionRuleSchema` and supplied variables/screens/widgets, and then atomically records the one-credit ledger debit and provider token counts. Provider errors and invalid output do not deduct credits. The generated rule is highlighted, editable, and unsaved until the user explicitly saves interactions. Thumbs feedback is stored separately without charging credits.
+
+For local tests, AI provider calls are mocked; no live Gemini request is made. To try real generation, configure your own key in ignored `cloud/.dev.vars`, apply migration `0008_ai_interaction_feedback.sql` with the other Worker migrations, and restart the Worker. Publish and export handlers remain unavailable and do not deduct credits.
 
 ### PF-T218 — Layer tree behavior and implementation notes
 

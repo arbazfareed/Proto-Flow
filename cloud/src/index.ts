@@ -1,4 +1,5 @@
 import { Hono } from "hono";
+import { AiInteractionError, generateInteractionRule } from "./aiInteraction";
 import { registerAccountAuthRoutes } from "./accountAuth";
 import {
   activeAbuseFlag,
@@ -9,7 +10,7 @@ import {
   verifyTurnstileToken,
 } from "./abuse";
 import { requireJwt, signJwt } from "./auth";
-import { registerAdminRoutes, recordUsageEvent, runOperationalAlerts } from "./admin";
+import { registerAdminRoutes, runOperationalAlerts } from "./admin";
 import type { AuthClaims, WorkerEnv } from "./env";
 import { errorResponse } from "./errors";
 
@@ -155,6 +156,8 @@ const MAX_ACTION_BODY_BYTES = 64 * 1024;
 const DEVICE_ID_PATTERN = /^[a-f\d]{64}$/i;
 const INSTALL_ID_PATTERN =
   /^[a-f\d]{8}-[a-f\d]{4}-4[a-f\d]{3}-[89ab][a-f\d]{3}-[a-f\d]{12}$/i;
+const UUID_PATTERN =
+  /^[a-f\d]{8}-[a-f\d]{4}-[1-8][a-f\d]{3}-[89ab][a-f\d]{3}-[a-f\d]{12}$/i;
 const METERED_ACTION_COSTS = {
   ai_interaction_generator: 1,
   cloud_preview_publish: 2,
@@ -1136,20 +1139,98 @@ app.post("/action/run", requireJwt, async (context) => {
       );
     }
 
-    const usageEventType = body.type === "ai_interaction_generator"
-      ? "ai_generate"
-      : body.type === "cloud_preview_publish"
-        ? "cloud_publish"
-        : "code_export";
-    // These handlers are still intentionally unavailable; count requests, not fabricated provider usage or cost.
-    await recordUsageEvent(context.env, accountId, usageEventType, {});
+    if (body.type !== "ai_interaction_generator") {
+      return errorResponse(
+        context,
+        501,
+        "ACTION_NOT_IMPLEMENTED",
+        "This cloud action is not available yet. No credits were deducted.",
+      );
+    }
 
-    return errorResponse(
-      context,
-      501,
-      "ACTION_NOT_IMPLEMENTED",
-      "This cloud action is not available yet. No credits were deducted.",
-    );
+    let generated: Awaited<ReturnType<typeof generateInteractionRule>>;
+    try {
+      generated = await generateInteractionRule(context.env, body.payload);
+    } catch (error) {
+      if (error instanceof AiInteractionError) {
+        if (error.code === "PROMPT_REJECTED") {
+          console.warn("Rejected a suspected AI prompt injection.", {
+            accountId,
+            reason: "instruction_override",
+          });
+          return errorResponse(context, 400, "PROMPT_REJECTED", error.message);
+        }
+        if (error.code === "INVALID_PAYLOAD") {
+          return errorResponse(context, 400, "INVALID_PAYLOAD", error.message);
+        }
+        if (error.code === "INVALID_RESPONSE") {
+          return errorResponse(context, 502, "AI_RESPONSE_INVALID", error.message);
+        }
+        return errorResponse(context, 503, "AI_PROVIDER_UNAVAILABLE", error.message);
+      }
+      throw error;
+    }
+
+    const chargedAt = new Date().toISOString();
+    const ledgerId = crypto.randomUUID();
+    const usageMetadata = JSON.stringify({
+      inputTokens: generated.inputTokens,
+      outputTokens: generated.outputTokens,
+    });
+    const chargeResults = await context.env.DB.batch([
+      context.env.DB.prepare(
+        `UPDATE wallets
+         SET balance = balance - ?, lifetime_spent = lifetime_spent + ?, updated_at = ?
+         WHERE account_id = ? AND balance >= ?`,
+      ).bind(cost, cost, chargedAt, accountId, cost),
+      context.env.DB.prepare(
+        `INSERT INTO ledger (id, account_id, delta, reason, metadata_json, created_at)
+         SELECT ?, ?, -?, 'action:ai_generate', ?, ? WHERE changes() = 1`,
+      ).bind(ledgerId, accountId, cost, usageMetadata, chargedAt),
+      context.env.DB.prepare(
+        `INSERT INTO usage_events (id, account_id, event_type, metadata_json)
+         SELECT ?, ?, 'ai_generate', ? WHERE changes() = 1`,
+      ).bind(crypto.randomUUID(), accountId, usageMetadata),
+    ]);
+    if (chargeResults.some((result) => !result.success)) {
+      throw new Error("The AI action charge transaction did not complete.");
+    }
+    if (chargeResults[0]?.meta?.changes !== 1) {
+      const latestWallet = await context.env.DB
+        .prepare("SELECT balance FROM wallets WHERE account_id = ?")
+        .bind(accountId)
+        .first<{ balance: number }>();
+      return context.json(
+        {
+          error: {
+            code: "INSUFFICIENT_BALANCE",
+            message: "Your wallet balance changed before this action completed. No credits were deducted.",
+          },
+          balance: latestWallet?.balance ?? 0,
+          required: cost,
+        },
+        402,
+      );
+    }
+
+    const now = new Date().toISOString();
+    const { wallet: updatedWallet, recentLedger } = await loadWallet(context.env.DB, accountId, now);
+    return context.json({
+      success: true,
+      type: body.type,
+      result: generated.rule,
+      wallet: {
+        accountId,
+        email: null,
+        balance: updatedWallet.balance,
+        lifetimeGranted: updatedWallet.lifetime_granted,
+        lifetimeSpent: updatedWallet.lifetime_spent,
+        recentLedger,
+        claimable: updatedWallet.claimable === 1,
+        nextClaimAt: nextClaimAt(updatedWallet.last_granted_at),
+        syncedAt: Date.now(),
+      },
+    });
   } catch (error) {
     console.error("Metered action dispatch failed.", {
       accountId,
@@ -1162,6 +1243,60 @@ app.post("/action/run", requireJwt, async (context) => {
       "DATABASE_UNAVAILABLE",
       "The wallet service is temporarily unavailable.",
     );
+  }
+});
+
+app.post("/action/feedback", requireJwt, async (context) => {
+  let body: unknown;
+  try {
+    body = await context.req.json();
+  } catch {
+    return errorResponse(context, 400, "INVALID_PAYLOAD", "A valid JSON feedback body is required.");
+  }
+  if (
+    typeof body !== "object" ||
+    body === null ||
+    Array.isArray(body) ||
+    Object.keys(body).length !== 2 ||
+    !("ruleId" in body) ||
+    !("feedback" in body) ||
+    typeof body.ruleId !== "string" ||
+    !UUID_PATTERN.test(body.ruleId) ||
+    (body.feedback !== "positive" && body.feedback !== "negative")
+  ) {
+    return errorResponse(context, 400, "INVALID_PAYLOAD", "Provide a valid interaction rule ID and feedback vote.");
+  }
+
+  const accountId = context.get("auth").accountId;
+  const deviceHash = await hashWithSecret(
+    `protoflow-device:${context.get("auth").deviceId}`,
+    context.env.JWT_SECRET!,
+  );
+  const rateLimit = await enforceRateLimit(
+    context,
+    `device:action-feedback:${deviceHash}`,
+    30,
+    60,
+    "device",
+  );
+  if (rateLimit) return rateLimit;
+
+  try {
+    const result = await context.env.DB.prepare(
+      `INSERT INTO ai_interaction_feedback (id, account_id, rule_id, feedback)
+       VALUES (?, ?, ?, ?)
+       ON CONFLICT (account_id, rule_id) DO UPDATE SET
+         feedback = excluded.feedback,
+         created_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')`,
+    ).bind(crypto.randomUUID(), accountId, body.ruleId, body.feedback).run();
+    if (!result.success) throw new Error("The AI interaction feedback could not be saved.");
+    return context.json({ success: true });
+  } catch (error) {
+    console.error("AI interaction feedback could not be recorded.", {
+      accountId,
+      message: error instanceof Error ? error.message : "Unknown database error.",
+    });
+    return errorResponse(context, 503, "DATABASE_UNAVAILABLE", "Feedback could not be saved. Please try again.");
   }
 });
 

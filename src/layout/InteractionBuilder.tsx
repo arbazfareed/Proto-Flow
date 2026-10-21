@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { ArrowDown, ArrowUp, Plus, Play, Trash2 } from "lucide-react";
+import { ArrowDown, ArrowUp, Plus, Play, Sparkles, ThumbsDown, ThumbsUp, Trash2 } from "lucide-react";
 import type {
   InteractionAction,
   InteractionCondition,
@@ -9,13 +9,16 @@ import type {
   VariableDefinition,
   Widget,
 } from "../project/schema";
-import { parseProject } from "../project/schema";
+import { InteractionRuleSchema, parseProject } from "../project/schema";
 import {
   createInteractionRule,
   testInteractionRule,
   validateInteractionRules,
 } from "../project/interactions";
 import { useStore } from "../store";
+import { submitInteractionFeedback } from "../wallet/api";
+import { useMeteredAction } from "../wallet/meteredActions";
+import { useWalletStore } from "../wallet/store";
 
 const EVENTS = [
   ["onClick", "Click"],
@@ -140,6 +143,34 @@ export function InteractionBuilder({
   const [rules, setRules] = useState<InteractionRule[]>([]);
   const [savedRules, setSavedRules] = useState<InteractionRule[]>([]);
   const [testMessage, setTestMessage] = useState("");
+  const [aiOpen, setAiOpen] = useState(false);
+  const [aiPrompt, setAiPrompt] = useState("");
+  const [aiContextScope, setAiContextScope] = useState<"widget" | "screen">("screen");
+  const [generatedRuleId, setGeneratedRuleId] = useState<string | null>(null);
+  const [feedbackStatus, setFeedbackStatus] = useState("");
+  const aiPayload = useMemo(() => ({
+    prompt: aiPrompt,
+    widgetContext: {
+      id: widget.id,
+      name: widget.name ?? widget.type,
+      type: widget.type,
+      screenId: screen.id,
+      screenName: screen.name,
+      text: [widget.props.text, widget.props.label, widget.props.title]
+        .find((value): value is string => typeof value === "string") ?? "",
+    },
+    variables: project.variables
+      .filter((variable) => variable.scope === "project" || variable.screenId === screen.id)
+      .map(({ name, type, scope, initial }) => ({ name, type, scope, initial })),
+    screens: project.screens.map(({ id, name }) => ({ id, name })),
+    widgets: (aiContextScope === "screen" ? screen.widgets : [widget]).map((item) => ({
+      id: item.id,
+      name: item.name ?? item.type,
+      type: item.type,
+      screenId: screen.id,
+    })),
+  }), [aiContextScope, aiPrompt, project.screens, project.variables, screen.id, screen.name, screen.widgets, widget]);
+  const aiGenerator = useMeteredAction<InteractionRule>("ai_interaction_generator", aiPayload);
 
   const relevantRules = useMemo(
     () => rules.filter((rule) => rule.widgetId === widget.id || !rule.widgetId),
@@ -220,6 +251,34 @@ export function InteractionBuilder({
       : "Conditions did not match the variables' initial values.");
   };
 
+  const generateRule = async () => {
+    setFeedbackStatus("");
+    const result = await aiGenerator.run();
+    if (!result) return;
+    const parsedRule = InteractionRuleSchema.safeParse(result);
+    if (!parsedRule.success || parsedRule.data.widgetId !== widget.id) {
+      setFeedbackStatus("The AI returned an invalid rule. No changes were saved.");
+      return;
+    }
+    setRules((current) => [...current, parsedRule.data]);
+    setGeneratedRuleId(parsedRule.data.id);
+    setFeedbackStatus("AI rule added for review. Save interactions when you're ready.");
+  };
+
+  const sendFeedback = async (ruleId: string, feedback: "positive" | "negative") => {
+    const token = useWalletStore.getState().jwt;
+    if (!token) {
+      setFeedbackStatus("Your wallet session expired. Refresh it before sending feedback.");
+      return;
+    }
+    try {
+      await submitInteractionFeedback(token, ruleId, feedback);
+      setFeedbackStatus("Thanks for your feedback.");
+    } catch (error) {
+      setFeedbackStatus(error instanceof Error ? error.message : "Could not send AI feedback.");
+    }
+  };
+
   return (
     <section className="interaction-builder" aria-label="Interaction rules">
       <div className="interaction-builder-heading">
@@ -227,15 +286,63 @@ export function InteractionBuilder({
           <strong>TRIGGERS</strong>
           <p>Rules for {widget.name ?? widget.type}</p>
         </div>
-        <button type="button" className="interaction-add-button" onClick={addRule}>
-          <Plus size={13} /> Add rule
-        </button>
+        <div className="interaction-builder-actions">
+          <button type="button" className="interaction-add-button" onClick={() => setAiOpen((open) => !open)}>
+            <Sparkles size={13} /> Generate with AI
+          </button>
+          <button type="button" className="interaction-add-button" onClick={addRule}>
+            <Plus size={13} /> Add rule
+          </button>
+        </div>
       </div>
+      {aiOpen && (
+        <div className="interaction-ai-generator" aria-label="AI interaction generator">
+          <label htmlFor="interaction-ai-prompt">Describe the interaction</label>
+          <textarea
+            id="interaction-ai-prompt"
+            aria-label="Describe the interaction"
+            maxLength={2000}
+            placeholder="For example: When clicked, set isOpen to true."
+            value={aiPrompt}
+            onChange={(event) => setAiPrompt(event.currentTarget.value)}
+          />
+          <div className="interaction-ai-options">
+            <label>Context
+              <select aria-label="AI context" value={aiContextScope} onChange={(event) =>
+                setAiContextScope(event.currentTarget.value as "widget" | "screen")
+              }>
+                <option value="screen">Current screen</option>
+                <option value="widget">Selected widget only</option>
+              </select>
+            </label>
+            <label>Example
+              <select aria-label="Prompt examples" value="" onChange={(event) => {
+                if (event.currentTarget.value) setAiPrompt(event.currentTarget.value);
+                event.currentTarget.value = "";
+              }}>
+                <option value="">Choose an example</option>
+                <option value="When clicked, navigate to the next screen.">Click to navigate</option>
+                <option value="When clicked, set the selected boolean variable to true.">Click to set a variable</option>
+                <option value="When the input changes, update its bound variable.">Input changes a variable</option>
+              </select>
+            </label>
+          </div>
+          <button
+            type="button"
+            className="interaction-ai-submit"
+            disabled={aiGenerator.isRunning || aiPrompt.trim().length === 0}
+            onClick={() => void generateRule()}
+          >
+            <Sparkles size={12} /> {aiGenerator.isRunning ? "Generating…" : "Generate (1 credit)"}
+          </button>
+          {aiGenerator.error && <p className="interaction-issue is-error" role="alert">{aiGenerator.error}</p>}
+        </div>
+      )}
       {relevantRules.length === 0 ? (
         <p className="interaction-empty">No interactions yet.</p>
       ) : relevantRules.map((rule, index) => (
         <article
-          className="interaction-rule-card"
+          className={`interaction-rule-card${generatedRuleId === rule.id ? " is-ai-generated" : ""}`}
           key={rule.id}
           draggable
           onDragStart={(event) => event.dataTransfer.setData("text/plain", rule.id)}
@@ -493,6 +600,13 @@ export function InteractionBuilder({
             <p className={`interaction-issue is-${issue.severity}`} key={`${issue.code}-${issueIndex}`}>{issue.message}</p>
           ))}
           <button type="button" className="interaction-test-button" onClick={() => runTest(rule)}><Play size={11} /> Test rule</button>
+          {generatedRuleId === rule.id && (
+            <div className="interaction-ai-feedback" aria-label="AI generation feedback">
+              <span>AI-generated · review before saving</span>
+              <button type="button" aria-label="AI result was helpful" onClick={() => void sendFeedback(rule.id, "positive")}><ThumbsUp size={12} /></button>
+              <button type="button" aria-label="AI result was not helpful" onClick={() => void sendFeedback(rule.id, "negative")}><ThumbsDown size={12} /></button>
+            </div>
+          )}
         </article>
       ))}
       {unsaved && hasBlockingErrors && (
@@ -509,6 +623,7 @@ export function InteractionBuilder({
         </select>
       </label>
       {testMessage && <p className="interaction-test-result" role="status">{testMessage}</p>}
+      {feedbackStatus && <p className="interaction-test-result" role="status">{feedbackStatus}</p>}
       <button type="button" className="interaction-save-button" disabled={!unsaved || hasBlockingErrors} onClick={save}>
         {unsaved ? "Save interactions" : "Saved"}
       </button>

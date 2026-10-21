@@ -935,3 +935,23 @@ export async function runMeteredAction<T = unknown>(
     wallet: toSnapshot(result.wallet as WalletResponse),
   };
 }
+
+export async function submitInteractionFeedback(
+  token: string,
+  ruleId: string,
+  feedback: "positive" | "negative",
+): Promise<void> {
+  const response = await authenticatedRequest<unknown>("/action/feedback", token, {
+    method: "POST",
+    body: JSON.stringify({ ruleId, feedback }),
+  });
+  if (
+    typeof response !== "object" ||
+    response === null ||
+    Array.isArray(response) ||
+    !("success" in response) ||
+    response.success !== true
+  ) {
+    throw new Error("The cloud service returned an invalid feedback response.");
+  }
+}

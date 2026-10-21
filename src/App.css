@@ -584,10 +584,22 @@
 .responsive-panel { padding:2px 0 8px; }
 .interaction-builder { display:grid; gap:9px; padding:2px 0 10px; }
 .interaction-builder-heading,.interaction-rule-title,.interaction-subheading { display:flex; align-items:center; justify-content:space-between; gap:7px; }
+.interaction-builder-actions { display:flex; flex-wrap:wrap; justify-content:flex-end; gap:4px; }
 .interaction-builder-heading strong,.interaction-rule-title>span { color:#b8b2c7; font-size:9px; letter-spacing:.08em; }
 .interaction-builder-heading p,.interaction-empty { margin:4px 0 0; color:#85858f; font-size:9px; }
 .interaction-add-button,.interaction-subheading button,.interaction-test-button { display:inline-flex; align-items:center; justify-content:center; gap:4px; min-height:23px; padding:3px 6px; border:1px solid #393541; border-radius:4px; color:#d0c4ef; background:#25232a; font-size:9px; cursor:pointer; }
 .interaction-rule-card { display:grid; gap:8px; padding:9px 7px; border:1px solid #303137; border-radius:6px; background:#1b1c20; }
+.interaction-rule-card.is-ai-generated { border-color:#7863a7; box-shadow:0 0 0 1px #7863a733; }
+.interaction-ai-generator { display:grid; gap:7px; padding:9px; border:1px solid #393541; border-radius:6px; background:#201e25; }
+.interaction-ai-generator>label,.interaction-ai-options label { display:grid; gap:4px; color:#b8b2c7; font-size:9px; }
+.interaction-ai-generator textarea,.interaction-ai-options select { min-width:0; width:100%; padding:6px; border:1px solid #373840; border-radius:4px; color:#e1dfe6; background:#202126; font:inherit; font-size:9px; }
+.interaction-ai-generator textarea { min-height:68px; resize:vertical; }
+.interaction-ai-options { display:grid; grid-template-columns:1fr 1fr; gap:6px; }
+.interaction-ai-submit { display:inline-flex; min-height:27px; align-items:center; justify-content:center; gap:5px; border:1px solid #66548d; border-radius:4px; color:#ece5ff; background:#39304b; font-size:9px; cursor:pointer; }
+.interaction-ai-submit:disabled { opacity:.5; cursor:default; }
+.interaction-ai-feedback { display:flex; align-items:center; justify-content:flex-end; gap:5px; color:#aba2bd; font-size:8px; }
+.interaction-ai-feedback span { margin-right:auto; }
+.interaction-ai-feedback button { display:grid; width:23px; height:23px; place-items:center; border:1px solid #393541; border-radius:4px; color:#cfc5e5; background:#25232a; cursor:pointer; }
 .interaction-rule-title>div { display:flex; gap:2px; }
 .interaction-rule-title button,.interaction-condition>button,.interaction-action>button,.interaction-row-controls button { display:grid; width:21px; height:21px; place-items:center; border:0; border-radius:3px; color:#9c9ca6; background:transparent; cursor:pointer; }
 .interaction-rule-title button:hover,.interaction-condition>button:hover,.interaction-action>button:hover,.interaction-row-controls button:hover { color:#eee8ff; background:#302b3a; }

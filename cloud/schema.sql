@@ -147,3 +147,15 @@ CREATE TABLE IF NOT EXISTS usage_events (
 
 CREATE INDEX IF NOT EXISTS usage_events_type_created_idx ON usage_events (event_type, created_at DESC);
 CREATE INDEX IF NOT EXISTS usage_events_account_created_idx ON usage_events (account_id, created_at DESC);
+
+CREATE TABLE IF NOT EXISTS ai_interaction_feedback (
+  id TEXT PRIMARY KEY NOT NULL,
+  account_id TEXT NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
+  rule_id TEXT NOT NULL,
+  feedback TEXT NOT NULL CHECK (feedback IN ('positive', 'negative')),
+  created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+  UNIQUE (account_id, rule_id)
+) STRICT;
+
+CREATE INDEX IF NOT EXISTS ai_interaction_feedback_created_idx
+  ON ai_interaction_feedback (created_at DESC);
