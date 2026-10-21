@@ -2,6 +2,7 @@ import { lazy, Suspense, useCallback, useEffect, useRef, useState } from "react"
 import {
   ArrowDownToLine,
   ArrowRight,
+  Braces,
   Bell,
   CircleAlert,
   ChevronDown,
@@ -75,6 +76,7 @@ import { ElementLibrary } from "./ElementLibrary";
 import { CANVAS_ICON_NAMES } from "../canvas/iconLibrary";
 import { useWalletStore } from "../wallet/store";
 import { WalletHistoryDialog } from "./WalletHistoryDialog";
+import { VariablesPanel } from "./VariablesPanel";
 
 const CanvasStage = lazy(() =>
   import("../canvas/CanvasStage").then((module) => ({
@@ -403,6 +405,7 @@ export function LeftSidebar({
   const project = useStore((state) => state.project);
   const isDirty = useStore((state) => state.isDirty);
   const leftPanelOpen = useStore((state) => state.leftPanelOpen);
+  const [sidebarTab, setSidebarTab] = useState<"elements" | "variables">("elements");
 
   if (!leftPanelOpen) return null;
 
@@ -424,13 +427,37 @@ export function LeftSidebar({
         <div className="nav-item active" aria-current="page"><FileText size={16} /><span>{project.name}</span><span className="nav-unsaved">{isDirty ? "•" : ""}</span></div>
         <button className="nav-item" onClick={onOpen}><FolderOpen size={16} /><span>Open project…</span><kbd>Ctrl O</kbd></button>
       </div>
-      <ElementLibrary
-        activeTool={activeTool}
-        mode="sidebar"
-        onSelectTool={onSelectTool}
-        onAddScreen={onAddScreen}
-      />
-      <SymbolLibrary />
+      <div className="sidebar-tabs" role="tablist" aria-label="Sidebar tools">
+        <button
+          className={`sidebar-tab${sidebarTab === "elements" ? " is-active" : ""}`}
+          type="button"
+          role="tab"
+          aria-selected={sidebarTab === "elements"}
+          onClick={() => setSidebarTab("elements")}
+        >
+          Elements
+        </button>
+        <button
+          className={`sidebar-tab${sidebarTab === "variables" ? " is-active" : ""}`}
+          type="button"
+          role="tab"
+          aria-selected={sidebarTab === "variables"}
+          onClick={() => setSidebarTab("variables")}
+        >
+          <Braces size={13} /> Variables
+        </button>
+      </div>
+      {sidebarTab === "elements" ? (
+        <>
+          <ElementLibrary
+            activeTool={activeTool}
+            mode="sidebar"
+            onSelectTool={onSelectTool}
+            onAddScreen={onAddScreen}
+          />
+          <SymbolLibrary />
+        </>
+      ) : <VariablesPanel />}
       <div className="sidebar-footer">
         <button className="nav-item" onClick={onOpenPalette}><Keyboard size={16} /><span>Keyboard shortcuts</span></button>
         <button className="nav-item" onClick={onUpdates}><CircleHelp size={16} /><span>Help & updates</span></button>

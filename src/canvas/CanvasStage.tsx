@@ -108,6 +108,7 @@ import {
   readImageUrl,
   type ImportedImage,
 } from "./images";
+import { getVariableCompletions } from "../project/variables";
 
 interface CanvasSize {
   width: number;
@@ -640,6 +641,7 @@ export function CanvasStage({
   const contentLayerRef = useRef<KonvaLayer>(null);
   const transformerRef = useRef<Konva.Transformer>(null);
   const imageInputRef = useRef<HTMLInputElement>(null);
+  const textEditorRef = useRef<HTMLTextAreaElement>(null);
   const imageTargetRef = useRef<string | null>(null);
   const cancelEditRef = useRef(false);
   const panGestureRef = useRef<{ pointerId: number; x: number; y: number } | null>(
@@ -679,6 +681,8 @@ export function CanvasStage({
     value: string;
   } | null>(null);
   const [editValue, setEditValue] = useState("");
+  const [editCursor, setEditCursor] = useState(0);
+  const [variableSuggestionIndex, setVariableSuggestionIndex] = useState(0);
   const altHeldRef = useRef(false);
   const pendingGuidesRef = useRef<CanvasGuide[]>([]);
   const dragStartPositionsRef = useRef<Map<string, CanvasPoint> | null>(null);
@@ -705,6 +709,7 @@ export function CanvasStage({
   const activeScreen = useStore((state) =>
     state.project.screens.find((screen) => screen.id === state.getActiveScreenId()),
   );
+  const project = useStore((state) => state.project);
   const symbols = useStore((state) => state.project.symbols);
   const activeBreakpointId = useStore((state) => state.activeBreakpointId);
   const selectedIds = useStore((state) => state.selectedIds);
@@ -1125,8 +1130,11 @@ export function CanvasStage({
       }
       const editable = getEditableWidgetText(widget);
       if (!editable) return;
+      const initialValue = editable.value.slice(0, MAX_WIDGET_TEXT_LENGTH);
       setEditing({ widgetId: widget.id, ...editable });
-      setEditValue(editable.value.slice(0, MAX_WIDGET_TEXT_LENGTH));
+      setEditValue(initialValue);
+      setEditCursor(initialValue.length);
+      setVariableSuggestionIndex(0);
     },
     [openImagePicker],
   );
@@ -1141,6 +1149,25 @@ export function CanvasStage({
     );
     setEditing(null);
   }, [editValue, editing]);
+
+  const variableCompletion = editing && activeScreen
+    ? getVariableCompletions(project, activeScreen.id, editValue, editCursor)
+    : null;
+  const completionVariables = variableCompletion?.variables ?? [];
+  const visibleVariableSuggestions = completionVariables.slice(0, 8);
+  const insertVariableSuggestion = (name: string) => {
+    if (!variableCompletion) return;
+    const insertion = `{{${name}}}`;
+    const value = `${editValue.slice(0, variableCompletion.start)}${insertion}${editValue.slice(variableCompletion.end)}`;
+    const cursor = variableCompletion.start + insertion.length;
+    setEditValue(value);
+    setEditCursor(cursor);
+    setVariableSuggestionIndex(0);
+    requestAnimationFrame(() => {
+      textEditorRef.current?.focus();
+      textEditorRef.current?.setSelectionRange(cursor, cursor);
+    });
+  };
 
   const cancelWidgetTextEdit = useCallback(() => {
     cancelEditRef.current = true;
@@ -2895,41 +2922,91 @@ export function CanvasStage({
         const width = Math.max(80, widget.width * zoom * (toggleLabel ? 1 : 1));
         const height = Math.max(28, widget.height * zoom);
         return (
-          <textarea
-            className="canvas-inline-editor"
-            aria-label={`Edit ${widget.type} text`}
-            style={{
-              left,
-              top,
-              width,
-              height,
-              transform: `rotate(${widget.rotation}deg)`,
-              fontFamily: typeof widget.props.fontFamily === "string" ? widget.props.fontFamily : "Arial",
-              fontSize: `${(typeof widget.props.fontSize === "number" ? widget.props.fontSize : 14) * zoom}px`,
-              lineHeight: String(typeof widget.props.lineHeight === "number" ? widget.props.lineHeight : 1.2),
-            }}
-            maxLength={MAX_WIDGET_TEXT_LENGTH}
-            value={editValue}
-            autoFocus
-            onChange={(event) => setEditValue(event.currentTarget.value.slice(0, MAX_WIDGET_TEXT_LENGTH))}
-            onMouseDown={(event) => event.stopPropagation()}
-            onBlur={() => {
-              if (cancelEditRef.current) {
-                cancelEditRef.current = false;
-                return;
-              }
-              commitWidgetTextEdit();
-            }}
-            onKeyDown={(event) => {
-              if (event.key === "Escape") {
-                event.preventDefault();
-                cancelWidgetTextEdit();
-              } else if (event.key === "Enter" && !event.shiftKey) {
-                event.preventDefault();
+          <>
+            <textarea
+              ref={textEditorRef}
+              className="canvas-inline-editor"
+              aria-label={`Edit ${widget.type} text`}
+              style={{
+                left,
+                top,
+                width,
+                height,
+                transform: `rotate(${widget.rotation}deg)`,
+                fontFamily: typeof widget.props.fontFamily === "string" ? widget.props.fontFamily : "Arial",
+                fontSize: `${(typeof widget.props.fontSize === "number" ? widget.props.fontSize : 14) * zoom}px`,
+                lineHeight: String(typeof widget.props.lineHeight === "number" ? widget.props.lineHeight : 1.2),
+              }}
+              maxLength={MAX_WIDGET_TEXT_LENGTH}
+              value={editValue}
+              autoFocus
+              onChange={(event) => {
+                setEditValue(event.currentTarget.value.slice(0, MAX_WIDGET_TEXT_LENGTH));
+                setEditCursor(event.currentTarget.selectionStart);
+                setVariableSuggestionIndex(0);
+              }}
+              onClick={(event) => setEditCursor(event.currentTarget.selectionStart)}
+              onKeyUp={(event) => setEditCursor(event.currentTarget.selectionStart)}
+              onMouseDown={(event) => event.stopPropagation()}
+              onBlur={() => {
+                if (cancelEditRef.current) {
+                  cancelEditRef.current = false;
+                  return;
+                }
                 commitWidgetTextEdit();
-              }
-            }}
-          />
+              }}
+              onKeyDown={(event) => {
+                if (visibleVariableSuggestions.length > 0 && event.key === "ArrowDown") {
+                  event.preventDefault();
+                  setVariableSuggestionIndex((index) =>
+                    (index + 1) % visibleVariableSuggestions.length,
+                  );
+                } else if (visibleVariableSuggestions.length > 0 && event.key === "ArrowUp") {
+                  event.preventDefault();
+                  setVariableSuggestionIndex((index) =>
+                    (index - 1 + visibleVariableSuggestions.length) % visibleVariableSuggestions.length,
+                  );
+                } else if (
+                  visibleVariableSuggestions.length > 0 &&
+                  (event.key === "Tab" || (event.key === "Enter" && !event.shiftKey))
+                ) {
+                  event.preventDefault();
+                  const suggestion = visibleVariableSuggestions[variableSuggestionIndex];
+                  if (suggestion) insertVariableSuggestion(suggestion.name);
+                } else if (event.key === "Escape") {
+                  event.preventDefault();
+                  cancelWidgetTextEdit();
+                } else if (event.key === "Enter" && !event.shiftKey) {
+                  event.preventDefault();
+                  commitWidgetTextEdit();
+                }
+              }}
+            />
+            {variableCompletion && visibleVariableSuggestions.length > 0 && (
+              <div
+                className="variable-completion-popover"
+                role="listbox"
+                aria-label="Variable suggestions"
+                style={{ left, top: top + height + 4, minWidth: Math.min(width, 220) }}
+              >
+                {visibleVariableSuggestions.map((variable, index) => (
+                  <button
+                    className={`variable-completion-option${index === variableSuggestionIndex ? " is-active" : ""}`}
+                    key={variable.id}
+                    type="button"
+                    role="option"
+                    aria-selected={index === variableSuggestionIndex}
+                    onMouseDown={(event) => event.preventDefault()}
+                    onClick={() => insertVariableSuggestion(variable.name)}
+                  >
+                    <span className="variable-token-chip">{variable.name}</span>
+                    <small>{variable.type} · {variable.scope}</small>
+                  </button>
+                ))}
+                <div className="variable-completion-hint">Enter or Tab to insert</div>
+              </div>
+            )}
+          </>
         );
       })()}
       <div className="canvas-zoom-controls" role="group" aria-label="Canvas view controls">

@@ -182,9 +182,13 @@ Automated tests verify pure math, parser and schema behavior, image payload exte
 
 ### `.pflow` project schema
 
-Version `1.1.0` projects contain UUID-backed project, screen, widget, variable, interaction-rule, and symbol entities. Version `1.0.0` projects are migrated by adding an empty symbol library. A project has at least one screen and a `startScreenId` that refers to one of them; every symbol instance must reference an existing symbol. Widget coordinates are bounded to ±100,000 units, dimensions must be at least one unit, and opacity must be between zero and one. Geometry, visibility, z-order, style, and freeform `props` are validated before a project is loaded or saved.
+Version `1.2.0` projects contain UUID-backed project, screen, widget, variable, interaction-rule, and symbol entities. Versions `1.0.0` and `1.1.0` are migrated to the current format; prior variable defaults are retained as typed initial values. Variables have unique JavaScript-identifier names within project or screen scope, typed initial values, and screen references are checked against existing screens. A project has at least one screen and a `startScreenId` that refers to one of them; every symbol instance must reference an existing symbol. Widget coordinates are bounded to ±100,000 units, dimensions must be at least one unit, and opacity must be between zero and one. Geometry, visibility, z-order, style, and freeform `props` are validated before a project is loaded or saved.
 
 Use `createEmptyProject(name)` to create a starter project and `parseProject(raw)` to validate either a JSON string or an in-memory value. Invalid data throws `SchemaValidationError`, whose `issues` property contains the Zod issue list.
+
+### PF-T401 — Variable management foundation
+
+Use the Variables tab in the left sidebar to create, edit, rename, and delete project- or screen-scoped string, number, and boolean variables. Text editors support `{{variableName}}` completions; renaming a variable updates matching widget text and interaction references. The variable validation panel reports unknown references, unused variables, and interaction type mismatches. Variable definitions are persisted in `.pflow` files and participate in undo/redo. `VariableRuntimeStore` provides per-preview initial values, typed updates, reset, and text interpolation for the preview runtime.
 
 Project files are opened and saved through Rust Tauri commands. Saves stage data in the destination directory, sync it to disk, then atomically replace the target; the frontend validates project data with the shared Zod schema before saving and after opening.
 

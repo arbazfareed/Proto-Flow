@@ -3,32 +3,61 @@ import { DEFAULT_DEVICE_PRESET, toScreenDevice } from "../devices/catalog";
 import { ScreenDeviceSchema } from "../devices/schema";
 import type { ScreenDevice } from "../devices/types";
 
-export const PROJECT_SCHEMA_VERSION = "1.1.0";
-const LEGACY_PROJECT_SCHEMA_VERSION = "1.0.0";
+export const PROJECT_SCHEMA_VERSION = "1.2.0";
+const LEGACY_PROJECT_SCHEMA_VERSIONS = new Set(["1.0.0", "1.1.0"]);
 const COORDINATE_LIMIT = 100_000;
 const HexColorSchema = z
   .string()
   .regex(/^#(?:[\da-f]{3}|[\da-f]{4}|[\da-f]{6}|[\da-f]{8})$/i, "Expected a hex color.");
+const RESERVED_VARIABLE_NAMES = new Set([
+  "await", "break", "case", "catch", "class", "const", "continue", "debugger",
+  "default", "delete", "do", "else", "enum", "export", "extends", "false",
+  "finally", "for", "function", "if", "import", "in", "instanceof", "new",
+  "null", "return", "super", "switch", "this", "throw", "true", "try",
+  "typeof", "var", "void", "while", "with", "yield",
+]);
+
+export function isValidVariableName(name: string): boolean {
+  return /^[A-Za-z_$][\w$]{0,119}$/.test(name) &&
+    !RESERVED_VARIABLE_NAMES.has(name);
+}
 
 const VariableDefinitionBase = z.object({
   id: z.string().uuid(),
-  name: z.string().trim().min(1).max(120),
+  name: z.string().trim().refine(isValidVariableName, "Use a valid variable identifier."),
+  scope: z.enum(["project", "screen"]),
+  screenId: z.string().uuid().optional(),
 });
 
 export const VariableDefinitionSchema = z.discriminatedUnion("type", [
   VariableDefinitionBase.extend({
     type: z.literal("string"),
-    defaultValue: z.string().optional(),
+    initial: z.string(),
   }).strict(),
   VariableDefinitionBase.extend({
     type: z.literal("number"),
-    defaultValue: z.number().finite().optional(),
+    initial: z.number().finite(),
   }).strict(),
   VariableDefinitionBase.extend({
     type: z.literal("boolean"),
-    defaultValue: z.boolean().optional(),
+    initial: z.boolean(),
   }).strict(),
-]);
+]).superRefine((variable, context) => {
+  if (variable.scope === "screen" && !variable.screenId) {
+    context.addIssue({
+      code: "custom",
+      path: ["screenId"],
+      message: "Screen-scoped variables must reference a screen.",
+    });
+  }
+  if (variable.scope === "project" && variable.screenId) {
+    context.addIssue({
+      code: "custom",
+      path: ["screenId"],
+      message: "Project-scoped variables cannot reference a screen.",
+    });
+  }
+});
 
 export const InteractionConditionSchema = z
   .object({
@@ -247,6 +276,27 @@ export const ProtoFlowProjectSchema = z
   })
   .strict()
   .superRefine((project, context) => {
+    const variableNames = new Set<string>();
+    const screenIds = new Set(project.screens.map((screen) => screen.id));
+    for (const [index, variable] of project.variables.entries()) {
+      const scopeKey = `${variable.scope}:${variable.screenId ?? ""}:${variable.name}`;
+      if (variableNames.has(scopeKey)) {
+        context.addIssue({
+          code: "custom",
+          path: ["variables", index, "name"],
+          message: `Variable "${variable.name}" already exists in this scope.`,
+        });
+      }
+      variableNames.add(scopeKey);
+      if (variable.scope === "screen" && variable.screenId && !screenIds.has(variable.screenId)) {
+        context.addIssue({
+          code: "custom",
+          path: ["variables", index, "screenId"],
+          message: "Screen-scoped variable must reference an existing screen.",
+        });
+      }
+    }
+
     const symbolIds = new Set<string>();
     for (const [index, symbol] of project.symbols.entries()) {
       if (symbolIds.has(symbol.id)) {
@@ -338,16 +388,31 @@ export function parseProject(raw: unknown): Project {
     }
   }
 
-  if (
-    typeof value === "object" &&
-    value !== null &&
-    "schemaVersion" in value &&
-    value.schemaVersion === LEGACY_PROJECT_SCHEMA_VERSION
-  ) {
+  if (typeof value === "object" && value !== null && "schemaVersion" in value &&
+    typeof value.schemaVersion === "string" &&
+    LEGACY_PROJECT_SCHEMA_VERSIONS.has(value.schemaVersion)) {
+    const variables = "variables" in value && Array.isArray(value.variables)
+      ? value.variables.map((variable: unknown) => {
+          if (typeof variable !== "object" || variable === null || Array.isArray(variable)) {
+            return variable;
+          }
+          const oldVariable = variable as Record<string, unknown>;
+          const { defaultValue, ...rest } = oldVariable;
+          return {
+            ...rest,
+            scope: oldVariable.scope ?? "project",
+            initial: oldVariable.initial ?? defaultValue ?? (
+              oldVariable.type === "string" ? "" :
+                oldVariable.type === "number" ? 0 : false
+            ),
+          };
+        })
+      : [];
     value = {
       ...value,
       schemaVersion: PROJECT_SCHEMA_VERSION,
       symbols: "symbols" in value && Array.isArray(value.symbols) ? value.symbols : [],
+      variables,
     };
   }
 
@@ -357,7 +422,7 @@ export function parseProject(raw: unknown): Project {
     "schemaVersion" in value &&
     typeof value.schemaVersion === "string" &&
     value.schemaVersion !== PROJECT_SCHEMA_VERSION &&
-    value.schemaVersion !== LEGACY_PROJECT_SCHEMA_VERSION
+    !LEGACY_PROJECT_SCHEMA_VERSIONS.has(value.schemaVersion)
   ) {
     throw new SchemaValidationError([
       {

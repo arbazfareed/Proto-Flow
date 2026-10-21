@@ -972,6 +972,9 @@ export function ScreenLayerSidebar() {
     editProject((current) => ({
       ...current,
       screens: remaining,
+      variables: current.variables.filter(
+        (variable) => variable.scope !== "screen" || variable.screenId !== screenId,
+      ),
       startScreenId: deletedStartScreen ? remaining[0].id : current.startScreenId,
     }));
     if (activeScreenId === screenId) {

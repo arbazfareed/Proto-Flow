@@ -19,7 +19,8 @@ function createCompleteProject(): Project {
         id: crypto.randomUUID(),
         name: "attempts",
         type: "number",
-        defaultValue: 0,
+        initial: 0,
+        scope: "project",
       },
     ],
     screens: [
@@ -75,7 +76,7 @@ describe("ProtoFlow project schema", () => {
   it("creates a valid starter project with a UUID start screen", () => {
     const project = createEmptyProject("Checkout flow");
 
-    expect(project.schemaVersion).toBe("1.1.0");
+    expect(project.schemaVersion).toBe("1.2.0");
     expect(project.name).toBe("Checkout flow");
     expect(project.screens).toHaveLength(1);
     expect(project.screens[0].id).toBe(project.startScreenId);
@@ -92,12 +93,65 @@ describe("ProtoFlow project schema", () => {
     expect(parseProject(serializeProject(project))).toEqual(project);
   });
 
-  it("migrates version 1.0 projects to the symbol-aware 1.1 schema", () => {
+  it("migrates version 1.0 projects to the current schema", () => {
     const project = createCompleteProject();
     const { symbols: _symbols, ...legacy } = project;
     const migrated = parseProject({ ...legacy, schemaVersion: "1.0.0" });
-    expect(migrated.schemaVersion).toBe("1.1.0");
+    expect(migrated.schemaVersion).toBe("1.2.0");
     expect(migrated.symbols).toEqual([]);
+  });
+
+  it("migrates version 1.1 variables to typed project-scoped initial values", () => {
+    const project = createCompleteProject();
+    const legacy = {
+      ...project,
+      schemaVersion: "1.1.0",
+      variables: [{
+        id: crypto.randomUUID(),
+        name: "attempts",
+        type: "number",
+        defaultValue: 2,
+      }],
+    };
+    const migrated = parseProject(legacy);
+    expect(migrated.variables).toEqual([{
+      id: legacy.variables[0].id,
+      name: "attempts",
+      type: "number",
+      initial: 2,
+      scope: "project",
+    }]);
+  });
+
+  it("requires valid names, unique scope names, and a screen for local variables", () => {
+    const project = createCompleteProject();
+    const screenId = project.screens[0].id;
+    expect(() => parseProject({
+      ...project,
+      variables: [
+        { id: crypto.randomUUID(), name: "bad-name", type: "string", initial: "", scope: "project" },
+      ],
+    })).toThrow(/valid variable identifier/i);
+    expect(() => parseProject({
+      ...project,
+      variables: [
+        ...project.variables,
+        { ...project.variables[0], id: crypto.randomUUID() },
+      ],
+    })).toThrow(/already exists in this scope/i);
+    expect(() => parseProject({
+      ...project,
+      variables: [
+        { id: crypto.randomUUID(), name: "local", type: "boolean", initial: false, scope: "screen" },
+      ],
+    })).toThrow(/must reference a screen/i);
+    expect(parseProject({
+      ...project,
+      variables: [
+        ...project.variables,
+        { id: crypto.randomUUID(), name: "attempts", type: "number", initial: 1, scope: "screen", screenId },
+      ],
+    }).variables).toHaveLength(2);
   });
 
   it("validates symbol-instance references", () => {
@@ -415,7 +469,7 @@ describe("ProtoFlow project schema", () => {
     ).toThrow(SchemaValidationError);
   });
 
-  it("keeps variable default values aligned with their declared types", () => {
+  it("keeps variable initial values aligned with their declared types", () => {
     const project = createEmptyProject();
 
     expect(() =>
@@ -426,10 +480,25 @@ describe("ProtoFlow project schema", () => {
             id: crypto.randomUUID(),
             name: "enabled",
             type: "boolean",
-            defaultValue: "true",
+            initial: "true",
+            scope: "project",
           },
         ],
       }),
     ).toThrow(SchemaValidationError);
+  });
+
+  it("rejects reserved JavaScript keywords as variable names", () => {
+    const project = createEmptyProject();
+    expect(() => parseProject({
+      ...project,
+      variables: [{
+        id: crypto.randomUUID(),
+        name: "const",
+        type: "string",
+        initial: "",
+        scope: "project",
+      }],
+    })).toThrow(/valid variable identifier/i);
   });
 });
