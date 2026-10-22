@@ -3,6 +3,7 @@ import { ArrowDown, ArrowUp, Plus, Play, Sparkles, ThumbsDown, ThumbsUp, Trash2 
 import type {
   InteractionAction,
   InteractionCondition,
+  InteractionLocalVariable,
   InteractionRule,
   Project,
   Screen,
@@ -55,7 +56,14 @@ const ACTIONS = [
   ["filterRepeater", "Filter repeater"],
 ] as const;
 
-function getVariable(project: Project, screenId: string, name: string) {
+function getVariable(
+  project: Project,
+  screenId: string,
+  name: string,
+  localVariables: InteractionLocalVariable[] = [],
+): Pick<VariableDefinition, "type" | "initial"> | undefined {
+  const local = localVariables.find((item) => item.name === name);
+  if (local) return local;
   return project.variables.find(
     (item) => item.scope === "screen" && item.screenId === screenId && item.name === name,
   ) ?? project.variables.find((item) => item.scope === "project" && item.name === name);
@@ -97,16 +105,29 @@ function initialAction(type: string, screen: Screen): InteractionAction {
   }
 }
 
-function conditionValue(variable: VariableDefinition | undefined, value: string) {
+function conditionValue(variable: Pick<VariableDefinition, "type" | "initial"> | undefined, value: string) {
   if (variable?.type === "number") return value === "" ? "" : Number(value);
   if (variable?.type === "boolean") return value === "true";
   return value;
 }
 
-function actionValue(variable: VariableDefinition | undefined, value: string) {
+function actionValue(variable: Pick<VariableDefinition, "type" | "initial"> | undefined, value: string) {
   if (variable?.type === "number") return value === "" ? "" : Number(value);
   if (variable?.type === "boolean") return value === "true";
   return value;
+}
+
+function expressionVariables(
+  project: Project,
+  screen: Screen,
+  localVariables: InteractionLocalVariable[] = [],
+): Record<string, unknown> {
+  return Object.fromEntries([
+    ...project.variables.filter((entry) => entry.scope === "project"),
+    ...project.variables.filter((entry) => entry.scope === "screen" && entry.screenId === screen.id),
+  ].map((entry) => [entry.name, entry.initial]).concat(
+    localVariables.map((entry) => [entry.name, entry.initial]),
+  ));
 }
 
 function moveEntry<T>(items: T[], from: number, to: number): T[] {
@@ -123,11 +144,13 @@ function ActionTarget({
   project,
   screen,
   action,
+  localVariables,
   onChange,
 }: {
   project: Project;
   screen: Screen;
   action: InteractionAction;
+  localVariables: InteractionLocalVariable[];
   onChange: (target: string) => void;
 }) {
   const targets = action.type === "navigate" || action.type === "navigateTo"
@@ -135,9 +158,11 @@ function ActionTarget({
     : action.type === "setVariable"
       ? project.variables
           .filter((item) =>
-            item.scope === "project" || item.screenId === screen.id,
+            (item.scope === "project" || item.screenId === screen.id) &&
+            !localVariables.some((local) => local.name === item.name),
           )
           .map((item) => ({ id: item.name, label: item.name }))
+          .concat(localVariables.map((item) => ({ id: item.name, label: `${item.name} (local)` })))
       : collectWidgetsDeep(screen.widgets).filter((item) =>
           action.type === "setPanelState"
             ? ["panel", "dynamic-panel", "dynamicPanel"].includes(item.type)
@@ -239,6 +264,16 @@ export function InteractionBuilder({
   const addRule = () => {
     setRules((current) => [...current, createInteractionRule(widget)]);
   };
+  const updateLocalVariable = (
+    ruleId: string,
+    index: number,
+    update: (variable: InteractionLocalVariable) => InteractionLocalVariable,
+  ) => updateRule(ruleId, (rule) => ({
+    ...rule,
+    localVariables: (rule.localVariables ?? []).map((variable, variableIndex) =>
+      variableIndex === index ? update(variable) : variable,
+    ),
+  }));
 
   const addTemplate = (template: string) => {
     const rule = createInteractionRule(widget);
@@ -427,7 +462,7 @@ export function InteractionBuilder({
             }))}><Plus size={11} /> Add</button>
           </div>
           {rule.conditions.map((condition, conditionIndex) => {
-            const variable = getVariable(project, screen.id, condition.variable);
+            const variable = getVariable(project, screen.id, condition.variable, rule.localVariables);
             const expressionMode = /^\[\[[\s\S]*\]\]$/.test(condition.variable);
             return (
               <div className="interaction-condition" key={`${rule.id}-condition-${conditionIndex}`}
@@ -462,7 +497,7 @@ export function InteractionBuilder({
                   value={condition.variable}
                   onChange={(event) => {
                     const name = event.currentTarget.value;
-                    const selected = getVariable(project, screen.id, name);
+                    const selected = getVariable(project, screen.id, name, rule.localVariables);
                     updateRule(rule.id, (item) => ({
                       ...item,
                       conditions: item.conditions.map((entry, index) => index === conditionIndex
@@ -472,8 +507,14 @@ export function InteractionBuilder({
                   }}
                 >
                   <option value="">Variable</option>
-                  {project.variables.filter((item) => item.scope === "project" || item.screenId === screen.id)
+                  {project.variables.filter((item) =>
+                    (item.scope === "project" || item.screenId === screen.id) &&
+                    !(rule.localVariables ?? []).some((local) => local.name === item.name),
+                  )
                     .map((item) => <option key={item.id} value={item.name}>{item.name}</option>)}
+                  {(rule.localVariables ?? []).map((item) => (
+                    <option key={`local-${item.name}`} value={item.name}>{item.name} (local)</option>
+                  ))}
                 </select>
                 <select
                   aria-label="Condition operator"
@@ -525,7 +566,7 @@ export function InteractionBuilder({
                       screenId={screen.id}
                       expectedType="boolean"
                       context={{
-                        variables: Object.fromEntries(project.variables.map((entry) => [entry.name, entry.initial])),
+                        variables: expressionVariables(project, screen, rule.localVariables),
                         widgets: collectWidgetsDeep(screen.widgets),
                         thisWidget: widget,
                       }}
@@ -565,6 +606,95 @@ export function InteractionBuilder({
             );
           })}
           <div className="interaction-subheading">
+            <span>Local variables</span>
+            <button type="button" onClick={() => updateRule(rule.id, (item) => ({
+              ...item,
+              localVariables: [
+                ...(item.localVariables ?? []),
+                { name: `local${(item.localVariables?.length ?? 0) + 1}`, type: "string", initial: "" },
+              ],
+            }))}><Plus size={11} /> Add local</button>
+          </div>
+          {(rule.localVariables ?? []).map((localVariable, localIndex) => (
+            <div className="interaction-action" key={`${rule.id}-local-${localIndex}`}>
+              <input
+                aria-label={`Local variable ${localIndex + 1} name`}
+                value={localVariable.name}
+                onChange={(event) => {
+                  const name = event.currentTarget.value;
+                  updateLocalVariable(rule.id, localIndex, (item) => ({
+                    ...item,
+                    name,
+                  }));
+                }}
+              />
+              <select
+                aria-label={`Local variable ${localIndex + 1} type`}
+                value={localVariable.type}
+                onChange={(event) => {
+                  const type = event.currentTarget.value as InteractionLocalVariable["type"];
+                  updateLocalVariable(rule.id, localIndex, (item) => {
+                    if (type === "string") return { name: item.name, type: "string", initial: "" };
+                    if (type === "number") return { name: item.name, type: "number", initial: 0 };
+                    return { name: item.name, type: "boolean", initial: false };
+                  });
+                }}
+              >
+                <option value="string">Text</option>
+                <option value="number">Number</option>
+                <option value="boolean">Boolean</option>
+              </select>
+              {localVariable.type === "boolean" ? (
+                <select
+                  aria-label={`Local variable ${localIndex + 1} initial value`}
+                  value={String(localVariable.initial)}
+                  onChange={(event) => {
+                    const initial = event.currentTarget.value === "true";
+                    updateLocalVariable(rule.id, localIndex, (item) => ({
+                      name: item.name,
+                      type: "boolean",
+                      initial,
+                    }));
+                  }}
+                >
+                  <option value="false">false</option>
+                  <option value="true">true</option>
+                </select>
+              ) : (
+                <input
+                  aria-label={`Local variable ${localIndex + 1} initial value`}
+                  type={localVariable.type === "number" ? "number" : "text"}
+                  value={String(localVariable.initial)}
+                  onChange={(event) => {
+                    const input = event.currentTarget.value;
+                    if (localVariable.type === "number") {
+                      const initial = Number(input);
+                      updateLocalVariable(rule.id, localIndex, (item) => ({
+                        name: item.name,
+                        type: "number",
+                        initial,
+                      }));
+                    } else {
+                      updateLocalVariable(rule.id, localIndex, (item) => ({
+                        name: item.name,
+                        type: "string",
+                        initial: input,
+                      }));
+                    }
+                  }}
+                />
+              )}
+              <button
+                type="button"
+                aria-label={`Remove local variable ${localIndex + 1}`}
+                onClick={() => updateRule(rule.id, (item) => ({
+                  ...item,
+                  localVariables: (item.localVariables ?? []).filter((_, index) => index !== localIndex),
+                }))}
+              ><Trash2 size={11} /></button>
+            </div>
+          ))}
+          <div className="interaction-subheading">
             <span>Actions</span>
             <button type="button" onClick={() => updateRule(rule.id, (item) => ({
               ...item,
@@ -573,7 +703,7 @@ export function InteractionBuilder({
           </div>
           {rule.actions.map((action, actionIndex) => {
             const variable = action.type === "setVariable"
-              ? getVariable(project, screen.id, action.target)
+              ? getVariable(project, screen.id, action.target, rule.localVariables)
               : undefined;
             return (
               <div className="interaction-action" key={`${rule.id}-action-${actionIndex}`}
@@ -603,7 +733,8 @@ export function InteractionBuilder({
                   {ACTIONS.map(([value, label]) => <option key={value} value={value}>{label}</option>)}
                   {!ACTIONS.some(([value]) => value === action.type) && <option value={action.type}>{action.type}</option>}
                 </select>
-                <ActionTarget project={project} screen={screen} action={action} onChange={(target) =>
+                <ActionTarget project={project} screen={screen} action={action}
+                  localVariables={rule.localVariables ?? []} onChange={(target) =>
                   updateRule(rule.id, (item) => ({
                     ...item,
                     actions: item.actions.map((entry, index) => index === actionIndex
@@ -621,7 +752,7 @@ export function InteractionBuilder({
                     screenId={screen.id}
                     expectedType={variable.type}
                     context={{
-                      variables: Object.fromEntries(project.variables.map((entry) => [entry.name, entry.initial])),
+                      variables: expressionVariables(project, screen, rule.localVariables),
                       widgets: collectWidgetsDeep(screen.widgets),
                       thisWidget: widget,
                     }}
@@ -704,7 +835,7 @@ export function InteractionBuilder({
                     screenId={screen.id}
                     multiline={action.type === "setRepeaterData"}
                     context={{
-                      variables: Object.fromEntries(project.variables.map((entry) => [entry.name, entry.initial])),
+                      variables: expressionVariables(project, screen, rule.localVariables),
                       widgets: collectWidgetsDeep(screen.widgets),
                       thisWidget: widget,
                     }}

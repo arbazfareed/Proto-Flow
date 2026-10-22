@@ -23,27 +23,39 @@ let loadedScreen = "";
 function screen() {
   return project.screens.find((item) => item.id === screenId) || project.screens[0];
 }
-function variable(name, activeScreen) {
+function variable(name, activeScreen, localVariables) {
+  if (localVariables && Object.prototype.hasOwnProperty.call(localVariables, name)) return localVariables[name];
   const item = project.variables.find((entry) => entry.name === name && entry.scope === "screen" && entry.screenId === activeScreen)
     || project.variables.find((entry) => entry.name === name && entry.scope === "project");
   return item ? variables.get(item.id) : undefined;
 }
-function setVariable(name, value, activeScreen) {
+function setVariable(name, value, activeScreen, localVariables) {
+  if (localVariables && Object.prototype.hasOwnProperty.call(localVariables, name)) {
+    if (typeof value !== typeof localVariables[name]) {
+      throw new Error("The assigned value does not match local variable " + name + ".");
+    }
+    localVariables[name] = value;
+    return;
+  }
   const item = project.variables.find((entry) => entry.name === name && entry.scope === "screen" && entry.screenId === activeScreen)
     || project.variables.find((entry) => entry.name === name && entry.scope === "project");
   if (item && typeof value === typeof item.initial) variables.set(item.id, value);
 }
-function expressionVariables(activeScreen) {
-  return Object.fromEntries(project.variables
-    .filter((entry) => entry.scope === "project" || entry.screenId === activeScreen)
+function expressionVariables(activeScreen, localVariables) {
+  const globals = Object.fromEntries(project.variables
+    .filter((entry) => entry.scope === "project")
     .map((entry) => [entry.name, variables.get(entry.id)]));
+  const screenVariables = Object.fromEntries(project.variables
+    .filter((entry) => entry.scope === "screen" && entry.screenId === activeScreen)
+    .map((entry) => [entry.name, variables.get(entry.id)]));
+  return { ...globals, ...screenVariables, ...localVariables };
 }
-function text(value, activeScreen, item, widget) {
+function text(value, activeScreen, item, widget, localVariables) {
   const interpolated = String(value ?? "").replace(/\{\{\s*([\w$.-]+)\s*\}\}/g, (_, name) => {
     if (name.startsWith("item.")) return String(item?.[name.slice(5)] ?? "");
-    return String(variable(name, activeScreen) ?? "");
+    return String(variable(name, activeScreen, localVariables) ?? "");
   });
-  const variablesByName = expressionVariables(activeScreen);
+  const variablesByName = expressionVariables(activeScreen, localVariables);
   const widgets = allWidgets(screen().widgets);
   return interpolated.replace(/\[\[([\s\S]*?)\]\]/g, (whole, source) => {
     try {
@@ -74,36 +86,36 @@ function repeaterItemVisible(widget, item) {
     default: return actual === rule.value;
   }
 }
-function interpolateActionValue(value, item, widget) {
-  if (typeof value === "string") return text(value, screen().id, item, widget);
-  if (Array.isArray(value)) return value.map((entry) => interpolateActionValue(entry, item, widget));
-  if (value && typeof value === "object") return Object.fromEntries(Object.entries(value).map(([key, entry]) => [key, interpolateActionValue(entry, item, widget)]));
+function interpolateActionValue(value, item, widget, localVariables) {
+  if (typeof value === "string") return text(value, screen().id, item, widget, localVariables);
+  if (Array.isArray(value)) return value.map((entry) => interpolateActionValue(entry, item, widget, localVariables));
+  if (value && typeof value === "object") return Object.fromEntries(Object.entries(value).map(([key, entry]) => [key, interpolateActionValue(entry, item, widget, localVariables)]));
   return value;
 }
-function actionValue(value, item, widget) {
-  const interpolated = interpolateActionValue(value, item, widget);
+function actionValue(value, item, widget, localVariables) {
+  const interpolated = interpolateActionValue(value, item, widget, localVariables);
   if (typeof interpolated !== "string") return interpolated;
   try { return JSON.parse(interpolated); } catch { return interpolated; }
 }
-function matches(condition, activeScreen, item, widget) {
+function matches(condition, activeScreen, item, widget, localVariables) {
   const directExpression = /^\[\[([\s\S]*?)\]\]$/.exec(condition.variable);
   if (directExpression) {
     try {
       return Boolean(evaluateExpression(directExpression[1].trim(), {
-        variables: expressionVariables(activeScreen),
+        variables: expressionVariables(activeScreen, localVariables),
         widgets: allWidgets(screen().widgets),
         item,
         thisWidget: widget,
       }));
     } catch { return false; }
   }
-  const current = variable(condition.variable, activeScreen);
+  const current = variable(condition.variable, activeScreen, localVariables);
   let expected = condition.value;
   const valueExpression = typeof expected === "string" ? /^\[\[([\s\S]*?)\]\]$/.exec(expected) : null;
   if (valueExpression) {
     try {
       expected = evaluateExpression(valueExpression[1].trim(), {
-        variables: expressionVariables(activeScreen),
+        variables: expressionVariables(activeScreen, localVariables),
         widgets: allWidgets(screen().widgets),
         item,
         thisWidget: widget,
@@ -121,7 +133,7 @@ function matches(condition, activeScreen, item, widget) {
     default: return false;
   }
 }
-function actions(rule, activeScreen, item, widget) {
+function actions(rule, activeScreen, item, widget, localVariables) {
   for (const action of rule.actions) {
     if (action.type === "navigate" || action.type === "navigateTo") {
       if (project.screens.some((item) => item.id === action.target) && action.target !== screenId) {
@@ -132,30 +144,30 @@ function actions(rule, activeScreen, item, widget) {
     } else if (action.type === "show" || action.type === "hide") {
       visibility.set(action.target, action.type === "show");
     } else if (action.type === "setVariable") {
-      setVariable(action.target, actionValue(action.value, item, widget), activeScreen);
+      setVariable(action.target, actionValue(action.value, item, widget, localVariables), activeScreen, localVariables);
     } else if (action.type === "setPanelState") {
       const panel = allWidgets(screen().widgets).find((item) => item.id === action.target);
       const states = panel?.props.states || [];
-      const stateValue = actionValue(action.value, item, widget);
+      const stateValue = actionValue(action.value, item, widget, localVariables);
       const state = states.find((item) => item.id === action.stateId || item.id === stateValue || item.name === stateValue);
       if (states.length && !state) throw new Error("The requested panel state does not exist.");
       panelStates.set(action.target, state?.id || action.stateId || stateValue);
       panelTransitions.set(action.target, { transition: action.transition || "none", duration: action.duration || 0 });
     } else if (action.type === "setRepeaterData") {
-      repeaterData.set(action.target, repeaterRows(actionValue(action.value, item, widget)));
+      repeaterData.set(action.target, repeaterRows(actionValue(action.value, item, widget, localVariables)));
     } else if (["addRepeaterRow", "removeRepeaterRow", "sortRepeater", "filterRepeater"].includes(action.type)) {
       const repeater = allWidgets(screen().widgets).find((entry) => entry.id === action.target && entry.type === "repeater");
       if (!repeater) throw new Error("Repeater action target is missing.");
       const rows = repeaterRows(repeaterData.get(action.target) ?? repeater.props.dataset ?? []);
       if (action.type === "addRepeaterRow") {
-        const row = actionValue(action.value, item, widget);
+        const row = actionValue(action.value, item, widget, localVariables);
         repeaterData.set(action.target, repeaterRows([...rows, row && typeof row === "object" ? row : {}]));
       } else if (action.type === "removeRepeaterRow") {
-        const index = Number(actionValue(action.value, item, widget));
+        const index = Number(actionValue(action.value, item, widget, localVariables));
         if (!Number.isInteger(index) || index < 0 || index >= rows.length) throw new Error("Repeater row index must reference an existing row.");
         repeaterData.set(action.target, rows.filter((_, rowIndex) => rowIndex !== index));
       } else {
-        const config = actionValue(action.value, item, widget);
+        const config = actionValue(action.value, item, widget, localVariables);
         if (!config || typeof config !== "object" || typeof config.field !== "string") throw new Error("Repeater sort/filter action requires a field.");
         if (action.type === "sortRepeater") {
           const direction = config.direction === "desc" ? -1 : 1;
@@ -172,9 +184,10 @@ function actions(rule, activeScreen, item, widget) {
 function fire(widget, event, item) {
   const activeScreen = screen();
   for (const rule of activeScreen.interactionRules.filter((item) => item.event === event && (!item.widgetId || item.widgetId === widget.id))) {
-    const checks = rule.conditions.map((condition) => matches(condition, activeScreen.id, item, widget));
+    const localVariables = Object.fromEntries((rule.localVariables || []).map((entry) => [entry.name, entry.initial]));
+    const checks = rule.conditions.map((condition) => matches(condition, activeScreen.id, item, widget, localVariables));
     if (rule.conditions.length && (rule.conditionMode === "any" ? !checks.some(Boolean) : !checks.every(Boolean))) continue;
-    actions(rule, activeScreen.id, item, widget);
+    actions(rule, activeScreen.id, item, widget, localVariables);
   }
   render();
 }
@@ -320,9 +333,10 @@ function render() {
   if (loadedScreen !== activeScreen.id) {
     loadedScreen = activeScreen.id;
     for (const rule of activeScreen.interactionRules.filter((item) => item.event === "onLoad")) {
-      const checks = rule.conditions.map((condition) => matches(condition, activeScreen.id));
+      const localVariables = Object.fromEntries((rule.localVariables || []).map((entry) => [entry.name, entry.initial]));
+      const checks = rule.conditions.map((condition) => matches(condition, activeScreen.id, undefined, undefined, localVariables));
       if (!rule.conditions.length || (rule.conditionMode === "any" ? checks.some(Boolean) : checks.every(Boolean))) {
-        actions(rule, activeScreen.id);
+        actions(rule, activeScreen.id, undefined, undefined, localVariables);
       }
     }
     if (loadedScreen === screenId) return;

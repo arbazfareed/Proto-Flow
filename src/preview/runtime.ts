@@ -1,5 +1,6 @@
 import type {
   InteractionCondition,
+  InteractionLocalVariable,
   InteractionRule,
   Project,
   Screen,
@@ -29,7 +30,13 @@ function resolveExpressionValue(
   item?: RepeaterRecord,
 ): unknown {
   if (typeof value === "string") {
-    const withItem = item ? interpolateItem(value, item) : value;
+    const withItem = (item ? interpolateItem(value, item) : value)
+      .replace(/\{\{\s*([A-Za-z_$][\w$.-]*)\s*\}\}/g, (token, name: string) => {
+        const resolved = name.startsWith("item.")
+          ? item?.[name.slice(5)]
+          : context.variables?.[name];
+        return resolved === undefined ? token : String(resolved);
+      });
     const wholeExpression = /^\[\[([\s\S]*?)\]\]$/.exec(withItem);
     if (wholeExpression) return evaluateExpression(wholeExpression[1].trim(), context);
     return interpolateExpressions(withItem, context);
@@ -225,11 +232,18 @@ export class PreviewRuntime {
     );
   }
 
-  expressionContext(widget?: Widget, item?: RepeaterRecord) {
-    const variables = Object.fromEntries(this.variables.entries(this.screenId)
-      .map(({ variable, value }) => [variable.name, value]));
+  expressionContext(
+    widget?: Widget,
+    item?: RepeaterRecord,
+    localVariables?: Record<string, RuntimeVariableValue>,
+  ) {
+    const entries = this.variables.entries(this.screenId);
+    const variables = Object.fromEntries([
+      ...entries.filter(({ variable }) => variable.scope === "project"),
+      ...entries.filter(({ variable }) => variable.scope === "screen"),
+    ].map(({ variable, value }) => [variable.name, value]));
     return {
-      variables,
+      variables: { ...variables, ...localVariables },
       widgets: collectWidgetsDeep(this.currentScreen.widgets),
       item,
       thisWidget: widget,
@@ -255,9 +269,10 @@ export class PreviewRuntime {
       rule.event === event && (!rule.widgetId || rule.widgetId === widget.id),
     );
     for (const rule of rules) {
-      if (!this.conditionsMatch(rule, screen.id, item, widget)) continue;
+      const localVariables = this.initializeLocalVariables(rule.localVariables);
+      if (!this.conditionsMatch(rule, screen.id, item, widget, localVariables)) continue;
       try {
-        this.runActions(rule, screen, item, widget);
+        this.runActions(rule, screen, item, widget, localVariables);
       } catch (error) {
         errors.push(error instanceof Error ? error.message : "Interaction action failed.");
       }
@@ -282,23 +297,31 @@ export class PreviewRuntime {
     screenId: string,
     item?: RepeaterRecord,
     widget?: Widget,
+    localVariables: Record<string, RuntimeVariableValue> = {},
   ): boolean {
     if (rule.conditions.length === 0) return true;
     const results = rule.conditions.map((condition) => {
       const directExpression = /^\[\[([\s\S]*?)\]\]$/.exec(condition.variable);
       if (directExpression) {
         try {
-          return Boolean(evaluateExpression(directExpression[1].trim(), this.expressionContext(widget, item)));
+          return Boolean(evaluateExpression(
+            directExpression[1].trim(),
+            this.expressionContext(widget, item, localVariables),
+          ));
         } catch {
           return false;
         }
       }
-      let value: RuntimeVariableValue | undefined = this.variables.get(condition.variable, screenId);
+      let value: RuntimeVariableValue | undefined = localVariables[condition.variable]
+        ?? this.variables.get(condition.variable, screenId);
       if (typeof condition.value === "string") {
         const expression = /^\[\[([\s\S]*?)\]\]$/.exec(condition.value);
         if (expression) {
           try {
-            const evaluated = evaluateExpression(expression[1].trim(), this.expressionContext(widget, item));
+            const evaluated = evaluateExpression(
+              expression[1].trim(),
+              this.expressionContext(widget, item, localVariables),
+            );
             value = typeof evaluated === "string" || typeof evaluated === "number" || typeof evaluated === "boolean"
               ? evaluated
               : undefined;
@@ -314,9 +337,25 @@ export class PreviewRuntime {
       : results.every(Boolean);
   }
 
-  private runActions(rule: InteractionRule, screen: Screen, item?: RepeaterRecord, widget?: Widget): void {
+  private initializeLocalVariables(
+    definitions: InteractionLocalVariable[] = [],
+  ): Record<string, RuntimeVariableValue> {
+    return Object.fromEntries(definitions.map(({ name, initial }) => [name, initial]));
+  }
+
+  private runActions(
+    rule: InteractionRule,
+    screen: Screen,
+    item?: RepeaterRecord,
+    widget?: Widget,
+    localVariables: Record<string, RuntimeVariableValue> = {},
+  ): void {
     for (const action of rule.actions) {
-      const actionValue = resolveExpressionValue(action.value, this.expressionContext(widget, item), item);
+      const actionValue = resolveExpressionValue(
+        action.value,
+        this.expressionContext(widget, item, localVariables),
+        item,
+      );
       switch (action.type) {
         case "navigate":
         case "navigateTo":
@@ -330,6 +369,20 @@ export class PreviewRuntime {
           this.visibility[action.target] = action.type === "show";
           break;
         case "setVariable":
+          {
+          const localVariable = rule.localVariables?.find((entry) => entry.name === action.target);
+          if (localVariable) {
+            if (
+              (typeof actionValue !== "string" &&
+                typeof actionValue !== "number" &&
+                typeof actionValue !== "boolean") ||
+              typeof actionValue !== localVariable.type
+            ) {
+              throw new Error(`Value for local variable "${action.target}" must be ${localVariable.type}.`);
+            }
+            localVariables[action.target] = actionValue;
+            break;
+          }
           if (!this.project.variables.some((item) =>
             item.scope === "project"
               ? item.name === action.target
@@ -346,6 +399,7 @@ export class PreviewRuntime {
           }
           this.variables.set(action.target, actionValue, screen.id);
           break;
+          }
         case "setPanelState":
           {
           const panel = this.requireWidget(screen, action.target, ["panel", "dynamic-panel", "dynamicPanel"]);

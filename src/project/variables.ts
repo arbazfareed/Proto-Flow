@@ -125,8 +125,10 @@ export function validateVariableReferences(project: Project): VariableIssue[] {
       );
     });
     screen.interactionRules.forEach((rule, ruleIndex) => {
+      const localNames = new Set((rule.localVariables ?? []).map((variable) => variable.name));
       rule.conditions.forEach((condition, conditionIndex) => {
         if (/^\[\[[\s\S]*\]\]$/.test(condition.variable)) return;
+        if (localNames.has(condition.variable)) return;
         const variable = getVariable(project.variables, condition.variable, screen.id);
         const path = `screens[${screenIndex}].interactionRules[${ruleIndex}].conditions[${conditionIndex}]`;
         if (!variable) {
@@ -167,6 +169,7 @@ export function validateVariableReferences(project: Project): VariableIssue[] {
       });
       rule.actions.forEach((action, actionIndex) => {
         if (action.type !== "setVariable") return;
+        if (localNames.has(action.target)) return;
         const variable = getVariable(project.variables, action.target, screen.id);
         const path = `screens[${screenIndex}].interactionRules[${ruleIndex}].actions[${actionIndex}]`;
         if (!variable) {
@@ -268,19 +271,22 @@ export function renameVariableReferences(
           ...widget,
           props: updateReferences(widget.props, variable.name, newName) as Record<string, unknown>,
         })),
-        interactionRules: screen.interactionRules.map((rule) => ({
+        interactionRules: screen.interactionRules.map((rule) => {
+          const hasLocalShadow = (rule.localVariables ?? []).some((local) => local.name === variable.name);
+          return {
           ...rule,
           conditions: rule.conditions.map((condition) =>
-            condition.variable === variable.name
+            !hasLocalShadow && condition.variable === variable.name
               ? { ...condition, variable: newName }
               : condition,
           ),
           actions: rule.actions.map((action) =>
-            action.type === "setVariable" && action.target === variable.name
+            !hasLocalShadow && action.type === "setVariable" && action.target === variable.name
               ? { ...action, target: newName }
               : action,
           ),
-        })),
+          };
+        }),
       };
     }),
     symbols: variable.scope === "project"

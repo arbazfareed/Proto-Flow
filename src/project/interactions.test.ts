@@ -107,6 +107,41 @@ describe("interaction rules", () => {
     expect(validateInteractionRules(project, screen)).toEqual([]);
   });
 
+  it("warns about type-mismatched shadowing and unread interaction variables", () => {
+    const project = createEmptyProject();
+    const screen = project.screens[0];
+    project.variables.push({
+      id: crypto.randomUUID(),
+      name: "score",
+      type: "string",
+      initial: "project",
+      scope: "project",
+    });
+    const rule = createRule("trigger", {
+      localVariables: [
+        { name: "score", type: "number", initial: 3 },
+        { name: "unused", type: "boolean", initial: false },
+      ],
+      conditions: [{ variable: "score", operator: "greaterThan", value: 1 }],
+      actions: [{ type: "setVariable", target: "score", value: "[[ score + 1 ]]" }],
+    });
+    screen.interactionRules = [rule];
+
+    expect(validateInteractionRules(project, screen)).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        severity: "warning",
+        code: "type-mismatch",
+        message: expect.stringContaining('shadows a string variable with type number'),
+      }),
+      expect.objectContaining({
+        severity: "warning",
+        code: "unused-local",
+        message: expect.stringContaining('Local variable "unused"'),
+      }),
+    ]));
+    expect(testInteractionRule(project, screen, rule).actions).toEqual(["Set local score to 4"]);
+  });
+
   it("reports missing targets, self-visibility, and navigation cycles", () => {
     const project = createEmptyProject();
     const first = project.screens[0];

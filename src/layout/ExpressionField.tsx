@@ -26,7 +26,8 @@ export function ExpressionField({
   const inputRef = useRef<HTMLTextAreaElement | HTMLInputElement>(null);
   const variableNames = project.variables
     .filter((variable) => variable.scope === "project" || variable.screenId === screenId)
-    .map((variable) => variable.name);
+    .map((variable) => variable.name)
+    .concat(Object.keys(context?.variables ?? {}));
   const widgetNames = project.screens
     .find((screen) => screen.id === screenId)?.widgets
     .flatMap((widget) => [widget.name, typeof widget.props.name === "string" ? widget.props.name : ""])
