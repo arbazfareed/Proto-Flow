@@ -20,6 +20,7 @@ import { submitInteractionFeedback } from "../wallet/api";
 import { useMeteredAction } from "../wallet/meteredActions";
 import { useWalletStore } from "../wallet/store";
 import { collectWidgetsDeep, getPanelStates, PANEL_TRANSITIONS } from "../project/dynamicPanels";
+import { ExpressionField } from "./ExpressionField";
 
 const EVENTS = [
   ["onClick", "Click"],
@@ -427,6 +428,7 @@ export function InteractionBuilder({
           </div>
           {rule.conditions.map((condition, conditionIndex) => {
             const variable = getVariable(project, screen.id, condition.variable);
+            const expressionMode = /^\[\[[\s\S]*\]\]$/.test(condition.variable);
             return (
               <div className="interaction-condition" key={`${rule.id}-condition-${conditionIndex}`}
                 draggable
@@ -453,6 +455,8 @@ export function InteractionBuilder({
                     }}
                   ><option value="all">All</option><option value="any">Any</option></select>
                 ) : <span className="interaction-condition-and">{conditionIndex ? (rule.conditionMode === "any" ? "OR" : "AND") : "IF"}</span>}
+                {!expressionMode && (
+                  <>
                 <select
                   aria-label="Condition variable"
                   value={condition.variable}
@@ -509,6 +513,43 @@ export function InteractionBuilder({
                       }));
                     }}
                   />
+                )}
+                  </>
+                )}
+                {expressionMode ? (
+                  <>
+                    <ExpressionField
+                      label={`Condition ${conditionIndex + 1} expression`}
+                      value={condition.variable}
+                      project={project}
+                      screenId={screen.id}
+                      expectedType="boolean"
+                      context={{
+                        variables: Object.fromEntries(project.variables.map((entry) => [entry.name, entry.initial])),
+                        widgets: collectWidgetsDeep(screen.widgets),
+                        thisWidget: widget,
+                      }}
+                      onChange={(value) => updateRule(rule.id, (item) => ({
+                        ...item,
+                        conditions: item.conditions.map((entry, index) => index === conditionIndex
+                          ? { ...entry, variable: value }
+                          : entry),
+                      }))}
+                    />
+                    <button type="button" onClick={() => updateRule(rule.id, (item) => ({
+                      ...item,
+                      conditions: item.conditions.map((entry, index) => index === conditionIndex
+                        ? { ...entry, variable: "" }
+                        : entry),
+                    }))}>Use variable</button>
+                  </>
+                ) : (
+                  <button type="button" aria-label={`Use expression for condition ${conditionIndex + 1}`} onClick={() => updateRule(rule.id, (item) => ({
+                    ...item,
+                    conditions: item.conditions.map((entry, index) => index === conditionIndex
+                      ? { ...entry, variable: "[[ ]]"}
+                      : entry),
+                  }))}>[[ ]]</button>
                 )}
                 <div className="interaction-row-controls">
                   <button type="button" aria-label={`Move condition ${conditionIndex + 1} up`} disabled={conditionIndex === 0}
@@ -573,29 +614,31 @@ export function InteractionBuilder({
                   }))
                 } />
                 {action.type === "setVariable" && variable && (
-                  variable.type === "boolean" ? (
-                    <select aria-label="Action value" value={String(action.value ?? variable.initial)} onChange={(event) => {
-                      const value = event.currentTarget.value === "true";
+                  <ExpressionField
+                    label="Action value"
+                    value={String(action.value ?? variable.initial)}
+                    project={project}
+                    screenId={screen.id}
+                    expectedType={variable.type}
+                    context={{
+                      variables: Object.fromEntries(project.variables.map((entry) => [entry.name, entry.initial])),
+                      widgets: collectWidgetsDeep(screen.widgets),
+                      thisWidget: widget,
+                    }}
+                    onChange={(raw) => {
+                      const value = raw.includes("[[")
+                        ? raw
+                        : variable.type === "boolean"
+                          ? raw === "true"
+                          : actionValue(variable, raw);
                       updateRule(rule.id, (item) => ({
                         ...item,
                         actions: item.actions.map((entry, index) => index === actionIndex
                           ? { ...entry, value }
                           : entry),
                       }));
-                    }}><option value="true">true</option><option value="false">false</option></select>
-                  ) : (
-                    <input aria-label="Action value" type={variable.type === "number" ? "number" : "text"}
-                      value={String(action.value ?? variable.initial)}
-                      onChange={(event) => {
-                        const value = actionValue(variable, event.currentTarget.value);
-                        updateRule(rule.id, (item) => ({
-                          ...item,
-                          actions: item.actions.map((entry, index) => index === actionIndex
-                            ? { ...entry, value }
-                            : entry),
-                        }));
-                      }} />
-                  )
+                    }}
+                  />
                 )}
                 {action.type === "setPanelState" && (() => {
                   const panel = collectWidgetsDeep(screen.widgets).find((item) => item.id === action.target);
@@ -654,11 +697,18 @@ export function InteractionBuilder({
                   );
                 })()}
                 {["setRepeaterData", "addRepeaterRow", "removeRepeaterRow", "sortRepeater", "filterRepeater"].includes(action.type) && (
-                  <input aria-label="Action value" type="text"
-                    placeholder={action.type === "setRepeaterData" ? "Dataset JSON" : "Action JSON or value"}
+                  <ExpressionField
+                    label="Action value"
                     value={String(action.value ?? "")}
-                    onChange={(event) => {
-                      const value = event.currentTarget.value;
+                    project={project}
+                    screenId={screen.id}
+                    multiline={action.type === "setRepeaterData"}
+                    context={{
+                      variables: Object.fromEntries(project.variables.map((entry) => [entry.name, entry.initial])),
+                      widgets: collectWidgetsDeep(screen.widgets),
+                      thisWidget: widget,
+                    }}
+                    onChange={(value) => {
                       updateRule(rule.id, (item) => ({
                         ...item,
                         actions: item.actions.map((entry, index) => index === actionIndex

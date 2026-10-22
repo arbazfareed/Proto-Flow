@@ -55,6 +55,7 @@ describe("interaction rules", () => {
       initial: 2,
       scope: "project",
     });
+
     project.variables.push({
       id: crypto.randomUUID(),
       name: "enabled",
@@ -74,6 +75,36 @@ describe("interaction rules", () => {
       conditions,
     }));
     expect(any).toMatchObject({ matched: true, conditionResults: [true, false] });
+  });
+
+  it("tests expression conditions and typed expression actions", () => {
+    const project = createEmptyProject();
+    const screen = project.screens[0];
+    project.variables.push({
+      id: crypto.randomUUID(),
+      name: "count",
+      type: "number",
+      initial: 3,
+      scope: "project",
+    });
+    const trigger = createWidget();
+    screen.widgets.push(trigger);
+    const rule = createRule(trigger.id, {
+      conditions: [{
+        variable: "[[ count * 2 > 5 ]]",
+        operator: "equals",
+        value: true,
+      }],
+      actions: [{ type: "setVariable", target: "count", value: "[[ count + 4 ]]" }],
+    });
+
+    expect(testInteractionRule(project, screen, rule)).toMatchObject({
+      matched: true,
+      conditionResults: [true],
+      actions: ["Set count to 7"],
+    });
+    screen.interactionRules = [rule];
+    expect(validateInteractionRules(project, screen)).toEqual([]);
   });
 
   it("reports missing targets, self-visibility, and navigation cycles", () => {

@@ -84,7 +84,7 @@ describe("standalone published preview bundle", () => {
   it("includes dynamic-panel state switching and transition rendering in the standalone runtime", () => {
     const html = generatePublishedPreviewHtml(createEmptyProject("Panel export"));
     expect(html).toContain("function activeWidgets(widgets, depth = 0)");
-    expect(html).toContain('panelStates.set(action.target, state?.id || action.stateId || action.value)');
+    expect(html).toContain('panelStates.set(action.target, state?.id || action.stateId || stateValue)');
     expect(html).toContain("@keyframes protoflow-panel-slide-left");
   });
 
@@ -118,6 +118,9 @@ describe("standalone published preview bundle", () => {
     expect(html).toContain("renderWidget(child, activeScreen, rowData)");
     expect(html).toContain("item?.[name.slice(5)]");
     expect(html).toContain("function repeaterItemVisible(widget, item)");
+    expect(html).toContain("function evaluateExpression(source, context = {})");
+    expect(html).toContain("evaluateExpression(source.trim(), { variables: variablesByName");
+    expect(html).not.toMatch(/\beval\s*\(/);
     expect(html).toContain('row.addEventListener("click", () => fire(widget, "onClick", rowData))');
     expect(() => new Function(PREVIEW_RUNTIME_SCRIPT)).not.toThrow();
   });

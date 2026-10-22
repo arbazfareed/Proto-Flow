@@ -458,6 +458,21 @@
 .selection-action:hover:not(:disabled) { color:#fff; background:#3a3448; }
 .selection-action:disabled { opacity:.35; cursor:default; }
 .canvas-inline-editor { position:absolute; z-index:3; resize:none; padding:4px 6px; border:1px solid var(--accent); border-radius:3px; outline:0; color:var(--text-primary); background:#19181feF; font:inherit; line-height:1.2; transform-origin:top left; }
+.expression-insert-button { position:absolute; z-index:4; padding:4px 7px; border:1px solid #514268; border-radius:4px; color:#d9c9ff; background:#30283e; font-size:9px; cursor:pointer; }
+.expression-field { display:grid; gap:5px; min-width:0; }
+.expression-field-input { min-height:58px; resize:vertical; }
+.expression-field-toolbar { display:flex; align-items:center; justify-content:space-between; gap:6px; color:#8d8b96; font-size:9px; }
+.expression-field-toolbar code { color:#d9c9ff; }
+.expression-field-preview { margin:0; color:#9fcbb0; font-size:9px; line-height:1.5; overflow-wrap:anywhere; }
+.expression-field-preview.is-error { color:#ee929a; }
+.expression-field-preview.is-warning { color:#f0d17b; }
+.canvas-expression-preview { position:absolute; z-index:5; padding:4px 6px; border:1px solid #39483d; border-radius:4px; color:#9fcbb0; background:#1c2821f5; font-size:9px; overflow-wrap:anywhere; }
+.canvas-expression-preview.is-error { border-color:#70454a; color:#ee929a; background:#2b1e20f5; }
+.interaction-expression-condition { display:grid; min-width:0; gap:5px; }
+.expression-autocomplete { color:#8d8b96; font-size:9px; }
+.expression-autocomplete>div { display:flex; flex-wrap:wrap; gap:4px; max-height:110px; overflow:auto; padding:5px 0; }
+.expression-autocomplete button { padding:3px 5px; border:1px solid #393640; border-radius:4px; color:#c9c5d2; background:#242328; font:9px ui-monospace,SFMono-Regular,Consolas,monospace; cursor:pointer; }
+.expression-autocomplete button:hover { border-color:#665386; color:#e2d4ff; }
 .canvas-empty-state { position:absolute; z-index:1; top:50%; left:50%; width:min(390px,80%); display:flex; align-items:center; flex-direction:column; transform:translate(-50%,-50%); text-align:center; pointer-events:none; }
 .canvas-empty-state button { pointer-events:auto; }
 .empty-icon-wrap { width:49px; height:49px; display:grid; place-items:center; margin-bottom:21px; border:1px solid #37333f; border-radius:14px; color:#b6a0f7; background:linear-gradient(145deg,#26222f,#1b1b20); box-shadow:0 8px 28px #0004; }
