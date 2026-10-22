@@ -107,6 +107,11 @@ const CanvasStage = lazy(() =>
     default: module.CanvasStage,
   })),
 );
+const FlowDiagram = lazy(() =>
+  import("../flow/FlowDiagram").then((module) => ({
+    default: module.FlowDiagram,
+  })),
+);
 
 interface TopBarProps {
   onNew: () => void;
@@ -569,6 +574,7 @@ export function CanvasArea({
   const toggleBattery = useStore((state) => state.toggleBattery);
   const toggleSignal = useStore((state) => state.toggleSignal);
   const [viewMenuOpen, setViewMenuOpen] = useState(false);
+  const [viewMode, setViewMode] = useState<"design" | "flow">("design");
   const [orientationRequest, setOrientationRequest] = useState<{
     screenId: string;
     device: ScreenDevice;
@@ -668,7 +674,22 @@ export function CanvasArea({
               </button>
             </span>
           )}
-          <span className="canvas-mode"><span className="mode-dot" /> Canvas</span>
+          <div className="workspace-view-toggle" role="group" aria-label="Workspace view">
+            <button
+              className={`workspace-view-button${viewMode === "design" ? " is-active" : ""}`}
+              aria-pressed={viewMode === "design"}
+              onClick={() => setViewMode("design")}
+            >
+              Design
+            </button>
+            <button
+              className={`workspace-view-button${viewMode === "flow" ? " is-active" : ""}`}
+              aria-pressed={viewMode === "flow"}
+              onClick={() => setViewMode("flow")}
+            >
+              Flow
+            </button>
+          </div>
           {!rightPanelOpen && <button className="icon-button small-icon" aria-label="Show inspector panel" onClick={onToggleRight}><PanelRightClose size={15} /></button>}
           <div className="canvas-view-menu-anchor">
             <button
@@ -826,16 +847,30 @@ export function CanvasArea({
         </div>
       </div>
       <div className="canvas-stage">
-        <Suspense fallback={<div className="canvas-stage-surface" />}>
-          <CanvasStage
-            onSaveAs={onSaveAs}
-            onOpen={onOpen}
-            onOpenPalette={onOpenPalette}
-            onNotify={onNotify}
-            activeTool={activeTool}
-            onToolChange={setActiveTool}
-          />
-        </Suspense>
+        {viewMode === "flow" ? (
+          <Suspense fallback={<div className="canvas-stage-surface" />}>
+            <FlowDiagram
+              onNotify={onNotify}
+              onOpenScreen={(screenId, widgetId) => {
+                const state = useStore.getState();
+                state.setActiveScreen(screenId);
+                if (widgetId) state.select([widgetId]);
+                setViewMode("design");
+              }}
+            />
+          </Suspense>
+        ) : (
+          <Suspense fallback={<div className="canvas-stage-surface" />}>
+            <CanvasStage
+              onSaveAs={onSaveAs}
+              onOpen={onOpen}
+              onOpenPalette={onOpenPalette}
+              onNotify={onNotify}
+              activeTool={activeTool}
+              onToolChange={setActiveTool}
+            />
+          </Suspense>
+        )}
       </div>
     </main>
   );

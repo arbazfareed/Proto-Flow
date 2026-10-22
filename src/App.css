@@ -422,6 +422,52 @@
 .orientation-cancel:hover { background:#292a30; }
 .mode-dot { width:5px; height:5px; background:#9d83ee; }
 .canvas-stage { position:relative; min-height:0; flex:1; overflow:hidden; background:var(--surface-canvas); }
+.workspace-view-toggle { display:flex; align-items:center; gap:2px; padding:3px; border:1px solid #35363d; border-radius:7px; background:#1b1c21; }
+.workspace-view-button { min-height:25px; padding:0 10px; border:0; border-radius:5px; color:#9696a0; background:transparent; font:inherit; font-size:10px; cursor:pointer; }
+.workspace-view-button:hover { color:#e2ddec; background:#292a30; }
+.workspace-view-button.is-active { color:#e6ddff; background:#39304f; box-shadow:inset 0 0 0 1px #594b77; }
+.flow-diagram { display:flex; min-width:0; min-height:0; width:100%; height:100%; flex-direction:column; background:#17181c; }
+.flow-toolbar { display:flex; min-height:54px; align-items:center; justify-content:space-between; gap:12px; padding:7px 14px; border-bottom:1px solid #2d2e34; background:#1b1c20; }
+.flow-toolbar-copy { display:flex; min-width:0; flex-direction:column; gap:3px; }
+.flow-toolbar-copy strong { color:#e5e3ec; font-size:12px; font-weight:650; }
+.flow-toolbar-copy span,.flow-help { color:#8e8e99; font-size:10px; }
+.flow-toolbar-actions { display:flex; flex-wrap:wrap; align-items:center; gap:6px; }
+.flow-tool-button { min-height:28px; padding:0 9px; font-size:10px; }
+.flow-viewport { position:relative; min-height:0; flex:1; overflow:hidden; background-color:#17181c; background-image:radial-gradient(#36373e 1px,transparent 1px); background-position:0 0; background-size:22px 22px; cursor:grab; touch-action:none; }
+.flow-viewport:active { cursor:grabbing; }
+.flow-world { position:absolute; top:0; left:0; transform-origin:top left; }
+.flow-edges { position:absolute; inset:0; overflow:visible; }
+.flow-edge { cursor:pointer; outline:none; }
+.flow-edge-hit { fill:none; stroke:transparent; stroke-width:22; pointer-events:stroke; }
+.flow-edge-visible { fill:none; stroke:#9275e7; stroke-width:2; pointer-events:none; }
+.flow-edge.is-selected .flow-edge-visible { stroke:#d2c1ff; stroke-width:3; }
+.flow-edge text { fill:#d8d2e3; stroke:#17181c; stroke-width:5px; paint-order:stroke; font-size:10px; pointer-events:none; }
+.flow-node { position:absolute; box-sizing:border-box; z-index:1; display:flex; width:224px; height:190px; flex-direction:column; overflow:hidden; border:1px solid #484750; border-radius:10px; background:#222329; box-shadow:0 7px 18px #0005; }
+.flow-node.is-active { border-color:#a187f0; box-shadow:0 0 0 2px #a187f055,0 8px 20px #0006; }
+.flow-node.can-connect { border-color:#62c9a1; }
+.flow-node-header { display:flex; min-height:34px; align-items:center; justify-content:space-between; gap:6px; padding:0 7px 0 10px; border-bottom:1px solid #383940; background:#292a31; }
+.flow-node-title { display:flex; min-width:0; flex:1; align-items:center; gap:6px; padding:0; overflow:hidden; border:0; color:#e9e7ee; background:transparent; text-align:left; cursor:pointer; }
+.flow-drag-grip { display:grid; width:15px; height:22px; flex-shrink:0; place-items:center; color:#777580; cursor:grab; touch-action:none; }
+.flow-drag-grip:hover { color:#c4b2f2; }
+.flow-node-name { overflow:hidden; font-size:10px; font-weight:650; text-overflow:ellipsis; white-space:nowrap; }
+.flow-start-badge { flex-shrink:0; padding:2px 4px; border-radius:3px; color:#d4c6ff; background:#41365b; font-size:7px; font-weight:750; letter-spacing:.05em; }
+.flow-connect-handle { display:grid; width:23px; height:23px; flex-shrink:0; place-items:center; border:1px solid #55515f; border-radius:50%; color:#c4b2f2; background:#302d38; cursor:crosshair; }
+.flow-connect-handle:hover,.flow-connect-handle.is-connecting { border-color:#a78bfa; color:#fff; background:#755cbd; }
+.flow-node-preview { display:grid; min-height:0; flex:1; place-items:center; padding:7px 10px; border:0; background:transparent; cursor:pointer; }
+.flow-preview-screen { position:relative; display:block; width:100%; max-width:100%; max-height:100%; overflow:hidden; border:1px solid #555761; border-radius:4px; background:#f9f9fb; }
+.flow-preview-widget { position:absolute; display:block; min-width:1px; min-height:1px; border-radius:2px; }
+.flow-empty-screen { position:absolute; inset:0; display:grid; place-items:center; color:#85858f; font-size:8px; }
+.flow-node-footer { display:flex; min-height:23px; align-items:center; justify-content:space-between; gap:8px; padding:0 10px; border-top:1px solid #383940; color:#9998a2; font-size:8px; }
+.flow-connect-hint,.flow-edge-card,.flow-zoom-controls { position:absolute; z-index:3; display:flex; align-items:center; gap:8px; border:1px solid #45434d; border-radius:8px; background:#222329ed; box-shadow:0 6px 18px #0005; }
+.flow-connect-hint { top:12px; left:50%; max-width:calc(100% - 24px); padding:5px 8px 5px 12px; color:#d5d2dc; font-size:10px; transform:translateX(-50%); }
+.flow-edge-card { right:14px; bottom:14px; max-width:calc(100% - 28px); padding:8px; }
+.flow-edge-card-copy { display:flex; min-width:80px; flex-direction:column; gap:4px; margin:0 4px; }
+.flow-edge-card-copy strong { max-width:230px; overflow:hidden; color:#e8e4ef; font-size:10px; text-overflow:ellipsis; white-space:nowrap; }
+.flow-edge-card-copy span { display:flex; align-items:center; gap:5px; color:#aaa6b2; font-size:9px; }
+.flow-zoom-controls { right:14px; bottom:14px; padding:3px; }
+.flow-zoom-controls span { min-width:35px; color:#c4c0cb; font-size:9px; text-align:center; }
+.flow-edge-card~.flow-zoom-controls { bottom:74px; }
+.flow-help { margin:0; padding:5px 12px; border-top:1px solid #2d2e34; background:#1b1c20; }
 .canvas-stage-surface { position:absolute; inset:0; overflow:hidden; touch-action:none; }
 .canvas-drop-target { position:absolute; z-index:5; border:2px solid #a78bfa; border-radius:3px; background:#9b83df22; pointer-events:none; }
 .canvas-drop-insertion { position:absolute; z-index:6; width:22px; height:2px; background:#c5afff; box-shadow:0 0 8px #a78bfa; transform:translate(-50%,-50%); pointer-events:none; }

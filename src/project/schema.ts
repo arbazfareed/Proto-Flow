@@ -17,8 +17,8 @@ export type {
   InteractionRule,
 } from "./interactionSchema";
 
-export const PROJECT_SCHEMA_VERSION = "1.6.0";
-const LEGACY_PROJECT_SCHEMA_VERSIONS = new Set(["1.0.0", "1.1.0", "1.2.0", "1.3.0", "1.4.0", "1.5.0"]);
+export const PROJECT_SCHEMA_VERSION = "1.7.0";
+const LEGACY_PROJECT_SCHEMA_VERSIONS = new Set(["1.0.0", "1.1.0", "1.2.0", "1.3.0", "1.4.0", "1.5.0", "1.6.0"]);
 const COORDINATE_LIMIT = 100_000;
 const HexColorSchema = z
   .string()
@@ -205,6 +205,10 @@ export const ProtoScreenSchema = z
   .object({
     id: z.string().uuid(),
     name: z.string().trim().min(1).max(120),
+    flowPosition: z.object({
+      x: z.number().finite().min(-COORDINATE_LIMIT).max(COORDINATE_LIMIT),
+      y: z.number().finite().min(-COORDINATE_LIMIT).max(COORDINATE_LIMIT),
+    }).strict().optional(),
     device: ScreenDeviceSchema.optional(),
     breakpoints: z.array(BreakpointSchema).optional(),
     widgets: z.array(ProtoWidgetSchema),
