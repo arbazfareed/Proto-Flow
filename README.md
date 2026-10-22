@@ -210,11 +210,11 @@ Use the Variables tab in the left sidebar to create, edit, rename, and delete pr
 
 ### PF-T402 — Conditional logic and trigger builder
 
-Select a widget and choose **Interactions** in the inspector to bind click, hover, change, load, tap, and touch-start/end triggers. Rules support ordered conditions with all/any matching and ordered navigate, show/hide, variable, panel-state, and repeater-data actions. The editor validates targets and variable types, warns about navigation loops and a trigger hiding itself, supports templates and rule testing against the variables' initial values, and saves changes as a single undoable project edit. Interactions persist in the `.pflow` schema; legacy rules without a widget binding remain readable and migrate with all-condition matching.
+Select a widget and choose **Interactions** in the inspector to bind click, hover, change, load, tap, and touch-start/end triggers. Rules support ordered conditions with all/any matching and ordered navigate, show/hide, variable, panel-state, and repeater data actions (set, add, remove, sort, and filter). The editor validates targets and variable types, warns about navigation loops and a trigger hiding itself, supports templates and rule testing against the variables' initial values, and saves changes as a single undoable project edit. Interactions persist in the `.pflow` schema; legacy rules without a widget binding remain readable and migrate with all-condition matching.
 
 ### PF-T403 — Local preview runtime
 
-Choose **Preview** in the editor toolbar to open the current prototype in a separate Tauri window (or a browser popup during web development). The preview renders widgets as DOM elements, listens for project edits over Tauri events or a local `BroadcastChannel`, and preserves runtime values while a project hot-reloads. Its toolbar supports screen navigation/back, restart, desktop/tablet/mobile device sizes, device-frame toggling, and a live variable inspector. Triggered rules execute in order and support navigation, visibility, typed variable, panel-state, and repeater-data actions; runtime errors are logged and shown in the preview rather than terminating it.
+Choose **Preview** in the editor toolbar to open the current prototype in a separate Tauri window (or a browser popup during web development). The preview renders widgets as DOM elements, listens for project edits over Tauri events or a local `BroadcastChannel`, and preserves runtime values while a project hot-reloads. Its toolbar supports screen navigation/back, restart, desktop/tablet/mobile device sizes, device-frame toggling, and a live variable inspector. Triggered rules execute in order and support navigation, visibility, typed variable, panel-state, and repeater dataset actions; runtime errors are logged and shown in the preview rather than terminating it.
 
 ### PF-T408 — Real-time collaboration
 
@@ -234,7 +234,13 @@ This is a development-only unsigned plugin runtime. Production installation and 
 
 Add a **Dynamic panel** from Elements, select it, then use the Inspector's **States** controls to add, rename, duplicate, reorder, delete, and switch states. Choose a state in the Inspector or its layer-tree node and enable **Edit active state** to add and arrange that state's widgets on the canvas. State content is stored in `props.states[]`; nested panels are supported up to five levels.
 
-In the Interactions tab, add a **Set panel state** action, select its target and state, then configure one of the six transitions and a duration in milliseconds. Browser/Tauri preview and standalone HTML exports apply the state switch at runtime. Existing panels without state data and older project files remain loadable; the project schema migrates to version 1.4.0.
+In the Interactions tab, add a **Set panel state** action, select its target and state, then configure one of the six transitions and a duration in milliseconds. Browser/Tauri preview and standalone HTML exports apply the state switch at runtime. Existing panels without state data and older project files remain loadable; the project schema migrates to version 1.5.0.
+
+### PF-T411 — Repeaters
+
+Add a **Repeater** from Elements and select it to edit its dataset and row layout in the Inspector. Add fields and records, edit or delete rows, and import/export CSV or import JSON. Datasets are limited to 1,000 record objects; the Inspector warns when the JSON payload exceeds 100 KB. Enable **Edit row template** to place widgets on the canvas relative to the repeater; select a template widget to bind its text or image source to a dataset field. Text and image values also support `{{item.field}}` interpolation.
+
+The vertical, horizontal, and grid layouts render in the browser/Tauri preview, standalone HTML export, and React TSX export. Interaction actions can replace data with JSON, append a record, remove a row by zero-based index, sort by `{ "field": "name", "direction": "asc" }`, or filter using `{ "field": "active", "operator": "equals", "value": true }`. Data is persisted under `props.dataset`; template widgets live in `props.rowTemplate.widgets` and field mappings in `props.itemBinding`. Existing projects migrate to schema version 1.5.0.
 
 Project files are opened and saved through Rust Tauri commands. Saves stage data in the destination directory, sync it to disk, then atomically replace the target; the frontend validates project data with the shared Zod schema before saving and after opening.
 

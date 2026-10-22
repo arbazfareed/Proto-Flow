@@ -15,6 +15,52 @@ import {
   getPanelStates,
   type PanelTransition,
 } from "../project/dynamicPanels";
+import {
+  getRepeaterDataset,
+  interpolateItem,
+  parseRepeaterDataset,
+  type RepeaterRecord,
+} from "../project/repeaters";
+
+function resolveItemValue(value: unknown, item?: RepeaterRecord): unknown {
+  if (!item) return value;
+  if (typeof value === "string") return interpolateItem(value, item);
+  if (Array.isArray(value)) return value.map((entry) => resolveItemValue(entry, item));
+  if (typeof value === "object" && value !== null) {
+    return Object.fromEntries(Object.entries(value).map(([key, entry]) => [
+      key,
+      resolveItemValue(entry, item),
+    ]));
+  }
+  return value;
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+interface RepeaterActionConfig extends Record<string, unknown> {
+  field: string;
+}
+
+function parseRepeaterActionConfig(
+  value: unknown,
+  item: RepeaterRecord | undefined,
+  action: "sort" | "filter",
+): RepeaterActionConfig {
+  let config = resolveItemValue(value, item);
+  if (typeof config === "string") {
+    try {
+      config = JSON.parse(config) as unknown;
+    } catch (error) {
+      throw new Error(`Repeater ${action} action must be valid JSON: ${error instanceof Error ? error.message : "invalid JSON"}`);
+    }
+  }
+  if (!isRecord(config) || typeof config.field !== "string") {
+    throw new Error(`Repeater ${action} action requires a field name.`);
+  }
+  return { ...config, field: config.field };
+}
 
 export type PreviewEvent =
   | "onClick"
@@ -60,17 +106,6 @@ function conditionMatches(
     case "contains":
       return typeof value === "string" && typeof condition.value === "string" &&
         value.includes(condition.value);
-  }
-}
-
-function parseRepeaterValue(value: unknown): unknown {
-  if (typeof value !== "string") return value;
-  try {
-    return JSON.parse(value) as unknown;
-  } catch (error) {
-    throw new Error(
-      `Repeater data must be valid JSON: ${error instanceof Error ? error.message : "invalid JSON"}`,
-    );
   }
 }
 
@@ -190,7 +225,7 @@ export class PreviewRuntime {
     };
   }
 
-  runEvent(widget: Widget, event: PreviewEvent): string[] {
+  runEvent(widget: Widget, event: PreviewEvent, item?: RepeaterRecord): string[] {
     const screen = this.currentScreen;
     const errors: string[] = [];
     const rules = screen.interactionRules.filter((rule) =>
@@ -199,7 +234,7 @@ export class PreviewRuntime {
     for (const rule of rules) {
       if (!this.conditionsMatch(rule, screen.id)) continue;
       try {
-        this.runActions(rule, screen);
+        this.runActions(rule, screen, item);
       } catch (error) {
         errors.push(error instanceof Error ? error.message : "Interaction action failed.");
       }
@@ -229,7 +264,7 @@ export class PreviewRuntime {
       : results.every(Boolean);
   }
 
-  private runActions(rule: InteractionRule, screen: Screen): void {
+  private runActions(rule: InteractionRule, screen: Screen, item?: RepeaterRecord): void {
     for (const action of rule.actions) {
       switch (action.type) {
         case "navigate":
@@ -238,7 +273,7 @@ export class PreviewRuntime {
           break;
         case "show":
         case "hide":
-          if (!screen.widgets.some((item) => item.id === action.target)) {
+          if (!collectWidgetsDeep(screen.widgets).some((item) => item.id === action.target)) {
             throw new Error(`Visibility action target "${action.target}" is missing.`);
           }
           this.visibility[action.target] = action.type === "show";
@@ -283,13 +318,83 @@ export class PreviewRuntime {
           break;
           }
         case "setRepeaterData":
+          {
           this.requireWidget(screen, action.target, ["repeater"]);
-          this.repeaterData[action.target] = parseRepeaterValue(action.value);
+          this.repeaterData[action.target] = parseRepeaterDataset(
+            resolveItemValue(action.value, item),
+          );
           break;
+          }
+        case "addRepeaterRow":
+          {
+          const repeater = this.requireWidget(screen, action.target, ["repeater"]);
+          const rows = this.getRepeaterRows(repeater);
+          let row = resolveItemValue(action.value, item);
+          if (typeof row === "string") {
+            try {
+              row = JSON.parse(row) as unknown;
+            } catch (error) {
+              throw new Error(`Repeater row must be a JSON object: ${error instanceof Error ? error.message : "invalid JSON"}`);
+            }
+          }
+          if (!isRecord(row)) throw new Error("Repeater row must be an object.");
+          this.repeaterData[action.target] = parseRepeaterDataset([
+            ...rows,
+            row,
+          ]);
+          break;
+          }
+        case "removeRepeaterRow":
+          {
+          const repeater = this.requireWidget(screen, action.target, ["repeater"]);
+          const rows = this.getRepeaterRows(repeater);
+          const index = Number(resolveItemValue(action.value, item));
+          if (!Number.isInteger(index) || index < 0 || index >= rows.length) {
+            throw new Error("Repeater row index must reference an existing row.");
+          }
+          this.repeaterData[action.target] = rows.filter((_row, rowIndex) => rowIndex !== index);
+          break;
+          }
+        case "sortRepeater":
+          {
+          const repeater = this.requireWidget(screen, action.target, ["repeater"]);
+          const config = parseRepeaterActionConfig(action.value, item, "sort");
+          const field = config.field;
+          const direction = config.direction === "desc" ? -1 : 1;
+          this.repeaterData[action.target] = this.getRepeaterRows(repeater).slice().sort((first, second) =>
+            String(first[field] ?? "").localeCompare(String(second[field] ?? ""), undefined, { numeric: true }) * direction,
+          );
+          break;
+          }
+        case "filterRepeater":
+          {
+          const repeater = this.requireWidget(screen, action.target, ["repeater"]);
+          const config = parseRepeaterActionConfig(action.value, item, "filter");
+          const field = config.field;
+          const operator = typeof config.operator === "string" ? config.operator : "equals";
+          const expected = config.value;
+          this.repeaterData[action.target] = this.getRepeaterRows(repeater).filter((row) => {
+            const actual = row[field];
+            switch (operator) {
+              case "notEquals": return actual !== expected;
+              case "contains": return typeof actual === "string" && actual.includes(String(expected ?? ""));
+              case "greaterThan": return typeof actual === "number" && typeof expected === "number" && actual > expected;
+              case "lessThan": return typeof actual === "number" && typeof expected === "number" && actual < expected;
+              default: return actual === expected;
+            }
+          });
+          break;
+          }
         default:
           throw new Error(`Unsupported interaction action "${action.type}".`);
       }
     }
+  }
+
+  private getRepeaterRows(widget: Widget): RepeaterRecord[] {
+    return this.repeaterData[widget.id] === undefined
+      ? getRepeaterDataset(widget)
+      : parseRepeaterDataset(this.repeaterData[widget.id]);
   }
 
   private requireWidget(screen: Screen, widgetId: string, acceptedTypes: string[]): Widget {

@@ -76,10 +76,24 @@ function jsxString(value: unknown): string {
 }
 
 export function generateSingleFileJsx(project: Project): string {
-  return `import { useState, type CSSProperties } from "react";
+  return `import { useState, type CSSProperties, type ReactNode } from "react";
 
 const project = ${jsxString(project)};
 type Widget = typeof project.screens[number]["widgets"][number];
+const repeaterItemVisible = (widget: Widget, item: Record<string, unknown>): boolean => {
+  const rule = widget.props.visibleWhen;
+  if (typeof rule !== "object" || rule === null || Array.isArray(rule)) return true;
+  const condition = rule as Record<string, unknown>;
+  if (typeof condition.field !== "string" || typeof condition.operator !== "string") return true;
+  const actual = item[condition.field];
+  switch (condition.operator) {
+    case "notEquals": return actual !== condition.value;
+    case "contains": return typeof actual === "string" && actual.includes(String(condition.value ?? ""));
+    case "greaterThan": return typeof actual === "number" && typeof condition.value === "number" && actual > condition.value;
+    case "lessThan": return typeof actual === "number" && typeof condition.value === "number" && actual < condition.value;
+    default: return actual === condition.value;
+  }
+};
 
 export default function App() {
   const [screenId, setScreenId] = useState(project.startScreenId);
@@ -102,7 +116,41 @@ export default function App() {
     padding: typeof widget.props.padding === "number" ? widget.props.padding : 8,
     boxSizing: "border-box",
   });
-  const label = (widget: Widget) => String(widget.props.text ?? widget.props.label ?? widget.props.title ?? widget.type);
+  const label = (widget: Widget, item?: Record<string, unknown>) =>
+    String(widget.props.text ?? widget.props.label ?? widget.props.title ?? widget.type)
+      .replace(/\\{\\{\\s*item\\.([\\w$.-]+)\\s*\\}\\}/g, (_match, field: string) => String(item?.[field] ?? ""));
+  const renderWidget = (widget: Widget, item?: Record<string, unknown>): ReactNode => {
+    const text = label(widget, item);
+    if (widget.type === "repeater") {
+      const rows = Array.isArray(widget.props.dataset) ? widget.props.dataset as Record<string, unknown>[] : [];
+      const template = typeof widget.props.rowTemplate === "object" && widget.props.rowTemplate !== null
+        && "widgets" in widget.props.rowTemplate && Array.isArray(widget.props.rowTemplate.widgets)
+        ? widget.props.rowTemplate.widgets as Widget[] : [];
+      const layout = widget.props.layout === "horizontal" || widget.props.layout === "grid" ? widget.props.layout : "vertical";
+      return <div key={widget.id} style={{ ...style(widget), display: layout === "grid" ? "grid" : "flex",
+        flexDirection: layout === "horizontal" ? "row" : "column",
+        gridTemplateColumns: layout === "grid" ? "repeat(auto-fill,minmax(120px,1fr))" : undefined,
+        gap: typeof widget.props.gap === "number" ? widget.props.gap : 8, overflow: "visible" }}>
+        {rows.slice(0, 1000).map((row, index) => <div key={index} style={{ position: "relative",
+          width: widget.width, height: widget.height, flex: layout === "horizontal" ? "0 0 auto" : undefined }}>
+          {template.filter((child) => child.visible && repeaterItemVisible(child, row)).map((child) => renderWidget(child, row))}
+        </div>)}
+      </div>;
+    }
+    if (["button", "icon-button"].includes(widget.type)) {
+      return <button key={widget.id} type="button" style={style(widget)}>{text}</button>;
+    }
+    if (widget.type === "image") {
+      const src = String(widget.props.src ?? "").replace(/\\{\\{\\s*item\\.([\\w$.-]+)\\s*\\}\\}/g, (_match, field: string) => String(item?.[field] ?? ""));
+      if (src) return <img key={widget.id} src={src} alt={String(widget.props.alt ?? text)} style={{ ...style(widget), objectFit: "cover" }} />;
+    }
+    if (["input", "search", "textarea"].includes(widget.type)) {
+      return widget.type === "textarea"
+        ? <textarea key={widget.id} aria-label={String(widget.props.label ?? "Preview input")} placeholder={String(widget.props.placeholder ?? "")} style={style(widget)} />
+        : <input key={widget.id} type={widget.type === "search" ? "search" : String(widget.props.type ?? "text")} aria-label={String(widget.props.label ?? "Preview input")} placeholder={String(widget.props.placeholder ?? "")} style={style(widget)} />;
+    }
+    return <div key={widget.id} style={style(widget)}>{text}</div>;
+  };
   return (
     <main style={{ fontFamily: "system-ui, sans-serif", padding: 16 }}>
       <label>
@@ -112,21 +160,7 @@ export default function App() {
         </select>
       </label>
       <section style={{ position: "relative", width: screen.device?.width ?? 1440, height: screen.device?.height ?? 900, margin: "16px auto", background: "#fff", overflow: "hidden" }}>
-        {screen.widgets.filter((widget) => widget.visible).sort((a, b) => a.zIndex - b.zIndex).map((widget) => {
-          const text = label(widget);
-          if (["button", "icon-button"].includes(widget.type)) {
-            return <button key={widget.id} type="button" style={style(widget)}>{text}</button>;
-          }
-          if (widget.type === "image" && typeof widget.props.src === "string" && widget.props.src) {
-            return <img key={widget.id} src={widget.props.src} alt={String(widget.props.alt ?? text)} style={{ ...style(widget), objectFit: "cover" }} />;
-          }
-          if (["input", "search", "textarea"].includes(widget.type)) {
-            return widget.type === "textarea"
-              ? <textarea key={widget.id} aria-label={String(widget.props.label ?? "Preview input")} placeholder={String(widget.props.placeholder ?? "")} style={style(widget)} />
-              : <input key={widget.id} type={widget.type === "search" ? "search" : String(widget.props.type ?? "text")} aria-label={String(widget.props.label ?? "Preview input")} placeholder={String(widget.props.placeholder ?? "")} style={style(widget)} />;
-          }
-          return <div key={widget.id} style={style(widget)}>{text}</div>;
-        })}
+        {screen.widgets.filter((widget) => widget.visible).sort((a, b) => a.zIndex - b.zIndex).map((widget) => renderWidget(widget))}
       </section>
     </main>
   );

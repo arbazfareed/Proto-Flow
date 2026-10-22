@@ -12,6 +12,7 @@ export const createCanvasSlice: StateCreator<StoreState, [], [], CanvasSlice> = 
   snapEnabled: true,
   selectedIds: [],
   activePanelEdit: null,
+  activeRepeaterEdit: null,
   hoveredWidgetId: null,
   hoveredCanvasWidgetId: null,
   hoveredLayerWidgetId: null,
@@ -28,6 +29,7 @@ export const createCanvasSlice: StateCreator<StoreState, [], [], CanvasSlice> = 
   select: (selectedIds) =>
     set({ selectedIds: [...new Set(selectedIds)], geometryPreview: null }),
   setActivePanelEdit: (activePanelEdit) => set({ activePanelEdit }),
+  setActiveRepeaterEdit: (activeRepeaterEdit) => set({ activeRepeaterEdit }),
   clearSelection: () => set({ selectedIds: [], geometryPreview: null }),
   setCanvasHoveredWidget: (hoveredCanvasWidgetId) =>
     set((state) => ({
@@ -46,6 +48,7 @@ export const createCanvasSlice: StateCreator<StoreState, [], [], CanvasSlice> = 
       activeBreakpointId: null,
       selectedIds: [],
       activePanelEdit: null,
+      activeRepeaterEdit: null,
       hoveredWidgetId: null,
       hoveredCanvasWidgetId: null,
       hoveredLayerWidgetId: null,

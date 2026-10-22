@@ -7,7 +7,9 @@ const screenPicker = document.getElementById("screen-picker");
 const backButton = document.getElementById("back");
 const variables = new Map(project.variables.map((item) => [item.id, item.initial]));
 function allWidgets(widgets) {
-  return widgets.flatMap((item) => [item, ...(item.type === "dynamic-panel" ? (item.props.states || []).flatMap((state) => allWidgets(state.widgets || [])) : [])]);
+  return widgets.flatMap((item) => [item,
+    ...(item.type === "dynamic-panel" ? (item.props.states || []).flatMap((state) => allWidgets(state.widgets || [])) : []),
+    ...(item.type === "repeater" ? allWidgets(item.props.rowTemplate?.widgets || []) : [])]);
 }
 const visibility = new Map(project.screens.flatMap((screen) => allWidgets(screen.widgets).map((item) => [item.id, item.visible])));
 const panelStates = new Map();
@@ -29,8 +31,44 @@ function setVariable(name, value, activeScreen) {
     || project.variables.find((entry) => entry.name === name && entry.scope === "project");
   if (item && typeof value === typeof item.initial) variables.set(item.id, value);
 }
-function text(value, activeScreen) {
-  return String(value ?? "").replace(/\{\{\s*([\w$]+)\s*\}\}/g, (_, name) => String(variable(name, activeScreen) ?? ""));
+function text(value, activeScreen, item) {
+  return String(value ?? "").replace(/\{\{\s*([\w$.-]+)\s*\}\}/g, (_, name) => {
+    if (name.startsWith("item.")) return String(item?.[name.slice(5)] ?? "");
+    return String(variable(name, activeScreen) ?? "");
+  });
+}
+function repeaterRows(value) {
+  let rows = value;
+  if (typeof rows === "string") {
+    try { rows = JSON.parse(rows); } catch { throw new Error("Repeater data must be valid JSON."); }
+  }
+  if (!Array.isArray(rows) || rows.length > 1000 || rows.some((row) => !row || typeof row !== "object" || Array.isArray(row))) {
+    throw new Error("Repeater data must contain at most 1,000 record objects.");
+  }
+  return rows;
+}
+function repeaterItemVisible(widget, item) {
+  const rule = widget.props.visibleWhen;
+  if (!rule || typeof rule.field !== "string" || typeof rule.operator !== "string") return true;
+  const actual = item[rule.field];
+  switch (rule.operator) {
+    case "notEquals": return actual !== rule.value;
+    case "contains": return typeof actual === "string" && actual.includes(String(rule.value ?? ""));
+    case "greaterThan": return typeof actual === "number" && typeof rule.value === "number" && actual > rule.value;
+    case "lessThan": return typeof actual === "number" && typeof rule.value === "number" && actual < rule.value;
+    default: return actual === rule.value;
+  }
+}
+function interpolateActionValue(value, item) {
+  if (typeof value === "string") return text(value, screen().id, item);
+  if (Array.isArray(value)) return value.map((entry) => interpolateActionValue(entry, item));
+  if (value && typeof value === "object") return Object.fromEntries(Object.entries(value).map(([key, entry]) => [key, interpolateActionValue(entry, item)]));
+  return value;
+}
+function actionValue(value, item) {
+  const interpolated = interpolateActionValue(value, item);
+  if (typeof interpolated !== "string") return interpolated;
+  try { return JSON.parse(interpolated); } catch { return interpolated; }
 }
 function matches(condition, activeScreen) {
   const current = variable(condition.variable, activeScreen);
@@ -45,7 +83,7 @@ function matches(condition, activeScreen) {
     default: return false;
   }
 }
-function actions(rule, activeScreen) {
+function actions(rule, activeScreen, item) {
   for (const action of rule.actions) {
     if (action.type === "navigate" || action.type === "navigateTo") {
       if (project.screens.some((item) => item.id === action.target) && action.target !== screenId) {
@@ -65,24 +103,43 @@ function actions(rule, activeScreen) {
       panelStates.set(action.target, state?.id || action.stateId || action.value);
       panelTransitions.set(action.target, { transition: action.transition || "none", duration: action.duration || 0 });
     } else if (action.type === "setRepeaterData") {
-      try {
-        repeaterData.set(action.target, typeof action.value === "string" ? JSON.parse(action.value) : action.value);
-      } catch {
-        throw new Error("Repeater data must be valid JSON.");
+      repeaterData.set(action.target, repeaterRows(actionValue(action.value, item)));
+    } else if (["addRepeaterRow", "removeRepeaterRow", "sortRepeater", "filterRepeater"].includes(action.type)) {
+      const repeater = allWidgets(screen().widgets).find((entry) => entry.id === action.target && entry.type === "repeater");
+      if (!repeater) throw new Error("Repeater action target is missing.");
+      const rows = repeaterRows(repeaterData.get(action.target) ?? repeater.props.dataset ?? []);
+      if (action.type === "addRepeaterRow") {
+        const row = actionValue(action.value, item);
+        repeaterData.set(action.target, repeaterRows([...rows, row && typeof row === "object" ? row : {}]));
+      } else if (action.type === "removeRepeaterRow") {
+        const index = Number(actionValue(action.value, item));
+        if (!Number.isInteger(index) || index < 0 || index >= rows.length) throw new Error("Repeater row index must reference an existing row.");
+        repeaterData.set(action.target, rows.filter((_, rowIndex) => rowIndex !== index));
+      } else {
+        const config = actionValue(action.value, item);
+        if (!config || typeof config !== "object" || typeof config.field !== "string") throw new Error("Repeater sort/filter action requires a field.");
+        if (action.type === "sortRepeater") {
+          const direction = config.direction === "desc" ? -1 : 1;
+          repeaterData.set(action.target, rows.slice().sort((a, b) => String(a[config.field] ?? "").localeCompare(String(b[config.field] ?? ""), undefined, { numeric: true }) * direction));
+        } else {
+          repeaterData.set(action.target, rows.filter((row) => config.operator === "contains"
+            ? String(row[config.field] ?? "").includes(String(config.value ?? ""))
+            : config.operator === "notEquals" ? row[config.field] !== config.value : row[config.field] === config.value));
+        }
       }
     }
   }
 }
-function fire(widget, event) {
+function fire(widget, event, item) {
   const activeScreen = screen();
   for (const rule of activeScreen.interactionRules.filter((item) => item.event === event && (!item.widgetId || item.widgetId === widget.id))) {
     const checks = rule.conditions.map((condition) => matches(condition, activeScreen.id));
     if (rule.conditions.length && (rule.conditionMode === "any" ? !checks.some(Boolean) : !checks.every(Boolean))) continue;
-    actions(rule, activeScreen.id);
+    actions(rule, activeScreen.id, item);
   }
   render();
 }
-function renderWidget(widget, activeScreen) {
+function renderWidget(widget, activeScreen, item) {
   const element = document.createElement(widget.type === "button" || widget.type === "icon-button" ? "button" : "div");
   element.className = "widget";
   element.style.left = widget.x + "px";
@@ -103,14 +160,14 @@ function renderWidget(widget, activeScreen) {
   element.style.padding = (typeof widget.props.padding === "number" ? widget.props.padding : 8) + "px";
   element.style.whiteSpace = "pre-wrap";
   const rawText = widget.props.text ?? widget.props.label ?? widget.props.title ?? "";
-  const shownText = text(rawText, activeScreen.id);
+  const shownText = text(rawText, activeScreen.id, item);
   if (widget.type === "ellipse" || widget.type === "circle") element.style.borderRadius = "50%";
   if (widget.type === "button" || widget.type === "icon-button") element.textContent = shownText || "Button";
   else if (widget.type === "input" || widget.type === "search" || widget.type === "textarea") {
     const input = document.createElement(widget.type === "textarea" ? "textarea" : "input");
     input.type = widget.type === "search" ? "search" : (typeof widget.props.type === "string" ? widget.props.type : "text");
-    input.setAttribute("aria-label", text(widget.props.label || "Preview input", activeScreen.id));
-    input.placeholder = text(widget.props.placeholder || "", activeScreen.id);
+    input.setAttribute("aria-label", text(widget.props.label || "Preview input", activeScreen.id, item));
+    input.placeholder = text(widget.props.placeholder || "", activeScreen.id, item);
     input.value = String(widget.props.value ?? "");
     input.addEventListener("input", () => {
       const binding = widget.props.variableName ?? widget.props.variable;
@@ -119,7 +176,7 @@ function renderWidget(widget, activeScreen) {
         if (definition) setVariable(binding, definition.type === "number" ? Number(input.value) : input.value, activeScreen.id);
       }
     });
-    input.addEventListener("change", () => fire(widget, "onChange"));
+    input.addEventListener("change", () => fire(widget, "onChange", item));
     element.append(input);
   } else if (["checkbox", "toggle", "radio"].includes(widget.type)) {
     const input = document.createElement("input");
@@ -129,35 +186,59 @@ function renderWidget(widget, activeScreen) {
     input.addEventListener("change", () => {
       const binding = widget.props.variableName ?? widget.props.variable;
       if (typeof binding === "string") setVariable(binding, input.checked, activeScreen.id);
-      fire(widget, "onChange");
+      fire(widget, "onChange", item);
     });
     element.append(input, document.createTextNode(shownText));
   } else if (widget.type === "image") {
-    const src = typeof widget.props.src === "string" ? widget.props.src : "";
+    const src = text(typeof widget.props.src === "string" ? widget.props.src : "", activeScreen.id, item);
     if (src.startsWith("data:image/") || src.startsWith("assets/")) {
       const image = document.createElement("img");
       image.src = src;
-      image.alt = text(widget.props.alt || shownText, activeScreen.id);
+      image.alt = text(widget.props.alt || shownText, activeScreen.id, item);
       element.append(image);
     } else element.textContent = shownText || "Image";
   } else if (widget.type === "list" && Array.isArray(widget.props.items)) {
     const list = document.createElement("ul");
-    for (const item of widget.props.items) {
+    for (const listItem of widget.props.items) {
       const row = document.createElement("li");
-      row.textContent = text(item, activeScreen.id);
+      row.textContent = text(listItem, activeScreen.id, item);
       list.append(row);
     }
     element.append(list);
+  } else if (widget.type === "repeater") {
+    const rows = repeaterRows(repeaterData.get(widget.id) ?? widget.props.dataset ?? []);
+    const template = widget.props.rowTemplate?.widgets || [];
+    const layout = ["horizontal", "grid"].includes(widget.props.layout) ? widget.props.layout : "vertical";
+    element.replaceChildren();
+    element.style.display = layout === "grid" ? "grid" : "flex";
+    element.style.flexDirection = layout === "horizontal" ? "row" : "column";
+    element.style.gridTemplateColumns = layout === "grid" ? "repeat(auto-fill,minmax(120px,1fr))" : "";
+    element.style.gap = Math.max(0, Number(widget.props.gap) || 0) + "px";
+    element.style.overflow = "visible";
+    element.style.height = layout === "horizontal" ? widget.height + "px" : Math.max(widget.height, rows.length * (widget.height + (Number(widget.props.gap) || 0))) + "px";
+    for (const [index, rowData] of rows.entries()) {
+      const row = document.createElement("div");
+      row.className = "repeater-row";
+      row.style.position = "relative";
+      row.style.flex = layout === "horizontal" ? "0 0 " + widget.width + "px" : "0 0 auto";
+      row.style.width = widget.width + "px";
+      row.style.height = widget.height + "px";
+      row.style.overflow = "hidden";
+      row.addEventListener("click", () => fire(widget, "onClick", rowData));
+      for (const child of template) {
+        if (child.visible && visibility.get(child.id) !== false && repeaterItemVisible(child, rowData)) row.append(renderWidget(child, activeScreen, rowData));
+      }
+      element.append(row);
+    }
   } else {
     element.textContent = shownText || widget.type.replaceAll("-", " ");
   }
-  if (widget.type === "button" || widget.type === "icon-button") element.addEventListener("click", () => fire(widget, "onClick"));
-  else element.addEventListener("click", () => fire(widget, "onClick"));
-  element.addEventListener("mouseenter", () => fire(widget, "onHover"));
-  element.addEventListener("touchstart", () => fire(widget, "onTouchStart"), { passive: true });
+  if (widget.type !== "repeater") element.addEventListener("click", () => fire(widget, "onClick", item));
+  element.addEventListener("mouseenter", () => fire(widget, "onHover", item));
+  element.addEventListener("touchstart", () => fire(widget, "onTouchStart", item), { passive: true });
   element.addEventListener("touchend", () => {
-    fire(widget, "onTouchEnd");
-    fire(widget, "onTap");
+    fire(widget, "onTouchEnd", item);
+    fire(widget, "onTap", item);
   }, { passive: true });
   const panelState = panelStates.get(widget.id);
   if (panelState) element.dataset.panelState = panelState;
@@ -165,15 +246,6 @@ function renderWidget(widget, activeScreen) {
   const transition = owner ? panelTransitions.get(owner.id) : undefined;
   if (transition && transition.transition !== "none" && transition.duration > 0) {
     element.style.animation = "protoflow-panel-" + transition.transition + " " + transition.duration + "ms ease both";
-  }
-  const rows = repeaterData.get(widget.id);
-  if (widget.type === "repeater" && Array.isArray(rows)) {
-    element.replaceChildren();
-    for (const rowData of rows) {
-      const row = document.createElement("div");
-      row.textContent = typeof rowData === "string" ? text(rowData, activeScreen.id) : JSON.stringify(rowData);
-      element.append(row);
-    }
   }
   return element;
 }

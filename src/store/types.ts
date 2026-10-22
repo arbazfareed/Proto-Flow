@@ -30,6 +30,7 @@ export interface CanvasSlice {
   snapEnabled: boolean;
   selectedIds: string[];
   activePanelEdit: { panelId: string; stateId: string } | null;
+  activeRepeaterEdit: string | null;
   hoveredWidgetId: string | null;
   hoveredCanvasWidgetId: string | null;
   hoveredLayerWidgetId: string | null;
@@ -42,6 +43,7 @@ export interface CanvasSlice {
   toggleSnap: () => void;
   select: (ids: string[]) => void;
   setActivePanelEdit: (scope: { panelId: string; stateId: string } | null) => void;
+  setActiveRepeaterEdit: (repeaterId: string | null) => void;
   clearSelection: () => void;
   setCanvasHoveredWidget: (widgetId: string | null) => void;
   setLayerHoveredWidget: (widgetId: string | null) => void;

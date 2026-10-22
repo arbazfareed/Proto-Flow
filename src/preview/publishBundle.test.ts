@@ -4,6 +4,7 @@ import {
   generatePublishedPreviewHtml,
   getPublishedProjectData,
   publishedBundleSize,
+  PREVIEW_RUNTIME_SCRIPT,
 } from "./publishBundle";
 
 describe("standalone published preview bundle", () => {
@@ -75,7 +76,7 @@ describe("standalone published preview bundle", () => {
   it("fires touch-tap rules and evaluates each screen load rule only once", () => {
     const html = generatePublishedPreviewHtml(createEmptyProject("Runtime checks"));
 
-    expect(html).toContain('fire(widget, "onTap")');
+    expect(html).toContain('fire(widget, "onTap", item)');
     expect(html).toContain('for (const rule of activeScreen.interactionRules.filter((item) => item.event === "onLoad"))');
     expect(html).not.toContain("for (const widget of activeScreen.widgets)");
   });
@@ -85,5 +86,39 @@ describe("standalone published preview bundle", () => {
     expect(html).toContain("function activeWidgets(widgets, depth = 0)");
     expect(html).toContain('panelStates.set(action.target, state?.id || action.stateId || action.value)');
     expect(html).toContain("@keyframes protoflow-panel-slide-left");
+  });
+
+  it("renders repeater templates per record and includes bounded data actions", () => {
+    const project = createEmptyProject("Repeater export");
+    project.screens[0].widgets.push({
+      id: crypto.randomUUID(),
+      type: "repeater",
+      x: 0,
+      y: 0,
+      width: 240,
+      height: 80,
+      rotation: 0,
+      opacity: 1,
+      visible: true,
+      locked: false,
+      zIndex: 0,
+      style: {},
+      props: {
+        dataset: [{ name: "Ada" }],
+        rowTemplate: { widgets: [] },
+        layout: "vertical",
+        gap: 8,
+        itemBinding: {},
+      },
+    });
+    const html = generatePublishedPreviewHtml(project);
+    expect(html).toContain("function repeaterRows(value)");
+    expect(html).toContain("case");
+    expect(html).toContain('action.type === "sortRepeater"');
+    expect(html).toContain("renderWidget(child, activeScreen, rowData)");
+    expect(html).toContain("item?.[name.slice(5)]");
+    expect(html).toContain("function repeaterItemVisible(widget, item)");
+    expect(html).toContain('row.addEventListener("click", () => fire(widget, "onClick", rowData))');
+    expect(() => new Function(PREVIEW_RUNTIME_SCRIPT)).not.toThrow();
   });
 });

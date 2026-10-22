@@ -118,6 +118,10 @@ function describeAction(
     }
     case "setPanelState":
     case "setRepeaterData":
+    case "addRepeaterRow":
+    case "removeRepeaterRow":
+    case "sortRepeater":
+    case "filterRepeater":
       return `${action.type} for ${action.target}`;
     default:
       return `Unsupported action: ${action.type}`;
@@ -195,7 +199,8 @@ export function validateInteractionRules(project: Project, screen: Screen): Inte
             navigation.set(ownerScreen.id, targets);
           }
         } else if (action.type === "show" || action.type === "hide" ||
-          action.type === "setPanelState" || action.type === "setRepeaterData") {
+          action.type === "setPanelState" || ["setRepeaterData", "addRepeaterRow",
+            "removeRepeaterRow", "sortRepeater", "filterRepeater"].includes(action.type)) {
           const targetScreen = project.screens.find((item) =>
             collectWidgetsDeep(item.widgets).some((widget) => widget.id === action.target),
           );
@@ -206,7 +211,8 @@ export function validateInteractionRules(project: Project, screen: Screen): Inte
             : undefined;
           const targetTypeMatches = action.type === "setPanelState"
             ? ["panel", "dynamic-panel", "dynamicPanel"].includes(targetWidget?.type ?? "")
-            : action.type === "setRepeaterData"
+            : ["setRepeaterData", "addRepeaterRow", "removeRepeaterRow",
+              "sortRepeater", "filterRepeater"].includes(action.type)
               ? targetWidget?.type === "repeater"
               : true;
           if (!targetScreen || (ownerScreen.id === screen.id && !targetIsLocal) || !targetTypeMatches) {
@@ -216,8 +222,9 @@ export function validateInteractionRules(project: Project, screen: Screen): Inte
                 code: "unknown-target",
                 message: action.type === "setPanelState"
                   ? "Panel-state action must target a panel on this screen."
-                  : action.type === "setRepeaterData"
-                    ? "Repeater-data action must target a repeater on this screen."
+                  : ["setRepeaterData", "addRepeaterRow", "removeRepeaterRow",
+                    "sortRepeater", "filterRepeater"].includes(action.type)
+                    ? "Repeater action must target a repeater on this screen."
                     : "Visibility action must target a widget on this screen.",
                 ruleId: rule.id,
               });

@@ -568,6 +568,11 @@
 .dynamic-panel-state .icon-button:disabled { opacity:.35; cursor:default; }
 .dynamic-panel-state-actions { display:flex; gap:5px; margin-top:8px; }
 .dynamic-panel-state-actions .button { flex:1; min-height:26px; padding:4px; font-size:9px; }
+.repeater-data-table-wrap { max-width:100%; overflow:auto; margin-top:8px; }
+.repeater-data-table { width:100%; border-collapse:collapse; font-size:9px; }
+.repeater-data-table th,.repeater-data-table td { padding:3px; border:1px solid #373840; text-align:left; }
+.repeater-data-table th { color:#aaa6b5; font-weight:600; }
+.repeater-data-table .text-field { min-width:72px; height:25px; padding:3px 5px; font-size:9px; }
 .inspector-rule { height:1px; margin:18px 0; background:#292a2f; }
 .detail-row { justify-content:space-between; min-height:27px; color:#85858e; font-size:9px; }
 .detail-row>span:last-child { max-width:130px; overflow:hidden; color:#c5c5cc; text-overflow:ellipsis; white-space:nowrap; }

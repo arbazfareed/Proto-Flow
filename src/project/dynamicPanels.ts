@@ -80,6 +80,24 @@ export function flattenActivePanelWidgets(
   });
 }
 
+export function flattenRepeaterTemplateWidgets(
+  widget: Widget,
+  offsetX = 0,
+  offsetY = 0,
+): Widget[] {
+  if (widget.type !== "repeater") return [];
+  const template = widget.props.rowTemplate;
+  if (typeof template !== "object" || template === null || Array.isArray(template)) return [];
+  const children = (template as Record<string, unknown>).widgets;
+  if (!Array.isArray(children)) return [];
+  return (children as Widget[]).map((child) => ({
+    ...child,
+    x: child.x + offsetX,
+    y: child.y + offsetY,
+    groupId: child.groupId ?? widget.id,
+  }));
+}
+
 export function mapWidgetsDeep(
   widgets: Widget[],
   update: (widget: Widget) => Widget | null,
@@ -87,12 +105,30 @@ export function mapWidgetsDeep(
   return widgets.flatMap((widget) => {
     const changed = update(widget);
     if (!changed) return [];
-    if (changed.type !== "dynamic-panel") return [changed];
-    const states = getPanelStates(changed).map((state) => ({
-      ...state,
-      widgets: mapWidgetsDeep(state.widgets, update),
-    }));
-    return [withPanelStates(changed, states)];
+    if (changed.type === "dynamic-panel") {
+      const states = getPanelStates(changed).map((state) => ({
+        ...state,
+        widgets: mapWidgetsDeep(state.widgets, update),
+      }));
+      return [withPanelStates(changed, states)];
+    }
+    if (changed.type === "repeater") {
+      const template = changed.props.rowTemplate;
+      if (typeof template !== "object" || template === null || Array.isArray(template)) return [changed];
+      const record = template as Record<string, unknown>;
+      if (!Array.isArray(record.widgets)) return [changed];
+      return [{
+        ...changed,
+        props: {
+          ...changed.props,
+          rowTemplate: {
+            ...record,
+            widgets: mapWidgetsDeep(record.widgets as Widget[], update),
+          },
+        },
+      }];
+    }
+    return [changed];
   });
 }
 
@@ -101,8 +137,17 @@ export function collectWidgetsDeep(widgets: Widget[]): Widget[] {
     widget,
     ...(widget.type === "dynamic-panel"
       ? getPanelStates(widget).flatMap((state) => collectWidgetsDeep(state.widgets))
-      : []),
+      : widget.type === "repeater"
+        ? collectRepeaterChildren(widget)
+        : []),
   ]);
+}
+
+function collectRepeaterChildren(widget: Widget): Widget[] {
+  const template = widget.props.rowTemplate;
+  if (typeof template !== "object" || template === null || Array.isArray(template)) return [];
+  const children = (template as Record<string, unknown>).widgets;
+  return Array.isArray(children) ? collectWidgetsDeep(children as Widget[]) : [];
 }
 
 export function updatePanelState(

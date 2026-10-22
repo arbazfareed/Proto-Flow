@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import ts from "typescript";
 import { createEmptyProject } from "../project/schema";
 import {
   generateSingleFileJsx,
@@ -73,5 +74,60 @@ describe("React code export preparation", () => {
     expect(source).toContain("project.screens.map");
     expect(source).not.toContain("</script><script>notMarkup()");
     expect(source).toContain("\\u003c/script\\u003e");
+  });
+
+  it("exports repeater datasets through a bounded map with item-bound template widgets", () => {
+    const project = createEmptyProject("Repeater export");
+    const panel = {
+      id: crypto.randomUUID(),
+      type: "repeater",
+      x: 0,
+      y: 0,
+      width: 240,
+      height: 80,
+      rotation: 0,
+      opacity: 1,
+      visible: true,
+      locked: false,
+      zIndex: 0,
+      style: {},
+      props: {
+        dataset: [{ name: "Ada" }],
+        layout: "vertical",
+        gap: 8,
+        rowTemplate: { widgets: [{
+          id: crypto.randomUUID(),
+          type: "text",
+          x: 8,
+          y: 8,
+          width: 120,
+          height: 24,
+          rotation: 0,
+          opacity: 1,
+          visible: true,
+          locked: false,
+          zIndex: 0,
+          style: {},
+          props: {
+            text: "Hello {{item.name}}",
+            visibleWhen: { field: "active", operator: "equals", value: true },
+          },
+        }] },
+      },
+    };
+    project.screens[0].widgets.push(panel);
+    const source = generateSingleFileJsx(project);
+    expect(source).toContain("rows.slice(0, 1000).map");
+    expect(source).toContain("widget.props.rowTemplate");
+    expect(source).toContain("item?.[field]");
+    expect(source).toContain("Hello {{item.name}}");
+    expect(source).toContain("repeaterItemVisible(child, row)");
+    const transpiled = ts.transpileModule(source, {
+      compilerOptions: { jsx: ts.JsxEmit.ReactJSX, target: ts.ScriptTarget.ES2022 },
+      reportDiagnostics: true,
+    });
+    expect(transpiled.diagnostics?.filter((diagnostic) =>
+      diagnostic.category === ts.DiagnosticCategory.Error,
+    )).toEqual([]);
   });
 });

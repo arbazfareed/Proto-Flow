@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { ProtoWidgetSchema } from "./schema";
 import type { Widget, WidgetStyle } from "./schema";
+import { collectWidgetsDeep } from "./dynamicPanels";
 
 const WidgetClipboardSchema = z.object({
   format: z.literal("protoflow/widgets"),
@@ -118,38 +119,78 @@ export function createWidgetCopies(
   createId: () => string = () => crypto.randomUUID(),
 ): Widget[] {
   if (source.length === 0) return [];
-  const usedIds = new Set(existing.map((widget) => widget.id));
+  const usedIds = new Set(collectWidgetsDeep([...existing]).map((widget) => widget.id));
   const idFor = () => {
     let id = createId();
     while (usedIds.has(id)) id = createId();
     usedIds.add(id);
     return id;
   };
-  const idMap = new Map(source.map((widget) => [widget.id, idFor()]));
+  const allSourceWidgets = collectWidgetsDeep([...source]);
+  const idMap = new Map(allSourceWidgets.map((widget) => [widget.id, idFor()]));
   const highestZIndex = Math.max(0, ...existing.map((widget) => widget.zIndex));
 
-  return source.map((widget, index) => ({
-    ...structuredClone(widget),
-    id: idMap.get(widget.id)!,
-    groupId: widget.groupId
-      ? idMap.get(widget.groupId) ?? widget.groupId
-      : undefined,
-    x: widget.x + offset.x,
-    y: widget.y + offset.y,
-    zIndex: highestZIndex + index + 1,
-    overrides: widget.overrides
-      ? Object.fromEntries(
-          Object.entries(widget.overrides).map(([breakpointId, override]) => [
+  const cloneTree = (widget: Widget, root: boolean, index: number): Widget => {
+    const cloned = structuredClone(widget);
+    const props = { ...cloned.props };
+    if (widget.type === "dynamic-panel" && Array.isArray(props.states)) {
+      const stateIdMap = new Map<string, string>();
+      const states = props.states.map((state) => {
+        if (typeof state !== "object" || state === null || Array.isArray(state)) return state;
+        const record = state as Record<string, unknown>;
+        const stateId = idFor();
+        if (typeof record.id === "string") stateIdMap.set(record.id, stateId);
+        return {
+          ...record,
+          id: stateId,
+          widgets: Array.isArray(record.widgets)
+            ? record.widgets.map((child) => cloneTree(child as Widget, false, 0))
+            : [],
+        };
+      });
+      props.states = states;
+      if (typeof props.activeStateId === "string") {
+        props.activeStateId = stateIdMap.get(props.activeStateId) ?? states[0]?.id;
+      }
+    } else if (widget.type === "repeater") {
+      const template = props.rowTemplate;
+      if (typeof template === "object" && template !== null && !Array.isArray(template)) {
+        const record = template as Record<string, unknown>;
+        const children = Array.isArray(record.widgets)
+          ? record.widgets.map((child) => cloneTree(child as Widget, false, 0))
+          : [];
+        props.rowTemplate = { ...record, widgets: children };
+        const binding = props.itemBinding;
+        if (typeof binding === "object" && binding !== null && !Array.isArray(binding)) {
+          props.itemBinding = Object.fromEntries(Object.entries(binding).map(([field, id]) => [
+            field,
+            typeof id === "string" ? idMap.get(id) ?? id : id,
+          ]));
+        }
+      }
+    }
+    return {
+      ...cloned,
+      id: idMap.get(widget.id)!,
+      groupId: widget.groupId ? idMap.get(widget.groupId) ?? widget.groupId : undefined,
+      x: widget.x + (root ? offset.x : 0),
+      y: widget.y + (root ? offset.y : 0),
+      zIndex: root ? highestZIndex + index + 1 : widget.zIndex,
+      props,
+      overrides: root && widget.overrides
+        ? Object.fromEntries(Object.entries(widget.overrides).map(([breakpointId, override]) => [
             breakpointId,
             {
               ...override,
               ...(override.x === undefined ? {} : { x: override.x + offset.x }),
               ...(override.y === undefined ? {} : { y: override.y + offset.y }),
             },
-          ]),
-        )
-      : undefined,
-  }));
+          ]))
+        : widget.overrides,
+    };
+  };
+
+  return source.map((widget, index) => cloneTree(widget, true, index));
 }
 
 export function reorderWidgetSelection(

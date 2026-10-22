@@ -103,6 +103,28 @@ describe("widget clipboard and z-order actions", () => {
     expect(copies[0].overrides?.mobile).toMatchObject({ x: 35, y: 45 });
   });
 
+  it("clones repeater template IDs and item bindings without altering local child geometry", () => {
+    const parentId = crypto.randomUUID();
+    const child = { ...widget("00000000-0000-4000-8000-000000000007", 1, parentId), x: 12, y: 16 };
+    const parent: Widget = {
+      ...createShapeWidget("repeater", 20, 30),
+      id: parentId,
+      props: { rowTemplate: { widgets: [child] }, dataset: [], itemBinding: { name: child.id } },
+    };
+    const ids = [
+      "00000000-0000-4000-8000-000000000008",
+      "00000000-0000-4000-8000-000000000009",
+    ];
+    const [copy] = createWidgetCopies([parent], [parent], { x: 5, y: 6 }, () => ids.shift()!);
+    const template = copy.props.rowTemplate as { widgets: Widget[] };
+
+    expect(copy.id).not.toBe(parent.id);
+    expect(template.widgets[0].id).not.toBe(child.id);
+    expect(template.widgets[0].groupId).toBe(copy.id);
+    expect([template.widgets[0].x, template.widgets[0].y]).toEqual([12, 16]);
+    expect(copy.props.itemBinding).toEqual({ name: template.widgets[0].id });
+  });
+
   it("moves selected widgets front, back, forward, or backward as one stable block", () => {
     const items = [widget("a", 1), widget("b", 2), widget("c", 3), widget("d", 4)];
     expect(reorderWidgetSelection(items, ["b", "c"], "forward").map((item) => item.id))

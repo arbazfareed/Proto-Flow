@@ -37,12 +37,15 @@ import {
 import type { ScreenDevice } from "../devices/types";
 import type { SymbolDefinition, Widget, Project, Screen } from "../project/schema";
 import {
+  collectWidgetsDeep,
   addWidgetsToPanelState,
   flattenActivePanelWidgets,
+  flattenRepeaterTemplateWidgets,
   getPanelStates,
   mapWidgetsDeep,
   mergeActivePanelWidgets,
 } from "../project/dynamicPanels";
+import { mergeActiveRepeaterWidgets } from "../project/repeaters";
 import {
   createDraggedWidgetCopies,
   getActiveLayerDragPayload,
@@ -194,10 +197,25 @@ function duplicateScreenForCanvas(screen: Screen): Screen {
   };
 }
 
-function getEffectiveScreenWidgets(screen: Screen, breakpointId: string | null): Widget[] {
+function getCanvasWidgets(screen: Screen, repeaterId: string | null = null): Widget[] {
+  const widgets = flattenActivePanelWidgets(screen.widgets);
+  if (!repeaterId) return widgets;
+  const repeater = collectWidgetsDeep(widgets).find((widget) =>
+    widget.id === repeaterId && widget.type === "repeater",
+  );
+  return repeater
+    ? [...widgets, ...flattenRepeaterTemplateWidgets(repeater, repeater.x, repeater.y)]
+    : widgets;
+}
+
+function getEffectiveScreenWidgets(
+  screen: Screen,
+  breakpointId: string | null,
+  repeaterId: string | null = null,
+): Widget[] {
   const breakpoint = resolveActiveBreakpoint(screen, breakpointId);
   return resolveWidgetsForBreakpoint(
-    flattenActivePanelWidgets(screen.widgets),
+    getCanvasWidgets(screen, repeaterId),
     breakpoint,
     screen.device?.width ?? DEFAULT_DEVICE_PRESET.viewport.width,
     screen.device?.height ?? DEFAULT_DEVICE_PRESET.viewport.height,
@@ -221,7 +239,7 @@ function commitWidgetGeometry(
       ? activeBreakpointId
       : null;
   const effectiveWidgets = activeScreen
-    ? getEffectiveScreenWidgets(activeScreen, overrideBreakpointId)
+    ? getEffectiveScreenWidgets(activeScreen, overrideBreakpointId, current.activeRepeaterEdit)
     : [];
   const project: Project = {
     ...current.project,
@@ -234,6 +252,14 @@ function commitWidgetGeometry(
         const previous = effectiveById.get(widget.id);
         if (!update || !previous) return widget;
         const { id, ...geometry } = update;
+        const storedGeometry = current.activeRepeaterEdit &&
+          previous?.groupId === current.activeRepeaterEdit
+          ? {
+              ...geometry,
+              x: geometry.x === undefined ? undefined : geometry.x - (effectiveById.get(current.activeRepeaterEdit)?.x ?? 0),
+              y: geometry.y === undefined ? undefined : geometry.y - (effectiveById.get(current.activeRepeaterEdit)?.y ?? 0),
+            }
+          : geometry;
         if (
           (geometry.x === undefined || geometry.x === previous.x) &&
           (geometry.y === undefined || geometry.y === previous.y) &&
@@ -242,8 +268,8 @@ function commitWidgetGeometry(
           (geometry.rotation === undefined || geometry.rotation === previous.rotation)
         ) return widget;
         return overrideBreakpointId
-          ? updateWidgetOverride(widget, overrideBreakpointId, geometry)
-          : { ...widget, ...geometry };
+          ? updateWidgetOverride(widget, overrideBreakpointId, storedGeometry)
+          : { ...widget, ...storedGeometry };
       });
       const updatedEffectiveWidgets = syncWidgetGroupIdsToContainment(
         getEffectiveScreenWidgets({ ...screen, widgets: nextWidgets }, overrideBreakpointId),
@@ -717,6 +743,7 @@ export function CanvasStage({
   const project = useStore((state) => state.project);
   const symbols = useStore((state) => state.project.symbols);
   const activeBreakpointId = useStore((state) => state.activeBreakpointId);
+  const activeRepeaterEdit = useStore((state) => state.activeRepeaterEdit);
   const selectedIds = useStore((state) => state.selectedIds);
   const hoveredWidgetId = useStore((state) => state.hoveredWidgetId);
   useEffect(() => {
@@ -726,7 +753,7 @@ export function CanvasStage({
     ? resolveActiveBreakpoint(activeScreen, activeBreakpointId)
     : undefined;
   const baseScreenWidgets = activeScreen
-    ? flattenActivePanelWidgets(activeScreen.widgets)
+    ? getCanvasWidgets(activeScreen, activeRepeaterEdit)
     : [];
   const screenWidgets = activeScreen && activeBreakpoint
     ? resolveWidgetsForBreakpoint(
@@ -905,6 +932,16 @@ export function CanvasStage({
         const initialState = { id: crypto.randomUUID(), name: "State 1", widgets: [] };
         widget.props = { ...widget.props, states: [initialState], activeStateId: initialState.id };
       }
+      if (widget.type === "repeater") {
+        widget.props = {
+          ...widget.props,
+          rowTemplate: { widgets: [] },
+          dataset: [{ title: "Item 1" }, { title: "Item 2" }, { title: "Item 3" }],
+          layout: "vertical",
+          gap: 8,
+          itemBinding: {},
+        };
+      }
       if (type === "button" && typeof window !== "undefined") {
         const accent = getComputedStyle(document.documentElement)
           .getPropertyValue("--accent-strong")
@@ -914,7 +951,7 @@ export function CanvasStage({
           widget.style.stroke = accent;
         }
       }
-      const visibleWidgets = flattenActivePanelWidgets(screen.widgets);
+      const visibleWidgets = getCanvasWidgets(screen, current.activeRepeaterEdit);
       const siblings = visibleWidgets.map((item) => ({
         id: item.id,
         x: item.x,
@@ -960,11 +997,23 @@ export function CanvasStage({
         -1,
       ) + 1;
       const activePanelEdit = current.activePanelEdit;
+      const activeRepeaterEdit = current.activeRepeaterEdit;
       const editStateId = activePanelEdit?.stateId;
       const scopedPanel = activePanelEdit
         ? visibleWidgets.find((item) => item.id === activePanelEdit.panelId)
         : undefined;
-      const nextWidgets = scopedPanel?.type === "dynamic-panel" &&
+      const scopedRepeater = (activeRepeaterEdit
+        ? visibleWidgets.find((item) => item.id === activeRepeaterEdit)
+        : undefined) ?? visibleWidgets
+        .filter((item) => item.type === "repeater" && isWidgetContainedBy(widget, item))
+        .sort((first, second) => first.width * first.height - second.width * second.height)[0];
+      const nextWidgets = scopedRepeater?.type === "repeater"
+        ? mergeActiveRepeaterWidgets(
+            screen.widgets,
+            [...visibleWidgets, { ...widget, groupId: scopedRepeater.id }],
+            scopedRepeater.id,
+          )
+        : scopedPanel?.type === "dynamic-panel" &&
         editStateId &&
         getPanelStates(scopedPanel).some((state) => state.id === editStateId)
         ? addWidgetsToPanelState(
@@ -1597,7 +1646,7 @@ export function CanvasStage({
       (item) => item.id === current.getActiveScreenId(),
     );
     const selected = screen
-      ? getEffectiveScreenWidgets(screen, current.activeBreakpointId)
+      ? getEffectiveScreenWidgets(screen, current.activeBreakpointId, current.activeRepeaterEdit)
           .filter((widget) => current.selectedIds.includes(widget.id) && !widget.locked)
       : [];
     const updates = getSelectionUpdates(selected, operation);
@@ -1609,11 +1658,9 @@ export function CanvasStage({
     const screenId = current.getActiveScreenId();
     const activeScreen = current.project.screens.find((screen) => screen.id === screenId);
     if (!activeScreen) return;
-    const nextWidgets = mergeActivePanelWidgets(
-      activeScreen.widgets,
-      widgets,
-      current.activePanelEdit,
-    );
+    const nextWidgets = current.activeRepeaterEdit
+      ? mergeActiveRepeaterWidgets(activeScreen.widgets, widgets, current.activeRepeaterEdit)
+      : mergeActivePanelWidgets(activeScreen.widgets, widgets, current.activePanelEdit);
     if (nextWidgets === activeScreen.widgets) return;
     current.setProject({
       ...current.project,
@@ -1630,7 +1677,7 @@ export function CanvasStage({
       (item) => item.id === current.getActiveScreenId(),
     );
     if (!screen) return;
-    const visibleWidgets = flattenActivePanelWidgets(screen.widgets);
+    const visibleWidgets = getCanvasWidgets(screen, current.activeRepeaterEdit);
     const selected = visibleWidgets.filter((widget) =>
       current.selectedIds.includes(widget.id) && (!cut || !widget.locked),
     );
@@ -1656,7 +1703,7 @@ export function CanvasStage({
     const screen = current.project.screens.find(
       (item) => item.id === current.getActiveScreenId(),
     );
-    const selected = screen ? flattenActivePanelWidgets(screen.widgets).filter((widget) =>
+    const selected = screen ? getCanvasWidgets(screen, current.activeRepeaterEdit).filter((widget) =>
       current.selectedIds.includes(widget.id),
     ) : [];
     if (selected.length !== 1) return;
@@ -1672,7 +1719,7 @@ export function CanvasStage({
       (item) => item.id === current.getActiveScreenId(),
     );
     if (!screen) return;
-    const visibleWidgets = flattenActivePanelWidgets(screen.widgets);
+    const visibleWidgets = getCanvasWidgets(screen, current.activeRepeaterEdit);
     const selected = visibleWidgets.filter((widget) =>
       current.selectedIds.includes(widget.id),
     );
@@ -1696,7 +1743,7 @@ export function CanvasStage({
         current.project.screens.flatMap((item) => item.widgets),
         { x: pasteOffsetRef.current, y: pasteOffsetRef.current },
       );
-      updateActiveScreenWidgets([...flattenActivePanelWidgets(screen.widgets), ...copies]);
+      updateActiveScreenWidgets([...getCanvasWidgets(screen, current.activeRepeaterEdit), ...copies]);
       current.select(copies.map((widget) => widget.id));
     } catch (error) {
       console.error("Could not paste ProtoFlow widgets.", error);
@@ -1710,7 +1757,7 @@ export function CanvasStage({
       (item) => item.id === current.getActiveScreenId(),
     );
     if (!screen) return;
-    const visibleWidgets = flattenActivePanelWidgets(screen.widgets);
+    const visibleWidgets = getCanvasWidgets(screen, current.activeRepeaterEdit);
     const selected = visibleWidgets.filter((widget) =>
       current.selectedIds.includes(widget.id),
     );
@@ -1731,14 +1778,14 @@ export function CanvasStage({
     );
     if (!screen || current.selectedIds.length === 0) return;
     const deletable = new Set(
-      flattenActivePanelWidgets(screen.widgets)
+      getCanvasWidgets(screen, current.activeRepeaterEdit)
         .filter((widget) => current.selectedIds.includes(widget.id) && !widget.locked)
         .map((widget) => widget.id),
     );
     if (deletable.size === 0) return;
     transformerRef.current?.nodes([]);
     contentLayerRef.current?.batchDraw();
-    updateActiveScreenWidgets(flattenActivePanelWidgets(screen.widgets).filter((widget) => !deletable.has(widget.id)));
+    updateActiveScreenWidgets(getCanvasWidgets(screen, current.activeRepeaterEdit).filter((widget) => !deletable.has(widget.id)));
     current.clearSelection();
   }, [updateActiveScreenWidgets]);
 
@@ -1751,7 +1798,7 @@ export function CanvasStage({
     );
     if (!screen) return;
     updateActiveScreenWidgets(
-      reorderWidgetSelection(flattenActivePanelWidgets(screen.widgets), current.selectedIds, action),
+      reorderWidgetSelection(getCanvasWidgets(screen, current.activeRepeaterEdit), current.selectedIds, action),
     );
   }, [updateActiveScreenWidgets]);
 
@@ -1762,7 +1809,7 @@ export function CanvasStage({
       (item) => item.id === current.getActiveScreenId(),
     );
     if (!screen || selected.size === 0) return;
-    const visibleWidgets = flattenActivePanelWidgets(screen.widgets);
+    const visibleWidgets = getCanvasWidgets(screen, current.activeRepeaterEdit);
     const lock = !visibleWidgets
       .filter((widget) => selected.has(widget.id))
       .every((widget) => widget.locked);
@@ -1779,7 +1826,7 @@ export function CanvasStage({
     );
     if (!screen || selected.size === 0) return;
     if (ungroup) {
-      const visibleWidgets = flattenActivePanelWidgets(screen.widgets);
+      const visibleWidgets = getCanvasWidgets(screen, current.activeRepeaterEdit);
       const groupIds = new Set(visibleWidgets
         .filter((widget) => selected.has(widget.id) && widget.groupId)
         .map((widget) => widget.groupId!));
@@ -1794,7 +1841,7 @@ export function CanvasStage({
     }
     if (selected.size < 2) return;
     const groupId = crypto.randomUUID();
-    updateActiveScreenWidgets(flattenActivePanelWidgets(screen.widgets).map((widget) =>
+    updateActiveScreenWidgets(getCanvasWidgets(screen, current.activeRepeaterEdit).map((widget) =>
       selected.has(widget.id) ? { ...widget, groupId } : widget,
     ));
   }, [updateActiveScreenWidgets]);
@@ -1805,7 +1852,7 @@ export function CanvasStage({
       (item) => item.id === current.getActiveScreenId(),
     );
     if (!screen) return;
-    const selected = flattenActivePanelWidgets(screen.widgets).filter((widget) =>
+    const selected = getCanvasWidgets(screen, current.activeRepeaterEdit).filter((widget) =>
       current.selectedIds.includes(widget.id),
     );
     if (selected.length === 0) return;
@@ -2049,7 +2096,7 @@ export function CanvasStage({
           (item) => item.id === current.getActiveScreenId(),
         );
         const selected = screen
-          ? getEffectiveScreenWidgets(screen, current.activeBreakpointId)
+          ? getEffectiveScreenWidgets(screen, current.activeBreakpointId, current.activeRepeaterEdit)
               .filter((widget) => current.selectedIds.includes(widget.id) && !widget.locked)
           : [];
         if (selected.length === 0) return;
@@ -2776,7 +2823,7 @@ export function CanvasStage({
                   (item) => item.id === current.getActiveScreenId(),
                 );
                 const widgets = screen
-                  ? getEffectiveScreenWidgets(screen, current.activeBreakpointId).filter(
+                  ? getEffectiveScreenWidgets(screen, current.activeBreakpointId, current.activeRepeaterEdit).filter(
                       (item) =>
                         current.selectedIds.includes(item.id) &&
                         !item.locked &&
@@ -2807,7 +2854,7 @@ export function CanvasStage({
                   (item) => item.id === current.getActiveScreenId(),
                 );
                 const selected = screen
-                  ? getEffectiveScreenWidgets(screen, current.activeBreakpointId).filter(
+                  ? getEffectiveScreenWidgets(screen, current.activeBreakpointId, current.activeRepeaterEdit).filter(
                     (item) => current.selectedIds.includes(item.id) && !item.locked && item.visible,
                   )
                   : [];
