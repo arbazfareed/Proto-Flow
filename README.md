@@ -222,6 +222,14 @@ Choose **Collaborate** to start a session for one credit or join an existing ses
 
 For local development, apply Worker migrations from `cloud/` with `npm run db:apply:local`, then run `npm run dev -- --port 8790`. The local Wrangler environment binds the collaboration Durable Object and allows the Vite origin on port `1420`.
 
+### PF-T409 — Plugin API and extension hooks
+
+Choose **Manage Plugins** from Quick actions (`Ctrl/Cmd+K`) to install `.pflow-plugin` ZIP archives containing only `plugin.json` and `plugin.js`. The manifest declares a unique ID, name, semantic version, author, entry point, and requested permissions. Installation requires explicit confirmation; plugins start disabled and can be enabled, disabled, uninstalled, and inspected through a bounded activity log. The manager exposes registered custom rectangle/ellipse/text shapes, text exporters, prompt-only AI providers, and commands. The plugin SDK source and a TypeScript example are in `plugin-sdk/`; build the SDK with `npm --prefix plugin-sdk run build` and bundle plugin code into one `plugin.js`.
+
+Enabled plugin code runs in an opaque-origin iframe with scripts only, a restrictive Content Security Policy, and no ProtoFlow wallet/JWT, Tauri, or filesystem bridge. Exporters receive the current project only when explicitly run; AI providers receive only the entered prompt. Project-change events require the `project:read` permission. Archives are limited to 1 MiB, plugin source to 512 KiB, and extension inputs/results are validated before host actions.
+
+This is a development-only unsigned plugin runtime. Production installation and execution fail closed until a publisher signing-key trust store and live revocation endpoint are configured and verified; package publishing and marketplace distribution are not configured. The iframe permission boundary is a defense-in-depth sandbox, not a replacement for reviewing third-party code.
+
 Project files are opened and saved through Rust Tauri commands. Saves stage data in the destination directory, sync it to disk, then atomically replace the target; the frontend validates project data with the shared Zod schema before saving and after opening.
 
 ### State management
