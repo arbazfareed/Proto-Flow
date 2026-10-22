@@ -6,6 +6,7 @@ import {
   FilePlus2,
   FileText,
   FolderOpen,
+  Puzzle,
   Redo2,
   Undo2,
 } from "lucide-react";
@@ -63,6 +64,7 @@ export interface CoreCommandActions {
   toggleGrid: () => void;
   toggleSnap: () => void;
   checkForUpdates: () => void;
+  openPlugins: () => void;
 }
 
 export function createCoreCommands(actions: CoreCommandActions): AppCommand[] {
@@ -137,6 +139,13 @@ export function createCoreCommands(actions: CoreCommandActions): AppCommand[] {
       keywords: ["version", "upgrade"],
       icon: <Bell />,
       run: actions.checkForUpdates,
+    },
+    {
+      id: "app.plugins",
+      label: "Manage Plugins",
+      keywords: ["extensions", "plugin sdk", "sandbox"],
+      icon: <Puzzle />,
+      run: actions.openPlugins,
     },
   ];
 }

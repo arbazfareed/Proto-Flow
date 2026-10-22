@@ -1,0 +1,20 @@
+{
+  "name": "@protoflow/plugin-sdk",
+  "version": "0.1.0",
+  "description": "TypeScript API for ProtoFlow plugins",
+  "type": "module",
+  "sideEffects": false,
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": ["dist", "README.md"],
+  "scripts": {
+    "build": "tsc -p tsconfig.json"
+  },
+  "devDependencies": {
+    "typescript": "~6.0.3"
+  }
+}

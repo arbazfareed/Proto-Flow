@@ -43,6 +43,7 @@ describe("command registry", () => {
       toggleGrid: vi.fn(),
       toggleSnap: vi.fn(),
       checkForUpdates: vi.fn(),
+      openPlugins: vi.fn(),
     };
     const commands = new Map(
       createCoreCommands(actions).map((command) => [command.id, command]),
@@ -58,6 +59,7 @@ describe("command registry", () => {
       "canvas.toggle-grid",
       "canvas.toggle-snap",
       "app.check-updates",
+      "app.plugins",
     ]) {
       await commands.get(id)?.run();
     }
@@ -70,5 +72,6 @@ describe("command registry", () => {
     expect(actions.toggleGrid).toHaveBeenCalledOnce();
     expect(actions.toggleSnap).toHaveBeenCalledOnce();
     expect(actions.checkForUpdates).toHaveBeenCalledOnce();
+    expect(actions.openPlugins).toHaveBeenCalledOnce();
   });
 });

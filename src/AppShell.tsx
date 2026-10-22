@@ -14,6 +14,7 @@ import { WalletDialog } from "./layout/WalletDialog";
 import { CloudPreviewDialog } from "./layout/CloudPreviewDialog";
 import { ReactCodeExportDialog } from "./layout/ReactCodeExportDialog";
 import { HtmlExportDialog } from "./layout/HtmlExportDialog";
+import { PluginManagerDialog } from "./layout/PluginManagerDialog";
 import { CollaborationDialog } from "./layout/CollaborationDialog";
 import { CommandPalette } from "./layout/CommandPalette";
 import { commandRegistry, createCoreCommands } from "./commands/registry";
@@ -56,6 +57,7 @@ function AppShell() {
   const [cloudPreviewOpen, setCloudPreviewOpen] = useState(false);
   const [reactExportOpen, setReactExportOpen] = useState(false);
   const [htmlExportOpen, setHtmlExportOpen] = useState(false);
+  const [pluginManagerOpen, setPluginManagerOpen] = useState(false);
   const [collaborationMounted, setCollaborationMounted] = useState(false);
   const [collaborationOpen, setCollaborationOpen] = useState(false);
   const [collaborationInviteId, setCollaborationInviteId] = useState<string | null>(null);
@@ -356,6 +358,7 @@ function AppShell() {
       toggleGrid,
       toggleSnap,
       checkForUpdates: requestUpdateCheck,
+      openPlugins: () => setPluginManagerOpen(true),
     }),
     [createNewProject, openFile, redo, requestUpdateCheck, save, toggleGrid, toggleSnap, undo],
   );
@@ -550,6 +553,7 @@ function AppShell() {
       {cloudPreviewOpen && <CloudPreviewDialog onClose={() => setCloudPreviewOpen(false)} />}
       {reactExportOpen && <ReactCodeExportDialog onClose={() => setReactExportOpen(false)} />}
       {htmlExportOpen && <HtmlExportDialog onClose={() => setHtmlExportOpen(false)} />}
+      {pluginManagerOpen && <PluginManagerDialog onClose={() => setPluginManagerOpen(false)} />}
       {collaborationMounted && (
         <CollaborationDialog
           open={collaborationOpen}
