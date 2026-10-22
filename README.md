@@ -230,6 +230,12 @@ Enabled plugin code runs in an opaque-origin iframe with scripts only, a restric
 
 This is a development-only unsigned plugin runtime. Production installation and execution fail closed until a publisher signing-key trust store and live revocation endpoint are configured and verified; package publishing and marketplace distribution are not configured. The iframe permission boundary is a defense-in-depth sandbox, not a replacement for reviewing third-party code.
 
+### PF-T410 — Dynamic panels
+
+Add a **Dynamic panel** from Elements, select it, then use the Inspector's **States** controls to add, rename, duplicate, reorder, delete, and switch states. Choose a state in the Inspector or its layer-tree node and enable **Edit active state** to add and arrange that state's widgets on the canvas. State content is stored in `props.states[]`; nested panels are supported up to five levels.
+
+In the Interactions tab, add a **Set panel state** action, select its target and state, then configure one of the six transitions and a duration in milliseconds. Browser/Tauri preview and standalone HTML exports apply the state switch at runtime. Existing panels without state data and older project files remain loadable; the project schema migrates to version 1.4.0.
+
 Project files are opened and saved through Rust Tauri commands. Saves stage data in the destination directory, sync it to disk, then atomically replace the target; the frontend validates project data with the shared Zod schema before saving and after opening.
 
 ### State management

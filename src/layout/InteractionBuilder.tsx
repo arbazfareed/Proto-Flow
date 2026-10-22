@@ -19,6 +19,7 @@ import { useStore } from "../store";
 import { submitInteractionFeedback } from "../wallet/api";
 import { useMeteredAction } from "../wallet/meteredActions";
 import { useWalletStore } from "../wallet/store";
+import { collectWidgetsDeep, getPanelStates, PANEL_TRANSITIONS } from "../project/dynamicPanels";
 
 const EVENTS = [
   ["onClick", "Click"],
@@ -65,7 +66,12 @@ function initialAction(type: string, screen: Screen): InteractionAction {
     case "setRepeaterData":
     case "show":
     case "hide":
-      return { type, target: screen.widgets[0]?.id ?? "" };
+      return {
+        type,
+        target: (type === "setPanelState"
+          ? collectWidgetsDeep(screen.widgets).find((item) => item.type === "dynamic-panel")
+          : collectWidgetsDeep(screen.widgets)[0])?.id ?? "",
+      };
     default:
       return { type, target: "" };
   }
@@ -112,7 +118,7 @@ function ActionTarget({
             item.scope === "project" || item.screenId === screen.id,
           )
           .map((item) => ({ id: item.name, label: item.name }))
-      : screen.widgets.filter((item) =>
+      : collectWidgetsDeep(screen.widgets).filter((item) =>
           action.type === "setPanelState"
             ? ["panel", "dynamic-panel", "dynamicPanel"].includes(item.type)
             : action.type === "setRepeaterData"
@@ -540,7 +546,9 @@ export function InteractionBuilder({
                   updateRule(rule.id, (item) => ({
                     ...item,
                     actions: item.actions.map((entry, index) => index === actionIndex
-                      ? { ...entry, target }
+                      ? action.type === "setPanelState"
+                        ? { ...entry, target, stateId: undefined, value: undefined }
+                        : { ...entry, target }
                       : entry),
                   }))
                 } />
@@ -569,9 +577,65 @@ export function InteractionBuilder({
                       }} />
                   )
                 )}
-                {(action.type === "setPanelState" || action.type === "setRepeaterData") && (
+                {action.type === "setPanelState" && (() => {
+                  const panel = collectWidgetsDeep(screen.widgets).find((item) => item.id === action.target);
+                  const states = panel ? getPanelStates(panel) : [];
+                  return (
+                    <>
+                      {states.length > 0 ? (
+                        <select aria-label="Panel state" value={action.stateId ?? String(action.value ?? "")} onChange={(event) => {
+                          const stateId = event.currentTarget.value;
+                          updateRule(rule.id, (item) => ({
+                            ...item,
+                            actions: item.actions.map((entry, index) => index === actionIndex
+                              ? { ...entry, stateId, value: undefined }
+                              : entry),
+                          }));
+                        }}>
+                          <option value="">Choose state</option>
+                          {states.map((state) => <option key={state.id} value={state.id}>{state.name}</option>)}
+                        </select>
+                      ) : (
+                        <input aria-label="Panel state" type="text" placeholder="State name"
+                          value={String(action.value ?? "")}
+                          onChange={(event) => {
+                            const value = event.currentTarget.value;
+                            updateRule(rule.id, (item) => ({
+                              ...item,
+                              actions: item.actions.map((entry, index) => index === actionIndex
+                                ? { ...entry, value, stateId: undefined }
+                                : entry),
+                            }));
+                          }} />
+                      )}
+                      <select aria-label="Panel transition" value={action.transition ?? "none"} onChange={(event) => {
+                        const transition = event.currentTarget.value as (typeof PANEL_TRANSITIONS)[number];
+                        updateRule(rule.id, (item) => ({
+                          ...item,
+                          actions: item.actions.map((entry, index) => index === actionIndex
+                            ? { ...entry, transition }
+                            : entry),
+                        }));
+                      }}>
+                        {PANEL_TRANSITIONS.map((transition) => <option key={transition} value={transition}>{transition}</option>)}
+                      </select>
+                      <input aria-label="Transition duration (ms)" type="number" min="0" max="10000" step="50"
+                        value={action.duration ?? 0}
+                        onChange={(event) => {
+                          const duration = Number(event.currentTarget.value);
+                          updateRule(rule.id, (item) => ({
+                            ...item,
+                            actions: item.actions.map((entry, index) => index === actionIndex
+                              ? { ...entry, duration }
+                              : entry),
+                          }));
+                        }} />
+                    </>
+                  );
+                })()}
+                {action.type === "setRepeaterData" && (
                   <input aria-label="Action value" type="text"
-                    placeholder={action.type === "setPanelState" ? "State name" : "Dataset JSON"}
+                    placeholder="Dataset JSON"
                     value={String(action.value ?? "")}
                     onChange={(event) => {
                       const value = event.currentTarget.value;

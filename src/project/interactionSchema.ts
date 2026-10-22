@@ -21,6 +21,16 @@ export const InteractionActionSchema = z
     type: z.string().trim().min(1),
     target: z.string().trim().min(1),
     value: z.unknown().optional(),
+    stateId: z.string().uuid().optional(),
+    transition: z.enum([
+      "none",
+      "fade",
+      "slide-left",
+      "slide-right",
+      "slide-up",
+      "slide-down",
+    ]).optional(),
+    duration: z.number().finite().min(0).max(10_000).optional(),
   })
   .strict();
 

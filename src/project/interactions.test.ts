@@ -109,4 +109,35 @@ describe("interaction rules", () => {
     expect(issues.some((issue) => issue.code === "unknown-target")).toBe(true);
     expect(issues.some((issue) => issue.code === "navigation-cycle")).toBe(true);
   });
+
+  it("validates nested panel targets and rejects state IDs not owned by that panel", () => {
+    const project = createEmptyProject();
+    const screen = project.screens[0];
+    const trigger = createWidget();
+    const panel = {
+      ...createWidget(),
+      type: "dynamic-panel",
+      props: {
+        states: [{ id: crypto.randomUUID(), name: "Open", widgets: [] }],
+      },
+    };
+    screen.widgets.push(trigger, panel);
+    const rule = createRule(trigger.id, {
+      actions: [{
+        type: "setPanelState",
+        target: panel.id,
+        stateId: crypto.randomUUID(),
+        transition: "fade",
+        duration: 200,
+      }],
+    });
+    screen.interactionRules = [rule];
+
+    expect(validateInteractionRules(project, screen)).toEqual([
+      expect.objectContaining({
+        severity: "error",
+        message: "Panel-state action must choose a state belonging to its target panel.",
+      }),
+    ]);
+  });
 });

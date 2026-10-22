@@ -16,8 +16,8 @@ export type {
   InteractionRule,
 } from "./interactionSchema";
 
-export const PROJECT_SCHEMA_VERSION = "1.3.0";
-const LEGACY_PROJECT_SCHEMA_VERSIONS = new Set(["1.0.0", "1.1.0", "1.2.0"]);
+export const PROJECT_SCHEMA_VERSION = "1.4.0";
+const LEGACY_PROJECT_SCHEMA_VERSIONS = new Set(["1.0.0", "1.1.0", "1.2.0", "1.3.0"]);
 const COORDINATE_LIMIT = 100_000;
 const HexColorSchema = z
   .string()
@@ -186,6 +186,12 @@ export const ProtoWidgetSchema = z
   })
   .strict();
 
+const DynamicPanelStateSchema = z.object({
+  id: z.string().uuid(),
+  name: z.string().trim().min(1).max(120),
+  widgets: z.array(ProtoWidgetSchema),
+}).strict();
+
 export const SymbolDefinitionSchema = z.object({
   id: z.string().uuid(),
   name: z.string().trim().min(1).max(120),
@@ -289,15 +295,81 @@ export const ProtoFlowProjectSchema = z
       symbolIds.add(symbol.id);
     }
     for (const [screenIndex, screen] of project.screens.entries()) {
-      for (const [widgetIndex, widget] of screen.widgets.entries()) {
+      const widgetIds = new Set<string>();
+      const validateWidgets = (widgets: Widget[], basePath: (string | number)[], panelDepth: number) => {
+        for (const [widgetIndex, widget] of widgets.entries()) {
+          const widgetPath = [...basePath, widgetIndex];
+          if (widgetIds.has(widget.id)) {
+            context.addIssue({
+              code: "custom",
+              path: [...widgetPath, "id"],
+              message: `Duplicate widget ID: ${widget.id}.`,
+            });
+          }
+          widgetIds.add(widget.id);
         if (widget.type === "symbol-instance" && !symbolIds.has(widget.symbolId ?? "")) {
           context.addIssue({
             code: "custom",
-            path: ["screens", screenIndex, "widgets", widgetIndex, "symbolId"],
+            path: [...widgetPath, "symbolId"],
             message: "Symbol instance must reference an existing symbol.",
           });
         }
-      }
+          if (widget.type !== "dynamic-panel") continue;
+          if (panelDepth >= 5) {
+            context.addIssue({
+              code: "custom",
+              path: widgetPath,
+              message: "Dynamic panels may be nested at most five levels deep.",
+            });
+          }
+          if (!("states" in widget.props)) continue;
+          const parsedStates = z.array(DynamicPanelStateSchema).safeParse(widget.props.states);
+          if (!parsedStates.success) {
+            for (const issue of parsedStates.error.issues) {
+              context.addIssue({
+                ...issue,
+                path: [...widgetPath, "props", "states", ...issue.path],
+              });
+            }
+            continue;
+          }
+          const states = parsedStates.data;
+          if (states.length === 0) {
+            context.addIssue({
+              code: "custom",
+              path: [...widgetPath, "props", "states"],
+              message: "A dynamic panel must have at least one state.",
+            });
+          }
+          const stateIds = new Set<string>();
+          for (const [stateIndex, state] of states.entries()) {
+            if (stateIds.has(state.id)) {
+              context.addIssue({
+                code: "custom",
+                path: [...widgetPath, "props", "states", stateIndex, "id"],
+                message: `Duplicate dynamic-panel state ID: ${state.id}.`,
+              });
+            }
+            stateIds.add(state.id);
+            const childDepth = panelDepth + 1;
+            validateWidgets(
+              state.widgets,
+              [...widgetPath, "props", "states", stateIndex, "widgets"],
+              childDepth,
+            );
+          }
+          const activeStateId = widget.props.activeStateId;
+          if (activeStateId !== undefined &&
+            (typeof activeStateId !== "string" || !stateIds.has(activeStateId))) {
+            context.addIssue({
+              code: "custom",
+              path: [...widgetPath, "props", "activeStateId"],
+              message: "Active state must reference a state belonging to this panel.",
+            });
+          }
+        }
+      };
+      validateWidgets(screen.widgets, ["screens", screenIndex, "widgets"], 0);
     }
     if (!project.screens.some((screen) => screen.id === project.startScreenId)) {
       context.addIssue({
@@ -352,6 +424,70 @@ export function formatProjectValidationError(error: SchemaValidationError): stri
   return error.message;
 }
 
+function migrateDynamicPanelWidgets(widgets: unknown[]): unknown[] {
+  return widgets.map((value) => {
+    if (typeof value !== "object" || value === null || Array.isArray(value)) return value;
+    const widget = value as Record<string, unknown>;
+    if (widget.type !== "dynamic-panel" ||
+      typeof widget.props !== "object" ||
+      widget.props === null ||
+      Array.isArray(widget.props)) {
+      return value;
+    }
+    const props = widget.props as Record<string, unknown>;
+    if (!Array.isArray(props.states)) return value;
+    if (props.states.every((state) => typeof state === "string")) {
+      const legacyNames = props.states.length > 0 ? props.states : ["State 1"];
+      const states = legacyNames.map((name, index) => ({
+        id: crypto.randomUUID(),
+        name: typeof name === "string" && name.trim() ? name.trim() : `State ${index + 1}`,
+        widgets: [],
+      }));
+      const priorActive = props.activeStateId;
+      const selected = states.find((state) => state.name === priorActive) ?? states[0];
+      return {
+        ...widget,
+        props: {
+          ...props,
+          states,
+          activeStateId: selected?.id,
+        },
+      };
+    }
+    const states = props.states.map((state, index) => {
+      if (typeof state !== "object" || state === null || Array.isArray(state)) return state;
+      const prior = state as Record<string, unknown>;
+      return {
+        ...prior,
+        id: typeof prior.id === "string" && z.string().uuid().safeParse(prior.id).success
+          ? prior.id
+          : crypto.randomUUID(),
+        name: typeof prior.name === "string" && prior.name.trim()
+          ? prior.name
+          : `State ${index + 1}`,
+        widgets: Array.isArray(prior.widgets)
+          ? migrateDynamicPanelWidgets(prior.widgets)
+          : [],
+      };
+    });
+    const activeId = typeof props.activeStateId === "string"
+      ? states.find((state) =>
+          typeof state === "object" && state !== null && "id" in state &&
+          state.id === props.activeStateId,
+        )
+      : undefined;
+    const activeStateId = typeof activeId === "object" && activeId !== null && "id" in activeId
+      ? activeId.id
+      : (states[0] && typeof states[0] === "object" && states[0] !== null && "id" in states[0]
+          ? states[0].id
+          : undefined);
+    return {
+      ...widget,
+      props: { ...props, states, activeStateId },
+    };
+  });
+}
+
 export function parseProject(raw: unknown): Project {
   let value = raw;
   if (typeof raw === "string") {
@@ -394,6 +530,9 @@ export function parseProject(raw: unknown): Project {
           const oldScreen = screen as Record<string, unknown>;
           return {
             ...oldScreen,
+            widgets: Array.isArray(oldScreen.widgets)
+              ? migrateDynamicPanelWidgets(oldScreen.widgets)
+              : oldScreen.widgets,
             interactionRules: Array.isArray(oldScreen.interactionRules)
               ? oldScreen.interactionRules.map((rule: unknown) => {
                   if (typeof rule !== "object" || rule === null || Array.isArray(rule)) {

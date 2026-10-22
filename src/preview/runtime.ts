@@ -10,6 +10,11 @@ import {
   VariableRuntimeStore,
   type RuntimeVariableValue,
 } from "../project/variables";
+import {
+  collectWidgetsDeep,
+  getPanelStates,
+  type PanelTransition,
+} from "../project/dynamicPanels";
 
 export type PreviewEvent =
   | "onClick"
@@ -25,6 +30,7 @@ export interface PreviewRuntimeSnapshot {
   backStack: string[];
   visibility: Record<string, boolean>;
   panelStates: Record<string, string>;
+  panelTransitions: Record<string, { transition: PanelTransition; duration: number }>;
   repeaterData: Record<string, unknown>;
   variables: Array<{ variable: VariableDefinition; value: RuntimeVariableValue }>;
 }
@@ -75,6 +81,7 @@ export class PreviewRuntime {
   private backStack: string[] = [];
   private visibility: Record<string, boolean>;
   private panelStates: Record<string, string> = {};
+  private panelTransitions: Record<string, { transition: PanelTransition; duration: number }> = {};
   private repeaterData: Record<string, unknown> = {};
 
   constructor(project: Project) {
@@ -83,7 +90,7 @@ export class PreviewRuntime {
     this.screenId = project.startScreenId;
     this.visibility = Object.fromEntries(
       project.screens.flatMap((screen) =>
-        screen.widgets.map((widget) => [widget.id, widget.visible]),
+        collectWidgetsDeep(screen.widgets).map((widget) => [widget.id, widget.visible]),
       ),
     );
   }
@@ -102,18 +109,21 @@ export class PreviewRuntime {
     this.project = structuredClone(project);
     this.variables.updateDefinitions(project.variables);
     const widgetIds = new Set(project.screens.flatMap((screen) =>
-      screen.widgets.map((widget) => widget.id),
+      collectWidgetsDeep(screen.widgets).map((widget) => widget.id),
     ));
     this.visibility = Object.fromEntries(
       Object.entries(this.visibility).filter(([widgetId]) => widgetIds.has(widgetId)),
     );
     for (const screen of project.screens) {
-      for (const widget of screen.widgets) {
+      for (const widget of collectWidgetsDeep(screen.widgets)) {
         this.visibility[widget.id] ??= widget.visible;
       }
     }
     this.panelStates = Object.fromEntries(
       Object.entries(this.panelStates).filter(([widgetId]) => widgetIds.has(widgetId)),
+    );
+    this.panelTransitions = Object.fromEntries(
+      Object.entries(this.panelTransitions).filter(([widgetId]) => widgetIds.has(widgetId)),
     );
     this.repeaterData = Object.fromEntries(
       Object.entries(this.repeaterData).filter(([widgetId]) => widgetIds.has(widgetId)),
@@ -134,10 +144,11 @@ export class PreviewRuntime {
     this.backStack = [];
     this.visibility = Object.fromEntries(
       this.project.screens.flatMap((screen) =>
-        screen.widgets.map((widget) => [widget.id, widget.visible]),
+        collectWidgetsDeep(screen.widgets).map((widget) => [widget.id, widget.visible]),
       ),
     );
     this.panelStates = {};
+    this.panelTransitions = {};
     this.repeaterData = {};
   }
 
@@ -173,6 +184,7 @@ export class PreviewRuntime {
       backStack: [...this.backStack],
       visibility: { ...this.visibility },
       panelStates: { ...this.panelStates },
+      panelTransitions: { ...this.panelTransitions },
       repeaterData: structuredClone(this.repeaterData),
       variables: this.variables.entries(this.screenId),
     };
@@ -249,12 +261,27 @@ export class PreviewRuntime {
           this.variables.set(action.target, action.value, screen.id);
           break;
         case "setPanelState":
-          this.requireWidget(screen, action.target, ["panel", "dynamic-panel", "dynamicPanel"]);
-          if (typeof action.value !== "string" || !action.value) {
-            throw new Error("Panel-state action requires a state name.");
+          {
+          const panel = this.requireWidget(screen, action.target, ["panel", "dynamic-panel", "dynamicPanel"]);
+          if (typeof action.value !== "string" && typeof action.stateId !== "string") {
+            throw new Error("Panel-state action requires a state ID or state name.");
           }
-          this.panelStates[action.target] = action.value;
+          const states = getPanelStates(panel);
+          const state = states.find((item) =>
+            item.id === action.stateId ||
+            item.id === action.value ||
+            item.name === action.value,
+          );
+          if (states.length > 0 && !state) {
+            throw new Error(`Panel "${panel.id}" does not contain the requested state.`);
+          }
+          this.panelStates[action.target] = state?.id ?? String(action.stateId ?? action.value);
+          this.panelTransitions[action.target] = {
+            transition: action.transition ?? "none",
+            duration: action.duration ?? 0,
+          };
           break;
+          }
         case "setRepeaterData":
           this.requireWidget(screen, action.target, ["repeater"]);
           this.repeaterData[action.target] = parseRepeaterValue(action.value);
@@ -266,7 +293,7 @@ export class PreviewRuntime {
   }
 
   private requireWidget(screen: Screen, widgetId: string, acceptedTypes: string[]): Widget {
-    const widget = screen.widgets.find((item) => item.id === widgetId);
+    const widget = collectWidgetsDeep(screen.widgets).find((item) => item.id === widgetId);
     if (!widget || !acceptedTypes.includes(widget.type)) {
       throw new Error(`Action target "${widgetId}" must be a ${acceptedTypes.join(" or ")} widget.`);
     }

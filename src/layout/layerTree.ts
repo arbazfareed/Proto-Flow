@@ -1,4 +1,5 @@
 import type { Widget } from "../project/schema";
+import { collectWidgetsDeep, getPanelStates } from "../project/dynamicPanels";
 import {
   getWidgetParentIdMap,
   isWidgetContainer,
@@ -9,9 +10,11 @@ import type { LayerCategoryId } from "./layerGrouping";
 
 export interface LayerTreeNode {
   id: string;
-  kind: "widget" | "group";
+  kind: "widget" | "group" | "state";
   widget?: Widget;
   groupId?: string;
+  panelId?: string;
+  stateId?: string;
   label: string;
   category: LayerCategoryId;
   children: LayerTreeNode[];
@@ -63,6 +66,7 @@ export function isLayerContainer(widget: Widget): boolean {
 
 export function getLayerTreeCollapseKey(node: LayerTreeNode): string | null {
   if (node.kind === "group") return node.groupId ? `semantic:${node.groupId}` : null;
+  if (node.kind === "state") return `panel-state:${node.id}`;
   return node.widget && (isLayerContainer(node.widget) || node.children.length > 0)
     ? `container:${node.widget.id}`
     : null;
@@ -346,5 +350,42 @@ export function buildLayerHierarchy(
   };
   roots.forEach(finalize);
 
-  return roots.sort(nodeOrder);
+  const insertPanelStates = (node: LayerTreeNode): LayerTreeNode => {
+    node.children = node.children.map(insertPanelStates);
+    if (node.kind !== "widget" || node.widget?.type !== "dynamic-panel") return node;
+    const states = getPanelStates(node.widget);
+    if (states.length === 0) return node;
+    const originalChildren = node.children;
+    const claimed = new Set<string>();
+    node.children = states.map((state) => {
+      const stateIds = new Set(collectWidgetsDeep(state.widgets).map((widget) => widget.id));
+      const children = originalChildren.filter((child) => {
+        const childIds = new Set<string>();
+        const collect = (item: LayerTreeNode) => {
+          if (item.widget) childIds.add(item.widget.id);
+          item.children.forEach(collect);
+        };
+        collect(child);
+        const belongs = [...stateIds].some((id) => childIds.has(id));
+        if (belongs) claimed.add(child.id);
+        return belongs;
+      });
+      return {
+        id: `panel-state:${node.widget!.id}:${state.id}`,
+        kind: "state",
+        panelId: node.widget!.id,
+        stateId: state.id,
+        label: state.name,
+        category: node.category,
+        children,
+        descendantCount: children.reduce((count, child) => count + child.descendantCount + 1, 0),
+        maxZIndex: Math.max(node.widget!.zIndex, ...children.map((child) => child.maxZIndex)),
+        maxStackingOrder: node.maxStackingOrder,
+      };
+    });
+    node.children.push(...originalChildren.filter((child) => !claimed.has(child.id)));
+    node.descendantCount = node.children.reduce((count, child) => count + child.descendantCount + 1, 0);
+    return node;
+  };
+  return roots.map(insertPanelStates).sort(nodeOrder);
 }

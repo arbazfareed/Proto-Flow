@@ -42,6 +42,12 @@ import {
 } from "../project/responsive";
 import type { Project, Screen, Widget } from "../project/schema";
 import {
+  collectWidgetsDeep,
+  mapWidgetsDeep,
+  updatePanelState,
+  withPanelStates,
+} from "../project/dynamicPanels";
+import {
   setActiveLayerDragPayload,
   LAYER_DRAG_MIME,
   reorderWidgetSet,
@@ -381,7 +387,7 @@ export function ScreenLayerSidebar() {
   const hierarchyWidgets = useMemo(() => {
     if (!activeScreen || !activeBreakpoint) return [];
     return resolveWidgetsForBreakpoint(
-      activeScreen.widgets,
+      collectWidgetsDeep(activeScreen.widgets),
       activeBreakpoint,
       activeScreen.device?.width ?? DEFAULT_DEVICE_PRESET.viewport.width,
       activeScreen.device?.height ?? DEFAULT_DEVICE_PRESET.viewport.height,
@@ -673,7 +679,7 @@ export function ScreenLayerSidebar() {
   const layerMode = layerPreferences.mode;
   const layerGroups = useMemo(() => {
     const query = categorySearch.trim().toLowerCase();
-    const widgets = activeScreen?.widgets ?? [];
+    const widgets = hierarchyWidgets;
     const filteredWidgets = query
       ? widgets.filter((widget) => {
           const definition = getShapeToolDefinition(widget.type);
@@ -723,6 +729,7 @@ export function ScreenLayerSidebar() {
     }));
   }, [
     activeScreen,
+    hierarchyWidgets,
     categorySearch,
     layerMode,
     draggedCategoryId,
@@ -1007,7 +1014,7 @@ export function ScreenLayerSidebar() {
           ? screen
           : {
               ...screen,
-              widgets: screen.widgets.map((widget) =>
+              widgets: mapWidgetsDeep(screen.widgets, (widget) =>
                 widget.id === widgetId ? { ...widget, ...patch } : widget,
               ),
             },
@@ -1023,7 +1030,7 @@ export function ScreenLayerSidebar() {
       screens: current.screens.map((screen) =>
         screen.id !== activeScreen.id
           ? screen
-          : { ...screen, widgets: screen.widgets.filter((widget) => !ids.has(widget.id)) },
+          : { ...screen, widgets: mapWidgetsDeep(screen.widgets, (widget) => ids.has(widget.id) ? null : widget) },
       ),
     }));
     const current = useStore.getState();
@@ -1658,7 +1665,7 @@ export function ScreenLayerSidebar() {
       return;
     }
     const name = renameDraft.trim().slice(0, 120);
-    if (name && activeScreen?.widgets.find((widget) => widget.id === widgetId)?.name !== name) {
+    if (name && hierarchyWidgets.find((widget) => widget.id === widgetId)?.name !== name) {
       setWidgetProperty(widgetId, { name });
     }
     setRenamingWidgetId(null);
@@ -1685,7 +1692,7 @@ export function ScreenLayerSidebar() {
       .join(" ");
     const invalidDrop = container &&
       draggedLayerIds.length > 0 &&
-      wouldCreateLayerCycle(activeScreen?.widgets ?? [], draggedLayerIds, widget.id);
+      wouldCreateLayerCycle(hierarchyWidgets, draggedLayerIds, widget.id);
     return (
       <div
         key={widget.id}
@@ -1718,7 +1725,7 @@ export function ScreenLayerSidebar() {
         }}
         onDragStart={(event) => {
           const sourceIds = selectedIds.includes(widget.id) ? selectedIds : [widget.id];
-          const sourceWidgets = (activeScreen?.widgets ?? []).filter((item) =>
+          const sourceWidgets = hierarchyWidgets.filter((item) =>
             sourceIds.includes(item.id),
           );
           setDraggedLayerIds(sourceWidgets.map((item) => item.id));
@@ -1934,7 +1941,7 @@ export function ScreenLayerSidebar() {
     ? layerGroups.find((group) => group.id === categoryMenu.id)
     : undefined;
   const menuLayerWidget = menu?.kind === "layer"
-    ? activeScreen?.widgets.find((widget) => widget.id === menu.id)
+    ? hierarchyWidgets.find((widget) => widget.id === menu.id)
     : undefined;
   const menuLayerNode = menuLayerWidget
     ? findLayerTreeNode(
@@ -2399,6 +2406,71 @@ export function ScreenLayerSidebar() {
               const entryIndex = virtualizedRange.start + visibleIndex;
               if (entry.kind === "node" && entry.node.kind === "widget" && entry.node.widget) {
                 return renderWidgetRow(entry.node.widget, entry, entryIndex);
+              }
+              if (entry.kind === "node" && entry.node.kind === "state") {
+                const node = entry.node;
+                const collapseKey = getLayerTreeCollapseKey(node)!;
+                const indentation = Math.min(entry.depth + 1, 5) * 16;
+                const ownedChildIds = node.children
+                  .filter((child) => visibleLayerNodeIds.has(child.id))
+                  .map(layerNodeDomId)
+                  .join(" ");
+                return (
+                  <div
+                    key={node.id}
+                    id={`layer-state-${node.id}`}
+                    className={`layer-state-row${entry.depth > 0 ? " is-nested" : ""}`}
+                    role="treeitem"
+                    tabIndex={entry.depth === 0 ? 0 : -1}
+                    data-entry-index={entryIndex}
+                    aria-level={entry.depth + 2}
+                    aria-label={`State ${node.label}`}
+                    aria-expanded={!entry.collapsed}
+                    aria-posinset={entry.position}
+                    aria-setsize={entry.siblingCount}
+                    aria-owns={ownedChildIds || undefined}
+                    data-collapse-key={collapseKey}
+                    data-depth={entry.depth + 1}
+                    style={{ paddingLeft: `${indentation}px` }}
+                    onKeyDown={navigateLayerTree}
+                    onClick={() => {
+                      if (!activeScreen || !node.panelId || !node.stateId) return;
+                      const current = useStore.getState();
+                      current.setProject({
+                        ...current.project,
+                        updatedAt: new Date().toISOString(),
+                        screens: current.project.screens.map((screen) =>
+                          screen.id === activeScreen.id
+                            ? {
+                                ...screen,
+                                widgets: updatePanelState(screen.widgets, node.panelId!, (panel, states) =>
+                                  withPanelStates(panel, states, node.stateId),
+                                ),
+                              }
+                            : screen,
+                        ),
+                      });
+                      current.setActivePanelEdit({ panelId: node.panelId, stateId: node.stateId });
+                      current.select([node.panelId]);
+                    }}
+                    onDoubleClick={() => toggleGroup(node.id, collapseKey)}
+                  >
+                    <button
+                      className="layer-expand-toggle"
+                      aria-label={`${entry.collapsed ? "Expand" : "Collapse"} ${node.label}`}
+                      aria-expanded={!entry.collapsed}
+                      disabled={node.children.length === 0}
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        toggleGroup(node.id, collapseKey);
+                      }}
+                    >
+                      {node.children.length > 0 && (entry.collapsed ? <ChevronRight size={12} /> : <ChevronDown size={12} />)}
+                    </button>
+                    <span className="layer-state-label">{node.label}</span>
+                    <span className="layer-state-count">{node.children.length}</span>
+                  </div>
+                );
               }
               if (entry.kind === "node") {
                 const node = entry.node;

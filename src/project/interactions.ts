@@ -8,6 +8,7 @@ import type {
   Widget,
 } from "./schema";
 import { VariableRuntimeStore } from "./variables";
+import { collectWidgetsDeep, getPanelStates } from "./dynamicPanels";
 
 export type InteractionIssue = {
   severity: "error" | "warning";
@@ -101,7 +102,7 @@ function describeAction(
     }
     case "show":
     case "hide": {
-      const widget = screen.widgets.find((item) => item.id === action.target);
+      const widget = collectWidgetsDeep(screen.widgets).find((item) => item.id === action.target);
       return widget
         ? `${action.type === "show" ? "Show" : "Hide"} ${widget.name ?? widget.type}`
         : `Unknown widget: ${action.target}`;
@@ -129,7 +130,7 @@ export function validateInteractionRules(project: Project, screen: Screen): Inte
   for (const ownerScreen of project.screens) {
     for (const rule of ownerScreen.interactionRules) {
       if (ownerScreen.id === screen.id) {
-        if (rule.widgetId && !screen.widgets.some((widget) => widget.id === rule.widgetId)) {
+        if (rule.widgetId && !collectWidgetsDeep(screen.widgets).some((widget) => widget.id === rule.widgetId)) {
           issues.push({
             severity: "error",
             code: "unknown-target",
@@ -196,11 +197,13 @@ export function validateInteractionRules(project: Project, screen: Screen): Inte
         } else if (action.type === "show" || action.type === "hide" ||
           action.type === "setPanelState" || action.type === "setRepeaterData") {
           const targetScreen = project.screens.find((item) =>
-            item.widgets.some((widget) => widget.id === action.target),
+            collectWidgetsDeep(item.widgets).some((widget) => widget.id === action.target),
           );
           const targetIsLocal = ownerScreen.id === screen.id &&
-            screen.widgets.some((widget) => widget.id === action.target);
-          const targetWidget = targetScreen?.widgets.find((widget) => widget.id === action.target);
+            collectWidgetsDeep(screen.widgets).some((widget) => widget.id === action.target);
+          const targetWidget = targetScreen
+            ? collectWidgetsDeep(targetScreen.widgets).find((widget) => widget.id === action.target)
+            : undefined;
           const targetTypeMatches = action.type === "setPanelState"
             ? ["panel", "dynamic-panel", "dynamicPanel"].includes(targetWidget?.type ?? "")
             : action.type === "setRepeaterData"
@@ -219,6 +222,19 @@ export function validateInteractionRules(project: Project, screen: Screen): Inte
                 ruleId: rule.id,
               });
             }
+          } else if (ownerScreen.id === screen.id && action.type === "setPanelState" &&
+            targetWidget && getPanelStates(targetWidget).length > 0 &&
+            !getPanelStates(targetWidget).some((state) =>
+              state.id === action.stateId ||
+              state.id === action.value ||
+              state.name === action.value,
+            )) {
+            issues.push({
+              severity: "error",
+              code: "unknown-target",
+              message: "Panel-state action must choose a state belonging to its target panel.",
+              ruleId: rule.id,
+            });
           } else if (
             ownerScreen.id === screen.id &&
             (action.type === "show" || action.type === "hide") &&

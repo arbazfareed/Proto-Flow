@@ -145,6 +145,31 @@ describe("layer hierarchy", () => {
       .toEqual(["rectangle-parent", "text-child", "image-grandchild"]);
   });
 
+  it("nests dynamic-panel widgets beneath their named state nodes", () => {
+    const first = widget("first", "text", 1, "panel");
+    const second = widget("second", "button", 2, "panel");
+    const panel = {
+      ...widget("panel", "dynamic-panel", 0),
+      props: {
+        activeStateId: "state-one",
+        states: [
+          { id: "state-one", name: "One", widgets: [first] },
+          { id: "state-two", name: "Two", widgets: [second] },
+        ],
+      },
+    };
+    const roots = buildLayerHierarchy([panel, first, second], (item) => item.id);
+    const rows = flattenLayerHierarchy(roots, new Set());
+
+    expect(rows.map(({ node }) => [node.kind, node.label])).toEqual([
+      ["widget", "panel"],
+      ["state", "One"],
+      ["widget", "first"],
+      ["state", "Two"],
+      ["widget", "second"],
+    ]);
+  });
+
   it("expands a tree to a selected depth while keeping deeper containers collapsed", () => {
     const roots = buildLayerHierarchy([
       widget("frame", "frame", 0),
