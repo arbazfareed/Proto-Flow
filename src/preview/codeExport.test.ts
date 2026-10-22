@@ -133,4 +133,56 @@ describe("React code export preparation", () => {
       diagnostic.category === ts.DiagnosticCategory.Error,
     )).toEqual([]);
   });
+
+  it("retains local-variable rules and emits invocation-scoped bindings in the React export", () => {
+    const project = createEmptyProject("Local variable export");
+    const trigger = {
+      id: crypto.randomUUID(),
+      type: "button",
+      x: 0,
+      y: 0,
+      width: 100,
+      height: 40,
+      rotation: 0,
+      opacity: 1,
+      visible: true,
+      locked: false,
+      zIndex: 0,
+      style: {},
+      props: { label: "Increment" },
+    };
+    project.screens[0].widgets.push(trigger);
+    project.variables.push({
+      id: crypto.randomUUID(),
+      name: "total",
+      type: "number",
+      initial: 0,
+      scope: "project",
+    });
+    project.screens[0].interactionRules = [{
+      id: crypto.randomUUID(),
+      widgetId: trigger.id,
+      event: "onClick",
+      conditions: [{ variable: "[[ item.score >= amount ]]", operator: "equals", value: true }],
+      actions: [
+        { type: "setVariable", target: "amount", value: "[[ amount + 1 ]]" },
+        { type: "setVariable", target: "total", value: "[[ item.score + amount ]]" },
+      ],
+      localVariables: [{ name: "amount", type: "number", initial: 2 }],
+    }];
+
+    const prepared = prepareExportProject(project, options());
+    expect(prepared.screens[0].interactionRules).toHaveLength(1);
+    const source = generateSingleFileJsx(prepared);
+    expect(source).toContain("let localValue = definition.initial");
+    expect(source).toContain("localVariables[definition.name] = localValue");
+    expect(source).toContain('onClick={() => runInteractions(widget, "onClick", item)}');
+    const transpiled = ts.transpileModule(source, {
+      compilerOptions: { jsx: ts.JsxEmit.ReactJSX, target: ts.ScriptTarget.ES2022 },
+      reportDiagnostics: true,
+    });
+    expect(transpiled.diagnostics?.filter((diagnostic) =>
+      diagnostic.category === ts.DiagnosticCategory.Error,
+    )).toEqual([]);
+  });
 });

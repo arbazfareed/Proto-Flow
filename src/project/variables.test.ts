@@ -98,6 +98,30 @@ describe("variable references and runtime values", () => {
     });
   });
 
+  it("preserves local references and excludes them from project-variable validation during rename", () => {
+    const project = withWidgetText("Hello {{customerName}}!");
+    const screen = project.screens[0];
+    screen.interactionRules = [{
+      id: crypto.randomUUID(),
+      event: "onClick",
+      conditions: [{ variable: "customerName", operator: "equals", value: "local" }],
+      actions: [{ type: "setVariable", target: "customerName", value: "next" }],
+      localVariables: [{ name: "customerName", type: "string", initial: "local" }],
+    }];
+    const variable = project.variables[0];
+
+    expect(validateVariableReferences(project)).not.toContainEqual(expect.objectContaining({
+      code: "unknown-reference",
+      message: expect.stringContaining("customerName"),
+    }));
+    const renamed = renameVariableReferences(project, variable, "personName");
+    expect(renamed.screens[0].widgets[0].props.text).toBe("Hello {{personName}}!");
+    expect(renamed.screens[0].interactionRules[0]).toMatchObject({
+      conditions: [{ variable: "customerName" }],
+      actions: [{ target: "customerName" }],
+    });
+  });
+
   it("provides matching project and active-screen suggestions", () => {
     const project = withWidgetText("");
     const screenId = project.screens[0].id;

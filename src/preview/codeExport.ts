@@ -50,8 +50,16 @@ export function prepareExportProject(project: Project, options: CodeExportOption
     }),
     interactionRules: options.includeInteractions
       ? screen.interactionRules.filter((rule) =>
-        rule.conditions.every((condition) => variableNames.has(condition.variable)) &&
-        rule.actions.every((action) => action.type !== "setVariable" || variableNames.has(action.target)),
+        rule.conditions.every((condition) =>
+          /^\[\[[\s\S]*\]\]$/.test(condition.variable) ||
+          (rule.localVariables ?? []).some((variable) => variable.name === condition.variable) ||
+          variableNames.has(condition.variable),
+        ) &&
+        rule.actions.every((action) =>
+          action.type !== "setVariable" ||
+          variableNames.has(action.target) ||
+          (rule.localVariables ?? []).some((variable) => variable.name === action.target),
+        ),
       )
       : [],
   }));
@@ -99,7 +107,86 @@ const repeaterItemVisible = (widget: Widget, item: Record<string, unknown>): boo
 export default function App() {
 ${EXPRESSION_RUNTIME_SOURCE}
   const [screenId, setScreenId] = useState(project.startScreenId);
+  const [runtimeVariables, setRuntimeVariables] = useState<Record<string, unknown>>(() =>
+    Object.fromEntries(project.variables.map((entry) => [entry.id, entry.initial])));
   const screen = project.screens.find((item) => item.id === screenId) ?? project.screens[0];
+  const getVariableValues = (updates: Record<string, unknown> = {}) => Object.fromEntries([
+    ...project.variables.filter((entry) => entry.scope === "project"),
+    ...project.variables.filter((entry) => entry.scope === "screen" && entry.screenId === screen.id),
+  ].map((entry) => [entry.name, updates[entry.id] ?? runtimeVariables[entry.id] ?? entry.initial]));
+  const resolveActionValue = (value: unknown, variables: Record<string, unknown>, item?: Record<string, unknown>, widget?: Widget): unknown => {
+    if (typeof value === "string") {
+      const withBindings = value.replace(/\\{\\{\\s*([\\w$.-]+)\\s*\\}\\}/g, (whole, name: string) => {
+        const current = name.startsWith("item.") ? item?.[name.slice(5)] : variables[name];
+        return current === undefined ? whole : String(current);
+      });
+      const wholeExpression = /^\\[\\[([\\s\\S]*?)\\]\\]$/.exec(withBindings);
+      const context = { variables, widgets: screen.widgets, item, thisWidget: widget };
+      if (wholeExpression) return evaluateExpression(wholeExpression[1].trim(), context);
+      return withBindings.replace(/\\[\\[([\\s\\S]*?)\\]\\]/g, (whole, source: string) => {
+        try {
+          const result = evaluateExpression(source.trim(), context);
+          return result === null || result === undefined ? "" : String(result);
+        } catch { return whole; }
+      });
+    }
+    if (Array.isArray(value)) return value.map((entry) => resolveActionValue(entry, variables, item, widget));
+    if (typeof value === "object" && value !== null) {
+      return Object.fromEntries(Object.entries(value).map(([key, entry]) =>
+        [key, resolveActionValue(entry, variables, item, widget)]));
+    }
+    return value;
+  };
+  const runInteractions = (widget: Widget, eventName: string, item?: Record<string, unknown>) => {
+    const updates: Record<string, unknown> = {};
+    for (const rule of screen.interactionRules.filter((entry) =>
+      entry.event === eventName && (!entry.widgetId || entry.widgetId === widget.id))) {
+      const localVariables: Record<string, unknown> = {};
+      for (const definition of rule.localVariables ?? []) {
+        let localValue = definition.initial;
+        localVariables[definition.name] = localValue;
+      }
+      const variables = { ...getVariableValues(updates), ...localVariables };
+      const matches = rule.conditions.map((condition) => {
+        const expression = /^\\[\\[([\\s\\S]*?)\\]\\]$/.exec(condition.variable);
+        if (expression) {
+          try {
+            return Boolean(evaluateExpression(expression[1].trim(), { variables, widgets: screen.widgets, item, thisWidget: widget }));
+          } catch { return false; }
+        }
+        const current = variables[condition.variable];
+        const expected = typeof condition.value === "string"
+          ? resolveActionValue(condition.value, variables, item, widget)
+          : condition.value;
+        switch (condition.operator) {
+          case "equals": return current === expected;
+          case "notEquals": return current !== expected;
+          case "greaterThan": return typeof current === "number" && typeof expected === "number" && current > expected;
+          case "greaterThanOrEqual": return typeof current === "number" && typeof expected === "number" && current >= expected;
+          case "lessThan": return typeof current === "number" && typeof expected === "number" && current < expected;
+          case "lessThanOrEqual": return typeof current === "number" && typeof expected === "number" && current <= expected;
+          case "contains": return typeof current === "string" && typeof expected === "string" && current.includes(expected);
+          default: return false;
+        }
+      });
+      if (rule.conditions.length && (rule.conditionMode === "any" ? !matches.some(Boolean) : !matches.every(Boolean))) continue;
+      for (const action of rule.actions) {
+        if (action.type !== "setVariable") continue;
+        const actionVariables = { ...getVariableValues(updates), ...localVariables };
+        const value = resolveActionValue(action.value, actionVariables, item, widget);
+        if (Object.hasOwn(localVariables, action.target)) {
+          const localDefinition = rule.localVariables?.find((entry) => entry.name === action.target);
+          if (localDefinition && typeof value === localDefinition.type) localVariables[action.target] = value;
+          continue;
+        }
+        const definition = project.variables.find((entry) =>
+          entry.name === action.target && entry.scope === "screen" && entry.screenId === screen.id,
+        ) ?? project.variables.find((entry) => entry.name === action.target && entry.scope === "project");
+        if (definition && typeof value === definition.type) updates[definition.id] = value;
+      }
+    }
+    if (Object.keys(updates).length) setRuntimeVariables((current) => ({ ...current, ...updates }));
+  };
   const style = (widget: Widget): CSSProperties => ({
     position: "absolute",
     left: widget.x,
@@ -122,9 +209,7 @@ ${EXPRESSION_RUNTIME_SOURCE}
     String(value ?? "").replace(/\\{\\{\\s*item\\.([\\w$.-]+)\\s*\\}\\}/g, (_match, field: string) => String(item?.[field] ?? ""))
       .replace(/\\[\\[([\\s\\S]*?)\\]\\]/g, (whole, source: string) => {
         try {
-          const variables = Object.fromEntries(project.variables
-            .filter((entry) => entry.scope === "project" || entry.screenId === screen.id)
-            .map((entry) => [entry.name, entry.initial]));
+          const variables = getVariableValues();
           const widgets = screen.widgets;
           const result = evaluateExpression(source.trim(), { variables, widgets, item, thisWidget: widget });
           return result === null || result === undefined ? "" : String(result);
@@ -144,14 +229,16 @@ ${EXPRESSION_RUNTIME_SOURCE}
         flexDirection: layout === "horizontal" ? "row" : "column",
         gridTemplateColumns: layout === "grid" ? "repeat(auto-fill,minmax(120px,1fr))" : undefined,
         gap: typeof widget.props.gap === "number" ? widget.props.gap : 8, overflow: "visible" }}>
-        {rows.slice(0, 1000).map((row, index) => <div key={index} style={{ position: "relative",
+        {rows.slice(0, 1000).map((row, index) => <div key={index}
+          onClick={() => runInteractions(widget, "onClick", row)} style={{ position: "relative",
           width: widget.width, height: widget.height, flex: layout === "horizontal" ? "0 0 auto" : undefined }}>
           {template.filter((child) => child.visible && repeaterItemVisible(child, row)).map((child) => renderWidget(child, row))}
         </div>)}
       </div>;
     }
     if (["button", "icon-button"].includes(widget.type)) {
-      return <button key={widget.id} type="button" style={style(widget)}>{text}</button>;
+      return <button key={widget.id} type="button" style={style(widget)}
+        onClick={() => runInteractions(widget, "onClick", item)}>{text}</button>;
     }
     if (widget.type === "image") {
       const src = resolveText(widget.props.src, widget, item);
@@ -162,7 +249,8 @@ ${EXPRESSION_RUNTIME_SOURCE}
         ? <textarea key={widget.id} aria-label={String(widget.props.label ?? "Preview input")} placeholder={String(widget.props.placeholder ?? "")} style={style(widget)} />
         : <input key={widget.id} type={widget.type === "search" ? "search" : String(widget.props.type ?? "text")} aria-label={String(widget.props.label ?? "Preview input")} placeholder={String(widget.props.placeholder ?? "")} style={style(widget)} />;
     }
-    return <div key={widget.id} style={style(widget)}>{text}</div>;
+    return <div key={widget.id} style={style(widget)}
+      onClick={() => runInteractions(widget, "onClick", item)}>{text}</div>;
   };
   return (
     <main style={{ fontFamily: "system-ui, sans-serif", padding: 16 }}>

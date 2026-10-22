@@ -1,19 +1,23 @@
 import type {
   InteractionAction,
   InteractionCondition,
+  InteractionLocalVariable,
   InteractionRule,
   Project,
   Screen,
   VariableDefinition,
   Widget,
 } from "./schema";
+import { isValidVariableName } from "./schema";
+import { isValidInteractionLocalVariableName } from "./interactionSchema";
 import { VariableRuntimeStore } from "./variables";
 import { collectWidgetsDeep, getPanelStates } from "./dynamicPanels";
 import { evaluateExpression } from "./expressions";
 
 export type InteractionIssue = {
   severity: "error" | "warning";
-  code: "unknown-target" | "self-visibility" | "navigation-cycle" | "type-mismatch";
+  code: "unknown-target" | "self-visibility" | "navigation-cycle" | "type-mismatch" |
+    "unused-local" | "invalid-local" | "duplicate-local";
   message: string;
   ruleId: string;
 };
@@ -76,11 +80,24 @@ export function testInteractionRule(
 ): InteractionTestResult {
   const runtime = new VariableRuntimeStore(project.variables);
   const trigger = collectWidgetsDeep(screen.widgets).find((widget) => widget.id === rule.widgetId);
-  const expressionContext = {
-    variables: Object.fromEntries(runtime.entries(screen.id)
-      .map(({ variable, value }) => [variable.name, value])),
+  const localValues: Record<string, string | number | boolean> = Object.fromEntries(
+    (rule.localVariables ?? []).map(({ name, initial }) => [name, initial]),
+  );
+  const getExpressionContext = () => ({
+    variables: {
+      ...Object.fromEntries(runtime.entries(screen.id)
+        .filter(({ variable }) => variable.scope === "project")
+        .map(({ variable, value }) => [variable.name, value])),
+      ...Object.fromEntries(runtime.entries(screen.id)
+        .filter(({ variable }) => variable.scope === "screen")
+        .map(({ variable, value }) => [variable.name, value])),
+      ...localValues,
+    },
     widgets: collectWidgetsDeep(screen.widgets),
     thisWidget: trigger,
+  });
+  const expressionContext = {
+    ...getExpressionContext(),
   };
   const conditionResults = rule.conditions.map((condition) => {
     if (/^\[\[[\s\S]*\]\]$/.test(condition.variable)) {
@@ -101,7 +118,12 @@ export function testInteractionRule(
         }
       }
     }
-    return compareValues({ ...condition, value: expected }, runtime.get(condition.variable, screen.id));
+    return compareValues(
+      { ...condition, value: expected },
+      Object.hasOwn(localValues, condition.variable)
+        ? localValues[condition.variable]
+        : runtime.get(condition.variable, screen.id),
+    );
   });
   const matched = rule.conditions.length === 0
     ? true
@@ -109,7 +131,9 @@ export function testInteractionRule(
       ? conditionResults.some(Boolean)
       : conditionResults.every(Boolean);
   const actions = matched
-    ? rule.actions.map((action) => describeAction(project, screen, action, runtime))
+    ? rule.actions.map((action) =>
+      describeAction(project, screen, action, runtime, rule.localVariables ?? [], localValues, getExpressionContext),
+    )
     : [];
   return { matched, conditionResults, actions };
 }
@@ -119,6 +143,9 @@ function describeAction(
   screen: Screen,
   action: InteractionAction,
   runtime: VariableRuntimeStore,
+  localDefinitions: InteractionLocalVariable[],
+  localValues: Record<string, string | number | boolean>,
+  getExpressionContext: () => { variables: Record<string, unknown>; widgets: Widget[]; thisWidget: Widget | undefined },
 ): string {
   switch (action.type) {
     case "navigate":
@@ -134,6 +161,25 @@ function describeAction(
         : `Unknown widget: ${action.target}`;
     }
     case "setVariable": {
+      const localVariable = localDefinitions.find((item) => item.name === action.target);
+      if (localVariable) {
+        let value: unknown = action.value;
+        if (typeof value === "string") {
+          const expression = /^\[\[([\s\S]*?)\]\]$/.exec(value);
+          if (expression) {
+            try {
+              value = evaluateExpression(expression[1].trim(), getExpressionContext());
+            } catch {
+              return `Invalid expression for local variable ${localVariable.name}`;
+            }
+          }
+        }
+        if (!isRuntimeValue(value) || typeof value !== localVariable.type) {
+          return `Invalid ${localVariable.type} value for local variable ${localVariable.name}`;
+        }
+        localValues[localVariable.name] = value;
+        return `Set local ${localVariable.name} to ${String(value)}`;
+      }
       const variable = getVariable(project.variables, action.target, screen.id);
       if (!variable) return `Unknown variable: ${action.target}`;
       let value: unknown = action.value;
@@ -142,9 +188,7 @@ function describeAction(
         if (expression) {
           try {
             value = evaluateExpression(expression[1].trim(), {
-              variables: Object.fromEntries(runtime.entries(screen.id)
-                .map(({ variable: entry, value: current }) => [entry.name, current])),
-              widgets: collectWidgetsDeep(screen.widgets),
+              ...getExpressionContext(),
             });
           } catch {
             return `Invalid expression for ${variable.name}`;
@@ -185,7 +229,8 @@ export function validateInteractionRules(project: Project, screen: Screen): Inte
         }
         for (const condition of rule.conditions) {
           if (/^\[\[[\s\S]*\]\]$/.test(condition.variable)) continue;
-          const variable = getVariable(project.variables, condition.variable, screen.id);
+          const localVariable = rule.localVariables?.find((item) => item.name === condition.variable);
+          const variable = localVariable ?? getVariable(project.variables, condition.variable, screen.id);
           if (!variable) {
             issues.push({
               severity: "error",
@@ -196,11 +241,15 @@ export function validateInteractionRules(project: Project, screen: Screen): Inte
           } else {
             const numeric = ["greaterThan", "greaterThanOrEqual", "lessThan", "lessThanOrEqual"]
               .includes(condition.operator);
-            const mismatch = numeric
-              ? variable.type !== "number" || typeof condition.value !== "number"
-              : condition.operator === "contains"
-                ? variable.type !== "string" || typeof condition.value !== "string"
-                : typeof condition.value !== variable.type;
+            const expressionValue = typeof condition.value === "string" &&
+              /^\[\[[\s\S]*\]\]$/.test(condition.value);
+            const mismatch = expressionValue
+              ? false
+              : numeric
+                ? variable.type !== "number" || typeof condition.value !== "number"
+                : condition.operator === "contains"
+                  ? variable.type !== "string" || typeof condition.value !== "string"
+                  : typeof condition.value !== variable.type;
             if (mismatch) {
               issues.push({
                 severity: "warning",
@@ -209,6 +258,65 @@ export function validateInteractionRules(project: Project, screen: Screen): Inte
                 ruleId: rule.id,
               });
             }
+          }
+        }
+      }
+
+      if (ownerScreen.id === screen.id) {
+        const localVariables = rule.localVariables ?? [];
+        const names = new Set(localVariables.map((variable) => variable.name));
+        const declaredNames = new Set<string>();
+        const referenced = new Set<string>();
+        for (const localVariable of localVariables) {
+          if (!isValidInteractionLocalVariableName(localVariable.name) || !isValidVariableName(localVariable.name)) {
+            issues.push({
+              severity: "error",
+              code: "invalid-local",
+              message: `Local variable "${localVariable.name}" must be a valid identifier.`,
+              ruleId: rule.id,
+            });
+          }
+          if (declaredNames.has(localVariable.name)) {
+            issues.push({
+              severity: "error",
+              code: "duplicate-local",
+              message: `Local variable "${localVariable.name}" is declared more than once.`,
+              ruleId: rule.id,
+            });
+          }
+          declaredNames.add(localVariable.name);
+        }
+        const markReferences = (value: unknown) => {
+          if (typeof value !== "string") return;
+          for (const name of names) {
+            if (value === name || value.includes(`{{${name}}}`) ||
+              new RegExp(`(^|[^\\w$])${name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}([^\\w$]|$)`).test(value)) {
+              referenced.add(name);
+            }
+          }
+        };
+        for (const condition of rule.conditions) {
+          markReferences(condition.variable);
+          markReferences(condition.value);
+        }
+        for (const action of rule.actions) markReferences(action.value);
+        for (const localVariable of localVariables) {
+          const shadowed = getVariable(project.variables, localVariable.name, ownerScreen.id);
+          if (shadowed && shadowed.type !== localVariable.type) {
+            issues.push({
+              severity: "warning",
+              code: "type-mismatch",
+              message: `Local variable "${localVariable.name}" shadows a ${shadowed.type} variable with type ${localVariable.type}.`,
+              ruleId: rule.id,
+            });
+          }
+          if (!referenced.has(localVariable.name)) {
+            issues.push({
+              severity: "warning",
+              code: "unused-local",
+              message: `Local variable "${localVariable.name}" is never read by this interaction.`,
+              ruleId: rule.id,
+            });
           }
         }
       }
@@ -297,7 +405,8 @@ export function validateInteractionRules(project: Project, screen: Screen): Inte
             });
           }
         } else if (action.type === "setVariable") {
-          const variable = getVariable(project.variables, action.target, ownerScreen.id);
+          const localVariable = rule.localVariables?.find((item) => item.name === action.target);
+          const variable = localVariable ?? getVariable(project.variables, action.target, ownerScreen.id);
           if (!variable) {
             if (ownerScreen.id === screen.id) {
               issues.push({
@@ -364,5 +473,6 @@ export function createInteractionRule(widget: Widget): InteractionRule {
     conditionMode: "all",
     conditions: [],
     actions: [{ type: "navigate", target: "" }],
+    localVariables: [],
   };
 }

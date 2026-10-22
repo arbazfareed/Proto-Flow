@@ -13,11 +13,12 @@ export {
 export type {
   InteractionAction,
   InteractionCondition,
+  InteractionLocalVariable,
   InteractionRule,
 } from "./interactionSchema";
 
-export const PROJECT_SCHEMA_VERSION = "1.5.0";
-const LEGACY_PROJECT_SCHEMA_VERSIONS = new Set(["1.0.0", "1.1.0", "1.2.0", "1.3.0", "1.4.0"]);
+export const PROJECT_SCHEMA_VERSION = "1.6.0";
+const LEGACY_PROJECT_SCHEMA_VERSIONS = new Set(["1.0.0", "1.1.0", "1.2.0", "1.3.0", "1.4.0", "1.5.0"]);
 const COORDINATE_LIMIT = 100_000;
 const HexColorSchema = z
   .string()

@@ -174,6 +174,83 @@ describe("PreviewRuntime", () => {
     expect(runtime.getVariable("count")).toBe(0);
   });
 
+  it("scopes local variables to one rule invocation and gives them highest precedence", () => {
+    const project = createProject();
+    const screen = project.screens[0];
+    const trigger = screen.widgets[0];
+    project.variables.push({
+      id: crypto.randomUUID(),
+      name: "total",
+      type: "number",
+      initial: 0,
+      scope: "project",
+    });
+    project.variables.push({
+      id: crypto.randomUUID(),
+      name: "count",
+      type: "number",
+      initial: 20,
+      scope: "screen",
+      screenId: screen.id,
+    });
+    screen.interactionRules = [
+      {
+        id: crypto.randomUUID(),
+        widgetId: trigger.id,
+        event: "onClick",
+        conditions: [{ variable: "count", operator: "equals", value: 2 }],
+        actions: [
+          { type: "setVariable", target: "count", value: "[[ count + 1 ]]" },
+          { type: "setVariable", target: "total", value: "[[ count ]]" },
+        ],
+        localVariables: [{ name: "count", type: "number", initial: 2 }],
+      },
+      {
+        id: crypto.randomUUID(),
+        widgetId: trigger.id,
+        event: "onClick",
+        conditions: [{ variable: "count", operator: "equals", value: 2 }],
+        actions: [{ type: "setVariable", target: "total", value: 999 }],
+      },
+    ];
+
+    const runtime = new PreviewRuntime(project);
+    expect(runtime.runEvent(trigger, "onClick")).toEqual([]);
+    expect(runtime.getVariable("count", screen.id)).toBe(20);
+    expect(runtime.getVariable("total")).toBe(3);
+    expect(runtime.runEvent(trigger, "onClick")).toEqual([]);
+    expect(runtime.getVariable("count", screen.id)).toBe(20);
+    expect(runtime.getVariable("total")).toBe(3);
+    expect(runtime.snapshot().variables.filter(({ variable }) => variable.name === "count")).toHaveLength(2);
+  });
+
+  it("provides repeater item and local variables to action expressions", () => {
+    const project = createProject();
+    const screen = project.screens[0];
+    const trigger = screen.widgets[0];
+    project.variables.push({
+      id: crypto.randomUUID(),
+      name: "total",
+      type: "number",
+      initial: 0,
+      scope: "project",
+    });
+    screen.interactionRules = [{
+      id: crypto.randomUUID(),
+      widgetId: trigger.id,
+      event: "onClick",
+      conditions: [{ variable: "[[ item.score >= threshold ]]", operator: "equals", value: true }],
+      actions: [{ type: "setVariable", target: "total", value: "[[ item.score + threshold ]]" }],
+      localVariables: [{ name: "threshold", type: "number", initial: 4 }],
+    }];
+
+    const runtime = new PreviewRuntime(project);
+    expect(runtime.runEvent(trigger, "onClick", { score: 6 })).toEqual([]);
+    expect(runtime.getVariable("total")).toBe(10);
+    expect(runtime.runEvent(trigger, "onClick", { score: 2 })).toEqual([]);
+    expect(runtime.getVariable("total")).toBe(10);
+  });
+
   it("applies panel-state and repeater-data actions to compatible targets", () => {
     const project = createProject();
     const screen = project.screens[0];

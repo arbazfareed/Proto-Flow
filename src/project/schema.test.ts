@@ -77,7 +77,7 @@ describe("ProtoFlow project schema", () => {
   it("creates a valid starter project with a UUID start screen", () => {
     const project = createEmptyProject("Checkout flow");
 
-    expect(project.schemaVersion).toBe("1.5.0");
+    expect(project.schemaVersion).toBe("1.6.0");
     expect(project.name).toBe("Checkout flow");
     expect(project.screens).toHaveLength(1);
     expect(project.screens[0].id).toBe(project.startScreenId);
@@ -150,7 +150,7 @@ describe("ProtoFlow project schema", () => {
     const project = createCompleteProject();
     const { symbols: _symbols, ...legacy } = project;
     const migrated = parseProject({ ...legacy, schemaVersion: "1.0.0" });
-    expect(migrated.schemaVersion).toBe("1.5.0");
+    expect(migrated.schemaVersion).toBe("1.6.0");
     expect(migrated.symbols).toEqual([]);
   });
 
@@ -179,9 +179,51 @@ describe("ProtoFlow project schema", () => {
   it("migrates version 1.2 interaction rules to the current format", () => {
     const project = createCompleteProject();
     const migrated = parseProject({ ...project, schemaVersion: "1.2.0" });
-    expect(migrated.schemaVersion).toBe("1.5.0");
+    expect(migrated.schemaVersion).toBe("1.6.0");
     expect(migrated.screens[0].interactionRules[0].conditionMode).toBe("all");
     expect(migrated.screens[0].interactionRules[0].widgetId).toBeUndefined();
+  });
+
+  it("migrates version 1.5 projects with interaction-local variables", () => {
+    const project = createCompleteProject();
+    const migrated = parseProject({ ...project, schemaVersion: "1.5.0" });
+    expect(migrated.schemaVersion).toBe("1.6.0");
+    expect(migrated.screens[0].interactionRules[0].localVariables).toBeUndefined();
+  });
+
+  it("validates and round-trips typed local variables on interaction rules", () => {
+    const project = createCompleteProject();
+    const rule = project.screens[0].interactionRules[0];
+    rule.localVariables = [
+      { name: "step", type: "number", initial: 1 },
+      { name: "message", type: "string", initial: "ready" },
+      { name: "enabled", type: "boolean", initial: true },
+    ];
+    const roundTrip = parseProject(serializeProject(project));
+    expect(roundTrip.screens[0].interactionRules[0].localVariables).toEqual(rule.localVariables);
+    expect(() => parseProject({
+      ...project,
+      screens: [{
+        ...project.screens[0],
+        interactionRules: [{
+          ...rule,
+          localVariables: [
+            { name: "step", type: "number", initial: 1 },
+            { name: "step", type: "string", initial: "two" },
+          ],
+        }],
+      }],
+    })).toThrow(/declared more than once/i);
+    expect(() => parseProject({
+      ...project,
+      screens: [{
+        ...project.screens[0],
+        interactionRules: [{
+          ...rule,
+          localVariables: [{ name: "constructor", type: "string", initial: "blocked" }],
+        }],
+      }],
+    })).toThrow(/non-reserved/i);
   });
 
   it("migrates legacy named dynamic-panel states to stable IDs", () => {

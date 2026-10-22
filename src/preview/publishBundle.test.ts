@@ -124,4 +124,13 @@ describe("standalone published preview bundle", () => {
     expect(html).toContain('row.addEventListener("click", () => fire(widget, "onClick", rowData))');
     expect(() => new Function(PREVIEW_RUNTIME_SCRIPT)).not.toThrow();
   });
+
+  it("initializes and discards per-rule locals while preserving local-over-screen-over-project precedence", () => {
+    const html = generatePublishedPreviewHtml(createEmptyProject("Local scope export"));
+    expect(html).toContain("Object.fromEntries((rule.localVariables || []).map((entry) => [entry.name, entry.initial]))");
+    expect(html).toContain("if (localVariables && Object.prototype.hasOwnProperty.call(localVariables, name))");
+    expect(html).toContain("return { ...globals, ...screenVariables, ...localVariables }");
+    expect(html).toContain("actions(rule, activeScreen.id, undefined, undefined, localVariables)");
+    expect(() => new Function(PREVIEW_RUNTIME_SCRIPT)).not.toThrow();
+  });
 });
