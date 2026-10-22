@@ -16,6 +16,7 @@ import {
   getRepeaterDataset,
   getRepeaterTemplate,
   interpolateItem,
+  isRepeaterItemVisible,
   type RepeaterRecord,
 } from "../project/repeaters";
 import { DEVICE_PRESETS } from "../devices/catalog";
@@ -229,7 +230,9 @@ function PreviewWidget({
         className={`preview-widget preview-repeater is-${layout}`}
         data-widget-type="repeater"
         style={{ ...style, height: layout === "horizontal" ? widget.height : Math.max(widget.height, rows.length * (widget.height + gap)), overflow: "visible", ...rowStyle }}
-        {...commonHandlers}
+        onMouseEnter={commonHandlers.onMouseEnter}
+        onTouchStart={commonHandlers.onTouchStart}
+        onTouchEnd={commonHandlers.onTouchEnd}
       >
         {rows.map((record, index) => (
           <div className="preview-repeater-row" key={`${widget.id}-${index}`} style={{
@@ -238,9 +241,9 @@ function PreviewWidget({
             width: widget.width,
             height: widget.height,
             overflow: "hidden",
-          }}>
+          }} onClick={() => runEvent(widget, "onClick", record)}>
             {template
-              .filter((child) => child.visible && snapshot.visibility[child.id] !== false)
+              .filter((child) => child.visible && snapshot.visibility[child.id] !== false && isRepeaterItemVisible(child, record))
               .map((child) => (
                 <PreviewWidget
                   key={`${child.id}-${index}`}

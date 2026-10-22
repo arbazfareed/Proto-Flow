@@ -117,6 +117,8 @@ describe("standalone published preview bundle", () => {
     expect(html).toContain('action.type === "sortRepeater"');
     expect(html).toContain("renderWidget(child, activeScreen, rowData)");
     expect(html).toContain("item?.[name.slice(5)]");
+    expect(html).toContain("function repeaterItemVisible(widget, item)");
+    expect(html).toContain('row.addEventListener("click", () => fire(widget, "onClick", rowData))');
     expect(() => new Function(PREVIEW_RUNTIME_SCRIPT)).not.toThrow();
   });
 });

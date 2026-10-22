@@ -2296,6 +2296,36 @@ function RepeaterBindingSection({ screen, widget }: { screen: Project["screens"]
   const bindingMatch = typeof current === "string"
     ? current.match(/^\{\{\s*item\.([\w$.-]+)\s*\}\}$/)
     : null;
+  const visibleWhen = typeof widget.props.visibleWhen === "object" &&
+    widget.props.visibleWhen !== null && !Array.isArray(widget.props.visibleWhen)
+    ? widget.props.visibleWhen as Record<string, unknown>
+    : undefined;
+
+  const updateTemplateProps = (props: Record<string, unknown>) => {
+    const currentStore = useStore.getState();
+    currentStore.setProject({
+      ...currentStore.project,
+      updatedAt: new Date().toISOString(),
+      screens: currentStore.project.screens.map((item) => item.id === screen.id
+        ? {
+            ...item,
+            widgets: updateRepeater(item.widgets, repeater.id, (container) => ({
+              ...container,
+              props: {
+                ...container.props,
+                rowTemplate: {
+                  widgets: getRepeaterTemplate(container).map((candidate) =>
+                    candidate.id === widget.id
+                      ? { ...candidate, props: { ...candidate.props, ...props } }
+                      : candidate,
+                  ),
+                },
+              },
+            })),
+          }
+        : item),
+    });
+  };
 
   const bindField = (field: string) => {
     const currentStore = useStore.getState();
@@ -2345,6 +2375,64 @@ function RepeaterBindingSection({ screen, widget }: { screen: Project["screens"]
         <option value="">No field binding</option>
         {fields.map((field) => <option key={field} value={field}>{field}</option>)}
       </select>
+      <label className="field-label repeater-visibility-toggle">
+        <input
+          type="checkbox"
+          checked={Boolean(visibleWhen)}
+          onChange={(event) => updateTemplateProps({
+            visibleWhen: event.currentTarget.checked
+              ? { field: fields[0] ?? "", operator: "equals", value: "" }
+              : undefined,
+          })}
+        />
+        Conditional visibility per row
+      </label>
+      {visibleWhen && (
+        <>
+          <label className="field-label" htmlFor="repeater-visibility-field">Show when field</label>
+          <select
+            id="repeater-visibility-field"
+            className="text-field"
+            value={typeof visibleWhen.field === "string" ? visibleWhen.field : ""}
+            onChange={(event) => updateTemplateProps({
+              visibleWhen: { ...visibleWhen, field: event.currentTarget.value },
+            })}
+          >
+            <option value="">Choose field</option>
+            {fields.map((field) => <option key={field} value={field}>{field}</option>)}
+          </select>
+          <select
+            aria-label="Visibility comparison"
+            className="text-field"
+            value={typeof visibleWhen.operator === "string" ? visibleWhen.operator : "equals"}
+            onChange={(event) => updateTemplateProps({
+              visibleWhen: { ...visibleWhen, operator: event.currentTarget.value },
+            })}
+          >
+            <option value="equals">Equals</option>
+            <option value="notEquals">Does not equal</option>
+            <option value="contains">Contains</option>
+            <option value="greaterThan">Greater than</option>
+            <option value="lessThan">Less than</option>
+          </select>
+          <input
+            className="text-field"
+            aria-label="Visibility value"
+            value={String(visibleWhen.value ?? "")}
+            onChange={(event) => {
+              const field = typeof visibleWhen.field === "string" ? visibleWhen.field : "";
+              const sample = getRepeaterDataset(repeater)[0]?.[field];
+              const raw = event.currentTarget.value;
+              const value = typeof sample === "number"
+                ? Number(raw)
+                : typeof sample === "boolean"
+                  ? raw === "true"
+                  : raw;
+              updateTemplateProps({ visibleWhen: { ...visibleWhen, value } });
+            }}
+          />
+        </>
+      )}
     </section>
   );
 }

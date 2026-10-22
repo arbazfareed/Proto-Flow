@@ -88,6 +88,21 @@ export function interpolateItem(
   });
 }
 
+export function isRepeaterItemVisible(widget: Widget, item: RepeaterRecord): boolean {
+  const condition = widget.props.visibleWhen;
+  if (typeof condition !== "object" || condition === null || Array.isArray(condition)) return true;
+  const rule = condition as Record<string, unknown>;
+  if (typeof rule.field !== "string" || typeof rule.operator !== "string") return true;
+  const actual = item[rule.field];
+  switch (rule.operator) {
+    case "notEquals": return actual !== rule.value;
+    case "contains": return typeof actual === "string" && actual.includes(String(rule.value ?? ""));
+    case "greaterThan": return typeof actual === "number" && typeof rule.value === "number" && actual > rule.value;
+    case "lessThan": return typeof actual === "number" && typeof rule.value === "number" && actual < rule.value;
+    default: return actual === rule.value;
+  }
+}
+
 export function repeaterDataBytes(dataset: RepeaterRecord[]): number {
   return new TextEncoder().encode(JSON.stringify(dataset)).byteLength;
 }

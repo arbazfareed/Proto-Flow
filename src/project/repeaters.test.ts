@@ -3,6 +3,7 @@ import {
   MAX_REPEATER_ROWS,
   getRepeaterDataset,
   interpolateItem,
+  isRepeaterItemVisible,
   parseRepeaterCsv,
   parseRepeaterDataset,
   repeaterDataBytes,
@@ -46,6 +47,20 @@ describe("repeater data helpers", () => {
     expect(interpolateItem("Hello {{ item.name }} / {{item.missing}}", { name: "Ada" }))
       .toBe("Hello Ada / ");
     expect(repeaterDataBytes([{ content: "x".repeat(100) }])).toBeGreaterThan(100);
+  });
+
+  it("evaluates per-record visibility conditions with typed comparisons", () => {
+    const templateWidget = widget("text", {
+      visibleWhen: { field: "active", operator: "equals", value: true },
+    });
+    expect(isRepeaterItemVisible(templateWidget, { active: true })).toBe(true);
+    expect(isRepeaterItemVisible(templateWidget, { active: false })).toBe(false);
+    expect(isRepeaterItemVisible(widget("text", {
+      visibleWhen: { field: "score", operator: "greaterThan", value: 10 },
+    }), { score: 12 })).toBe(true);
+    expect(isRepeaterItemVisible(widget("text", {
+      visibleWhen: { field: "name", operator: "contains", value: "Ada" },
+    }), { name: "Ada Lovelace" })).toBe(true);
   });
 
   it("migrates old repeaters and validates the row-template schema", () => {

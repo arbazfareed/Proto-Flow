@@ -80,6 +80,20 @@ export function generateSingleFileJsx(project: Project): string {
 
 const project = ${jsxString(project)};
 type Widget = typeof project.screens[number]["widgets"][number];
+const repeaterItemVisible = (widget: Widget, item: Record<string, unknown>): boolean => {
+  const rule = widget.props.visibleWhen;
+  if (typeof rule !== "object" || rule === null || Array.isArray(rule)) return true;
+  const condition = rule as Record<string, unknown>;
+  if (typeof condition.field !== "string" || typeof condition.operator !== "string") return true;
+  const actual = item[condition.field];
+  switch (condition.operator) {
+    case "notEquals": return actual !== condition.value;
+    case "contains": return typeof actual === "string" && actual.includes(String(condition.value ?? ""));
+    case "greaterThan": return typeof actual === "number" && typeof condition.value === "number" && actual > condition.value;
+    case "lessThan": return typeof actual === "number" && typeof condition.value === "number" && actual < condition.value;
+    default: return actual === condition.value;
+  }
+};
 
 export default function App() {
   const [screenId, setScreenId] = useState(project.startScreenId);
@@ -119,7 +133,7 @@ export default function App() {
         gap: typeof widget.props.gap === "number" ? widget.props.gap : 8, overflow: "visible" }}>
         {rows.slice(0, 1000).map((row, index) => <div key={index} style={{ position: "relative",
           width: widget.width, height: widget.height, flex: layout === "horizontal" ? "0 0 auto" : undefined }}>
-          {template.filter((child) => child.visible).map((child) => renderWidget(child, row))}
+          {template.filter((child) => child.visible && repeaterItemVisible(child, row)).map((child) => renderWidget(child, row))}
         </div>)}
       </div>;
     }

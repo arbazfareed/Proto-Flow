@@ -47,6 +47,18 @@ function repeaterRows(value) {
   }
   return rows;
 }
+function repeaterItemVisible(widget, item) {
+  const rule = widget.props.visibleWhen;
+  if (!rule || typeof rule.field !== "string" || typeof rule.operator !== "string") return true;
+  const actual = item[rule.field];
+  switch (rule.operator) {
+    case "notEquals": return actual !== rule.value;
+    case "contains": return typeof actual === "string" && actual.includes(String(rule.value ?? ""));
+    case "greaterThan": return typeof actual === "number" && typeof rule.value === "number" && actual > rule.value;
+    case "lessThan": return typeof actual === "number" && typeof rule.value === "number" && actual < rule.value;
+    default: return actual === rule.value;
+  }
+}
 function interpolateActionValue(value, item) {
   if (typeof value === "string") return text(value, screen().id, item);
   if (Array.isArray(value)) return value.map((entry) => interpolateActionValue(entry, item));
@@ -212,16 +224,16 @@ function renderWidget(widget, activeScreen, item) {
       row.style.width = widget.width + "px";
       row.style.height = widget.height + "px";
       row.style.overflow = "hidden";
+      row.addEventListener("click", () => fire(widget, "onClick", rowData));
       for (const child of template) {
-        if (child.visible && visibility.get(child.id) !== false) row.append(renderWidget(child, activeScreen, rowData));
+        if (child.visible && visibility.get(child.id) !== false && repeaterItemVisible(child, rowData)) row.append(renderWidget(child, activeScreen, rowData));
       }
       element.append(row);
     }
   } else {
     element.textContent = shownText || widget.type.replaceAll("-", " ");
   }
-  if (widget.type === "button" || widget.type === "icon-button") element.addEventListener("click", () => fire(widget, "onClick", item));
-  else element.addEventListener("click", () => fire(widget, "onClick", item));
+  if (widget.type !== "repeater") element.addEventListener("click", () => fire(widget, "onClick", item));
   element.addEventListener("mouseenter", () => fire(widget, "onHover", item));
   element.addEventListener("touchstart", () => fire(widget, "onTouchStart", item), { passive: true });
   element.addEventListener("touchend", () => {

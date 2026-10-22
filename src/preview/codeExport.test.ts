@@ -108,7 +108,10 @@ describe("React code export preparation", () => {
           locked: false,
           zIndex: 0,
           style: {},
-          props: { text: "Hello {{item.name}}" },
+          props: {
+            text: "Hello {{item.name}}",
+            visibleWhen: { field: "active", operator: "equals", value: true },
+          },
         }] },
       },
     };
@@ -118,6 +121,7 @@ describe("React code export preparation", () => {
     expect(source).toContain("widget.props.rowTemplate");
     expect(source).toContain("item?.[field]");
     expect(source).toContain("Hello {{item.name}}");
+    expect(source).toContain("repeaterItemVisible(child, row)");
     const transpiled = ts.transpileModule(source, {
       compilerOptions: { jsx: ts.JsxEmit.ReactJSX, target: ts.ScriptTarget.ES2022 },
       reportDiagnostics: true,
