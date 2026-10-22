@@ -6,6 +6,7 @@ import {
   SchemaValidationError,
   serializeProject,
   type Project,
+  type Widget,
 } from "./schema";
 
 function createCompleteProject(): Project {
@@ -76,7 +77,7 @@ describe("ProtoFlow project schema", () => {
   it("creates a valid starter project with a UUID start screen", () => {
     const project = createEmptyProject("Checkout flow");
 
-    expect(project.schemaVersion).toBe("1.3.0");
+    expect(project.schemaVersion).toBe("1.4.0");
     expect(project.name).toBe("Checkout flow");
     expect(project.screens).toHaveLength(1);
     expect(project.screens[0].id).toBe(project.startScreenId);
@@ -93,11 +94,63 @@ describe("ProtoFlow project schema", () => {
     expect(parseProject(serializeProject(project))).toEqual(project);
   });
 
+  it("validates nested dynamic-panel states, active state references, and the nesting limit", () => {
+    const project = createCompleteProject();
+    const button = project.screens[0].widgets[0];
+    const panelId = crypto.randomUUID();
+    const firstState = {
+      id: crypto.randomUUID(),
+      name: "Default",
+      widgets: [{ ...button, id: crypto.randomUUID(), groupId: panelId }],
+    };
+    const panel = {
+      ...button,
+      id: panelId,
+      type: "dynamic-panel",
+      props: { states: [firstState], activeStateId: firstState.id },
+    };
+    const nested = {
+      ...project,
+      screens: [{
+        ...project.screens[0],
+        widgets: [panel],
+      }],
+    };
+    expect(parseProject(nested).screens[0].widgets[0].props.activeStateId).toBe(firstState.id);
+    expect(() => parseProject({
+      ...nested,
+      screens: [{
+        ...nested.screens[0],
+        widgets: [{ ...panel, props: { ...panel.props, activeStateId: crypto.randomUUID() } }],
+      }],
+    })).toThrow(/active state must reference/i);
+
+    const makeNestedPanel = (remaining: number): Widget => {
+      const state = {
+        id: crypto.randomUUID(),
+        name: "State 1",
+        widgets: remaining > 1 ? [makeNestedPanel(remaining - 1)] : [],
+      };
+      return {
+        ...panel,
+        id: crypto.randomUUID(),
+        props: { states: [state], activeStateId: state.id },
+      };
+    };
+    expect(() => parseProject({
+      ...nested,
+      screens: [{
+        ...nested.screens[0],
+        widgets: [makeNestedPanel(6)],
+      }],
+    })).toThrow(/nested at most five levels/i);
+  });
+
   it("migrates version 1.0 projects to the current schema", () => {
     const project = createCompleteProject();
     const { symbols: _symbols, ...legacy } = project;
     const migrated = parseProject({ ...legacy, schemaVersion: "1.0.0" });
-    expect(migrated.schemaVersion).toBe("1.3.0");
+    expect(migrated.schemaVersion).toBe("1.4.0");
     expect(migrated.symbols).toEqual([]);
   });
 
@@ -126,9 +179,37 @@ describe("ProtoFlow project schema", () => {
   it("migrates version 1.2 interaction rules to the current format", () => {
     const project = createCompleteProject();
     const migrated = parseProject({ ...project, schemaVersion: "1.2.0" });
-    expect(migrated.schemaVersion).toBe("1.3.0");
+    expect(migrated.schemaVersion).toBe("1.4.0");
     expect(migrated.screens[0].interactionRules[0].conditionMode).toBe("all");
     expect(migrated.screens[0].interactionRules[0].widgetId).toBeUndefined();
+  });
+
+  it("migrates legacy named dynamic-panel states to stable IDs", () => {
+    const project = createCompleteProject();
+    const button = project.screens[0].widgets[0];
+    const panel: Widget = {
+      ...button,
+      id: crypto.randomUUID(),
+      type: "dynamic-panel",
+      props: { states: ["Closed", "Open"], activeStateId: "Open" },
+    };
+    const legacy = {
+      ...project,
+      schemaVersion: "1.3.0",
+      screens: [{
+        ...project.screens[0],
+        widgets: [panel],
+      }],
+    };
+
+    const migrated = parseProject(legacy).screens[0].widgets[0];
+    expect(migrated.props.states).toEqual([
+      expect.objectContaining({ name: "Closed", widgets: [] }),
+      expect.objectContaining({ name: "Open", widgets: [] }),
+    ]);
+    expect(migrated.props.activeStateId).toBe(
+      (migrated.props.states as Array<{ id: string; name: string }>)[1].id,
+    );
   });
 
   it("requires valid names, unique scope names, and a screen for local variables", () => {

@@ -79,4 +79,11 @@ describe("standalone published preview bundle", () => {
     expect(html).toContain('for (const rule of activeScreen.interactionRules.filter((item) => item.event === "onLoad"))');
     expect(html).not.toContain("for (const widget of activeScreen.widgets)");
   });
+
+  it("includes dynamic-panel state switching and transition rendering in the standalone runtime", () => {
+    const html = generatePublishedPreviewHtml(createEmptyProject("Panel export"));
+    expect(html).toContain("function activeWidgets(widgets, depth = 0)");
+    expect(html).toContain('panelStates.set(action.target, state?.id || action.stateId || action.value)');
+    expect(html).toContain("@keyframes protoflow-panel-slide-left");
+  });
 });

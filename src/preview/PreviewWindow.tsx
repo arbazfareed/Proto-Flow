@@ -7,6 +7,11 @@ import { currentMonitor, getCurrentWindow } from "@tauri-apps/api/window";
 import { LogicalSize } from "@tauri-apps/api/dpi";
 import type { Project, Widget } from "../project/schema";
 import { parseProject } from "../project/schema";
+import {
+  collectWidgetsDeep,
+  flattenActivePanelWidgets,
+  getPanelStates,
+} from "../project/dynamicPanels";
 import { DEVICE_PRESETS } from "../devices/catalog";
 import { getPreviewWindowSize } from "./windowSizing";
 import {
@@ -75,6 +80,7 @@ function PreviewWidget({
   snapshot,
   runEvent,
   onError,
+  transitionStyle,
 }: {
   widget: Widget;
   runtime: PreviewRuntime;
@@ -82,6 +88,7 @@ function PreviewWidget({
   snapshot: PreviewRuntimeSnapshot;
   runEvent: (widget: Widget, event: PreviewEvent) => void;
   onError: (error: unknown) => void;
+  transitionStyle?: CSSProperties;
 }) {
   const [inputValue, setInputValue] = useState(stringProp(widget, "value"));
   const [checked, setChecked] = useState(
@@ -89,7 +96,7 @@ function PreviewWidget({
       ? widget.props.checked === true
       : widget.type === "radio" ? widget.props.selected === true : widget.props.on === true,
   );
-  const style = widgetStyle(widget);
+  const style = { ...widgetStyle(widget), ...transitionStyle };
   const text = getWidgetText(widget, runtime, screenId);
   const commonHandlers = {
     onClick: () => runEvent(widget, "onClick"),
@@ -181,7 +188,8 @@ function PreviewWidget({
 
   const panelState = snapshot.panelStates[widget.id];
   const repeater = snapshot.repeaterData[widget.id];
-  const stateLabel = panelState ? ` · ${panelState}` : "";
+  const stateName = getPanelStates(widget).find((state) => state.id === panelState)?.name;
+  const stateLabel = stateName ? ` · ${stateName}` : "";
   const repeaterLabel = repeater === undefined
     ? ""
     : ` · ${Array.isArray(repeater) ? repeater.length : "updated"} rows`;
@@ -322,7 +330,10 @@ export function PreviewWindow() {
     const screen = project.screens.find((item) => item.id === runtimeRef.current?.currentScreenId);
     if (!screen || loadedScreenRef.current === screen.id) return;
     loadedScreenRef.current = screen.id;
-    for (const widget of screen.widgets) runEvent(widget, "onLoad");
+    for (const widget of flattenActivePanelWidgets(
+      screen.widgets,
+      runtimeRef.current.snapshot().panelStates,
+    )) runEvent(widget, "onLoad");
   }, [project, runtimeSnapshot?.screenId, runtimeRevision, runEvent]);
 
   const restart = () => {
@@ -378,6 +389,8 @@ export function PreviewWindow() {
     return <main className="preview-loading" aria-live="polite">Waiting for the editor to send a project…</main>;
   }
 
+  const nestedWidgets = collectWidgetsDeep(activeScreen.widgets);
+  const visibleWidgets = flattenActivePanelWidgets(activeScreen.widgets, runtimeSnapshot.panelStates);
   const previewWidget = (widget: Widget) => (
     runtimeSnapshot.visibility[widget.id] !== false && (
       <PreviewWidget
@@ -388,6 +401,19 @@ export function PreviewWindow() {
         snapshot={runtimeSnapshot}
         runEvent={runEvent}
         onError={(error) => setToast(error instanceof Error ? error.message : "Preview control failed.")}
+        transitionStyle={(() => {
+          const parent = widget.groupId
+            ? nestedWidgets.find((candidate) => candidate.id === widget.groupId)
+            : undefined;
+          const transition = parent
+            ? runtimeSnapshot.panelTransitions[parent.id]
+            : undefined;
+          return transition && transition.transition !== "none" && transition.duration > 0
+            ? {
+                animation: `protoflow-panel-${transition.transition} ${transition.duration}ms ease both`,
+              }
+            : undefined;
+        })()}
       />
     )
   );
@@ -429,7 +455,7 @@ export function PreviewWindow() {
               transformOrigin: "top left",
             }}
           >
-            {activeScreen.widgets
+            {visibleWidgets
               .slice()
               .sort((first, second) => first.zIndex - second.zIndex)
               .map(previewWidget)}

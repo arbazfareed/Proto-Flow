@@ -136,4 +136,43 @@ describe("PreviewRuntime", () => {
     expect(runtime.snapshot().panelStates[panel.id]).toBe("expanded");
     expect(runtime.snapshot().repeaterData[repeater.id]).toEqual([{ name: "A" }]);
   });
+
+  it("switches a nested dynamic panel to a validated state with transition metadata", () => {
+    const project = createProject();
+    const screen = project.screens[0];
+    const trigger = screen.widgets[0];
+    const panel = screen.widgets.find((widget) => widget.type === "dynamic-panel");
+    if (!panel) throw new Error("Test fixture is missing a dynamic panel.");
+    const initial = { id: crypto.randomUUID(), name: "Closed", widgets: [] as Widget[] };
+    const expanded = {
+      id: crypto.randomUUID(),
+      name: "Expanded",
+      widgets: [makeWidget("text")],
+    };
+    panel.props = { states: [initial, expanded], activeStateId: initial.id };
+    const nestedTrigger = expanded.widgets[0];
+    screen.interactionRules = [{
+      id: crypto.randomUUID(),
+      widgetId: trigger.id,
+      event: "onClick",
+      conditions: [],
+      actions: [{
+        type: "setPanelState",
+        target: panel.id,
+        stateId: expanded.id,
+        transition: "slide-left",
+        duration: 250,
+      }],
+    }];
+
+    const runtime = new PreviewRuntime(project);
+    expect(runtime.snapshot().visibility[nestedTrigger.id]).toBe(true);
+    expect(runtime.runEvent(trigger, "onClick")).toEqual([]);
+    expect(runtime.snapshot().panelStates[panel.id]).toBe(expanded.id);
+    expect(runtime.snapshot().panelTransitions[panel.id]).toEqual({
+      transition: "slide-left",
+      duration: 250,
+    });
+    expect(runtime.runEvent(trigger, "onClick")).toEqual([]);
+  });
 });

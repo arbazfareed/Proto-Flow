@@ -41,6 +41,16 @@ import { isTauri } from "@tauri-apps/api/core";
 import { useStore } from "../store";
 import type { Project, Widget, WidgetStyle } from "../project/schema";
 import {
+  getActivePanelState,
+  getPanelStates,
+  collectWidgetsDeep,
+  flattenActivePanelWidgets,
+  mapWidgetsDeep,
+  withPanelStates,
+  updatePanelState,
+  type DynamicPanelState,
+} from "../project/dynamicPanels";
+import {
   DEFAULT_DEVICE_PRESET,
   toScreenDevice,
 } from "../devices/catalog";
@@ -922,7 +932,7 @@ function StyleSection({ widgets }: { widgets: Widget[] }) {
       const screenId = current.getActiveScreenId();
       const screen = current.project.screens.find((item) => item.id === screenId);
       const targetWidgets =
-        screen?.widgets.filter((widget) => session.widgetIds.includes(widget.id)) ?? [];
+        screen ? collectWidgetsDeep(screen.widgets).filter((widget) => session.widgetIds.includes(widget.id)) : [];
       const updates = new Map(
         getStyleUpdates(targetWidgets, patch).map((update) => [update.id, update.style]),
       );
@@ -934,7 +944,7 @@ function StyleSection({ widgets }: { widgets: Widget[] }) {
             ? item
             : {
                 ...item,
-                widgets: item.widgets.map((widget) =>
+                widgets: mapWidgetsDeep(item.widgets, (widget) =>
                   updates.has(widget.id)
                     ? { ...widget, style: updates.get(widget.id)! }
                     : widget,
@@ -959,7 +969,7 @@ function StyleSection({ widgets }: { widgets: Widget[] }) {
       const screenId = session.screenId;
       const screen = current.project.screens.find((item) => item.id === screenId);
       const targetWidgets =
-        screen?.widgets.filter((widget) => session.widgetIds.includes(widget.id)) ?? [];
+        screen ? collectWidgetsDeep(screen.widgets).filter((widget) => session.widgetIds.includes(widget.id)) : [];
       const updates = new Map(
         getTextPropertyUpdates(targetWidgets, patch).map((update) => [update.id, update.props]),
       );
@@ -971,7 +981,7 @@ function StyleSection({ widgets }: { widgets: Widget[] }) {
             ? item
             : {
                 ...item,
-                widgets: item.widgets.map((widget) => {
+                widgets: mapWidgetsDeep(item.widgets, (widget) => {
                   const props = updates.get(widget.id);
                   if (!props) return widget;
                   const measured = props.autoSize === true
@@ -1008,7 +1018,7 @@ function StyleSection({ widgets }: { widgets: Widget[] }) {
       const current = useStore.getState();
       const screen = current.project.screens.find((item) => item.id === session.screenId);
       const targetWidgets =
-        screen?.widgets.filter((widget) => session.widgetIds.includes(widget.id)) ?? [];
+        screen ? collectWidgetsDeep(screen.widgets).filter((widget) => session.widgetIds.includes(widget.id)) : [];
       const updates = new Map(
         getWidgetPropertyUpdates(targetWidgets, patch).map((update) => [update.id, update.props]),
       );
@@ -1020,7 +1030,7 @@ function StyleSection({ widgets }: { widgets: Widget[] }) {
             ? item
             : {
                 ...item,
-                widgets: item.widgets.map((widget) => {
+                widgets: mapWidgetsDeep(item.widgets, (widget) => {
                   const props = updates.get(widget.id);
                   return props ? { ...widget, props } : widget;
                 }),
@@ -1470,7 +1480,7 @@ function GeometrySection({ widgets }: { widgets: Widget[] }) {
             ? screen
             : {
                 ...screen,
-                widgets: screen.widgets.map((widget) => {
+                widgets: mapWidgetsDeep(screen.widgets, (widget) => {
                   const update = updateById.get(widget.id);
                   return update
                     ? {
@@ -1881,7 +1891,7 @@ function TextSizeControl({ widgets }: { widgets: Widget[] }) {
           ? screen
           : {
               ...screen,
-              widgets: screen.widgets.map((widget) => {
+              widgets: mapWidgetsDeep(screen.widgets, (widget) => {
                 if (!session!.widgetIds.includes(widget.id)) return widget;
                 const props: Record<string, unknown> = {
                   ...widget.props,
@@ -1964,6 +1974,146 @@ function TextSizeControl({ widgets }: { widgets: Widget[] }) {
   );
 }
 
+function copyPanelWidgets(widgets: Widget[], parentIds = new Map<string, string>()): Widget[] {
+  const idMap = new Map(widgets.map((widget) => [widget.id, crypto.randomUUID()]));
+  const allIds = new Map([...parentIds, ...idMap]);
+  return widgets.map((widget) => {
+    const id = idMap.get(widget.id)!;
+    const props = { ...widget.props };
+    if (widget.type === "dynamic-panel" && Array.isArray(props.states)) {
+      props.states = getPanelStates(widget).map((state) => ({
+        ...state,
+        id: crypto.randomUUID(),
+        widgets: copyPanelWidgets(state.widgets, new Map([[widget.id, id]])),
+      }));
+    }
+    return {
+      ...structuredClone(widget),
+      id,
+      groupId: widget.groupId ? allIds.get(widget.groupId) ?? parentIds.get(widget.groupId) : undefined,
+      props,
+    };
+  });
+}
+
+function DynamicPanelSection({ screen, widget }: { screen: Project["screens"][number]; widget: Widget }) {
+  const editingScope = useStore((state) => state.activePanelEdit);
+  const states = getPanelStates(widget);
+  const activeState = getActivePanelState(widget);
+  const isEditing = editingScope?.panelId === widget.id && editingScope.stateId === activeState?.id;
+
+  const update = (transform: (panel: Widget, current: DynamicPanelState[]) => Widget) => {
+    const current = useStore.getState();
+    current.setProject({
+      ...current.project,
+      updatedAt: new Date().toISOString(),
+      screens: current.project.screens.map((item) =>
+        item.id === screen.id
+          ? {
+              ...item,
+              widgets: updatePanelState(item.widgets, widget.id, transform),
+            }
+          : item,
+      ),
+    });
+  };
+
+  const selectState = (stateId: string) => {
+    update((panel, current) => withPanelStates(panel, current, stateId));
+    useStore.getState().setActivePanelEdit({ panelId: widget.id, stateId });
+  };
+
+  const addState = () => {
+    const state: DynamicPanelState = {
+      id: crypto.randomUUID(),
+      name: `State ${states.length + 1}`,
+      widgets: [],
+    };
+    update((panel, current) => withPanelStates(panel, [...current, state], state.id));
+    useStore.getState().setActivePanelEdit({ panelId: widget.id, stateId: state.id });
+  };
+
+  const renameState = (stateId: string, name: string) => {
+    const normalized = name.trim().slice(0, 120);
+    if (!normalized) return;
+    update((panel, current) => withPanelStates(
+      panel,
+      current.map((state) => state.id === stateId ? { ...state, name: normalized } : state),
+    ));
+  };
+
+  const duplicateState = () => {
+    if (!activeState) return;
+    const duplicate: DynamicPanelState = {
+      id: crypto.randomUUID(),
+      name: `${activeState.name} copy`,
+      widgets: copyPanelWidgets(activeState.widgets, new Map([[widget.id, widget.id]])),
+    };
+    update((panel, current) => withPanelStates(panel, [...current, duplicate], duplicate.id));
+    useStore.getState().setActivePanelEdit({ panelId: widget.id, stateId: duplicate.id });
+  };
+
+  const deleteState = (stateId: string) => {
+    if (states.length <= 1) return;
+    const remaining = states.filter((state) => state.id !== stateId);
+    update((panel) => withPanelStates(panel, remaining));
+    const nextActive = remaining.find((state) => state.id === widget.props.activeStateId) ?? remaining[0];
+    useStore.getState().setActivePanelEdit({ panelId: widget.id, stateId: nextActive.id });
+  };
+
+  const moveState = (stateId: string, offset: number) => {
+    const index = states.findIndex((state) => state.id === stateId);
+    const targetIndex = index + offset;
+    if (index < 0 || targetIndex < 0 || targetIndex >= states.length) return;
+    const reordered = [...states];
+    const [moved] = reordered.splice(index, 1);
+    reordered.splice(targetIndex, 0, moved);
+    update((panel) => withPanelStates(panel, reordered, panel.props.activeStateId));
+  };
+
+  return (
+    <section className="inspector-section dynamic-panel-section" aria-label="Dynamic panel states">
+      <div className="section-label"><span>STATES</span></div>
+      {states.map((state, index) => (
+        <div className={`dynamic-panel-state${state.id === activeState?.id ? " is-active" : ""}`} key={state.id}>
+          <button
+            className="button button-quiet"
+            aria-label={`Show ${state.name}`}
+            aria-pressed={state.id === activeState?.id}
+            onClick={() => selectState(state.id)}
+          >
+            {state.name} <span>{state.widgets.length}</span>
+          </button>
+          <input
+            className="text-field"
+            aria-label={`Rename ${state.name}`}
+            defaultValue={state.name}
+            onBlur={(event) => renameState(state.id, event.currentTarget.value)}
+          />
+          <button className="icon-button small-icon" aria-label={`Move ${state.name} up`} disabled={index === 0} onClick={() => moveState(state.id, -1)}>↑</button>
+          <button className="icon-button small-icon" aria-label={`Move ${state.name} down`} disabled={index === states.length - 1} onClick={() => moveState(state.id, 1)}>↓</button>
+          <button className="icon-button small-icon" aria-label={`Duplicate ${state.name}`} onClick={duplicateState}>＋</button>
+          <button className="icon-button small-icon" aria-label={`Delete ${state.name}`} disabled={states.length <= 1} onClick={() => deleteState(state.id)}>×</button>
+        </div>
+      ))}
+      <div className="dynamic-panel-state-actions">
+        <button className="button button-quiet" onClick={addState}>Add state</button>
+        <button
+          className="button button-quiet"
+          aria-pressed={isEditing}
+          onClick={() => activeState && useStore.getState().setActivePanelEdit(
+            isEditing ? null : { panelId: widget.id, stateId: activeState.id },
+          )}
+          disabled={!activeState}
+        >
+          {isEditing ? "Stop editing state" : "Edit active state"}
+        </button>
+      </div>
+      <p className="field-hint">Select a state, then add or arrange its widgets on the canvas.</p>
+    </section>
+  );
+}
+
 export function RightInspector({ onToggle, onUpdates, onRename }: RightInspectorProps) {
   const [inspectorTab, setInspectorTab] = useState<"design" | "responsive" | "interactions">("design");
   const project = useStore((state) => state.project);
@@ -1974,10 +2124,20 @@ export function RightInspector({ onToggle, onUpdates, onRename }: RightInspector
   const displayPath = filePath ? filePath.replaceAll("\\", "/").split("/").at(-1) : "Not saved yet";
   const selectedScreen = project.screens.find((screen) => screen.id === activeScreenId);
   const selectedWidgets =
-    selectedScreen?.widgets.filter(
+    selectedScreen ? flattenActivePanelWidgets(selectedScreen.widgets).filter(
       (widget) => selectedIds.includes(widget.id),
-    ) ?? [];
+    ) : [];
   const selectedWidget = selectedWidgets.length === 1 ? selectedWidgets[0] : undefined;
+  useEffect(() => {
+    if (selectedWidget?.type !== "dynamic-panel") return;
+    const state = getActivePanelState(selectedWidget);
+    if (state) {
+      useStore.getState().setActivePanelEdit({
+        panelId: selectedWidget.id,
+        stateId: state.id,
+      });
+    }
+  }, [selectedWidget?.id]);
   useEffect(() => {
     if (!selectedWidget || !selectedScreen) setInspectorTab("design");
   }, [selectedScreen?.id, selectedWidget?.id]);
@@ -2062,6 +2222,9 @@ export function RightInspector({ onToggle, onUpdates, onRename }: RightInspector
           <div id="inspector-design-panel" role="tabpanel" aria-labelledby="inspector-design-tab">
             <GeometrySection widgets={selectedWidgets} />
             <StyleSection widgets={selectedWidgets} />
+            {selectedWidget?.type === "dynamic-panel" && selectedScreen && (
+              <DynamicPanelSection screen={selectedScreen} widget={selectedWidget} />
+            )}
           </div>
         ) : inspectorTab === "responsive" && selectedWidget && selectedScreen ? (
           <div id="inspector-responsive-panel" role="tabpanel" aria-labelledby="inspector-responsive-tab">
@@ -2081,7 +2244,7 @@ export function RightInspector({ onToggle, onUpdates, onRename }: RightInspector
         <div className="detail-row"><span>File</span><span className={`file-value ${filePath ? "" : "muted-value"}`} title={filePath ?? "Not saved yet"}>{displayPath}</span></div>
         <div className="detail-row"><span>Format</span><span className="format-chip">.pflow <span>v1</span></span></div>
         <div className="detail-row"><span>Screens</span><span>{project.screens.length}</span></div>
-        <div className="detail-row"><span>Widgets</span><span>{project.screens.reduce((total, screen) => total + screen.widgets.length, 0)}</span></div>
+        <div className="detail-row"><span>Widgets</span><span>{project.screens.reduce((total, screen) => total + collectWidgetsDeep(screen.widgets).length, 0)}</span></div>
         <div className="inspector-rule" />
         <div className="section-label update-label"><span>UPDATES</span><Sparkles size={14} /></div>
         <div className="update-card">

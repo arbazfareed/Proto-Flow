@@ -6,8 +6,12 @@ const stage = document.getElementById("stage");
 const screenPicker = document.getElementById("screen-picker");
 const backButton = document.getElementById("back");
 const variables = new Map(project.variables.map((item) => [item.id, item.initial]));
-const visibility = new Map(project.screens.flatMap((screen) => screen.widgets.map((item) => [item.id, item.visible])));
+function allWidgets(widgets) {
+  return widgets.flatMap((item) => [item, ...(item.type === "dynamic-panel" ? (item.props.states || []).flatMap((state) => allWidgets(state.widgets || [])) : [])]);
+}
+const visibility = new Map(project.screens.flatMap((screen) => allWidgets(screen.widgets).map((item) => [item.id, item.visible])));
 const panelStates = new Map();
+const panelTransitions = new Map();
 const repeaterData = new Map();
 let screenId = project.startScreenId;
 let backStack = [];
@@ -54,7 +58,12 @@ function actions(rule, activeScreen) {
     } else if (action.type === "setVariable") {
       setVariable(action.target, action.value, activeScreen);
     } else if (action.type === "setPanelState") {
-      panelStates.set(action.target, action.value);
+      const panel = allWidgets(screen().widgets).find((item) => item.id === action.target);
+      const states = panel?.props.states || [];
+      const state = states.find((item) => item.id === action.stateId || item.id === action.value || item.name === action.value);
+      if (states.length && !state) throw new Error("The requested panel state does not exist.");
+      panelStates.set(action.target, state?.id || action.stateId || action.value);
+      panelTransitions.set(action.target, { transition: action.transition || "none", duration: action.duration || 0 });
     } else if (action.type === "setRepeaterData") {
       try {
         repeaterData.set(action.target, typeof action.value === "string" ? JSON.parse(action.value) : action.value);
@@ -152,6 +161,11 @@ function renderWidget(widget, activeScreen) {
   }, { passive: true });
   const panelState = panelStates.get(widget.id);
   if (panelState) element.dataset.panelState = panelState;
+  const owner = widget.groupId ? allWidgets(activeScreen.widgets).find((item) => item.id === widget.groupId) : undefined;
+  const transition = owner ? panelTransitions.get(owner.id) : undefined;
+  if (transition && transition.transition !== "none" && transition.duration > 0) {
+    element.style.animation = "protoflow-panel-" + transition.transition + " " + transition.duration + "ms ease both";
+  }
   const rows = repeaterData.get(widget.id);
   if (widget.type === "repeater" && Array.isArray(rows)) {
     element.replaceChildren();
@@ -162,6 +176,16 @@ function renderWidget(widget, activeScreen) {
     }
   }
   return element;
+}
+function activeWidgets(widgets, depth = 0) {
+  if (depth > 5) return [];
+  return widgets.flatMap((widget) => {
+    if (widget.type !== "dynamic-panel") return [widget];
+    const states = widget.props.states || [];
+    const stateId = panelStates.get(widget.id) || widget.props.activeStateId;
+    const state = states.find((item) => item.id === stateId) || states[0];
+    return [widget, ...(state ? activeWidgets(state.widgets || [], depth + 1) : [])];
+  });
 }
 function render() {
   const activeScreen = screen();
@@ -178,7 +202,7 @@ function render() {
   const device = activeScreen.device || { width: 1280, height: 800 };
   stage.style.width = device.width + "px";
   stage.style.height = device.height + "px";
-  for (const widget of [...activeScreen.widgets].sort((a, b) => a.zIndex - b.zIndex)) {
+  for (const widget of activeWidgets(activeScreen.widgets).sort((a, b) => a.zIndex - b.zIndex)) {
     if (visibility.get(widget.id) === false || widget.visible === false) continue;
     stage.append(renderWidget(widget, activeScreen));
   }
@@ -211,8 +235,9 @@ document.getElementById("restart").addEventListener("click", () => {
   variables.clear();
   for (const item of project.variables) variables.set(item.id, item.initial);
   visibility.clear();
-  for (const item of project.screens.flatMap((entry) => entry.widgets)) visibility.set(item.id, item.visible);
+  for (const item of project.screens.flatMap((entry) => allWidgets(entry.widgets))) visibility.set(item.id, item.visible);
   panelStates.clear();
+  panelTransitions.clear();
   repeaterData.clear();
   screenId = project.startScreenId;
   backStack = [];
@@ -226,7 +251,13 @@ export const PREVIEW_RUNTIME_STYLES = `*{box-sizing:border-box}html,body{margin:
 .toolbar{position:sticky;top:0;z-index:2147483647;display:flex;gap:8px;align-items:center;padding:10px;background:#211e29;border-bottom:1px solid #37323f}
 .toolbar button,.toolbar select{min-height:32px;border:1px solid #494353;border-radius:6px;padding:5px 9px;background:#302b39;color:inherit}
 .toolbar button:disabled{opacity:.45}.stage-wrap{padding:28px;overflow:auto}.stage{position:relative;margin:0 auto;background:#fff;color:#24212b;overflow:hidden;box-shadow:0 12px 42px #0007}
-.widget{position:absolute;overflow:hidden;white-space:pre-wrap}.widget img{width:100%;height:100%;object-fit:cover}.widget textarea,.widget input{max-width:100%;font:inherit}ul{margin:0;padding-left:20px}`;
+.widget{position:absolute;overflow:hidden;white-space:pre-wrap}.widget img{width:100%;height:100%;object-fit:cover}.widget textarea,.widget input{max-width:100%;font:inherit}ul{margin:0;padding-left:20px}
+@keyframes protoflow-panel-fade{from{opacity:0}to{opacity:1}}
+@keyframes protoflow-panel-slide-left{from{translate:20px 0}to{translate:0 0}}
+@keyframes protoflow-panel-slide-right{from{translate:-20px 0}to{translate:0 0}}
+@keyframes protoflow-panel-slide-up{from{translate:0 20px}to{translate:0 0}}
+@keyframes protoflow-panel-slide-down{from{translate:0 -20px}to{translate:0 0}}
+@media(prefers-reduced-motion:reduce){.widget[style*="protoflow-panel-"]{animation:none!important}}`;
 
 function escapeHtml(value: string): string {
   return value

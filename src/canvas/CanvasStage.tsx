@@ -37,6 +37,13 @@ import {
 import type { ScreenDevice } from "../devices/types";
 import type { SymbolDefinition, Widget, Project, Screen } from "../project/schema";
 import {
+  addWidgetsToPanelState,
+  flattenActivePanelWidgets,
+  getPanelStates,
+  mapWidgetsDeep,
+  mergeActivePanelWidgets,
+} from "../project/dynamicPanels";
+import {
   createDraggedWidgetCopies,
   getActiveLayerDragPayload,
   LAYER_DRAG_MIME,
@@ -190,7 +197,7 @@ function duplicateScreenForCanvas(screen: Screen): Screen {
 function getEffectiveScreenWidgets(screen: Screen, breakpointId: string | null): Widget[] {
   const breakpoint = resolveActiveBreakpoint(screen, breakpointId);
   return resolveWidgetsForBreakpoint(
-    screen.widgets,
+    flattenActivePanelWidgets(screen.widgets),
     breakpoint,
     screen.device?.width ?? DEFAULT_DEVICE_PRESET.viewport.width,
     screen.device?.height ?? DEFAULT_DEVICE_PRESET.viewport.height,
@@ -221,20 +228,19 @@ function commitWidgetGeometry(
     updatedAt: new Date().toISOString(),
     screens: current.project.screens.map((screen) => {
       if (screen.id !== screenId) return screen;
-      const nextWidgets = screen.widgets.map((widget) => {
+      const effectiveById = new Map(effectiveWidgets.map((widget) => [widget.id, widget]));
+      const nextWidgets = mapWidgetsDeep(screen.widgets, (widget) => {
         const update = updateById.get(widget.id);
-        if (!update) return widget;
+        const previous = effectiveById.get(widget.id);
+        if (!update || !previous) return widget;
         const { id, ...geometry } = update;
-        const previous = effectiveWidgets.find((item) => item.id === id) ?? widget;
         if (
           (geometry.x === undefined || geometry.x === previous.x) &&
           (geometry.y === undefined || geometry.y === previous.y) &&
           (geometry.width === undefined || geometry.width === previous.width) &&
           (geometry.height === undefined || geometry.height === previous.height) &&
           (geometry.rotation === undefined || geometry.rotation === previous.rotation)
-        ) {
-          return widget;
-        }
+        ) return widget;
         return overrideBreakpointId
           ? updateWidgetOverride(widget, overrideBreakpointId, geometry)
           : { ...widget, ...geometry };
@@ -242,16 +248,15 @@ function commitWidgetGeometry(
       const updatedEffectiveWidgets = syncWidgetGroupIdsToContainment(
         getEffectiveScreenWidgets({ ...screen, widgets: nextWidgets }, overrideBreakpointId),
       );
-      const effectiveById = new Map(
-        updatedEffectiveWidgets.map((widget) => [widget.id, widget]),
-      );
+      const groupIdById = new Map(updatedEffectiveWidgets.map((widget) => [widget.id, widget.groupId]));
       return {
         ...screen,
         breakpoints: overrideBreakpointId
           ? screen.breakpoints ?? [...getScreenBreakpoints(screen)]
           : screen.breakpoints,
-        widgets: nextWidgets.map((widget) => {
-          const groupId = effectiveById.get(widget.id)?.groupId;
+        widgets: mapWidgetsDeep(nextWidgets, (widget) => {
+          if (!groupIdById.has(widget.id)) return widget;
+          const groupId = groupIdById.get(widget.id);
           return widget.groupId === groupId ? widget : { ...widget, groupId };
         }),
       };
@@ -720,7 +725,9 @@ export function CanvasStage({
   const activeBreakpoint = activeScreen
     ? resolveActiveBreakpoint(activeScreen, activeBreakpointId)
     : undefined;
-  const baseScreenWidgets = activeScreen?.widgets ?? [];
+  const baseScreenWidgets = activeScreen
+    ? flattenActivePanelWidgets(activeScreen.widgets)
+    : [];
   const screenWidgets = activeScreen && activeBreakpoint
     ? resolveWidgetsForBreakpoint(
         baseScreenWidgets,
@@ -894,6 +901,10 @@ export function CanvasStage({
       }
 
       const widget = createShapeWidget(type, position.x, position.y, width, height, props);
+      if (widget.type === "dynamic-panel") {
+        const initialState = { id: crypto.randomUUID(), name: "State 1", widgets: [] };
+        widget.props = { ...widget.props, states: [initialState], activeStateId: initialState.id };
+      }
       if (type === "button" && typeof window !== "undefined") {
         const accent = getComputedStyle(document.documentElement)
           .getPropertyValue("--accent-strong")
@@ -903,7 +914,8 @@ export function CanvasStage({
           widget.style.stroke = accent;
         }
       }
-      const siblings = screen.widgets.map((item) => ({
+      const visibleWidgets = flattenActivePanelWidgets(screen.widgets);
+      const siblings = visibleWidgets.map((item) => ({
         id: item.id,
         x: item.x,
         y: item.y,
@@ -927,7 +939,7 @@ export function CanvasStage({
       widget.x = snap.position.x;
       widget.y = snap.position.y;
       const dropParent = dropParentId
-        ? screen.widgets.find((item) => item.id === dropParentId)
+        ? visibleWidgets.find((item) => item.id === dropParentId)
         : undefined;
       if (
         dropParent &&
@@ -937,17 +949,31 @@ export function CanvasStage({
         widget.groupId = dropParent.id;
       } else {
         const selectedParentId = getSelectedContainingParentId(
-          screen.widgets,
+          visibleWidgets,
           current.selectedIds,
           widget,
         );
         if (selectedParentId) widget.groupId = selectedParentId;
       }
-      widget.zIndex = screen.widgets.reduce(
+      widget.zIndex = visibleWidgets.reduce(
         (highest, item) => Math.max(highest, item.zIndex),
         -1,
       ) + 1;
-      const nextWidgets = syncWidgetGroupIdsToContainment([...screen.widgets, widget]);
+      const activePanelEdit = current.activePanelEdit;
+      const editStateId = activePanelEdit?.stateId;
+      const scopedPanel = activePanelEdit
+        ? visibleWidgets.find((item) => item.id === activePanelEdit.panelId)
+        : undefined;
+      const nextWidgets = scopedPanel?.type === "dynamic-panel" &&
+        editStateId &&
+        getPanelStates(scopedPanel).some((state) => state.id === editStateId)
+        ? addWidgetsToPanelState(
+            screen.widgets,
+            scopedPanel.id,
+            editStateId,
+            [{ ...widget, groupId: scopedPanel.id }],
+          )
+        : syncWidgetGroupIdsToContainment([...screen.widgets, widget]);
 
       current.setProject({
         ...current.project,
@@ -1582,16 +1608,18 @@ export function CanvasStage({
     const current = useStore.getState();
     const screenId = current.getActiveScreenId();
     const activeScreen = current.project.screens.find((screen) => screen.id === screenId);
-    if (
-      !activeScreen ||
-      (widgets.length === activeScreen.widgets.length &&
-        widgets.every((widget, index) => widget === activeScreen.widgets[index]))
-    ) return;
+    if (!activeScreen) return;
+    const nextWidgets = mergeActivePanelWidgets(
+      activeScreen.widgets,
+      widgets,
+      current.activePanelEdit,
+    );
+    if (nextWidgets === activeScreen.widgets) return;
     current.setProject({
       ...current.project,
       updatedAt: new Date().toISOString(),
       screens: current.project.screens.map((screen) =>
-        screen.id === screenId ? { ...screen, widgets } : screen,
+        screen.id === screenId ? { ...screen, widgets: nextWidgets } : screen,
       ),
     });
   }, []);
@@ -1602,7 +1630,8 @@ export function CanvasStage({
       (item) => item.id === current.getActiveScreenId(),
     );
     if (!screen) return;
-    const selected = screen.widgets.filter((widget) =>
+    const visibleWidgets = flattenActivePanelWidgets(screen.widgets);
+    const selected = visibleWidgets.filter((widget) =>
       current.selectedIds.includes(widget.id) && (!cut || !widget.locked),
     );
     if (selected.length === 0) return;
@@ -1617,7 +1646,7 @@ export function CanvasStage({
     }
     if (cut) {
       const ids = new Set(selected.map((widget) => widget.id));
-      updateActiveScreenWidgets(screen.widgets.filter((widget) => !ids.has(widget.id)));
+      updateActiveScreenWidgets(visibleWidgets.filter((widget) => !ids.has(widget.id)));
       current.clearSelection();
     }
   }, [onNotify, updateActiveScreenWidgets]);
@@ -1627,9 +1656,9 @@ export function CanvasStage({
     const screen = current.project.screens.find(
       (item) => item.id === current.getActiveScreenId(),
     );
-    const selected = screen?.widgets.filter((widget) =>
+    const selected = screen ? flattenActivePanelWidgets(screen.widgets).filter((widget) =>
       current.selectedIds.includes(widget.id),
-    ) ?? [];
+    ) : [];
     if (selected.length !== 1) return;
     copyWidgetStyle(selected[0]);
     onNotify("Style copied. Select one or more widgets and paste the style.");
@@ -1643,14 +1672,15 @@ export function CanvasStage({
       (item) => item.id === current.getActiveScreenId(),
     );
     if (!screen) return;
-    const selected = screen.widgets.filter((widget) =>
+    const visibleWidgets = flattenActivePanelWidgets(screen.widgets);
+    const selected = visibleWidgets.filter((widget) =>
       current.selectedIds.includes(widget.id),
     );
     if (selected.length === 0) return;
     const updated = new Map(
       pasteWidgetStyle(copiedStyle, selected).map((widget) => [widget.id, widget]),
     );
-    updateActiveScreenWidgets(screen.widgets.map((widget) => updated.get(widget.id) ?? widget));
+    updateActiveScreenWidgets(visibleWidgets.map((widget) => updated.get(widget.id) ?? widget));
   }, [updateActiveScreenWidgets]);
 
   const pasteSelection = useCallback(async () => {
@@ -1666,7 +1696,7 @@ export function CanvasStage({
         current.project.screens.flatMap((item) => item.widgets),
         { x: pasteOffsetRef.current, y: pasteOffsetRef.current },
       );
-      updateActiveScreenWidgets([...screen.widgets, ...copies]);
+      updateActiveScreenWidgets([...flattenActivePanelWidgets(screen.widgets), ...copies]);
       current.select(copies.map((widget) => widget.id));
     } catch (error) {
       console.error("Could not paste ProtoFlow widgets.", error);
@@ -1680,7 +1710,8 @@ export function CanvasStage({
       (item) => item.id === current.getActiveScreenId(),
     );
     if (!screen) return;
-    const selected = screen.widgets.filter((widget) =>
+    const visibleWidgets = flattenActivePanelWidgets(screen.widgets);
+    const selected = visibleWidgets.filter((widget) =>
       current.selectedIds.includes(widget.id),
     );
     if (selected.length === 0) return;
@@ -1689,7 +1720,7 @@ export function CanvasStage({
       current.project.screens.flatMap((item) => item.widgets),
       { x: 20, y: 20 },
     );
-    updateActiveScreenWidgets([...screen.widgets, ...copies]);
+    updateActiveScreenWidgets([...visibleWidgets, ...copies]);
     current.select(copies.map((widget) => widget.id));
   }, [updateActiveScreenWidgets]);
 
@@ -1700,14 +1731,14 @@ export function CanvasStage({
     );
     if (!screen || current.selectedIds.length === 0) return;
     const deletable = new Set(
-      screen.widgets
+      flattenActivePanelWidgets(screen.widgets)
         .filter((widget) => current.selectedIds.includes(widget.id) && !widget.locked)
         .map((widget) => widget.id),
     );
     if (deletable.size === 0) return;
     transformerRef.current?.nodes([]);
     contentLayerRef.current?.batchDraw();
-    updateActiveScreenWidgets(screen.widgets.filter((widget) => !deletable.has(widget.id)));
+    updateActiveScreenWidgets(flattenActivePanelWidgets(screen.widgets).filter((widget) => !deletable.has(widget.id)));
     current.clearSelection();
   }, [updateActiveScreenWidgets]);
 
@@ -1720,7 +1751,7 @@ export function CanvasStage({
     );
     if (!screen) return;
     updateActiveScreenWidgets(
-      reorderWidgetSelection(screen.widgets, current.selectedIds, action),
+      reorderWidgetSelection(flattenActivePanelWidgets(screen.widgets), current.selectedIds, action),
     );
   }, [updateActiveScreenWidgets]);
 
@@ -1731,10 +1762,11 @@ export function CanvasStage({
       (item) => item.id === current.getActiveScreenId(),
     );
     if (!screen || selected.size === 0) return;
-    const lock = !screen.widgets
+    const visibleWidgets = flattenActivePanelWidgets(screen.widgets);
+    const lock = !visibleWidgets
       .filter((widget) => selected.has(widget.id))
       .every((widget) => widget.locked);
-    updateActiveScreenWidgets(screen.widgets.map((widget) =>
+    updateActiveScreenWidgets(visibleWidgets.map((widget) =>
       selected.has(widget.id) ? { ...widget, locked: lock } : widget,
     ));
   }, [updateActiveScreenWidgets]);
@@ -1747,10 +1779,11 @@ export function CanvasStage({
     );
     if (!screen || selected.size === 0) return;
     if (ungroup) {
-      const groupIds = new Set(screen.widgets
+      const visibleWidgets = flattenActivePanelWidgets(screen.widgets);
+      const groupIds = new Set(visibleWidgets
         .filter((widget) => selected.has(widget.id) && widget.groupId)
         .map((widget) => widget.groupId!));
-      updateActiveScreenWidgets(screen.widgets.map((widget) => {
+      updateActiveScreenWidgets(visibleWidgets.map((widget) => {
         if (selected.has(widget.id) && widget.groupId && groupIds.has(widget.groupId)) {
           const { groupId: _groupId, ...rest } = widget;
           return rest;
@@ -1761,7 +1794,7 @@ export function CanvasStage({
     }
     if (selected.size < 2) return;
     const groupId = crypto.randomUUID();
-    updateActiveScreenWidgets(screen.widgets.map((widget) =>
+    updateActiveScreenWidgets(flattenActivePanelWidgets(screen.widgets).map((widget) =>
       selected.has(widget.id) ? { ...widget, groupId } : widget,
     ));
   }, [updateActiveScreenWidgets]);
@@ -1772,7 +1805,7 @@ export function CanvasStage({
       (item) => item.id === current.getActiveScreenId(),
     );
     if (!screen) return;
-    const selected = screen.widgets.filter((widget) =>
+    const selected = flattenActivePanelWidgets(screen.widgets).filter((widget) =>
       current.selectedIds.includes(widget.id),
     );
     if (selected.length === 0) return;

@@ -11,6 +11,7 @@ export const createCanvasSlice: StateCreator<StoreState, [], [], CanvasSlice> = 
   gridVisible: true,
   snapEnabled: true,
   selectedIds: [],
+  activePanelEdit: null,
   hoveredWidgetId: null,
   hoveredCanvasWidgetId: null,
   hoveredLayerWidgetId: null,
@@ -26,6 +27,7 @@ export const createCanvasSlice: StateCreator<StoreState, [], [], CanvasSlice> = 
   toggleSnap: () => set((state) => ({ snapEnabled: !state.snapEnabled })),
   select: (selectedIds) =>
     set({ selectedIds: [...new Set(selectedIds)], geometryPreview: null }),
+  setActivePanelEdit: (activePanelEdit) => set({ activePanelEdit }),
   clearSelection: () => set({ selectedIds: [], geometryPreview: null }),
   setCanvasHoveredWidget: (hoveredCanvasWidgetId) =>
     set((state) => ({
@@ -43,6 +45,7 @@ export const createCanvasSlice: StateCreator<StoreState, [], [], CanvasSlice> = 
       activeScreenId: screenId,
       activeBreakpointId: null,
       selectedIds: [],
+      activePanelEdit: null,
       hoveredWidgetId: null,
       hoveredCanvasWidgetId: null,
       hoveredLayerWidgetId: null,
