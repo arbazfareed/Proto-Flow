@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { createEmptyProject, type InteractionRule, type Project, type Widget } from "../project/schema";
 import { PreviewRuntime } from "./runtime";
+import { evaluateExpression } from "../project/expressions";
 
 function makeWidget(type = "button"): Widget {
   return {
@@ -112,6 +113,65 @@ describe("PreviewRuntime", () => {
     expect(runtime.currentScreenId).toBe(project.startScreenId);
     expect(runtime.getVariable("count")).toBe(0);
     expect(runtime.snapshot().backStack).toEqual([]);
+  });
+
+  it("evaluates expressions in text, conditions, and typed interaction action values", () => {
+    const project = createProject();
+    const screen = project.screens[0];
+    const trigger = screen.widgets[0];
+    const card = { ...makeWidget("rectangle"), name: "Card", x: 17, width: 80 };
+    screen.widgets.push(card);
+    project.variables.push({
+      id: crypto.randomUUID(),
+      name: "total",
+      type: "number",
+      initial: 0,
+      scope: "project",
+    });
+    screen.interactionRules = [{
+      id: crypto.randomUUID(),
+      widgetId: trigger.id,
+      event: "onClick",
+      conditions: [{
+        variable: "[[count >= 0 && item.score > 2]]",
+        operator: "equals",
+        value: true,
+      }],
+      actions: [{
+        type: "setVariable",
+        target: "total",
+        value: "[[count + item.score + Card.width + this.x]]",
+      }],
+    }];
+    const runtime = new PreviewRuntime(project);
+    expect(evaluateExpression("count + item.score + Card.width + this.x", runtime.expressionContext(trigger, { score: 4 }))).toBe(104);
+    expect(runtime.interpolate("Total [[count * 3]], x [[Card.x]], row [[item.score]]", screen.id, {
+      score: 4,
+    }, trigger)).toBe("Total 0, x 17, row 4");
+    expect(runtime.runEvent(trigger, "onClick", { score: 4 })).toEqual([]);
+    expect(runtime.getVariable("total")).toBe(104);
+  });
+
+  it("reports invalid expressions as interaction errors without changing runtime state", () => {
+    const project = createProject();
+    const screen = project.screens[0];
+    const trigger = screen.widgets[0];
+    screen.interactionRules = [{
+      id: crypto.randomUUID(),
+      widgetId: trigger.id,
+      event: "onClick",
+      conditions: [],
+      actions: [{
+        type: "setVariable",
+        target: "count",
+        value: "[[unknownFunction()]]",
+      }],
+    }];
+    const runtime = new PreviewRuntime(project);
+    expect(runtime.runEvent(trigger, "onClick")).toEqual([
+      'Unknown expression function "unknownFunction".',
+    ]);
+    expect(runtime.getVariable("count")).toBe(0);
   });
 
   it("applies panel-state and repeater-data actions to compatible targets", () => {

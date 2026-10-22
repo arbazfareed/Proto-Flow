@@ -109,7 +109,7 @@ describe("React code export preparation", () => {
           zIndex: 0,
           style: {},
           props: {
-            text: "Hello {{item.name}}",
+            text: "Hello {{item.name}} · [[ count * 2 ]]",
             visibleWhen: { field: "active", operator: "equals", value: true },
           },
         }] },
@@ -122,6 +122,9 @@ describe("React code export preparation", () => {
     expect(source).toContain("item?.[field]");
     expect(source).toContain("Hello {{item.name}}");
     expect(source).toContain("repeaterItemVisible(child, row)");
+    expect(source).toContain("function evaluateExpression(source, context = {})");
+    expect(source).toContain("evaluateExpression(source.trim(), { variables, widgets, item, thisWidget: widget })");
+    expect(source).not.toMatch(/\beval\s*\(/);
     const transpiled = ts.transpileModule(source, {
       compilerOptions: { jsx: ts.JsxEmit.ReactJSX, target: ts.ScriptTarget.ES2022 },
       reportDiagnostics: true,

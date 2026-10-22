@@ -1,4 +1,5 @@
 import type { Project } from "../project/schema";
+import { EXPRESSION_RUNTIME_SOURCE } from "../project/expressions";
 
 export type CodeExportScope = "all" | "current";
 export type CodeExportTailwindVersion = "3" | "4";
@@ -96,6 +97,7 @@ const repeaterItemVisible = (widget: Widget, item: Record<string, unknown>): boo
 };
 
 export default function App() {
+${EXPRESSION_RUNTIME_SOURCE}
   const [screenId, setScreenId] = useState(project.startScreenId);
   const screen = project.screens.find((item) => item.id === screenId) ?? project.screens[0];
   const style = (widget: Widget): CSSProperties => ({
@@ -116,9 +118,20 @@ export default function App() {
     padding: typeof widget.props.padding === "number" ? widget.props.padding : 8,
     boxSizing: "border-box",
   });
+  const resolveText = (value: unknown, widget: Widget, item?: Record<string, unknown>) =>
+    String(value ?? "").replace(/\\{\\{\\s*item\\.([\\w$.-]+)\\s*\\}\\}/g, (_match, field: string) => String(item?.[field] ?? ""))
+      .replace(/\\[\\[([\\s\\S]*?)\\]\\]/g, (whole, source: string) => {
+        try {
+          const variables = Object.fromEntries(project.variables
+            .filter((entry) => entry.scope === "project" || entry.screenId === screen.id)
+            .map((entry) => [entry.name, entry.initial]));
+          const widgets = screen.widgets;
+          const result = evaluateExpression(source.trim(), { variables, widgets, item, thisWidget: widget });
+          return result === null || result === undefined ? "" : String(result);
+        } catch { return whole; }
+      });
   const label = (widget: Widget, item?: Record<string, unknown>) =>
-    String(widget.props.text ?? widget.props.label ?? widget.props.title ?? widget.type)
-      .replace(/\\{\\{\\s*item\\.([\\w$.-]+)\\s*\\}\\}/g, (_match, field: string) => String(item?.[field] ?? ""));
+    resolveText(widget.props.text ?? widget.props.label ?? widget.props.title ?? widget.type, widget, item);
   const renderWidget = (widget: Widget, item?: Record<string, unknown>): ReactNode => {
     const text = label(widget, item);
     if (widget.type === "repeater") {
@@ -141,7 +154,7 @@ export default function App() {
       return <button key={widget.id} type="button" style={style(widget)}>{text}</button>;
     }
     if (widget.type === "image") {
-      const src = String(widget.props.src ?? "").replace(/\\{\\{\\s*item\\.([\\w$.-]+)\\s*\\}\\}/g, (_match, field: string) => String(item?.[field] ?? ""));
+      const src = resolveText(widget.props.src, widget, item);
       if (src) return <img key={widget.id} src={src} alt={String(widget.props.alt ?? text)} style={{ ...style(widget), objectFit: "cover" }} />;
     }
     if (["input", "search", "textarea"].includes(widget.type)) {

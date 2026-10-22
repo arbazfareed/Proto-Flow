@@ -46,6 +46,10 @@ Selection transforms, geometry/style/responsive inspector editing, the screen/la
 
 The element library includes dedicated canvas visuals for avatars, icon buttons, badges, alerts, progress, ratings, data summaries, and modern app patterns such as notifications, metric/profile/pricing cards, empty states, code blocks, segmented controls, and step indicators. Canvas icons use a Lucide preset selector in the inspector and render as SVGs on the canvas; library thumbnails continue to use the shared widget icon registry. Click an element to activate its draw tool, then drag on the canvas; alternatively, drag the library item directly onto the canvas to place it at that point.
 
+### Rich expressions
+
+Text, repeater values, interaction conditions, and action values can use safe runtime expressions such as `[[ price * quantity ]]`. The parser supports arithmetic, comparisons, logical operators, approved math/string/type/date/format functions, and project/widget/repeater references. It does not use `eval` or expose browser globals. See the [rich expressions reference](./docs/rich-expressions.md) for syntax, supported functions, limits, and examples.
+
 ### Phase 3 — Cloud API gateway scaffold
 
 `cloud/` contains the Cloudflare Workers/Hono API scaffold for PF-T301. It defines local Wrangler bindings for D1 (`DB`), KV (`CACHE`), and R2 (`ASSETS`), repeatable D1 migrations plus standalone `schema.sql`, origin allowlisting, consistent JSON errors, and HS256 Bearer JWT verification for wallet routes. Anonymous wallet provisioning, authenticated wallet reads, daily claims, optional email/Google account linking, PF-T404 AI interaction generation, PF-T405 cloud preview publishing, PF-T406 React/Tailwind code export, and Cloudflare Access-protected admin endpoints are implemented. Admin endpoints fail closed until Access settings are configured.

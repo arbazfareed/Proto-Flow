@@ -126,6 +126,7 @@ export function validateVariableReferences(project: Project): VariableIssue[] {
     });
     screen.interactionRules.forEach((rule, ruleIndex) => {
       rule.conditions.forEach((condition, conditionIndex) => {
+        if (/^\[\[[\s\S]*\]\]$/.test(condition.variable)) return;
         const variable = getVariable(project.variables, condition.variable, screen.id);
         const path = `screens[${screenIndex}].interactionRules[${ruleIndex}].conditions[${conditionIndex}]`;
         if (!variable) {
@@ -144,7 +145,11 @@ export function validateVariableReferences(project: Project): VariableIssue[] {
           "lessThan",
           "lessThanOrEqual",
         ].includes(condition.operator);
-        const mismatch = requiresNumber
+        const expressionValue = typeof condition.value === "string" &&
+          /^\[\[[\s\S]*\]\]$/.test(condition.value);
+        const mismatch = expressionValue
+          ? false
+          : requiresNumber
           ? variable.type !== "number" || typeof condition.value !== "number"
           : condition.operator === "contains"
             ? variable.type !== "string" || typeof condition.value !== "string"
@@ -174,7 +179,11 @@ export function validateVariableReferences(project: Project): VariableIssue[] {
           return;
         }
         used.add(variable.id);
-        if (action.value !== undefined && typeof action.value !== variable.type) {
+        if (
+          action.value !== undefined &&
+          !(typeof action.value === "string" && /^\[\[[\s\S]*\]\]$/.test(action.value)) &&
+          typeof action.value !== variable.type
+        ) {
           issues.push({
             severity: "warning",
             code: "type-mismatch",

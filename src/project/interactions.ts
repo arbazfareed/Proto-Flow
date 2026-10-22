@@ -9,6 +9,7 @@ import type {
 } from "./schema";
 import { VariableRuntimeStore } from "./variables";
 import { collectWidgetsDeep, getPanelStates } from "./dynamicPanels";
+import { evaluateExpression } from "./expressions";
 
 export type InteractionIssue = {
   severity: "error" | "warning";
@@ -74,9 +75,34 @@ export function testInteractionRule(
   rule: InteractionRule,
 ): InteractionTestResult {
   const runtime = new VariableRuntimeStore(project.variables);
-  const conditionResults = rule.conditions.map((condition) =>
-    compareValues(condition, runtime.get(condition.variable, screen.id)),
-  );
+  const trigger = collectWidgetsDeep(screen.widgets).find((widget) => widget.id === rule.widgetId);
+  const expressionContext = {
+    variables: Object.fromEntries(runtime.entries(screen.id)
+      .map(({ variable, value }) => [variable.name, value])),
+    widgets: collectWidgetsDeep(screen.widgets),
+    thisWidget: trigger,
+  };
+  const conditionResults = rule.conditions.map((condition) => {
+    if (/^\[\[[\s\S]*\]\]$/.test(condition.variable)) {
+      try {
+        return Boolean(evaluateExpression(condition.variable.slice(2, -2).trim(), expressionContext));
+      } catch {
+        return false;
+      }
+    }
+    let expected = condition.value;
+    if (typeof expected === "string") {
+      const expression = /^\[\[([\s\S]*?)\]\]$/.exec(expected);
+      if (expression) {
+        try {
+          expected = evaluateExpression(expression[1].trim(), expressionContext) as string | number | boolean;
+        } catch {
+          return false;
+        }
+      }
+    }
+    return compareValues({ ...condition, value: expected }, runtime.get(condition.variable, screen.id));
+  });
   const matched = rule.conditions.length === 0
     ? true
     : rule.conditionMode === "any"
@@ -110,11 +136,26 @@ function describeAction(
     case "setVariable": {
       const variable = getVariable(project.variables, action.target, screen.id);
       if (!variable) return `Unknown variable: ${action.target}`;
-      if (!isRuntimeValue(action.value) || typeof action.value !== variable.type) {
+      let value: unknown = action.value;
+      if (typeof value === "string") {
+        const expression = /^\[\[([\s\S]*?)\]\]$/.exec(value);
+        if (expression) {
+          try {
+            value = evaluateExpression(expression[1].trim(), {
+              variables: Object.fromEntries(runtime.entries(screen.id)
+                .map(({ variable: entry, value: current }) => [entry.name, current])),
+              widgets: collectWidgetsDeep(screen.widgets),
+            });
+          } catch {
+            return `Invalid expression for ${variable.name}`;
+          }
+        }
+      }
+      if (!isRuntimeValue(value) || typeof value !== variable.type) {
         return `Invalid ${variable.type} value for ${variable.name}`;
       }
-      runtime.set(variable.name, action.value, screen.id);
-      return `Set ${variable.name} to ${String(action.value)}`;
+      runtime.set(variable.name, value, screen.id);
+      return `Set ${variable.name} to ${String(value)}`;
     }
     case "setPanelState":
     case "setRepeaterData":
@@ -143,6 +184,7 @@ export function validateInteractionRules(project: Project, screen: Screen): Inte
           });
         }
         for (const condition of rule.conditions) {
+          if (/^\[\[[\s\S]*\]\]$/.test(condition.variable)) continue;
           const variable = getVariable(project.variables, condition.variable, screen.id);
           if (!variable) {
             issues.push({
@@ -268,6 +310,7 @@ export function validateInteractionRules(project: Project, screen: Screen): Inte
           } else if (
             ownerScreen.id === screen.id &&
             action.value !== undefined &&
+            !(typeof action.value === "string" && /^\[\[[\s\S]*\]\]$/.test(action.value)) &&
             typeof action.value !== variable.type
           ) {
             issues.push({

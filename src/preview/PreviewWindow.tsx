@@ -15,7 +15,6 @@ import {
 import {
   getRepeaterDataset,
   getRepeaterTemplate,
-  interpolateItem,
   isRepeaterItemVisible,
   type RepeaterRecord,
 } from "../project/repeaters";
@@ -45,7 +44,7 @@ function getWidgetText(
     "text",
     stringProp(widget, "label", stringProp(widget, "title", "")),
   );
-  return runtime.interpolate(item ? interpolateItem(text, item) : text, screenId);
+  return runtime.interpolate(text, screenId, item, widget);
 }
 
 function widgetStyle(widget: Widget): CSSProperties {
@@ -139,10 +138,10 @@ function PreviewWidget({
   if (widget.type === "input" || widget.type === "search" || widget.type === "textarea") {
     const tag = widget.type;
     const placeholderValue = stringProp(widget, "placeholder", "Enter text...");
-    const placeholder = runtime.interpolate(item ? interpolateItem(placeholderValue, item) : placeholderValue, screenId);
+    const placeholder = runtime.interpolate(placeholderValue, screenId, item, widget);
     return (
       <label className="preview-widget-label" style={{ ...style, overflow: "visible" }} {...commonHandlers}>
-        {stringProp(widget, "label") && <span>{runtime.interpolate(item ? interpolateItem(stringProp(widget, "label"), item) : stringProp(widget, "label"), screenId)}</span>}
+        {stringProp(widget, "label") && <span>{runtime.interpolate(stringProp(widget, "label"), screenId, item, widget)}</span>}
         {tag === "textarea"
           ? <textarea aria-label={stringProp(widget, "label", "Preview text")} value={inputValue} placeholder={placeholder} onChange={handleChange} />
           : <input aria-label={stringProp(widget, "label", "Preview input")} type={tag === "search" ? "search" : stringProp(widget, "type", "text")} value={inputValue} placeholder={placeholder} onChange={handleChange} />}
@@ -152,7 +151,7 @@ function PreviewWidget({
 
   if (["checkbox", "toggle", "radio"].includes(widget.type)) {
     const rawLabel = stringProp(widget, "label", widget.type);
-    const label = runtime.interpolate(item ? interpolateItem(rawLabel, item) : rawLabel, screenId);
+    const label = runtime.interpolate(rawLabel, screenId, item, widget);
     return (
       <label className={`preview-widget-choice is-${widget.type}`} style={style} {...commonHandlers}>
         <input
@@ -180,10 +179,10 @@ function PreviewWidget({
 
   if (widget.type === "image") {
     const source = stringProp(widget, "src", stringProp(widget, "url"));
-    const src = runtime.interpolate(item ? interpolateItem(source, item) : source, screenId);
+    const src = runtime.interpolate(source, screenId, item, widget);
     return (
       <div className="preview-widget" style={style} {...commonHandlers}>
-        {src ? <img src={src} alt={runtime.interpolate(stringProp(widget, "alt", text), screenId)} /> : text || "Image"}
+        {src ? <img src={src} alt={runtime.interpolate(stringProp(widget, "alt", text), screenId, item, widget)} /> : text || "Image"}
       </div>
     );
   }
@@ -198,7 +197,7 @@ function PreviewWidget({
       : [];
     return (
       <ul className="preview-widget preview-list" style={style} {...commonHandlers}>
-        {items.map((item, index) => <li key={`${index}-${item}`}>{runtime.interpolate(item, screenId)}</li>)}
+        {items.map((item, index) => <li key={`${index}-${item}`}>{runtime.interpolate(item, screenId, undefined, widget)}</li>)}
       </ul>
     );
   }

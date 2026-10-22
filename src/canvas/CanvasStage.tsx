@@ -46,6 +46,7 @@ import {
   mergeActivePanelWidgets,
 } from "../project/dynamicPanels";
 import { mergeActiveRepeaterWidgets } from "../project/repeaters";
+import { evaluateExpression, EXPRESSION_FUNCTIONS } from "../project/expressions";
 import {
   createDraggedWidgetCopies,
   getActiveLayerDragPayload,
@@ -3001,6 +3002,35 @@ export function CanvasStage({
         const top = screenPosition.y;
         const width = Math.max(80, widget.width * zoom * (toggleLabel ? 1 : 1));
         const height = Math.max(28, widget.height * zoom);
+        const expressionMatch = /\[\[\s*([A-Za-z_$][\w$]*)?$/.exec(editValue.slice(0, editCursor));
+        const expressionQuery = expressionMatch?.[1] ?? "";
+        const expressionSuggestions = expressionMatch
+          ? [...new Set([
+              ...project.variables
+                .filter((variable) => variable.scope === "project" || variable.screenId === activeScreen?.id)
+                .map((variable) => variable.name),
+              ...collectWidgetsDeep(screenWidgets).flatMap((candidate) =>
+                [candidate.name, typeof candidate.props.name === "string" ? candidate.props.name : ""],
+              ).filter((name): name is string => Boolean(name)),
+              "item.field",
+              "this.x",
+              ...EXPRESSION_FUNCTIONS.map((name) => `${name}(`),
+            ])].filter((suggestion) => suggestion.toLowerCase().startsWith(expressionQuery.toLowerCase())).slice(0, 8)
+          : [];
+        let expressionError = "";
+        const liveExpressionPreview = editValue.replace(/\[\[([\s\S]*?)\]\]/g, (whole, source: string) => {
+          try {
+            const result = evaluateExpression(source.trim(), {
+              variables: Object.fromEntries(project.variables.map((variable) => [variable.name, variable.initial])),
+              widgets: collectWidgetsDeep(screenWidgets),
+              thisWidget: widget,
+            });
+            return result === null || result === undefined ? "" : String(result);
+          } catch (error) {
+            expressionError ||= error instanceof Error ? error.message : "Invalid expression.";
+            return whole;
+          }
+        });
         return (
           <>
             <textarea
@@ -3062,6 +3092,34 @@ export function CanvasStage({
                 }
               }}
             />
+            {editValue.includes("[[") && (
+              <output
+                className={`expression-field-preview canvas-expression-preview${expressionError ? " is-error" : ""}`}
+                role={expressionError ? "alert" : "status"}
+                style={{ left, top: top + height + 3, width: Math.max(width, 180) }}
+              >{expressionError ? `Expression error: ${expressionError}` : `Preview: ${liveExpressionPreview}`}</output>
+            )}
+            <button
+              type="button"
+              className="expression-insert-button"
+              aria-label="Insert expression"
+              style={{ left, top: Math.max(0, top - 28) }}
+              onMouseDown={(event) => event.preventDefault()}
+              onClick={() => {
+                const editor = textEditorRef.current;
+                const start = editor?.selectionStart ?? editCursor;
+                const end = editor?.selectionEnd ?? start;
+                const insertion = "[[ ]]";
+                const next = `${editValue.slice(0, start)}${insertion}${editValue.slice(end)}`;
+                const cursor = start + 3;
+                setEditValue(next);
+                setEditCursor(cursor);
+                requestAnimationFrame(() => {
+                  textEditorRef.current?.focus();
+                  textEditorRef.current?.setSelectionRange(cursor, cursor);
+                });
+              }}
+            >Insert [[ ]]</button>
             {variableCompletion && visibleVariableSuggestions.length > 0 && (
               <div
                 className="variable-completion-popover"
@@ -3084,6 +3142,37 @@ export function CanvasStage({
                   </button>
                 ))}
                 <div className="variable-completion-hint">Enter or Tab to insert</div>
+              </div>
+            )}
+            {expressionMatch && expressionSuggestions.length > 0 && (
+              <div
+                className="variable-completion-popover"
+                role="listbox"
+                aria-label="Expression suggestions"
+                style={{ left, top: top + height + 4, minWidth: Math.min(width, 220) }}
+              >
+                {expressionSuggestions.map((suggestion) => (
+                  <button
+                    className="variable-completion-option"
+                    key={suggestion}
+                    type="button"
+                    role="option"
+                    onMouseDown={(event) => event.preventDefault()}
+                    onClick={() => {
+                      const start = editCursor - expressionMatch[0].length;
+                      const insertion = `[[${suggestion}`;
+                      const next = `${editValue.slice(0, start)}${insertion}${editValue.slice(editCursor)}`;
+                      const cursor = start + insertion.length;
+                      setEditValue(next);
+                      setEditCursor(cursor);
+                      requestAnimationFrame(() => {
+                        textEditorRef.current?.focus();
+                        textEditorRef.current?.setSelectionRange(cursor, cursor);
+                      });
+                    }}
+                  >{suggestion}</button>
+                ))}
+                <div className="variable-completion-hint">Expression names and functions</div>
               </div>
             )}
           </>

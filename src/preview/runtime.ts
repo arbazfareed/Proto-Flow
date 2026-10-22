@@ -21,15 +21,24 @@ import {
   parseRepeaterDataset,
   type RepeaterRecord,
 } from "../project/repeaters";
+import { evaluateExpression, interpolateExpressions } from "../project/expressions";
 
-function resolveItemValue(value: unknown, item?: RepeaterRecord): unknown {
-  if (!item) return value;
-  if (typeof value === "string") return interpolateItem(value, item);
-  if (Array.isArray(value)) return value.map((entry) => resolveItemValue(entry, item));
+function resolveExpressionValue(
+  value: unknown,
+  context: import("../project/expressions").ExpressionContext,
+  item?: RepeaterRecord,
+): unknown {
+  if (typeof value === "string") {
+    const withItem = item ? interpolateItem(value, item) : value;
+    const wholeExpression = /^\[\[([\s\S]*?)\]\]$/.exec(withItem);
+    if (wholeExpression) return evaluateExpression(wholeExpression[1].trim(), context);
+    return interpolateExpressions(withItem, context);
+  }
+  if (Array.isArray(value)) return value.map((entry) => resolveExpressionValue(entry, context, item));
   if (typeof value === "object" && value !== null) {
     return Object.fromEntries(Object.entries(value).map(([key, entry]) => [
       key,
-      resolveItemValue(entry, item),
+      resolveExpressionValue(entry, context, item),
     ]));
   }
   return value;
@@ -45,10 +54,9 @@ interface RepeaterActionConfig extends Record<string, unknown> {
 
 function parseRepeaterActionConfig(
   value: unknown,
-  item: RepeaterRecord | undefined,
   action: "sort" | "filter",
 ): RepeaterActionConfig {
-  let config = resolveItemValue(value, item);
+  let config = value;
   if (typeof config === "string") {
     try {
       config = JSON.parse(config) as unknown;
@@ -209,8 +217,23 @@ export class PreviewRuntime {
     this.variables.set(name, value, screenId);
   }
 
-  interpolate(text: string, screenId = this.screenId): string {
-    return this.variables.interpolate(text, screenId);
+  interpolate(text: string, screenId = this.screenId, item?: RepeaterRecord, widget?: Widget): string {
+    const contextualText = item ? interpolateItem(text, item) : text;
+    return interpolateExpressions(
+      this.variables.interpolate(contextualText, screenId),
+      this.expressionContext(widget, item),
+    );
+  }
+
+  expressionContext(widget?: Widget, item?: RepeaterRecord) {
+    const variables = Object.fromEntries(this.variables.entries(this.screenId)
+      .map(({ variable, value }) => [variable.name, value]));
+    return {
+      variables,
+      widgets: collectWidgetsDeep(this.currentScreen.widgets),
+      item,
+      thisWidget: widget,
+    };
   }
 
   snapshot(): PreviewRuntimeSnapshot {
@@ -232,9 +255,9 @@ export class PreviewRuntime {
       rule.event === event && (!rule.widgetId || rule.widgetId === widget.id),
     );
     for (const rule of rules) {
-      if (!this.conditionsMatch(rule, screen.id)) continue;
+      if (!this.conditionsMatch(rule, screen.id, item, widget)) continue;
       try {
-        this.runActions(rule, screen, item);
+        this.runActions(rule, screen, item, widget);
       } catch (error) {
         errors.push(error instanceof Error ? error.message : "Interaction action failed.");
       }
@@ -254,18 +277,46 @@ export class PreviewRuntime {
     this.variables.set(variableName, value, this.screenId);
   }
 
-  private conditionsMatch(rule: InteractionRule, screenId: string): boolean {
+  private conditionsMatch(
+    rule: InteractionRule,
+    screenId: string,
+    item?: RepeaterRecord,
+    widget?: Widget,
+  ): boolean {
     if (rule.conditions.length === 0) return true;
-    const results = rule.conditions.map((condition) =>
-      conditionMatches(condition, this.variables.get(condition.variable, screenId)),
-    );
+    const results = rule.conditions.map((condition) => {
+      const directExpression = /^\[\[([\s\S]*?)\]\]$/.exec(condition.variable);
+      if (directExpression) {
+        try {
+          return Boolean(evaluateExpression(directExpression[1].trim(), this.expressionContext(widget, item)));
+        } catch {
+          return false;
+        }
+      }
+      let value: RuntimeVariableValue | undefined = this.variables.get(condition.variable, screenId);
+      if (typeof condition.value === "string") {
+        const expression = /^\[\[([\s\S]*?)\]\]$/.exec(condition.value);
+        if (expression) {
+          try {
+            const evaluated = evaluateExpression(expression[1].trim(), this.expressionContext(widget, item));
+            value = typeof evaluated === "string" || typeof evaluated === "number" || typeof evaluated === "boolean"
+              ? evaluated
+              : undefined;
+          } catch {
+            value = undefined;
+          }
+        }
+      }
+      return conditionMatches(condition, value);
+    });
     return rule.conditionMode === "any"
       ? results.some(Boolean)
       : results.every(Boolean);
   }
 
-  private runActions(rule: InteractionRule, screen: Screen, item?: RepeaterRecord): void {
+  private runActions(rule: InteractionRule, screen: Screen, item?: RepeaterRecord, widget?: Widget): void {
     for (const action of rule.actions) {
+      const actionValue = resolveExpressionValue(action.value, this.expressionContext(widget, item), item);
       switch (action.type) {
         case "navigate":
         case "navigateTo":
@@ -287,30 +338,30 @@ export class PreviewRuntime {
             throw new Error(`Variable "${action.target}" is missing.`);
           }
           if (
-            typeof action.value !== "string" &&
-            typeof action.value !== "number" &&
-            typeof action.value !== "boolean"
+            typeof actionValue !== "string" &&
+            typeof actionValue !== "number" &&
+            typeof actionValue !== "boolean"
           ) {
             throw new Error(`A typed value is required for variable "${action.target}".`);
           }
-          this.variables.set(action.target, action.value, screen.id);
+          this.variables.set(action.target, actionValue, screen.id);
           break;
         case "setPanelState":
           {
           const panel = this.requireWidget(screen, action.target, ["panel", "dynamic-panel", "dynamicPanel"]);
-          if (typeof action.value !== "string" && typeof action.stateId !== "string") {
+          if (typeof actionValue !== "string" && typeof action.stateId !== "string") {
             throw new Error("Panel-state action requires a state ID or state name.");
           }
           const states = getPanelStates(panel);
           const state = states.find((item) =>
             item.id === action.stateId ||
-            item.id === action.value ||
-            item.name === action.value,
+            item.id === actionValue ||
+            item.name === actionValue,
           );
           if (states.length > 0 && !state) {
             throw new Error(`Panel "${panel.id}" does not contain the requested state.`);
           }
-          this.panelStates[action.target] = state?.id ?? String(action.stateId ?? action.value);
+          this.panelStates[action.target] = state?.id ?? String(action.stateId ?? actionValue);
           this.panelTransitions[action.target] = {
             transition: action.transition ?? "none",
             duration: action.duration ?? 0,
@@ -321,7 +372,7 @@ export class PreviewRuntime {
           {
           this.requireWidget(screen, action.target, ["repeater"]);
           this.repeaterData[action.target] = parseRepeaterDataset(
-            resolveItemValue(action.value, item),
+            actionValue,
           );
           break;
           }
@@ -329,7 +380,7 @@ export class PreviewRuntime {
           {
           const repeater = this.requireWidget(screen, action.target, ["repeater"]);
           const rows = this.getRepeaterRows(repeater);
-          let row = resolveItemValue(action.value, item);
+          let row = actionValue;
           if (typeof row === "string") {
             try {
               row = JSON.parse(row) as unknown;
@@ -348,7 +399,7 @@ export class PreviewRuntime {
           {
           const repeater = this.requireWidget(screen, action.target, ["repeater"]);
           const rows = this.getRepeaterRows(repeater);
-          const index = Number(resolveItemValue(action.value, item));
+          const index = Number(actionValue);
           if (!Number.isInteger(index) || index < 0 || index >= rows.length) {
             throw new Error("Repeater row index must reference an existing row.");
           }
@@ -358,7 +409,7 @@ export class PreviewRuntime {
         case "sortRepeater":
           {
           const repeater = this.requireWidget(screen, action.target, ["repeater"]);
-          const config = parseRepeaterActionConfig(action.value, item, "sort");
+          const config = parseRepeaterActionConfig(actionValue, "sort");
           const field = config.field;
           const direction = config.direction === "desc" ? -1 : 1;
           this.repeaterData[action.target] = this.getRepeaterRows(repeater).slice().sort((first, second) =>
@@ -369,7 +420,7 @@ export class PreviewRuntime {
         case "filterRepeater":
           {
           const repeater = this.requireWidget(screen, action.target, ["repeater"]);
-          const config = parseRepeaterActionConfig(action.value, item, "filter");
+          const config = parseRepeaterActionConfig(actionValue, "filter");
           const field = config.field;
           const operator = typeof config.operator === "string" ? config.operator : "equals";
           const expected = config.value;

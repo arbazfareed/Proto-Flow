@@ -1,6 +1,8 @@
 import type { Project } from "../project/schema";
+import { EXPRESSION_RUNTIME_SOURCE } from "../project/expressions";
 
 export const PREVIEW_RUNTIME_SCRIPT = String.raw`
+${EXPRESSION_RUNTIME_SOURCE}
 const project = JSON.parse(document.getElementById("project-data").textContent);
 const stage = document.getElementById("stage");
 const screenPicker = document.getElementById("screen-picker");
@@ -31,10 +33,23 @@ function setVariable(name, value, activeScreen) {
     || project.variables.find((entry) => entry.name === name && entry.scope === "project");
   if (item && typeof value === typeof item.initial) variables.set(item.id, value);
 }
-function text(value, activeScreen, item) {
-  return String(value ?? "").replace(/\{\{\s*([\w$.-]+)\s*\}\}/g, (_, name) => {
+function expressionVariables(activeScreen) {
+  return Object.fromEntries(project.variables
+    .filter((entry) => entry.scope === "project" || entry.screenId === activeScreen)
+    .map((entry) => [entry.name, variables.get(entry.id)]));
+}
+function text(value, activeScreen, item, widget) {
+  const interpolated = String(value ?? "").replace(/\{\{\s*([\w$.-]+)\s*\}\}/g, (_, name) => {
     if (name.startsWith("item.")) return String(item?.[name.slice(5)] ?? "");
     return String(variable(name, activeScreen) ?? "");
+  });
+  const variablesByName = expressionVariables(activeScreen);
+  const widgets = allWidgets(screen().widgets);
+  return interpolated.replace(/\[\[([\s\S]*?)\]\]/g, (whole, source) => {
+    try {
+      const result = evaluateExpression(source.trim(), { variables: variablesByName, widgets, item, thisWidget: widget });
+      return result === null || result === undefined ? "" : String(result);
+    } catch { return whole; }
   });
 }
 function repeaterRows(value) {
@@ -59,31 +74,54 @@ function repeaterItemVisible(widget, item) {
     default: return actual === rule.value;
   }
 }
-function interpolateActionValue(value, item) {
-  if (typeof value === "string") return text(value, screen().id, item);
-  if (Array.isArray(value)) return value.map((entry) => interpolateActionValue(entry, item));
-  if (value && typeof value === "object") return Object.fromEntries(Object.entries(value).map(([key, entry]) => [key, interpolateActionValue(entry, item)]));
+function interpolateActionValue(value, item, widget) {
+  if (typeof value === "string") return text(value, screen().id, item, widget);
+  if (Array.isArray(value)) return value.map((entry) => interpolateActionValue(entry, item, widget));
+  if (value && typeof value === "object") return Object.fromEntries(Object.entries(value).map(([key, entry]) => [key, interpolateActionValue(entry, item, widget)]));
   return value;
 }
-function actionValue(value, item) {
-  const interpolated = interpolateActionValue(value, item);
+function actionValue(value, item, widget) {
+  const interpolated = interpolateActionValue(value, item, widget);
   if (typeof interpolated !== "string") return interpolated;
   try { return JSON.parse(interpolated); } catch { return interpolated; }
 }
-function matches(condition, activeScreen) {
+function matches(condition, activeScreen, item, widget) {
+  const directExpression = /^\[\[([\s\S]*?)\]\]$/.exec(condition.variable);
+  if (directExpression) {
+    try {
+      return Boolean(evaluateExpression(directExpression[1].trim(), {
+        variables: expressionVariables(activeScreen),
+        widgets: allWidgets(screen().widgets),
+        item,
+        thisWidget: widget,
+      }));
+    } catch { return false; }
+  }
   const current = variable(condition.variable, activeScreen);
+  let expected = condition.value;
+  const valueExpression = typeof expected === "string" ? /^\[\[([\s\S]*?)\]\]$/.exec(expected) : null;
+  if (valueExpression) {
+    try {
+      expected = evaluateExpression(valueExpression[1].trim(), {
+        variables: expressionVariables(activeScreen),
+        widgets: allWidgets(screen().widgets),
+        item,
+        thisWidget: widget,
+      });
+    } catch { return false; }
+  }
   switch (condition.operator) {
-    case "equals": return current === condition.value;
-    case "notEquals": return current !== condition.value;
-    case "greaterThan": return current > condition.value;
-    case "greaterThanOrEqual": return current >= condition.value;
-    case "lessThan": return current < condition.value;
-    case "lessThanOrEqual": return current <= condition.value;
-    case "contains": return typeof current === "string" && current.includes(condition.value);
+    case "equals": return current === expected;
+    case "notEquals": return current !== expected;
+    case "greaterThan": return current > expected;
+    case "greaterThanOrEqual": return current >= expected;
+    case "lessThan": return current < expected;
+    case "lessThanOrEqual": return current <= expected;
+    case "contains": return typeof current === "string" && current.includes(expected);
     default: return false;
   }
 }
-function actions(rule, activeScreen, item) {
+function actions(rule, activeScreen, item, widget) {
   for (const action of rule.actions) {
     if (action.type === "navigate" || action.type === "navigateTo") {
       if (project.screens.some((item) => item.id === action.target) && action.target !== screenId) {
@@ -94,29 +132,30 @@ function actions(rule, activeScreen, item) {
     } else if (action.type === "show" || action.type === "hide") {
       visibility.set(action.target, action.type === "show");
     } else if (action.type === "setVariable") {
-      setVariable(action.target, action.value, activeScreen);
+      setVariable(action.target, actionValue(action.value, item, widget), activeScreen);
     } else if (action.type === "setPanelState") {
       const panel = allWidgets(screen().widgets).find((item) => item.id === action.target);
       const states = panel?.props.states || [];
-      const state = states.find((item) => item.id === action.stateId || item.id === action.value || item.name === action.value);
+      const stateValue = actionValue(action.value, item, widget);
+      const state = states.find((item) => item.id === action.stateId || item.id === stateValue || item.name === stateValue);
       if (states.length && !state) throw new Error("The requested panel state does not exist.");
-      panelStates.set(action.target, state?.id || action.stateId || action.value);
+      panelStates.set(action.target, state?.id || action.stateId || stateValue);
       panelTransitions.set(action.target, { transition: action.transition || "none", duration: action.duration || 0 });
     } else if (action.type === "setRepeaterData") {
-      repeaterData.set(action.target, repeaterRows(actionValue(action.value, item)));
+      repeaterData.set(action.target, repeaterRows(actionValue(action.value, item, widget)));
     } else if (["addRepeaterRow", "removeRepeaterRow", "sortRepeater", "filterRepeater"].includes(action.type)) {
       const repeater = allWidgets(screen().widgets).find((entry) => entry.id === action.target && entry.type === "repeater");
       if (!repeater) throw new Error("Repeater action target is missing.");
       const rows = repeaterRows(repeaterData.get(action.target) ?? repeater.props.dataset ?? []);
       if (action.type === "addRepeaterRow") {
-        const row = actionValue(action.value, item);
+        const row = actionValue(action.value, item, widget);
         repeaterData.set(action.target, repeaterRows([...rows, row && typeof row === "object" ? row : {}]));
       } else if (action.type === "removeRepeaterRow") {
-        const index = Number(actionValue(action.value, item));
+        const index = Number(actionValue(action.value, item, widget));
         if (!Number.isInteger(index) || index < 0 || index >= rows.length) throw new Error("Repeater row index must reference an existing row.");
         repeaterData.set(action.target, rows.filter((_, rowIndex) => rowIndex !== index));
       } else {
-        const config = actionValue(action.value, item);
+        const config = actionValue(action.value, item, widget);
         if (!config || typeof config !== "object" || typeof config.field !== "string") throw new Error("Repeater sort/filter action requires a field.");
         if (action.type === "sortRepeater") {
           const direction = config.direction === "desc" ? -1 : 1;
@@ -133,9 +172,9 @@ function actions(rule, activeScreen, item) {
 function fire(widget, event, item) {
   const activeScreen = screen();
   for (const rule of activeScreen.interactionRules.filter((item) => item.event === event && (!item.widgetId || item.widgetId === widget.id))) {
-    const checks = rule.conditions.map((condition) => matches(condition, activeScreen.id));
+    const checks = rule.conditions.map((condition) => matches(condition, activeScreen.id, item, widget));
     if (rule.conditions.length && (rule.conditionMode === "any" ? !checks.some(Boolean) : !checks.every(Boolean))) continue;
-    actions(rule, activeScreen.id, item);
+    actions(rule, activeScreen.id, item, widget);
   }
   render();
 }
@@ -160,14 +199,14 @@ function renderWidget(widget, activeScreen, item) {
   element.style.padding = (typeof widget.props.padding === "number" ? widget.props.padding : 8) + "px";
   element.style.whiteSpace = "pre-wrap";
   const rawText = widget.props.text ?? widget.props.label ?? widget.props.title ?? "";
-  const shownText = text(rawText, activeScreen.id, item);
+  const shownText = text(rawText, activeScreen.id, item, widget);
   if (widget.type === "ellipse" || widget.type === "circle") element.style.borderRadius = "50%";
   if (widget.type === "button" || widget.type === "icon-button") element.textContent = shownText || "Button";
   else if (widget.type === "input" || widget.type === "search" || widget.type === "textarea") {
     const input = document.createElement(widget.type === "textarea" ? "textarea" : "input");
     input.type = widget.type === "search" ? "search" : (typeof widget.props.type === "string" ? widget.props.type : "text");
-    input.setAttribute("aria-label", text(widget.props.label || "Preview input", activeScreen.id, item));
-    input.placeholder = text(widget.props.placeholder || "", activeScreen.id, item);
+    input.setAttribute("aria-label", text(widget.props.label || "Preview input", activeScreen.id, item, widget));
+    input.placeholder = text(widget.props.placeholder || "", activeScreen.id, item, widget);
     input.value = String(widget.props.value ?? "");
     input.addEventListener("input", () => {
       const binding = widget.props.variableName ?? widget.props.variable;
@@ -190,18 +229,18 @@ function renderWidget(widget, activeScreen, item) {
     });
     element.append(input, document.createTextNode(shownText));
   } else if (widget.type === "image") {
-    const src = text(typeof widget.props.src === "string" ? widget.props.src : "", activeScreen.id, item);
+    const src = text(typeof widget.props.src === "string" ? widget.props.src : "", activeScreen.id, item, widget);
     if (src.startsWith("data:image/") || src.startsWith("assets/")) {
       const image = document.createElement("img");
       image.src = src;
-      image.alt = text(widget.props.alt || shownText, activeScreen.id, item);
+      image.alt = text(widget.props.alt || shownText, activeScreen.id, item, widget);
       element.append(image);
     } else element.textContent = shownText || "Image";
   } else if (widget.type === "list" && Array.isArray(widget.props.items)) {
     const list = document.createElement("ul");
     for (const listItem of widget.props.items) {
       const row = document.createElement("li");
-      row.textContent = text(listItem, activeScreen.id, item);
+      row.textContent = text(listItem, activeScreen.id, item, widget);
       list.append(row);
     }
     element.append(list);
