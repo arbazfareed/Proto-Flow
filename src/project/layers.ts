@@ -78,7 +78,7 @@ export function getWidgetParentIdMap(
     const validReferencedParent =
       referencedParent &&
       referencedParent.id !== widget.id &&
-      isWidgetContainedBy(widget, referencedParent);
+      (referencedParent.type === "repeater" || isWidgetContainedBy(widget, referencedParent));
     const widgetArea = widget.width * widget.height;
     const containingParents = candidateParents.filter((candidate) =>
       candidate.id !== widget.id &&

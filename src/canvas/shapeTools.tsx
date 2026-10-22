@@ -376,7 +376,16 @@ function genericElementDefinition(
           fontWeight: "normal",
           lineHeight: 1.4,
         }
-      : { label };
+      : type === "repeater"
+        ? {
+            label,
+            rowTemplate: { widgets: [] },
+            dataset: [{ title: "Item 1" }, { title: "Item 2" }, { title: "Item 3" }],
+            layout: "vertical",
+            gap: 8,
+            itemBinding: {},
+          }
+        : { label };
   return {
     label,
     shortcut: "",

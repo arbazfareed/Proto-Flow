@@ -137,6 +137,47 @@ describe("PreviewRuntime", () => {
     expect(runtime.snapshot().repeaterData[repeater.id]).toEqual([{ name: "A" }]);
   });
 
+  it("supports repeater add, remove, sort, filter, and item-context interpolation", () => {
+    const project = createProject();
+    const screen = project.screens[0];
+    const trigger = screen.widgets[0];
+    const repeater = screen.widgets.find((widget) => widget.type === "repeater");
+    if (!repeater) throw new Error("Test fixture is missing a repeater.");
+    repeater.props.dataset = [{ name: "B", active: true }, { name: "A", active: false }];
+    screen.interactionRules = [
+      {
+        id: crypto.randomUUID(),
+        widgetId: trigger.id,
+        event: "onClick",
+        conditions: [],
+        actions: [
+          { type: "sortRepeater", target: repeater.id, value: '{"field":"name","direction":"asc"}' },
+          { type: "addRepeaterRow", target: repeater.id, value: '{"name":"{{item.name}}"}' },
+        ],
+      },
+      {
+        id: crypto.randomUUID(),
+        widgetId: trigger.id,
+        event: "onTap",
+        conditions: [],
+        actions: [
+          { type: "filterRepeater", target: repeater.id, value: '{"field":"active","operator":"equals","value":true}' },
+          { type: "removeRepeaterRow", target: repeater.id, value: 0 },
+        ],
+      },
+    ];
+    const runtime = new PreviewRuntime(project);
+    expect(runtime.runEvent(trigger, "onClick", { name: "C" })).toEqual([]);
+    expect(runtime.snapshot().repeaterData[repeater.id]).toEqual([
+      { name: "A", active: false },
+      { name: "B", active: true },
+      { name: "C" },
+    ]);
+
+    expect(runtime.runEvent(trigger, "onTap")).toEqual([]);
+    expect(runtime.snapshot().repeaterData[repeater.id]).toEqual([]);
+  });
+
   it("switches a nested dynamic panel to a validated state with transition metadata", () => {
     const project = createProject();
     const screen = project.screens[0];

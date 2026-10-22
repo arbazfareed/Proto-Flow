@@ -48,6 +48,10 @@ const ACTIONS = [
   ["setVariable", "Set variable"],
   ["setPanelState", "Set panel state"],
   ["setRepeaterData", "Set repeater data"],
+  ["addRepeaterRow", "Add repeater row"],
+  ["removeRepeaterRow", "Remove repeater row"],
+  ["sortRepeater", "Sort repeater"],
+  ["filterRepeater", "Filter repeater"],
 ] as const;
 
 function getVariable(project: Project, screenId: string, name: string) {
@@ -64,13 +68,28 @@ function initialAction(type: string, screen: Screen): InteractionAction {
       return { type, target: "", value: "" };
     case "setPanelState":
     case "setRepeaterData":
+    case "addRepeaterRow":
+    case "removeRepeaterRow":
+    case "sortRepeater":
+    case "filterRepeater":
     case "show":
     case "hide":
       return {
         type,
         target: (type === "setPanelState"
           ? collectWidgetsDeep(screen.widgets).find((item) => item.type === "dynamic-panel")
+          : type === "setRepeaterData" || type === "addRepeaterRow" ||
+              type === "removeRepeaterRow" || type === "sortRepeater" || type === "filterRepeater"
+            ? collectWidgetsDeep(screen.widgets).find((item) => item.type === "repeater")
           : collectWidgetsDeep(screen.widgets)[0])?.id ?? "",
+        ...(["setRepeaterData", "addRepeaterRow", "removeRepeaterRow", "sortRepeater", "filterRepeater"]
+          .includes(type) ? {
+            value: type === "setRepeaterData" ? "[]" :
+              type === "addRepeaterRow" ? "{}" :
+                type === "removeRepeaterRow" ? "0" :
+                  type === "sortRepeater" ? '{"field":"name","direction":"asc"}' :
+                    '{"field":"name","operator":"equals","value":""}',
+          } : {}),
       };
     default:
       return { type, target: "" };
@@ -121,7 +140,8 @@ function ActionTarget({
       : collectWidgetsDeep(screen.widgets).filter((item) =>
           action.type === "setPanelState"
             ? ["panel", "dynamic-panel", "dynamicPanel"].includes(item.type)
-            : action.type === "setRepeaterData"
+            : ["setRepeaterData", "addRepeaterRow", "removeRepeaterRow", "sortRepeater", "filterRepeater"]
+                .includes(action.type)
               ? item.type === "repeater"
               : true,
         ).map((item) => ({
@@ -633,9 +653,9 @@ export function InteractionBuilder({
                     </>
                   );
                 })()}
-                {action.type === "setRepeaterData" && (
+                {["setRepeaterData", "addRepeaterRow", "removeRepeaterRow", "sortRepeater", "filterRepeater"].includes(action.type) && (
                   <input aria-label="Action value" type="text"
-                    placeholder="Dataset JSON"
+                    placeholder={action.type === "setRepeaterData" ? "Dataset JSON" : "Action JSON or value"}
                     value={String(action.value ?? "")}
                     onChange={(event) => {
                       const value = event.currentTarget.value;

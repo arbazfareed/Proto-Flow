@@ -44,12 +44,20 @@ import {
   getActivePanelState,
   getPanelStates,
   collectWidgetsDeep,
-  flattenActivePanelWidgets,
   mapWidgetsDeep,
   withPanelStates,
   updatePanelState,
   type DynamicPanelState,
 } from "../project/dynamicPanels";
+import {
+  getRepeaterDataset,
+  getRepeaterTemplate,
+  parseRepeaterCsv,
+  parseRepeaterDataset,
+  repeaterDataBytes,
+  repeaterDatasetToCsv,
+  updateRepeater,
+} from "../project/repeaters";
 import {
   DEFAULT_DEVICE_PRESET,
   toScreenDevice,
@@ -62,6 +70,7 @@ import {
 } from "../devices/frame";
 import type { ScreenDevice } from "../devices/types";
 import { ScreenLayerSidebar } from "./ScreenLayerSidebar";
+import { createWidgetCopies } from "../project/widgetClipboard";
 import { SymbolLibrary } from "./SymbolLibrary";
 import { WidgetIcon } from "./widgetIcons";
 import { BreakpointToolbar, ResponsivePanel } from "./ResponsiveControls";
@@ -1975,23 +1984,15 @@ function TextSizeControl({ widgets }: { widgets: Widget[] }) {
 }
 
 function copyPanelWidgets(widgets: Widget[], parentIds = new Map<string, string>()): Widget[] {
-  const idMap = new Map(widgets.map((widget) => [widget.id, crypto.randomUUID()]));
-  const allIds = new Map([...parentIds, ...idMap]);
-  return widgets.map((widget) => {
-    const id = idMap.get(widget.id)!;
-    const props = { ...widget.props };
-    if (widget.type === "dynamic-panel" && Array.isArray(props.states)) {
-      props.states = getPanelStates(widget).map((state) => ({
-        ...state,
-        id: crypto.randomUUID(),
-        widgets: copyPanelWidgets(state.widgets, new Map([[widget.id, id]])),
-      }));
-    }
+  const copies = createWidgetCopies(widgets, [], { x: 0, y: 0 });
+  return copies.map((copy, index) => {
+    const source = widgets[index];
     return {
-      ...structuredClone(widget),
-      id,
-      groupId: widget.groupId ? allIds.get(widget.groupId) ?? parentIds.get(widget.groupId) : undefined,
-      props,
+      ...copy,
+      zIndex: source.zIndex,
+      groupId: source.groupId
+        ? parentIds.get(source.groupId) ?? copy.groupId
+        : undefined,
     };
   });
 }
@@ -2114,17 +2115,252 @@ function DynamicPanelSection({ screen, widget }: { screen: Project["screens"][nu
   );
 }
 
+function RepeaterSection({ screen, widget }: { screen: Project["screens"][number]; widget: Widget }) {
+  const [error, setError] = useState<string | null>(null);
+  const [newField, setNewField] = useState("");
+  const dataset = getRepeaterDataset(widget);
+  const template = getRepeaterTemplate(widget);
+  const editing = useStore((state) => state.activeRepeaterEdit === widget.id);
+  const fields = [...new Set(dataset.flatMap((record) => Object.keys(record)))];
+
+  const update = (props: Record<string, unknown>) => {
+    const current = useStore.getState();
+    current.setProject({
+      ...current.project,
+      updatedAt: new Date().toISOString(),
+      screens: current.project.screens.map((item) =>
+        item.id === screen.id
+          ? {
+              ...item,
+              widgets: updateRepeater(item.widgets, widget.id, (repeater) => ({
+                ...repeater,
+                props: { ...repeater.props, ...props },
+              })),
+            }
+          : item,
+      ),
+    });
+    setError(null);
+  };
+
+  const applyDataset = (value: unknown) => {
+    const next = parseRepeaterDataset(value);
+    update({ dataset: next });
+  };
+
+  const downloadCsv = () => {
+    const url = URL.createObjectURL(new Blob([repeaterDatasetToCsv(dataset)], { type: "text/csv;charset=utf-8" }));
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.download = `${widget.name ?? "repeater"}-data.csv`;
+    anchor.click();
+    URL.revokeObjectURL(url);
+  };
+
+  return (
+    <section className="inspector-section repeater-section" aria-label="Repeater data">
+      <div className="section-label"><span>REPEATER</span></div>
+      <label className="field-label" htmlFor="repeater-layout">Row layout</label>
+      <select
+        id="repeater-layout"
+        className="text-field"
+        value={widget.props.layout === "horizontal" || widget.props.layout === "grid" ? widget.props.layout : "vertical"}
+        onChange={(event) => update({ layout: event.currentTarget.value })}
+      >
+        <option value="vertical">Vertical</option>
+        <option value="horizontal">Horizontal</option>
+        <option value="grid">Grid</option>
+      </select>
+      <label className="field-label" htmlFor="repeater-gap">Row gap</label>
+      <input
+        id="repeater-gap"
+        className="text-field"
+        type="number"
+        min={0}
+        value={typeof widget.props.gap === "number" ? widget.props.gap : 8}
+        onChange={(event) => update({ gap: Math.max(0, Number(event.currentTarget.value) || 0) })}
+      />
+      <div className="dynamic-panel-state-actions">
+        <button
+          className="button button-quiet"
+          aria-pressed={editing}
+          onClick={() => useStore.getState().setActiveRepeaterEdit(editing ? null : widget.id)}
+        >
+          {editing ? "Stop editing template" : "Edit row template"}
+        </button>
+      </div>
+      <p className="field-hint">{template.length} template widgets. Bind a text widget with {"{{item.field}}"}.</p>
+      <div className="section-label"><span>DATASET ({dataset.length}/1,000)</span></div>
+      <div className="dynamic-panel-state-actions">
+        <input
+          className="text-field"
+          aria-label="New dataset field"
+          placeholder="Field name"
+          value={newField}
+          onChange={(event) => setNewField(event.currentTarget.value)}
+        />
+        <button
+          className="button button-quiet"
+          disabled={!newField.trim() || fields.includes(newField.trim())}
+          onClick={() => {
+            const field = newField.trim();
+            update({
+              dataset: dataset.length > 0
+                ? dataset.map((record) => ({ ...record, [field]: "" }))
+                : [{ [field]: "" }],
+            });
+            setNewField("");
+          }}
+        >Add field</button>
+        <button
+          className="button button-quiet"
+          disabled={dataset.length >= 1_000}
+          onClick={() => applyDataset([...dataset, Object.fromEntries(fields.map((field) => [field, ""]))])}
+        >Add record</button>
+        <button className="button button-quiet" onClick={downloadCsv}>Export CSV</button>
+        <label className="button button-quiet">
+          Import CSV/JSON
+          <input
+            type="file"
+            accept=".csv,.json,text/csv,application/json"
+            hidden
+            onChange={(event) => {
+              const file = event.currentTarget.files?.[0];
+              if (!file) return;
+              void file.text().then((contents) => {
+                try {
+                  applyDataset(file.name.toLowerCase().endsWith(".json")
+                    ? JSON.parse(contents) as unknown
+                    : parseRepeaterCsv(contents));
+                } catch (cause) {
+                  setError(cause instanceof Error ? cause.message : "Could not import repeater data.");
+                }
+              }).catch((cause: unknown) => {
+                setError(cause instanceof Error ? cause.message : "Could not read the selected file.");
+              });
+              event.currentTarget.value = "";
+            }}
+          />
+        </label>
+      </div>
+      {fields.length > 0 && (
+        <div className="repeater-data-table-wrap">
+          <table className="repeater-data-table">
+            <thead><tr>{fields.map((field) => <th key={field}>{field}</th>)}<th>Row</th></tr></thead>
+            <tbody>
+              {dataset.map((record, rowIndex) => (
+                <tr key={rowIndex}>
+                  {fields.map((field) => (
+                    <td key={field}>
+                      <input
+                        className="text-field"
+                        aria-label={`Row ${rowIndex + 1} ${field}`}
+                        value={record[field] === null ? "" : String(record[field] ?? "")}
+                        onChange={(event) => update({
+                          dataset: dataset.map((row, index) => index === rowIndex
+                            ? { ...row, [field]: event.currentTarget.value }
+                            : row),
+                        })}
+                      />
+                    </td>
+                  ))}
+                  <td><button className="icon-button small-icon" aria-label={`Delete row ${rowIndex + 1}`} onClick={() => update({ dataset: dataset.filter((_, index) => index !== rowIndex) })}>×</button></td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+      {repeaterDataBytes(dataset) > 100 * 1024 && (
+        <p className="field-hint" role="status">Dataset exceeds 100 KB and may increase project file size.</p>
+      )}
+      {error && <p className="field-hint" role="alert">{error}</p>}
+    </section>
+  );
+}
+
+function RepeaterBindingSection({ screen, widget }: { screen: Project["screens"][number]; widget: Widget }) {
+  const repeater = widget.groupId
+    ? collectWidgetsDeep(screen.widgets).find((candidate) =>
+        candidate.id === widget.groupId && candidate.type === "repeater",
+      )
+    : undefined;
+  if (!repeater) return null;
+  const fields = [...new Set(getRepeaterDataset(repeater).flatMap((record) => Object.keys(record)))];
+  const property = widget.type === "image"
+    ? "src"
+    : typeof widget.props.text === "string"
+      ? "text"
+      : "label";
+  const current = widget.props[property];
+  const bindingMatch = typeof current === "string"
+    ? current.match(/^\{\{\s*item\.([\w$.-]+)\s*\}\}$/)
+    : null;
+
+  const bindField = (field: string) => {
+    const currentStore = useStore.getState();
+    currentStore.setProject({
+      ...currentStore.project,
+      updatedAt: new Date().toISOString(),
+      screens: currentStore.project.screens.map((item) => item.id === screen.id
+        ? {
+            ...item,
+            widgets: updateRepeater(item.widgets, repeater.id, (container) => {
+              const binding = typeof container.props.itemBinding === "object" &&
+                container.props.itemBinding !== null && !Array.isArray(container.props.itemBinding)
+                ? container.props.itemBinding as Record<string, unknown>
+                : {};
+              const nextBindings = Object.fromEntries(Object.entries(binding)
+                .filter(([, id]) => id !== widget.id));
+              if (field) nextBindings[field] = widget.id;
+              const template = getRepeaterTemplate(container).map((candidate) =>
+                candidate.id === widget.id
+                  ? { ...candidate, props: { ...candidate.props, [property]: field ? `{{item.${field}}}` : "" } }
+                  : candidate,
+              );
+              return {
+                ...container,
+                props: {
+                  ...container.props,
+                  itemBinding: nextBindings,
+                  rowTemplate: { widgets: template },
+                },
+              };
+            }),
+          }
+        : item),
+    });
+  };
+
+  return (
+    <section className="inspector-section" aria-label="Repeater item binding">
+      <div className="section-label"><span>REPEATER BINDING</span></div>
+      <label className="field-label" htmlFor="repeater-binding">Dataset field</label>
+      <select
+        id="repeater-binding"
+        className="text-field"
+        value={bindingMatch?.[1] ?? ""}
+        onChange={(event) => bindField(event.currentTarget.value)}
+      >
+        <option value="">No field binding</option>
+        {fields.map((field) => <option key={field} value={field}>{field}</option>)}
+      </select>
+    </section>
+  );
+}
+
 export function RightInspector({ onToggle, onUpdates, onRename }: RightInspectorProps) {
   const [inspectorTab, setInspectorTab] = useState<"design" | "responsive" | "interactions">("design");
   const project = useStore((state) => state.project);
   const activeScreenId = useStore((state) => state.getActiveScreenId());
   const selectedIds = useStore((state) => state.selectedIds);
+  const activeRepeaterEdit = useStore((state) => state.activeRepeaterEdit);
   const filePath = useStore((state) => state.filePath);
   const rightPanelOpen = useStore((state) => state.rightPanelOpen);
   const displayPath = filePath ? filePath.replaceAll("\\", "/").split("/").at(-1) : "Not saved yet";
   const selectedScreen = project.screens.find((screen) => screen.id === activeScreenId);
   const selectedWidgets =
-    selectedScreen ? flattenActivePanelWidgets(selectedScreen.widgets).filter(
+    selectedScreen ? collectWidgetsDeep(selectedScreen.widgets).filter(
       (widget) => selectedIds.includes(widget.id),
     ) : [];
   const selectedWidget = selectedWidgets.length === 1 ? selectedWidgets[0] : undefined;
@@ -2138,6 +2374,17 @@ export function RightInspector({ onToggle, onUpdates, onRename }: RightInspector
       });
     }
   }, [selectedWidget?.id]);
+  useEffect(() => {
+    if (selectedWidget?.type === "repeater") {
+      useStore.getState().setActivePanelEdit(null);
+      useStore.getState().setActiveRepeaterEdit(selectedWidget.id);
+    } else if (
+      selectedWidget &&
+      selectedWidget.groupId !== activeRepeaterEdit
+    ) {
+      useStore.getState().setActiveRepeaterEdit(null);
+    }
+  }, [selectedWidget?.groupId, selectedWidget?.id, selectedWidget?.type]);
   useEffect(() => {
     if (!selectedWidget || !selectedScreen) setInspectorTab("design");
   }, [selectedScreen?.id, selectedWidget?.id]);
@@ -2224,6 +2471,12 @@ export function RightInspector({ onToggle, onUpdates, onRename }: RightInspector
             <StyleSection widgets={selectedWidgets} />
             {selectedWidget?.type === "dynamic-panel" && selectedScreen && (
               <DynamicPanelSection screen={selectedScreen} widget={selectedWidget} />
+            )}
+            {selectedWidget?.type === "repeater" && selectedScreen && (
+              <RepeaterSection screen={selectedScreen} widget={selectedWidget} />
+            )}
+            {selectedWidget && selectedScreen && (
+              <RepeaterBindingSection screen={selectedScreen} widget={selectedWidget} />
             )}
           </div>
         ) : inspectorTab === "responsive" && selectedWidget && selectedScreen ? (

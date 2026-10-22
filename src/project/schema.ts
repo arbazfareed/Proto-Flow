@@ -16,8 +16,8 @@ export type {
   InteractionRule,
 } from "./interactionSchema";
 
-export const PROJECT_SCHEMA_VERSION = "1.4.0";
-const LEGACY_PROJECT_SCHEMA_VERSIONS = new Set(["1.0.0", "1.1.0", "1.2.0", "1.3.0"]);
+export const PROJECT_SCHEMA_VERSION = "1.5.0";
+const LEGACY_PROJECT_SCHEMA_VERSIONS = new Set(["1.0.0", "1.1.0", "1.2.0", "1.3.0", "1.4.0"]);
 const COORDINATE_LIMIT = 100_000;
 const HexColorSchema = z
   .string()
@@ -314,6 +314,79 @@ export const ProtoFlowProjectSchema = z
             message: "Symbol instance must reference an existing symbol.",
           });
         }
+          if (widget.type === "repeater") {
+            const dataset = widget.props.dataset;
+            if (!Array.isArray(dataset) || dataset.length > 1_000 ||
+              dataset.some((row) => typeof row !== "object" || row === null || Array.isArray(row))) {
+              context.addIssue({
+                code: "custom",
+                path: [...widgetPath, "props", "dataset"],
+                message: "Repeater dataset must contain at most 1,000 record objects.",
+              });
+            }
+            if (Array.isArray(dataset)) {
+              for (const [rowIndex, row] of dataset.entries()) {
+                if (typeof row !== "object" || row === null || Array.isArray(row)) continue;
+                for (const [field, fieldValue] of Object.entries(row)) {
+                  if (fieldValue !== null &&
+                    typeof fieldValue !== "string" &&
+                    typeof fieldValue !== "number" &&
+                    typeof fieldValue !== "boolean") {
+                    context.addIssue({
+                      code: "custom",
+                      path: [...widgetPath, "props", "dataset", rowIndex, field],
+                      message: "Repeater fields must be text, numbers, booleans, or null.",
+                    });
+                  }
+                }
+              }
+            }
+            const layout = widget.props.layout;
+            if (layout !== undefined && layout !== "vertical" && layout !== "horizontal" && layout !== "grid") {
+              context.addIssue({
+                code: "custom",
+                path: [...widgetPath, "props", "layout"],
+                message: "Repeater layout must be vertical, horizontal, or grid.",
+              });
+            }
+            if (widget.props.gap !== undefined &&
+              (typeof widget.props.gap !== "number" || !Number.isFinite(widget.props.gap) || widget.props.gap < 0)) {
+              context.addIssue({
+                code: "custom",
+                path: [...widgetPath, "props", "gap"],
+                message: "Repeater gap must be a non-negative finite number.",
+              });
+            }
+            const template = widget.props.rowTemplate;
+            if (typeof template !== "object" || template === null || Array.isArray(template) ||
+              !Array.isArray((template as Record<string, unknown>).widgets)) {
+              context.addIssue({
+                code: "custom",
+                path: [...widgetPath, "props", "rowTemplate"],
+                message: "Repeater row template must contain a widgets array.",
+              });
+            } else {
+              const templateWidgets = (template as { widgets: Widget[] }).widgets;
+              validateWidgets(
+                templateWidgets,
+                [...widgetPath, "props", "rowTemplate", "widgets"],
+                panelDepth,
+              );
+              const bindings = widget.props.itemBinding;
+              if (bindings !== undefined &&
+                (typeof bindings !== "object" || bindings === null || Array.isArray(bindings) ||
+                  Object.entries(bindings).some(([field, id]) =>
+                    !field.trim() || typeof id !== "string" ||
+                    !templateWidgets.some((child) => child.id === id),
+                  ))) {
+                context.addIssue({
+                  code: "custom",
+                  path: [...widgetPath, "props", "itemBinding"],
+                  message: "Repeater bindings must map field names to widgets in its row template.",
+                });
+              }
+            }
+          }
           if (widget.type !== "dynamic-panel") continue;
           if (panelDepth >= 5) {
             context.addIssue({
@@ -428,13 +501,48 @@ function migrateDynamicPanelWidgets(widgets: unknown[]): unknown[] {
   return widgets.map((value) => {
     if (typeof value !== "object" || value === null || Array.isArray(value)) return value;
     const widget = value as Record<string, unknown>;
-    if (widget.type !== "dynamic-panel" ||
-      typeof widget.props !== "object" ||
+    if (typeof widget.props !== "object" ||
       widget.props === null ||
       Array.isArray(widget.props)) {
       return value;
     }
     const props = widget.props as Record<string, unknown>;
+    if (widget.type === "repeater") {
+      const rowTemplate = typeof props.rowTemplate === "object" && props.rowTemplate !== null &&
+        !Array.isArray(props.rowTemplate)
+        ? props.rowTemplate as Record<string, unknown>
+        : {};
+      return {
+        ...widget,
+        props: {
+          ...props,
+          rowTemplate: {
+            ...rowTemplate,
+            widgets: Array.isArray(rowTemplate.widgets)
+              ? migrateDynamicPanelWidgets(rowTemplate.widgets)
+              : [],
+          },
+          dataset: Array.isArray(props.dataset) ? props.dataset.slice(0, 1_000) : [],
+          layout: props.layout === "horizontal" || props.layout === "grid" ? props.layout : "vertical",
+          gap: typeof props.gap === "number" && Number.isFinite(props.gap) && props.gap >= 0
+            ? props.gap
+            : 8,
+          itemBinding: typeof props.itemBinding === "object" && props.itemBinding !== null &&
+            !Array.isArray(props.itemBinding) ? props.itemBinding : {},
+        },
+      };
+    }
+    if (widget.type !== "dynamic-panel") {
+      return {
+        ...widget,
+        props: Object.fromEntries(Object.entries(props).map(([key, child]) =>
+          key === "rowTemplate" && typeof child === "object" && child !== null &&
+          !Array.isArray(child) && "widgets" in child && Array.isArray(child.widgets)
+            ? [key, { ...child, widgets: migrateDynamicPanelWidgets(child.widgets) }]
+            : [key, child],
+        )),
+      };
+    }
     if (!Array.isArray(props.states)) return value;
     if (props.states.every((state) => typeof state === "string")) {
       const legacyNames = props.states.length > 0 ? props.states : ["State 1"];

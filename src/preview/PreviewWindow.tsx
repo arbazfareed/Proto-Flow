@@ -12,6 +12,12 @@ import {
   flattenActivePanelWidgets,
   getPanelStates,
 } from "../project/dynamicPanels";
+import {
+  getRepeaterDataset,
+  getRepeaterTemplate,
+  interpolateItem,
+  type RepeaterRecord,
+} from "../project/repeaters";
 import { DEVICE_PRESETS } from "../devices/catalog";
 import { getPreviewWindowSize } from "./windowSizing";
 import {
@@ -27,13 +33,18 @@ function stringProp(widget: Widget, key: string, fallback = ""): string {
   return typeof value === "string" ? value : fallback;
 }
 
-function getWidgetText(widget: Widget, runtime: PreviewRuntime, screenId: string): string {
+function getWidgetText(
+  widget: Widget,
+  runtime: PreviewRuntime,
+  screenId: string,
+  item?: RepeaterRecord,
+): string {
   const text = stringProp(
     widget,
     "text",
     stringProp(widget, "label", stringProp(widget, "title", "")),
   );
-  return runtime.interpolate(text, screenId);
+  return runtime.interpolate(item ? interpolateItem(text, item) : text, screenId);
 }
 
 function widgetStyle(widget: Widget): CSSProperties {
@@ -81,14 +92,16 @@ function PreviewWidget({
   runEvent,
   onError,
   transitionStyle,
+  item,
 }: {
   widget: Widget;
   runtime: PreviewRuntime;
   screenId: string;
   snapshot: PreviewRuntimeSnapshot;
-  runEvent: (widget: Widget, event: PreviewEvent) => void;
+  runEvent: (widget: Widget, event: PreviewEvent, item?: RepeaterRecord) => void;
   onError: (error: unknown) => void;
   transitionStyle?: CSSProperties;
+  item?: RepeaterRecord;
 }) {
   const [inputValue, setInputValue] = useState(stringProp(widget, "value"));
   const [checked, setChecked] = useState(
@@ -97,12 +110,12 @@ function PreviewWidget({
       : widget.type === "radio" ? widget.props.selected === true : widget.props.on === true,
   );
   const style = { ...widgetStyle(widget), ...transitionStyle };
-  const text = getWidgetText(widget, runtime, screenId);
+  const text = getWidgetText(widget, runtime, screenId, item);
   const commonHandlers = {
-    onClick: () => runEvent(widget, "onClick"),
-    onMouseEnter: () => runEvent(widget, "onHover"),
-    onTouchStart: (_event: TouchEvent<HTMLElement>) => runEvent(widget, "onTouchStart"),
-    onTouchEnd: (_event: TouchEvent<HTMLElement>) => runEvent(widget, "onTouchEnd"),
+    onClick: () => runEvent(widget, "onClick", item),
+    onMouseEnter: () => runEvent(widget, "onHover", item),
+    onTouchStart: (_event: TouchEvent<HTMLElement>) => runEvent(widget, "onTouchStart", item),
+    onTouchEnd: (_event: TouchEvent<HTMLElement>) => runEvent(widget, "onTouchEnd", item),
   };
   const handleChange = (event: ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
     const value = event.currentTarget.value;
@@ -119,15 +132,16 @@ function PreviewWidget({
         }
       }
     }
-    runEvent(widget, "onChange");
+    runEvent(widget, "onChange", item);
   };
 
   if (widget.type === "input" || widget.type === "search" || widget.type === "textarea") {
     const tag = widget.type;
-    const placeholder = runtime.interpolate(stringProp(widget, "placeholder", "Enter text..."), screenId);
+    const placeholderValue = stringProp(widget, "placeholder", "Enter text...");
+    const placeholder = runtime.interpolate(item ? interpolateItem(placeholderValue, item) : placeholderValue, screenId);
     return (
       <label className="preview-widget-label" style={{ ...style, overflow: "visible" }} {...commonHandlers}>
-        {stringProp(widget, "label") && <span>{runtime.interpolate(stringProp(widget, "label"), screenId)}</span>}
+        {stringProp(widget, "label") && <span>{runtime.interpolate(item ? interpolateItem(stringProp(widget, "label"), item) : stringProp(widget, "label"), screenId)}</span>}
         {tag === "textarea"
           ? <textarea aria-label={stringProp(widget, "label", "Preview text")} value={inputValue} placeholder={placeholder} onChange={handleChange} />
           : <input aria-label={stringProp(widget, "label", "Preview input")} type={tag === "search" ? "search" : stringProp(widget, "type", "text")} value={inputValue} placeholder={placeholder} onChange={handleChange} />}
@@ -136,7 +150,8 @@ function PreviewWidget({
   }
 
   if (["checkbox", "toggle", "radio"].includes(widget.type)) {
-    const label = runtime.interpolate(stringProp(widget, "label", widget.type), screenId);
+    const rawLabel = stringProp(widget, "label", widget.type);
+    const label = runtime.interpolate(item ? interpolateItem(rawLabel, item) : rawLabel, screenId);
     return (
       <label className={`preview-widget-choice is-${widget.type}`} style={style} {...commonHandlers}>
         <input
@@ -154,7 +169,7 @@ function PreviewWidget({
                 onError(error);
               }
             }
-            runEvent(widget, "onChange");
+            runEvent(widget, "onChange", item);
           }}
         />
         {label}
@@ -163,7 +178,8 @@ function PreviewWidget({
   }
 
   if (widget.type === "image") {
-    const src = stringProp(widget, "src", stringProp(widget, "url"));
+    const source = stringProp(widget, "src", stringProp(widget, "url"));
+    const src = runtime.interpolate(item ? interpolateItem(source, item) : source, screenId);
     return (
       <div className="preview-widget" style={style} {...commonHandlers}>
         {src ? <img src={src} alt={runtime.interpolate(stringProp(widget, "alt", text), screenId)} /> : text || "Image"}
@@ -183,6 +199,63 @@ function PreviewWidget({
       <ul className="preview-widget preview-list" style={style} {...commonHandlers}>
         {items.map((item, index) => <li key={`${index}-${item}`}>{runtime.interpolate(item, screenId)}</li>)}
       </ul>
+    );
+  }
+
+  if (widget.type === "repeater") {
+    const activeData = snapshot.repeaterData[widget.id];
+    const rows = Array.isArray(activeData) ? activeData as RepeaterRecord[] : getRepeaterDataset(widget);
+    const template = getRepeaterTemplate(widget);
+    const layout = widget.props.layout === "horizontal" || widget.props.layout === "grid"
+      ? widget.props.layout
+      : "vertical";
+    const gap = typeof widget.props.gap === "number" ? Math.max(0, widget.props.gap) : 8;
+    const rowStyle: CSSProperties = layout === "grid"
+      ? {
+          display: "grid",
+          gridTemplateColumns: `repeat(auto-fill, minmax(${Math.max(120, widget.width / 2)}px, 1fr))`,
+          gap,
+          alignContent: "start",
+          overflow: "visible",
+        }
+      : {
+          display: "flex",
+          flexDirection: layout === "horizontal" ? "row" : "column",
+          gap,
+          overflow: "visible",
+        };
+    return (
+      <div
+        className={`preview-widget preview-repeater is-${layout}`}
+        data-widget-type="repeater"
+        style={{ ...style, height: layout === "horizontal" ? widget.height : Math.max(widget.height, rows.length * (widget.height + gap)), overflow: "visible", ...rowStyle }}
+        {...commonHandlers}
+      >
+        {rows.map((record, index) => (
+          <div className="preview-repeater-row" key={`${widget.id}-${index}`} style={{
+            position: "relative",
+            flex: layout === "horizontal" ? `0 0 ${widget.width}px` : "0 0 auto",
+            width: widget.width,
+            height: widget.height,
+            overflow: "hidden",
+          }}>
+            {template
+              .filter((child) => child.visible && snapshot.visibility[child.id] !== false)
+              .map((child) => (
+                <PreviewWidget
+                  key={`${child.id}-${index}`}
+                  widget={child}
+                  runtime={runtime}
+                  screenId={screenId}
+                  snapshot={snapshot}
+                  runEvent={runEvent}
+                  onError={onError}
+                  item={record}
+                />
+              ))}
+          </div>
+        ))}
+      </div>
     );
   }
 
@@ -313,10 +386,10 @@ export function PreviewWindow() {
     return () => window.clearTimeout(timeout);
   }, [toast]);
 
-  const runEvent = useCallback((widget: Widget, event: PreviewEvent) => {
+  const runEvent = useCallback((widget: Widget, event: PreviewEvent, item?: RepeaterRecord) => {
     const runtime = runtimeRef.current;
     if (!runtime) return;
-    const errors = runtime.runEvent(widget, event);
+    const errors = runtime.runEvent(widget, event, item);
     setRuntimeSnapshot(runtime.snapshot());
     setRuntimeRevision((revision) => revision + 1);
     if (errors.length > 0) {
