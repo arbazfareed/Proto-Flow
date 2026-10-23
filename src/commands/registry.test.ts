@@ -44,6 +44,8 @@ describe("command registry", () => {
       toggleSnap: vi.fn(),
       checkForUpdates: vi.fn(),
       openPlugins: vi.fn(),
+      openVersionHistory: vi.fn(),
+      createCheckpoint: vi.fn(),
     };
     const commands = new Map(
       createCoreCommands(actions).map((command) => [command.id, command]),
@@ -54,6 +56,8 @@ describe("command registry", () => {
       "project.open",
       "project.save",
       "project.save-as",
+      "project.version-history",
+      "project.checkpoint",
       "edit.undo",
       "edit.redo",
       "canvas.toggle-grid",
@@ -73,5 +77,7 @@ describe("command registry", () => {
     expect(actions.toggleSnap).toHaveBeenCalledOnce();
     expect(actions.checkForUpdates).toHaveBeenCalledOnce();
     expect(actions.openPlugins).toHaveBeenCalledOnce();
+    expect(actions.openVersionHistory).toHaveBeenCalledOnce();
+    expect(actions.createCheckpoint).toHaveBeenCalledOnce();
   });
 });

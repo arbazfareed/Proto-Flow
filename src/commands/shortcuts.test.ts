@@ -11,6 +11,7 @@ function createActions(): ShortcutActions {
     togglePalette: vi.fn(),
     closePalette: vi.fn(),
     saveProject: vi.fn(),
+    createCheckpoint: vi.fn(),
     undo: vi.fn(),
     redo: vi.fn(),
     newProject: vi.fn(),
@@ -50,14 +51,37 @@ describe("global keyboard shortcuts", () => {
   it("routes save, undo and redo shortcuts", () => {
     const actions = createActions();
 
-    handleGlobalShortcut(createEvent("s", { shiftKey: true }), actions);
+    handleGlobalShortcut(createEvent("s"), actions);
     handleGlobalShortcut(createEvent("z"), actions);
     handleGlobalShortcut(createEvent("z", { shiftKey: true }), actions);
     handleGlobalShortcut(createEvent("y"), actions);
 
-    expect(actions.saveProject).toHaveBeenCalledWith(true);
+    expect(actions.saveProject).toHaveBeenCalledWith(false);
+    expect(actions.createCheckpoint).not.toHaveBeenCalled();
     expect(actions.undo).toHaveBeenCalledOnce();
     expect(actions.redo).toHaveBeenCalledTimes(2);
+  });
+
+  it("creates a checkpoint with Ctrl/Cmd+Shift+S without opening Save As", () => {
+    const actions = createActions();
+    const event = createEvent("s", { shiftKey: true });
+
+    handleGlobalShortcut(event, actions);
+
+    expect(event.preventDefault).toHaveBeenCalledOnce();
+    expect(actions.createCheckpoint).toHaveBeenCalledOnce();
+    expect(actions.saveProject).not.toHaveBeenCalled();
+  });
+
+  it("does not create a checkpoint while editing, or trigger the browser default", () => {
+    const actions = createActions();
+    const target = Object.assign(new EventTarget(), { tagName: "INPUT" });
+    const event = createEvent("s", { shiftKey: true, target });
+
+    handleGlobalShortcut(event, actions);
+
+    expect(event.preventDefault).toHaveBeenCalledOnce();
+    expect(actions.createCheckpoint).not.toHaveBeenCalled();
   });
 
   it("routes grid, new-project, and open-project shortcuts", () => {

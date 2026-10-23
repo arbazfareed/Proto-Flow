@@ -6,6 +6,7 @@ import {
   FilePlus2,
   FileText,
   FolderOpen,
+  History,
   Puzzle,
   Redo2,
   Undo2,
@@ -65,6 +66,8 @@ export interface CoreCommandActions {
   toggleSnap: () => void;
   checkForUpdates: () => void;
   openPlugins: () => void;
+  openVersionHistory: () => void;
+  createCheckpoint: () => void;
 }
 
 export function createCoreCommands(actions: CoreCommandActions): AppCommand[] {
@@ -97,9 +100,23 @@ export function createCoreCommands(actions: CoreCommandActions): AppCommand[] {
       id: "project.save-as",
       label: "Save Project As",
       keywords: ["duplicate", "file"],
-      shortcut: "Ctrl Shift S",
       icon: <FileText />,
       run: () => actions.saveProject(true),
+    },
+    {
+      id: "project.version-history",
+      label: "Version History",
+      keywords: ["checkpoint", "restore", "compare", "timeline"],
+      icon: <History />,
+      run: actions.openVersionHistory,
+    },
+    {
+      id: "project.checkpoint",
+      label: "Create Checkpoint",
+      keywords: ["version", "snapshot", "history"],
+      shortcut: "Ctrl Shift S",
+      icon: <FileText />,
+      run: actions.createCheckpoint,
     },
     {
       id: "edit.undo",
