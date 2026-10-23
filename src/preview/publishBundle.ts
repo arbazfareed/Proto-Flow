@@ -24,6 +24,27 @@ let loadedScreen = "";
 function screen() {
   return project.screens.find((item) => item.id === screenId) || project.screens[0];
 }
+function autoLayoutPosition(widget, activeScreen) {
+  const parent = activeScreen.widgets.find((item) => item.id === widget.groupId);
+  if (!parent || (parent.type !== "flex-row" && parent.type !== "flex-column")) return null;
+  const siblings = activeScreen.widgets.filter((item) => item.groupId === parent.id)
+    .sort((first, second) => first.zIndex - second.zIndex);
+  const index = siblings.findIndex((item) => item.id === widget.id);
+  const gap = Math.max(0, Number(parent.props.gap) || 12);
+  const padding = Math.max(0, Number(parent.props.padding) || 12);
+  const cursor = siblings.slice(0, Math.max(0, index)).reduce((total, item) =>
+    total + (parent.type === "flex-row" ? item.width : item.height) + gap, 0);
+  const horizontal = parent.type === "flex-row";
+  const crossSize = horizontal ? parent.height : parent.width;
+  const childSize = horizontal ? widget.height : widget.width;
+  const alignment = parent.props.alignItems;
+  const crossOffset = alignment === "center" ? Math.max(0, (crossSize - childSize) / 2)
+    : alignment === "flex-end" ? Math.max(0, crossSize - childSize) : 0;
+  return {
+    x: parent.x + padding + (horizontal ? cursor : crossOffset),
+    y: parent.y + padding + (horizontal ? crossOffset : cursor),
+  };
+}
 function variable(name, activeScreen, localVariables) {
   if (localVariables && Object.prototype.hasOwnProperty.call(localVariables, name)) return localVariables[name];
   const item = project.variables.find((entry) => entry.name === name && entry.scope === "screen" && entry.screenId === activeScreen)
@@ -368,11 +389,17 @@ function bindWidgetEvents(element, widget, item) {
   }, { passive: true });
 }
 function renderWidget(widget, activeScreen, item) {
-  const element = document.createElement(widget.type === "button" || widget.type === "icon-button" ? "button" : "div");
+  const element = document.createElement(widget.type === "button" || widget.type === "icon-button" ? "button"
+    : widget.type === "card" ? "article"
+      : widget.type === "alert" ? "aside"
+        : widget.type === "chart" || widget.type === "video" ? "figure"
+          : widget.type === "flex-row" || widget.type === "flex-column" || widget.type === "container" ? "section"
+            : "div");
   element.className = "widget";
   element.dataset.widgetId = widget.id;
-  element.style.left = widget.x + "px";
-  element.style.top = widget.y + "px";
+  const autoPosition = autoLayoutPosition(widget, activeScreen);
+  element.style.left = (autoPosition?.x ?? widget.x) + "px";
+  element.style.top = (autoPosition?.y ?? widget.y) + "px";
   element.style.width = widget.width + "px";
   element.style.height = widget.height + "px";
   element.style.zIndex = String(widget.zIndex);
@@ -439,6 +466,140 @@ function renderWidget(widget, activeScreen, item) {
     element.append(list);
   } else if (widget.type === "text" && widget.props.richText === true) {
     renderRichText(element, widget, activeScreen, item, localVariables);
+  } else if (widget.type === "card") {
+    element.classList.add("card-widget");
+    const imageSource = text(widget.props.imageSrc ?? widget.props.src ?? "", activeScreen.id, item, widget);
+    const image = document.createElement(imageSource ? "img" : "div");
+    if (imageSource) {
+      image.src = imageSource;
+      image.alt = text(widget.props.imageAlt ?? widget.props.title ?? "", activeScreen.id, item, widget);
+    } else {
+      image.className = "card-image-placeholder";
+      image.setAttribute("aria-hidden", "true");
+      image.textContent = "Image";
+    }
+    const content = document.createElement("div");
+    content.className = "card-content";
+    const heading = document.createElement("h3");
+    heading.textContent = text(widget.props.title ?? shownText ?? "Product card", activeScreen.id, item, widget);
+    const description = document.createElement("p");
+    description.textContent = text(widget.props.subtitle ?? "", activeScreen.id, item, widget);
+    const action = document.createElement("button");
+    action.type = "button";
+    action.textContent = text(widget.props.actionLabel ?? "Learn more", activeScreen.id, item, widget);
+    action.tabIndex = -1;
+    content.append(heading, description, action);
+    element.append(image, content);
+  } else if (widget.type === "chart") {
+    element.classList.add("chart-widget");
+    const title = document.createElement("figcaption");
+    title.textContent = text(widget.props.label ?? shownText ?? "Chart", activeScreen.id, item, widget);
+    element.setAttribute("aria-label", title.textContent);
+    const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+    svg.setAttribute("viewBox", "0 0 200 100");
+    svg.setAttribute("role", "img");
+    svg.setAttribute("aria-label", title.textContent + " " + String(widget.props.chartType ?? "bar") + " chart");
+    const values = (Array.isArray(widget.props.values) ? widget.props.values : [38, 68, 50, 88, 62])
+      .slice(0, 8).map((value) => Number.isFinite(value) ? Math.max(0, value) : 0);
+    const maximum = Math.max(1, ...values);
+    if (widget.props.chartType === "line") {
+      const line = document.createElementNS(svg.namespaceURI, "polyline");
+      line.setAttribute("points", values.map((value, index) =>
+        (12 + index * (176 / Math.max(1, values.length - 1))) + "," + (88 - value / maximum * 70)).join(" "));
+      line.setAttribute("fill", "none");
+      line.setAttribute("stroke", "#8b69ed");
+      line.setAttribute("stroke-width", "3");
+      svg.append(line);
+    } else if (widget.props.chartType === "pie") {
+      const total = values.reduce((sum, value) => sum + value, 0) || 1;
+      let offset = 0;
+      values.forEach((value, index) => {
+        const segment = document.createElementNS(svg.namespaceURI, "circle");
+        segment.setAttribute("cx", "100");
+        segment.setAttribute("cy", "50");
+        segment.setAttribute("r", "34");
+        segment.setAttribute("fill", "none");
+        segment.setAttribute("stroke", ["#8b69ed", "#55b6a8", "#e39b54", "#6579d8"][index % 4]);
+        segment.setAttribute("stroke-width", "22");
+        segment.setAttribute("stroke-dasharray", (value / total * 214) + " 214");
+        segment.setAttribute("stroke-dashoffset", String(-offset));
+        segment.setAttribute("transform", "rotate(-90 100 50)");
+        offset += value / total * 214;
+        svg.append(segment);
+      });
+    } else {
+      values.forEach((value, index) => {
+        const height = value / maximum * 70;
+        const bar = document.createElementNS(svg.namespaceURI, "rect");
+        bar.setAttribute("x", String(12 + index * 23));
+        bar.setAttribute("y", String(88 - height));
+        bar.setAttribute("width", "18");
+        bar.setAttribute("height", String(height));
+        bar.setAttribute("rx", "3");
+        bar.setAttribute("fill", index % 2 ? "#55b6a8" : "#8b69ed");
+        svg.append(bar);
+      });
+    }
+    element.append(title, svg);
+  } else if (widget.type === "alert") {
+    element.classList.add("alert-widget", "is-" + String(widget.props.variant ?? "info"));
+    element.setAttribute("role", widget.props.variant === "error" ? "alert" : "status");
+    const heading = document.createElement("strong");
+    heading.textContent = text(widget.props.label ?? shownText ?? "Changes saved", activeScreen.id, item, widget);
+    const description = document.createElement("span");
+    description.textContent = text(widget.props.subtitle ?? "", activeScreen.id, item, widget);
+    element.append(heading, description);
+    if (widget.props.dismissible === true) {
+      const close = document.createElement("button");
+      close.type = "button";
+      close.setAttribute("aria-label", "Dismiss alert");
+      close.textContent = "×";
+      close.addEventListener("click", () => element.remove());
+      element.append(close);
+    }
+  } else if (widget.type === "skeleton") {
+    element.classList.add("skeleton-widget");
+    element.setAttribute("aria-busy", "true");
+    element.setAttribute("aria-label", "Loading content");
+    element.innerHTML = "<span></span><span></span><span></span>";
+  } else if (widget.type === "video") {
+    element.classList.add("video-widget");
+    const source = text(widget.props.src ?? "", activeScreen.id, item, widget);
+    if (source) {
+      const video = document.createElement("video");
+      video.controls = true;
+      video.src = source;
+      video.poster = text(widget.props.poster ?? "", activeScreen.id, item, widget);
+      video.setAttribute("aria-label", shownText || "Video");
+      element.append(video);
+    } else {
+      const placeholder = document.createElement("div");
+      placeholder.className = "video-placeholder";
+      placeholder.setAttribute("role", "img");
+      placeholder.setAttribute("aria-label", (shownText || "Video") + " placeholder");
+      placeholder.textContent = "▶";
+      element.append(placeholder);
+    }
+    const caption = document.createElement("figcaption");
+    caption.textContent = shownText || "Video";
+    element.append(caption);
+  } else if (widget.type === "flex-row" || widget.type === "flex-column" || widget.type === "container") {
+    element.classList.add("layout-widget", "is-" + widget.type);
+    element.setAttribute("aria-label", shownText || widget.type.replaceAll("-", " "));
+    element.style.display = widget.type === "container" ? "block" : "flex";
+    element.style.flexDirection = widget.type === "flex-row" ? "row" : "column";
+    element.style.gap = Math.max(0, Number(widget.props.gap) || 12) + "px";
+    element.style.padding = Math.max(0, Number(widget.props.padding) || 12) + "px";
+    element.style.alignItems = typeof widget.props.alignItems === "string" ? widget.props.alignItems : "center";
+    element.style.justifyContent = typeof widget.props.justifyContent === "string" ? widget.props.justifyContent : "flex-start";
+  } else if (widget.type === "spacer") {
+    element.classList.add("spacer-widget");
+    element.setAttribute("aria-hidden", "true");
+  } else if (widget.type === "mobile-app" || widget.type === "web-app") {
+    element.classList.add("icon-mark", "is-" + widget.type);
+    element.setAttribute("role", "img");
+    element.setAttribute("aria-label", shownText || widget.type.replaceAll("-", " "));
+    element.textContent = widget.type === "mobile-app" ? "▯" : "▱";
   } else if (widget.type === "repeater") {
     const rows = repeaterRows(repeaterData.get(widget.id) ?? widget.props.dataset ?? []);
     const template = widget.props.rowTemplate?.widgets || [];
@@ -573,6 +734,7 @@ export const PREVIEW_RUNTIME_STYLES = `*{box-sizing:border-box}html,body{margin:
 .toolbar button,.toolbar select{min-height:32px;border:1px solid #494353;border-radius:6px;padding:5px 9px;background:#302b39;color:inherit}
 .toolbar button:disabled{opacity:.45}.stage-wrap{padding:28px;overflow:auto}.stage{position:relative;margin:0 auto;background:#fff;color:#24212b;overflow:hidden;box-shadow:0 12px 42px #0007}
 .widget{position:absolute;overflow:hidden;white-space:pre-wrap}.widget img{width:100%;height:100%;object-fit:cover}.widget textarea,.widget input{max-width:100%;font:inherit}.widget:hover{filter:brightness(.96)}.widget:focus-visible{outline:2px solid #8b69ed;outline-offset:2px}.widget.touch-feedback{box-shadow:0 0 0 8px #9b7cf233;border-radius:8px}#stage[data-input-mode="touch"] .widget,#stage[data-input-mode="both"] .widget{touch-action:none}
+.card-widget{display:flex;flex-direction:column;border:1px solid #d9d5e0;border-radius:10px;background:#fff;box-shadow:0 4px 14px #28203618}.card-widget>img,.card-image-placeholder{width:100%;height:43%;min-height:48px;object-fit:cover}.card-image-placeholder{display:grid;place-items:center;color:#767187;background:linear-gradient(135deg,#ece9f4,#d9d6e3);font-size:11px}.card-content{display:flex;min-height:0;flex:1;flex-direction:column;align-items:flex-start;gap:4px;padding:10px 12px}.card-content h3,.card-content p{max-width:100%;margin:0;overflow:hidden;text-overflow:ellipsis}.card-content h3{font-size:14px;line-height:1.3}.card-content p{color:#66616f;font-size:11px;line-height:1.35}.card-content button{margin-top:auto;padding:4px 8px;border:0;border-radius:4px;color:#fff;background:#7454cf;font:inherit;font-size:10px}.chart-widget{display:flex;flex-direction:column;gap:4px;margin:0;padding:8px 10px;border:1px solid #ddd9e5;border-radius:8px;color:#7454cf;background:#fff}.chart-widget figcaption{overflow:hidden;color:#45414c;font-size:11px;font-weight:650;text-overflow:ellipsis;white-space:nowrap}.chart-widget svg{width:100%;height:calc(100% - 20px)}.alert-widget{display:flex;align-items:flex-start;gap:8px;padding:10px 12px;border:1px solid #acd7ff;border-radius:7px;color:#16466f;background:#eff8ff}.alert-widget.is-success{border-color:#9ed9bb;color:#17653e;background:#effbf4}.alert-widget.is-warning{border-color:#f1d293;color:#74500f;background:#fff9e9}.alert-widget.is-error{border-color:#efb0b5;color:#892c35;background:#fff2f3}.alert-widget>strong{flex:1 1 auto;font-size:11px}.alert-widget>span{font-size:10px}.alert-widget>button{border:0;color:inherit;background:transparent;font-size:18px;cursor:pointer}.skeleton-widget{display:flex;flex-direction:column;justify-content:center;gap:8px;padding:12px;background:#f1f0f4}.skeleton-widget span{height:12px;border-radius:5px;background:linear-gradient(90deg,#e5e3e9 25%,#f5f4f7 50%,#e5e3e9 75%);background-size:200% 100%;animation:protoflow-shimmer 1.35s ease-in-out infinite}.skeleton-widget span:nth-child(2){width:78%}.skeleton-widget span:nth-child(3){width:56%}@keyframes protoflow-shimmer{to{background-position:-200% 0}}@media(prefers-reduced-motion:reduce){.skeleton-widget span{animation:none}}.video-widget{margin:0;border-radius:8px;background:#171923}.video-widget video{width:100%;height:100%;object-fit:cover}.video-placeholder{display:grid;width:100%;height:calc(100% - 20px);place-items:center;color:#fff;background:linear-gradient(145deg,#2b3041,#171923);font-size:30px}.video-widget figcaption{position:absolute;right:0;bottom:0;left:0;padding:5px 9px;color:#fff;background:#11131bd9;font-size:11px}.layout-widget{border:1px dashed #8d7eb7;border-radius:7px;background:#5a4a8020}.spacer-widget{border:1px dashed #b6a6df;background:repeating-linear-gradient(135deg,#8b69ed12 0 6px,transparent 6px 12px)}.icon-mark{display:grid;place-items:center;border:1px solid #8b69ed;border-radius:9px;color:#7454cf;background:#f3efff;font-size:32px}
 @keyframes protoflow-panel-fade{from{opacity:0}to{opacity:1}}
 @keyframes protoflow-panel-slide-left{from{translate:20px 0}to{translate:0 0}}
 @keyframes protoflow-panel-slide-right{from{translate:-20px 0}to{translate:0 0}}

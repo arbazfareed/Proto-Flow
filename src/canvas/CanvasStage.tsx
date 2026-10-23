@@ -18,6 +18,7 @@ import type { Layer as KonvaLayer } from "konva/lib/Layer";
 import { invoke, isTauri } from "@tauri-apps/api/core";
 import { getCurrentWebview } from "@tauri-apps/api/webview";
 import { useStore } from "../store";
+import { getAutoLayoutPositions } from "../project/widgetLayout";
 import {
   getScreenBreakpoints,
   getWidgetsMissingBreakpointOverrides,
@@ -831,6 +832,10 @@ export function CanvasStage({
         activeScreen.device?.height ?? DEFAULT_DEVICE_PRESET.viewport.height,
       )
     : [...baseScreenWidgets].sort((first, second) => first.zIndex - second.zIndex);
+  const autoLayoutPositions = useMemo(
+    () => getAutoLayoutPositions(screenWidgets),
+    [screenWidgets],
+  );
   const selectedParentWidgetIds = useMemo(
     () => getSelectedParentWidgetIds(screenWidgets, selectedIds),
     [screenWidgets, selectedIds],
@@ -2748,7 +2753,9 @@ export function CanvasStage({
                   zoom={zoom}
                   activeTool={activeTool}
                   position={
-                    previewPositions[widget.id] ?? { x: widget.x, y: widget.y }
+                    previewPositions[widget.id] ??
+                    autoLayoutPositions.get(widget.id) ??
+                    { x: widget.x, y: widget.y }
                   }
                   onEdit={() => beginWidgetTextEdit(widget)}
                   symbolDefinition={symbols.find((symbol) => symbol.id === widget.symbolId)}

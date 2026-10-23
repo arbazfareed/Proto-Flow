@@ -24,6 +24,7 @@ import {
   isRepeaterItemVisible,
   type RepeaterRecord,
 } from "../project/repeaters";
+import { getAutoLayoutPositions, type WidgetPosition } from "../project/widgetLayout";
 import { DEVICE_PRESETS, findDevicePreset } from "../devices/catalog";
 import type { DevicePreset } from "../devices/types";
 import { getPreviewWindowSize } from "./windowSizing";
@@ -59,15 +60,15 @@ function getWidgetText(
   return runtime.interpolate(text, screenId, item, widget);
 }
 
-function widgetStyle(widget: Widget): CSSProperties {
+function widgetStyle(widget: Widget, position?: WidgetPosition): CSSProperties {
   const fill = widget.style.fill;
   const stroke = widget.style.stroke;
   const radius = widget.style.cornerRadius;
   const textWidget = ["text", "label", "paragraph", "link", "code"].includes(widget.type);
   return {
     position: "absolute",
-    left: widget.x,
-    top: widget.y,
+    left: position?.x ?? widget.x,
+    top: position?.y ?? widget.y,
     width: widget.width,
     height: widget.height,
     zIndex: widget.zIndex,
@@ -105,6 +106,7 @@ function PreviewWidget({
   onError,
   transitionStyle,
   item,
+  layoutPosition,
   controlValues,
   onControlValueChange,
   onGestureFeedback,
@@ -117,6 +119,7 @@ function PreviewWidget({
   onError: (error: unknown) => void;
   transitionStyle?: CSSProperties;
   item?: RepeaterRecord;
+  layoutPosition?: WidgetPosition;
   controlValues: Record<string, string | boolean>;
   onControlValueChange: (key: string, value: string | boolean) => void;
   onGestureFeedback: (event: PreviewEvent, x: number, y: number) => void;
@@ -126,6 +129,7 @@ function PreviewWidget({
   const longPressFired = useRef(false);
   const multiTouchFired = useRef(false);
   const lastTap = useRef(0);
+  const [dismissed, setDismissed] = useState(false);
   const controlKey = item ? `${widget.id}:${JSON.stringify(item)}` : widget.id;
   const storedControlValue = controlValues[controlKey];
   const inputValue = typeof storedControlValue === "string"
@@ -136,7 +140,7 @@ function PreviewWidget({
     : widget.type === "checkbox"
       ? widget.props.checked === true
       : widget.type === "radio" ? widget.props.selected === true : widget.props.on === true;
-  const style = { ...widgetStyle(widget), ...transitionStyle };
+  const style = { ...widgetStyle(widget, layoutPosition), ...transitionStyle };
   const text = getWidgetText(widget, runtime, screenId, item);
   const richRuns = widget.type === "text" && widget.props.richText === true
     ? Array.isArray(widget.props.richTextRuns)
@@ -256,6 +260,162 @@ function PreviewWidget({
       }
     },
   };
+
+  if (dismissed) return null;
+
+  if (widget.type === "card") {
+    const imageSource = stringProp(widget, "imageSrc", stringProp(widget, "src"));
+    const title = runtime.interpolate(stringProp(widget, "title", text || "Product card"), screenId, item, widget);
+    const subtitle = runtime.interpolate(stringProp(widget, "subtitle", "A short description goes here."), screenId, item, widget);
+    const actionLabel = runtime.interpolate(stringProp(widget, "actionLabel", "Learn more"), screenId, item, widget);
+    return (
+      <article className="preview-widget preview-card" style={style} {...commonHandlers}>
+        <div className="preview-card-media">
+          {imageSource
+            ? <img src={runtime.interpolate(imageSource, screenId, item, widget)} alt={stringProp(widget, "imageAlt", title)} />
+            : <span aria-hidden="true">Image</span>}
+        </div>
+        <div className="preview-card-copy">
+          <h3>{title}</h3>
+          <p>{subtitle}</p>
+          <button type="button" tabIndex={-1}>{actionLabel}</button>
+        </div>
+      </article>
+    );
+  }
+
+  if (widget.type === "chart") {
+    const values = (Array.isArray(widget.props.values) ? widget.props.values : [38, 68, 50, 88, 62])
+      .slice(0, 8)
+      .map((value) => typeof value === "number" && Number.isFinite(value) ? Math.max(0, value) : 0);
+    const maxValue = Math.max(1, ...values);
+    const titleId = `${widget.id}-chart-title`;
+    const chartType = stringProp(widget, "chartType", "bar");
+    const points = values.map((value, index) =>
+      `${12 + index * (176 / Math.max(1, values.length - 1))},${88 - value / maxValue * 70}`,
+    ).join(" ");
+    const total = values.reduce((sum, value) => sum + value, 0) || 1;
+    let pieOffset = 0;
+    return (
+      <figure className="preview-widget preview-chart" style={style} {...commonHandlers}>
+        <figcaption id={titleId}>{text || "Chart"}</figcaption>
+        <svg viewBox="0 0 200 100" role="img" aria-labelledby={titleId}>
+          {chartType === "line"
+            ? <polyline points={points} fill="none" stroke="currentColor" strokeWidth="3" strokeLinejoin="round" strokeLinecap="round" />
+            : chartType === "pie"
+              ? values.map((value, index) => {
+                  const segment = (
+                    <circle
+                      key={index}
+                      cx="100"
+                      cy="52"
+                      r="34"
+                      fill="none"
+                      stroke={["#8b69ed", "#55b6a8", "#e39b54", "#6579d8", "#ce6b83"][index % 5]}
+                      strokeWidth="22"
+                      strokeDasharray={`${value / total * 214} 214`}
+                      strokeDashoffset={-pieOffset}
+                      transform="rotate(-90 100 52)"
+                    />
+                  );
+                  pieOffset += value / total * 214;
+                  return segment;
+                })
+              : values.map((value, index) => {
+                  const width = 18;
+                  const height = value / maxValue * 70;
+                  return (
+                    <rect
+                      key={index}
+                      x={12 + index * 23}
+                      y={88 - height}
+                      width={width}
+                      height={height}
+                      rx="3"
+                      fill={index === 0 ? "#8b69ed" : "#55b6a8"}
+                    />
+                  );
+                })}
+        </svg>
+      </figure>
+    );
+  }
+
+  if (widget.type === "alert") {
+    const variant = stringProp(widget, "variant", "info");
+    return (
+      <aside className={`preview-widget preview-alert is-${variant}`} role={variant === "error" ? "alert" : "status"} style={style} {...commonHandlers}>
+        <span className="preview-alert-icon" aria-hidden="true">!</span>
+        <span className="preview-alert-copy">
+          <strong>{runtime.interpolate(stringProp(widget, "label", "Changes saved"), screenId, item, widget)}</strong>
+          <span>{runtime.interpolate(stringProp(widget, "subtitle", ""), screenId, item, widget)}</span>
+        </span>
+        {widget.props.dismissible === true && (
+          <button type="button" aria-label="Dismiss alert" onClick={(event) => {
+            event.stopPropagation();
+            setDismissed(true);
+          }}>×</button>
+        )}
+      </aside>
+    );
+  }
+
+  if (widget.type === "skeleton") {
+    return (
+      <div className="preview-widget preview-skeleton" aria-busy="true" aria-label="Loading content" style={style} {...commonHandlers}>
+        <span /><span /><span />
+      </div>
+    );
+  }
+
+  if (widget.type === "video") {
+    const source = stringProp(widget, "src");
+    const poster = stringProp(widget, "poster");
+    return (
+      <figure className="preview-widget preview-video" style={style} {...commonHandlers}>
+        {source
+          ? <video controls src={source} poster={poster || undefined} aria-label={text || "Video"} />
+          : <div className="preview-video-placeholder" aria-label="Video preview">
+              {poster ? <img src={poster} alt="" /> : <span aria-hidden="true">Video</span>}
+              <span className="preview-video-play" aria-hidden="true">▶</span>
+              <figcaption>{text || "Video"}</figcaption>
+            </div>}
+      </figure>
+    );
+  }
+
+  if (widget.type === "mobile-app" || widget.type === "web-app") {
+    return (
+      <div className={`preview-widget preview-icon-mark is-${widget.type}`} role="img" aria-label={widget.type === "mobile-app" ? "Mobile app icon" : "Web app icon"} style={style} {...commonHandlers}>
+        {widget.type === "mobile-app" ? <span aria-hidden="true">▯</span> : <span aria-hidden="true">▱</span>}
+      </div>
+    );
+  }
+
+  if (widget.type === "spacer") {
+    return <div className="preview-widget preview-spacer" aria-hidden="true" style={style} {...commonHandlers} />;
+  }
+
+  if (widget.type === "flex-row" || widget.type === "flex-column" || widget.type === "container") {
+    return (
+      <section
+        className={`preview-widget preview-layout is-${widget.type}`}
+        aria-label={stringProp(widget, "label", widget.type.replaceAll("-", " "))}
+        style={{
+          ...style,
+          display: widget.type === "container" ? "block" : "flex",
+          flexDirection: widget.type === "flex-row" ? "row" : "column",
+          gap: typeof widget.props.gap === "number" ? widget.props.gap : 12,
+          padding: typeof widget.props.padding === "number" ? widget.props.padding : 12,
+          alignItems: stringProp(widget, "alignItems", "center"),
+          justifyContent: stringProp(widget, "justifyContent", "flex-start"),
+        }}
+        {...commonHandlers}
+      >
+        <span className="preview-layout-label">{stringProp(widget, "label", widget.type.replaceAll("-", " "))}</span>
+      </section>
+    );
+  }
   useEffect(() => () => window.clearTimeout(longPressTimer.current), []);
   const handleChange = (event: ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
     const value = event.currentTarget.value;
@@ -750,6 +910,7 @@ export function PreviewWindow() {
   const frames = selectedDevices.map((preset) => {
     const viewport = getPreviewViewport(preset, rotated);
     const responsiveWidgets = resolvePreviewWidgets(activeScreen, viewport);
+    const layoutPositions = getAutoLayoutPositions(responsiveWidgets);
     const nestedWidgets = collectWidgetsDeep(responsiveWidgets);
     const visibleWidgets = flattenActivePanelWidgets(
       responsiveWidgets,
@@ -790,6 +951,7 @@ export function PreviewWindow() {
                 runEvent={runEvent}
                 onError={(error) => setToast(error instanceof Error ? error.message : "Preview control failed.")}
                 transitionStyle={transitionStyle}
+                layoutPosition={layoutPositions.get(widget.id)}
                 controlValues={controlValues}
                 onControlValueChange={(key, value) => setControlValues((current) => ({
                   ...current,

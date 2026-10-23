@@ -2,6 +2,7 @@ import {
   Activity,
   AlignLeft,
   AlignJustify,
+  AppWindow,
   AlertCircle,
   ArrowRight,
   Award,
@@ -23,6 +24,8 @@ import {
   CloudOff,
   Component,
   CodeXml,
+  Columns3,
+  Container,
   ContactRound,
   FileText,
   Folder,
@@ -69,10 +72,12 @@ import {
   Search,
   SeparatorHorizontal,
   Smartphone,
+  Rows3,
   SlidersHorizontal,
   Sparkles,
   Spline,
   Shapes,
+  Space,
   Square,
   SquareChevronDown,
   SquareStack,
@@ -96,6 +101,8 @@ import type { DeviceCategory } from "../devices/types";
 export type WidgetCategory =
   | "shape"
   | "text"
+  | "layout"
+  | "media"
   | "widget"
   | "form"
   | "display"
@@ -135,9 +142,15 @@ const navigation = (icon: LucideIcon) => definition(icon, WIDGET_COLOR, "navigat
 const data = (icon: LucideIcon) => definition(icon, WIDGET_COLOR, "data");
 const advanced = (icon: LucideIcon) => definition(icon, ADVANCED_COLOR, "advanced");
 const container = (icon: LucideIcon) => definition(icon, CONTAINER_COLOR, "container");
+const layout = (icon: LucideIcon) => definition(icon, CONTAINER_COLOR, "layout");
+const media = (icon: LucideIcon) => definition(icon, WIDGET_COLOR, "media");
 const symbol = (icon: LucideIcon) => definition(icon, SYMBOL_COLOR, "symbol");
 
 export const WIDGET_ICON_REGISTRY: Record<string, WidgetIconDefinition> = {
+  container: layout(Container),
+  "flex-row": layout(Rows3),
+  "flex-column": layout(Columns3),
+  spacer: layout(Space),
   rectangle: shape(Square),
   ellipse: shape(Circle),
   circle: shape(Circle),
@@ -198,9 +211,11 @@ export const WIDGET_ICON_REGISTRY: Record<string, WidgetIconDefinition> = {
   searchBar: form(Search),
   form: form(FileText),
 
-  image: widget(Image),
+  image: media(Image),
   avatar: display(CircleUser),
-  video: display(Video),
+  video: media(Video),
+  "mobile-app": media(Smartphone),
+  "web-app": media(AppWindow),
   badge: display(Badge),
   chip: display(Tags),
   tag: display(Tag),

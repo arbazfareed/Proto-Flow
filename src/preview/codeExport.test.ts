@@ -20,6 +20,36 @@ function options(overrides: Partial<CodeExportOptions> = {}): CodeExportOptions 
 }
 
 describe("React code export preparation", () => {
+  it("exports learning widgets with semantic elements and flex-based layout", () => {
+    const project = createEmptyProject("Learning widgets");
+    project.screens[0].widgets.push(
+      {
+        id: crypto.randomUUID(), type: "card", x: 10, y: 20, width: 260, height: 196,
+        rotation: 0, opacity: 1, visible: true, locked: false, zIndex: 1, style: {},
+        props: { title: "Card title", subtitle: "Description", imageSrc: "", actionLabel: "Open" },
+      },
+      {
+        id: crypto.randomUUID(), type: "chart", x: 20, y: 30, width: 240, height: 160,
+        rotation: 0, opacity: 1, visible: true, locked: false, zIndex: 2, style: {},
+        props: { label: "Activity", chartType: "line", values: [10, 40, 25] },
+      },
+      {
+        id: crypto.randomUUID(), type: "alert", x: 30, y: 40, width: 240, height: 72,
+        rotation: 0, opacity: 1, visible: true, locked: false, zIndex: 3, style: {},
+        props: { label: "Saved", subtitle: "All changes saved", variant: "success" },
+      },
+    );
+    const source = generateSingleFileJsx(project);
+
+    expect(source).toContain("<article");
+    expect(source).toContain("<figure");
+    expect(source).toContain("<aside");
+    expect(source).toContain("<polyline");
+    expect(source).toContain("aria-busy=\"true\"");
+    expect(source).toContain("layoutPosition(widget)");
+    expect(source).toContain("const crossOffset = parent.props.alignItems === \"center\"");
+  });
+
   it("exports rich text as semantic JSX and keeps variable interpolation in runs", () => {
     const project = createEmptyProject("Rich text");
     project.variables.push({

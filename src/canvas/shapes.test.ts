@@ -164,8 +164,42 @@ describe("canvas shape registry", () => {
     }
   });
 
+  it("registers flex layout, spacer, and web/mobile learning elements", () => {
+    expect(ELEMENT_LIBRARY_TOOL_TYPES).toEqual(expect.arrayContaining([
+      "container",
+      "flex-row",
+      "flex-column",
+      "spacer",
+      "mobile-app",
+      "web-app",
+    ]));
+    expect(createShapeWidget("flex-row", 0, 0).props).toMatchObject({
+      layout: "flex-row",
+      gap: 12,
+      padding: 12,
+    });
+    expect(createShapeWidget("card", 0, 0).props).toMatchObject({
+      title: "Product card",
+      subtitle: expect.any(String),
+      imageSrc: "",
+      actionLabel: "Learn more",
+    });
+    expect(createShapeWidget("chart", 0, 0).props).toMatchObject({
+      chartType: "bar",
+      values: expect.any(Array),
+    });
+    expect(createShapeWidget("mobile-app", 0, 0).props.iconName).toBe("Smartphone");
+    expect(createShapeWidget("web-app", 0, 0).props.iconName).toBe("AppWindow");
+  });
+
   it("renders a broad set of valid Lucide SVGs for canvas icons", () => {
-    expect(CANVAS_ICON_NAMES.length).toBeGreaterThanOrEqual(60);
+    expect(CANVAS_ICON_NAMES.length).toBeGreaterThanOrEqual(70);
+    expect(CANVAS_ICON_NAMES).toEqual(expect.arrayContaining([
+      "Smartphone",
+      "TabletSmartphone",
+      "AppWindow",
+      "CodeXml",
+    ]));
     const camera = renderCanvasIconSvg("Camera", "#f0abfc", 2);
     expect(camera).toContain("<svg");
     expect(camera).toContain("<path");

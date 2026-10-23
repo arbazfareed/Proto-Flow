@@ -4,6 +4,7 @@ import { createPortal } from "react-dom";
 import {
   AlertTriangle,
   CircleSlash,
+  CodeXml,
   Eye,
   EyeOff,
   Lock,
@@ -25,14 +26,17 @@ import {
   getWidgetIconDefinition,
   WidgetIcon,
 } from "./widgetIcons";
+import { getWidgetLearningGuide } from "../project/learningWidgets";
 
 const TOOL_GROUPS = [
   { id: "container", label: "Containers" },
+  { id: "layout", label: "Layout" },
   { id: "advanced", label: "Advanced" },
   { id: "shape", label: "Shapes" },
   { id: "text", label: "Text" },
   { id: "form", label: "Forms" },
   { id: "display", label: "Display" },
+  { id: "media", label: "Media" },
   { id: "navigation", label: "Navigation" },
   { id: "data", label: "Data" },
   { id: "symbol", label: "Symbols" },
@@ -101,6 +105,7 @@ function ElementLibraryContents({
   const searchRef = useRef<HTMLInputElement>(null);
   const suppressClickAfterDragRef = useRef(false);
   const [query, setQuery] = useState("");
+  const [learnMode, setLearnMode] = useState(false);
   const matchingToolTypes = ELEMENT_LIBRARY_TOOL_TYPES.filter((tool) =>
     `${tool} ${getShapeToolDefinition(tool)?.label ?? tool}`
       .toLowerCase()
@@ -162,16 +167,27 @@ function ElementLibraryContents({
               : "Drag an element onto the canvas to place it, or click it then drag to draw."}
           </span>
         </div>
-        {mode === "popover" && (
+        <div className="element-library-header-actions">
           <button
-            className="icon-button small-icon"
+            className={`element-library-learn-toggle${learnMode ? " is-active" : ""}`}
             type="button"
-            aria-label="Close element library"
-            onClick={onClose}
+            aria-pressed={learnMode}
+            onClick={() => setLearnMode((current) => !current)}
           >
-            <X size={15} />
+            <CodeXml size={14} aria-hidden="true" />
+            Learn
           </button>
-        )}
+          {mode === "popover" && (
+            <button
+              className="icon-button small-icon"
+              type="button"
+              aria-label="Close element library"
+              onClick={onClose}
+            >
+              <X size={15} />
+            </button>
+          )}
+        </div>
       </div>
 
       <label className="element-library-search">
@@ -242,13 +258,14 @@ function ElementLibraryContents({
               {tools.map((tool) => {
                 const definition = getShapeToolDefinition(tool);
                 if (!definition) return null;
+                const guide = getWidgetLearningGuide(tool);
                 return (
                   <button
-                    className={`element-library-item${activeTool === tool ? " is-active" : ""}`}
+                    className={`element-library-item${activeTool === tool ? " is-active" : ""}${learnMode ? " is-learning" : ""}`}
                     key={tool}
                     type="button"
                     draggable
-                    title={`${definition.label} — drag onto the canvas or click, then drag to draw`}
+                    title={`${definition.label} — drag onto the canvas or click, then drag to draw. HTML: ${guide.element} CSS: ${guide.css} ${guide.note}`}
                     aria-label={`Add ${definition.label}`}
                     aria-pressed={activeTool === tool}
                     onDragStart={(event) => {
@@ -274,6 +291,13 @@ function ElementLibraryContents({
                   >
                     <WidgetIcon type={tool} size={16} />
                     <span>{definition.label}</span>
+                    {learnMode && (
+                      <small className="element-library-learn-copy">
+                        <code>{guide.element}</code>
+                        <span>{guide.css}</span>
+                        <span>{guide.note}</span>
+                      </small>
+                    )}
                   </button>
                 );
               })}

@@ -2,15 +2,23 @@ import type { ComponentType } from "react";
 import {
   Activity,
   ArrowDownRight,
+  AppWindow,
+  Columns3,
   CheckSquare,
+  CodeXml,
+  Container,
   Image,
   MousePointer2,
   Radio,
+  Rows3,
   Shapes,
+  Smartphone,
   Star,
+  Space,
   ToggleRight,
   Type,
   TextCursorInput,
+  Video,
 } from "lucide-react";
 import type { WidgetStyle } from "../project/schema";
 import { getWidgetIconDefinition } from "../layout/widgetIcons";
@@ -35,6 +43,12 @@ export type PrimitiveTool = (typeof PRIMITIVE_TOOLS)[number];
 export type WidgetTool = (typeof WIDGET_TOOLS)[number];
 
 export const GENERIC_ELEMENT_TOOL_LABELS = {
+  container: "Container",
+  "flex-row": "Flex Row",
+  "flex-column": "Flex Column",
+  spacer: "Spacer",
+  "mobile-app": "Mobile app icon",
+  "web-app": "Web app icon",
   polygon: "Polygon",
   star: "Star",
   divider: "Divider",
@@ -254,6 +268,9 @@ const TEXT_ELEMENT_TOOLS = new Set<GenericElementTool>([
   "label",
 ]);
 const CONTAINER_ELEMENT_TOOLS = new Set<GenericElementTool>([
+  "container",
+  "flex-row",
+  "flex-column",
   "frame",
   "group",
   "card",
@@ -279,6 +296,12 @@ const CONTAINER_ELEMENT_TOOLS = new Set<GenericElementTool>([
 ]);
 
 function genericElementDimensions(type: GenericElementTool): [number, number] {
+  if (type === "spacer") return [48, 24];
+  if (type === "container") return [240, 160];
+  if (type === "flex-row" || type === "flex-column") return [280, 144];
+  if (type === "card") return [260, 196];
+  if (type === "chart") return [240, 160];
+  if (type === "video") return [240, 150];
   if (type === "icon-button") return [40, 40];
   if (type === "custom-icon") return [32, 32];
   if (type === "badge") return [88, 28];
@@ -295,7 +318,7 @@ function genericElementDimensions(type: GenericElementTool): [number, number] {
   if (type === "bottom-nav") return [240, 64];
   if (CONTAINER_ELEMENT_TOOLS.has(type)) return [240, 140];
   if (type === "avatar") return [56, 56];
-  if (type === "video" || type === "chart" || type === "table" || type === "grid") {
+  if (type === "table" || type === "grid") {
     return [200, 120];
   }
   if (type === "list") return [220, 96];
@@ -367,6 +390,45 @@ function genericElementDefinition(
                           ? { label: "Pro", subtitle: "$19 / month" }
                           : type === "toast" || type === "notification"
                             ? { label: type === "toast" ? "Changes saved" : "New message", subtitle: "Just now" }
+    : type === "card"
+      ? {
+          title: "Product card",
+          subtitle: "A short description goes here.",
+          imageSrc: "",
+          actionLabel: "Learn more",
+        }
+      : type === "chart"
+        ? {
+            label: "Monthly activity",
+            chartType: "bar",
+            values: [38, 68, 50, 88, 62],
+          }
+        : type === "alert"
+          ? {
+              label: "Changes saved",
+              subtitle: "Your work is up to date.",
+              variant: "info",
+              dismissible: true,
+            }
+          : type === "video"
+            ? { label: "Product overview", src: "", poster: "" }
+            : type === "mobile-app"
+              ? { label: "Mobile app", iconName: "Smartphone" }
+              : type === "web-app"
+                ? { label: "Web app", iconName: "AppWindow" }
+            : type === "container"
+              ? { label, layout: "freeform", gap: 12, padding: 16 }
+              : type === "flex-row" || type === "flex-column"
+                ? {
+                    label,
+                    layout: type,
+                    gap: 12,
+                    padding: 12,
+                    alignItems: "center",
+                    justifyContent: "flex-start",
+                  }
+                : type === "spacer"
+                  ? { label: "Spacer", size: 24 }
     : type === "list"
       ? {
           items: ["List item 1", "List item 2", "List item 3"],
@@ -386,6 +448,11 @@ function genericElementDefinition(
             itemBinding: {},
           }
         : { label };
+  if (type === "spacer") {
+    style.fillOpacity = 0;
+    style.stroke = null;
+    style.strokeWidth = 0;
+  }
   return {
     label,
     shortcut: "",
@@ -393,7 +460,23 @@ function genericElementDefinition(
     height,
     style,
     props,
-    icon: getWidgetIconDefinition(type).icon,
+    icon: type === "container"
+      ? Container
+      : type === "flex-row"
+        ? Rows3
+        : type === "flex-column"
+          ? Columns3
+          : type === "spacer"
+            ? Space
+            : type === "video"
+              ? Video
+              : type === "mobile-app"
+                ? Smartphone
+                : type === "web-app"
+                  ? AppWindow
+                  : type === "code-block"
+                    ? CodeXml
+                    : getWidgetIconDefinition(type).icon,
   };
 }
 

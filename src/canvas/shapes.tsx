@@ -993,6 +993,294 @@ function NoticeShape({ widget, fill, stroke, strokeWidth }: ShapeComponentProps)
           perfectDrawEnabled={false}
         />
       )}
+      {widget.props.dismissible === true && widget.width > 120 && (
+        <CanvasIcon
+          name="X"
+          color="#aab4c4"
+          strokeWidth={1.8}
+          x={widget.width - 24}
+          y={10}
+          width={14}
+          height={14}
+        />
+      )}
+    </Group>
+  );
+}
+
+function CardShape({ widget, fill, stroke, strokeWidth }: ShapeComponentProps) {
+  const [image, setImage] = useState<HTMLImageElement | null>(null);
+  const imageSource = typeof widget.props.imageSrc === "string" ? widget.props.imageSrc : "";
+  const imageHeight = Math.max(48, widget.height * 0.43);
+  const title = getWidgetProp(widget, "title", "Product card");
+  const subtitle = getWidgetProp(widget, "subtitle", "A short description goes here.");
+  const actionLabel = getWidgetProp(widget, "actionLabel", "Learn more");
+  useEffect(() => {
+    if (!imageSource) {
+      setImage(null);
+      return;
+    }
+    let active = true;
+    const element = new window.Image();
+    element.crossOrigin = "anonymous";
+    element.onload = () => {
+      if (active) setImage(element);
+    };
+    element.onerror = () => {
+      if (active) {
+        console.error("Could not load the card image source.");
+        setImage(null);
+      }
+    };
+    element.src = imageSource;
+    return () => {
+      active = false;
+    };
+  }, [imageSource]);
+  return (
+    <Group>
+      <Rect
+        width={widget.width}
+        height={widget.height}
+        fill={fill ?? "#20232c"}
+        stroke={stroke ?? "#454853"}
+        strokeWidth={strokeWidth}
+        cornerRadius={widget.style.cornerRadius ?? 10}
+        perfectDrawEnabled={false}
+      />
+      {image
+        ? <KonvaImage
+            image={image}
+            x={1}
+            y={1}
+            width={Math.max(1, widget.width - 2)}
+            height={imageHeight}
+            crop={(() => {
+              const scale = Math.max((widget.width - 2) / image.width, imageHeight / image.height);
+              const cropWidth = (widget.width - 2) / scale;
+              const cropHeight = imageHeight / scale;
+              return {
+                x: (image.width - cropWidth) / 2,
+                y: (image.height - cropHeight) / 2,
+                width: cropWidth,
+                height: cropHeight,
+              };
+            })()}
+            perfectDrawEnabled={false}
+          />
+        : <>
+            <Rect
+              x={1}
+              y={1}
+              width={Math.max(1, widget.width - 2)}
+              height={imageHeight}
+              fill="#303344"
+              cornerRadius={[9, 9, 0, 0]}
+              perfectDrawEnabled={false}
+            />
+            <CanvasIcon
+              name="Image"
+              color="#85849b"
+              strokeWidth={1.5}
+              x={(widget.width - 28) / 2}
+              y={(imageHeight - 28) / 2}
+              width={28}
+              height={28}
+            />
+          </>}
+      <KonvaText
+        x={12}
+        y={imageHeight + 10}
+        width={widget.width - 24}
+        height={20}
+        text={title}
+        fontFamily="Arial"
+        fontSize={14}
+        fontStyle="bold"
+        fill="#f3f4f6"
+        ellipsis
+        perfectDrawEnabled={false}
+      />
+      <KonvaText
+        x={12}
+        y={imageHeight + 32}
+        width={widget.width - 24}
+        height={20}
+        text={subtitle}
+        fontFamily="Arial"
+        fontSize={11}
+        fill="#a9a9b4"
+        ellipsis
+        perfectDrawEnabled={false}
+      />
+      <Rect
+        x={12}
+        y={widget.height - 32}
+        width={Math.min(100, widget.width - 24)}
+        height={22}
+        fill={stroke ?? "#8b69ed"}
+        cornerRadius={5}
+        perfectDrawEnabled={false}
+      />
+      <KonvaText
+        x={16}
+        y={widget.height - 31}
+        width={Math.min(92, widget.width - 32)}
+        height={20}
+        text={actionLabel}
+        fontFamily="Arial"
+        fontSize={10}
+        fontStyle="bold"
+        fill="#fff"
+        align="center"
+        verticalAlign="middle"
+        ellipsis
+        perfectDrawEnabled={false}
+      />
+    </Group>
+  );
+}
+
+function VideoShape({ widget, fill, stroke, strokeWidth }: ShapeComponentProps) {
+  const title = getWidgetProp(widget, "label", "Product overview");
+  const playSize = Math.max(30, Math.min(48, widget.height * 0.34));
+  return (
+    <Group>
+      <Rect
+        width={widget.width}
+        height={widget.height}
+        fill={fill ?? "#171923"}
+        stroke={stroke ?? "#4a4d5a"}
+        strokeWidth={strokeWidth}
+        cornerRadius={widget.style.cornerRadius ?? 8}
+        perfectDrawEnabled={false}
+      />
+      <CanvasIcon
+        name="Image"
+        color="#6d7285"
+        strokeWidth={1.5}
+        x={widget.width * 0.43}
+        y={widget.height * 0.23}
+        width={widget.width * 0.14}
+        height={widget.height * 0.28}
+      />
+      <Circle
+        x={widget.width / 2}
+        y={widget.height * 0.49}
+        radius={playSize / 2}
+        fill="#171923cc"
+        stroke="#ffffffcc"
+        strokeWidth={1}
+        perfectDrawEnabled={false}
+      />
+      <CanvasIcon
+        name="Play"
+        color="#fff"
+        strokeWidth={2}
+        x={widget.width / 2 - playSize * 0.22}
+        y={widget.height * 0.49 - playSize * 0.22}
+        width={playSize * 0.44}
+        height={playSize * 0.44}
+      />
+      <Rect
+        y={widget.height - 28}
+        width={widget.width}
+        height={28}
+        fill="#11131bcc"
+        perfectDrawEnabled={false}
+      />
+      <KonvaText
+        x={10}
+        y={widget.height - 25}
+        width={widget.width - 20}
+        height={22}
+        text={title}
+        fontFamily="Arial"
+        fontSize={11}
+        fill="#f3f4f6"
+        verticalAlign="middle"
+        ellipsis
+        perfectDrawEnabled={false}
+      />
+    </Group>
+  );
+}
+
+function LayoutShape({ widget, fill, stroke, strokeWidth }: ShapeComponentProps) {
+  const label = getWidgetProp(widget, "label", widget.type === "flex-row" ? "Flex Row" : "Flex Column");
+  const isRow = widget.type === "flex-row";
+  const items = isRow ? 3 : 3;
+  const gap = Math.max(5, Math.min(12, Number(widget.props.gap) || 12));
+  const inset = 10;
+  const available = isRow ? widget.width - inset * 2 : widget.height - 36 - inset * 2;
+  const size = Math.max(10, (available - gap * (items - 1)) / items);
+  return (
+    <Group>
+      <Rect
+        width={widget.width}
+        height={widget.height}
+        fill={fill ?? "#20232c"}
+        stroke={stroke ?? "#51536a"}
+        strokeWidth={strokeWidth}
+        dash={[5, 3]}
+        cornerRadius={widget.style.cornerRadius ?? 8}
+        perfectDrawEnabled={false}
+      />
+      <KonvaText
+        x={10}
+        y={8}
+        width={widget.width - 20}
+        height={18}
+        text={label}
+        fontFamily="Arial"
+        fontSize={11}
+        fontStyle="bold"
+        fill="#bfb8d5"
+        ellipsis
+        perfectDrawEnabled={false}
+      />
+      {Array.from({ length: items }, (_, index) => (
+        <Rect
+          key={index}
+          x={isRow ? inset + index * (size + gap) : inset}
+          y={isRow ? 36 : 34 + index * (size + gap)}
+          width={isRow ? size : widget.width - inset * 2}
+          height={isRow ? Math.max(20, widget.height - 48) : Math.max(10, size)}
+          fill={index === 0 ? "#514477" : "#343642"}
+          stroke="#7767a4"
+          strokeWidth={1}
+          cornerRadius={4}
+          perfectDrawEnabled={false}
+        />
+      ))}
+    </Group>
+  );
+}
+
+function SpacerShape({ widget, stroke }: ShapeComponentProps) {
+  return (
+    <Group>
+      <Rect
+        width={widget.width}
+        height={widget.height}
+        fill="#000000"
+        opacity={0.01}
+        stroke={stroke ?? "#777780"}
+        strokeWidth={1}
+        dash={[4, 3]}
+        perfectDrawEnabled={false}
+      />
+      <KonvaText
+        width={widget.width}
+        height={widget.height}
+        text="SPACER"
+        fontFamily="Arial"
+        fontSize={Math.min(10, Math.max(7, widget.height * 0.35))}
+        fill="#aaa7b1"
+        align="center"
+        verticalAlign="middle"
+        perfectDrawEnabled={false}
+      />
     </Group>
   );
 }
@@ -1868,27 +2156,92 @@ function DataElementShape({ widget, fill, stroke, strokeWidth }: ShapeComponentP
       />
       {widget.type === "chart" ? (
         <Group>
-          <Line
-            points={[12, widget.height - 12, widget.width - 10, widget.height - 12]}
-            stroke="#454853"
-            strokeWidth={1}
-            perfectDrawEnabled={false}
-          />
-          {[0.38, 0.68, 0.5, 0.88, 0.62].map((height, index) => {
-            const barWidth = Math.max(5, (widget.width - 36) / 7);
-            return (
-              <Rect
-                key={index}
-                x={18 + index * (barWidth + 5)}
-                y={widget.height - 14 - (widget.height - 52) * height}
-                width={barWidth}
-                height={(widget.height - 52) * height}
-                fill={index === 3 ? stroke ?? "#8b69ed" : "#56516f"}
-                cornerRadius={[3, 3, 0, 0]}
-                perfectDrawEnabled={false}
-              />
-            );
-          })}
+          {(() => {
+            const rawValues = widget.props.values;
+            const values = Array.isArray(rawValues) && rawValues.length > 1
+              ? rawValues.slice(0, 8).map((value) => typeof value === "number" && Number.isFinite(value) ? Math.max(0, value) : 0)
+              : [38, 68, 50, 88, 62];
+            const maxValue = Math.max(1, ...values);
+            const plotTop = 34;
+            const plotHeight = Math.max(1, widget.height - 52);
+            const plotWidth = Math.max(1, widget.width - 30);
+            const chartType = widget.props.chartType;
+            if (chartType === "pie") {
+              const total = values.reduce((sum, value) => sum + value, 0) || 1;
+              let angle = 0;
+              const radius = Math.max(8, Math.min(plotWidth, plotHeight) * 0.42);
+              return values.map((value, index) => {
+                const nextAngle = angle + value / total * 360;
+                const segment = (
+                  <Arc
+                    key={index}
+                    x={widget.width / 2}
+                    y={plotTop + plotHeight / 2}
+                    innerRadius={radius * 0.55}
+                    outerRadius={radius}
+                    angle={nextAngle - angle}
+                    rotation={angle - 90}
+                    fill={index === 0 ? stroke ?? "#8b69ed" : ["#55b6a8", "#e39b54", "#6579d8", "#ce6b83", "#8c70bf"][index % 5]}
+                    listening={false}
+                    perfectDrawEnabled={false}
+                  />
+                );
+                angle = nextAngle;
+                return segment;
+              });
+            }
+            if (chartType === "line") {
+              const points = values.flatMap((value, index) => [
+                15 + (plotWidth * index) / Math.max(1, values.length - 1),
+                plotTop + plotHeight * (1 - value / maxValue),
+              ]);
+              return (
+                <>
+                  <Line
+                    points={[12, plotTop + plotHeight, widget.width - 12, plotTop + plotHeight]}
+                    stroke="#454853"
+                    strokeWidth={1}
+                    perfectDrawEnabled={false}
+                  />
+                  <Line
+                    points={points}
+                    stroke={stroke ?? "#8b69ed"}
+                    strokeWidth={2.5}
+                    lineCap="round"
+                    lineJoin="round"
+                    perfectDrawEnabled={false}
+                  />
+                  {values.map((_, index) => (
+                    <Circle
+                      key={index}
+                      x={points[index * 2]}
+                      y={points[index * 2 + 1]}
+                      radius={3}
+                      fill={stroke ?? "#8b69ed"}
+                      perfectDrawEnabled={false}
+                    />
+                  ))}
+                </>
+              );
+            }
+            const gap = 5;
+            const barWidth = Math.max(5, (plotWidth - gap * (values.length - 1)) / values.length);
+            return values.map((value, index) => {
+              const barHeight = plotHeight * value / maxValue;
+              return (
+                <Rect
+                  key={index}
+                  x={15 + index * (barWidth + gap)}
+                  y={plotTop + plotHeight - barHeight}
+                  width={barWidth}
+                  height={barHeight}
+                  fill={index === 0 ? stroke ?? "#8b69ed" : ["#56516f", "#55b6a8", "#6579d8", "#e39b54"][index % 4]}
+                  cornerRadius={[3, 3, 0, 0]}
+                  perfectDrawEnabled={false}
+                />
+              );
+            });
+          })()}
         </Group>
       ) : widget.type === "table" ? (
         <Group>
@@ -1988,7 +2341,7 @@ function GenericElementShape({
   if (widget.type === "avatar") {
     return <AvatarShape widget={widget} fill={fill} stroke={stroke} strokeWidth={strokeWidth} />;
   }
-  if (widget.type === "icon" || widget.type === "custom-icon") {
+  if (widget.type === "icon" || widget.type === "custom-icon" || widget.type === "mobile-app" || widget.type === "web-app") {
     return <IconShape widget={widget} fill={fill} stroke={stroke} strokeWidth={strokeWidth} />;
   }
   if (widget.type === "icon-button") {
@@ -2011,6 +2364,18 @@ function GenericElementShape({
   }
   if (widget.type === "profile-card") {
     return <ProfileCardShape widget={widget} fill={fill} stroke={stroke} strokeWidth={strokeWidth} />;
+  }
+  if (widget.type === "card") {
+    return <CardShape widget={widget} fill={fill} stroke={stroke} strokeWidth={strokeWidth} />;
+  }
+  if (widget.type === "video") {
+    return <VideoShape widget={widget} fill={fill} stroke={stroke} strokeWidth={strokeWidth} />;
+  }
+  if (widget.type === "flex-row" || widget.type === "flex-column") {
+    return <LayoutShape widget={widget} fill={fill} stroke={stroke} strokeWidth={strokeWidth} />;
+  }
+  if (widget.type === "spacer") {
+    return <SpacerShape widget={widget} fill={fill} stroke={stroke} strokeWidth={strokeWidth} />;
   }
   if (widget.type === "empty-state") {
     return <EmptyStateShape widget={widget} fill={fill} stroke={stroke} strokeWidth={strokeWidth} />;
@@ -2044,7 +2409,7 @@ function GenericElementShape({
         cornerRadius={widget.style.cornerRadius ?? 5}
         perfectDrawEnabled={false}
       />
-      {["frame", "group", "card", "modal", "overlay", "drawer", "section", "panel", "dynamic-panel", "repeater", "accordion", "carousel", "tabs-container", "navbar", "sidebar", "tabs", "menu", "dropdown-menu", "footer", "form"].includes(widget.type) ? (
+      {["container", "frame", "group", "card", "modal", "overlay", "drawer", "section", "panel", "dynamic-panel", "repeater", "accordion", "carousel", "tabs-container", "navbar", "sidebar", "tabs", "menu", "dropdown-menu", "footer", "form"].includes(widget.type) ? (
         <Group>
           <Rect
             x={8}

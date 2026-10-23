@@ -1,6 +1,9 @@
 import type { Widget } from "./schema";
 
 export const LAYER_CONTAINER_TYPES = new Set([
+  "container",
+  "flex-row",
+  "flex-column",
   "group",
   "frame",
   "panel",
