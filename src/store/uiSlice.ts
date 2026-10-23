@@ -11,6 +11,8 @@ export const createUISlice: StateCreator<StoreState, [], [], UISlice> = (set) =>
   statusBarTimeMode: "static",
   showBattery: true,
   showSignal: true,
+  notesOverlay: false,
+  inspectorTab: "design",
   setPaletteOpen: (paletteOpen) => set({ paletteOpen }),
   togglePalette: () => set((state) => ({ paletteOpen: !state.paletteOpen })),
   toggleLeftPanel: () => set((state) => ({ leftPanelOpen: !state.leftPanelOpen })),
@@ -21,4 +23,6 @@ export const createUISlice: StateCreator<StoreState, [], [], UISlice> = (set) =>
   setStatusBarTimeMode: (statusBarTimeMode) => set({ statusBarTimeMode }),
   toggleBattery: () => set((state) => ({ showBattery: !state.showBattery })),
   toggleSignal: () => set((state) => ({ showSignal: !state.showSignal })),
+  toggleNotesOverlay: () => set((state) => ({ notesOverlay: !state.notesOverlay })),
+  setInspectorTab: (inspectorTab) => set({ inspectorTab }),
 });

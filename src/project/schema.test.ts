@@ -77,7 +77,7 @@ describe("ProtoFlow project schema", () => {
   it("creates a valid starter project with a UUID start screen", () => {
     const project = createEmptyProject("Checkout flow");
 
-    expect(project.schemaVersion).toBe("1.7.0");
+    expect(project.schemaVersion).toBe("1.8.0");
     expect(project.name).toBe("Checkout flow");
     expect(project.screens).toHaveLength(1);
     expect(project.screens[0].id).toBe(project.startScreenId);
@@ -150,7 +150,7 @@ describe("ProtoFlow project schema", () => {
     const project = createCompleteProject();
     const { symbols: _symbols, ...legacy } = project;
     const migrated = parseProject({ ...legacy, schemaVersion: "1.0.0" });
-    expect(migrated.schemaVersion).toBe("1.7.0");
+    expect(migrated.schemaVersion).toBe("1.8.0");
     expect(migrated.symbols).toEqual([]);
   });
 
@@ -179,7 +179,7 @@ describe("ProtoFlow project schema", () => {
   it("migrates version 1.2 interaction rules to the current format", () => {
     const project = createCompleteProject();
     const migrated = parseProject({ ...project, schemaVersion: "1.2.0" });
-    expect(migrated.schemaVersion).toBe("1.7.0");
+    expect(migrated.schemaVersion).toBe("1.8.0");
     expect(migrated.screens[0].interactionRules[0].conditionMode).toBe("all");
     expect(migrated.screens[0].interactionRules[0].widgetId).toBeUndefined();
   });
@@ -187,14 +187,14 @@ describe("ProtoFlow project schema", () => {
   it("migrates version 1.5 projects with interaction-local variables", () => {
     const project = createCompleteProject();
     const migrated = parseProject({ ...project, schemaVersion: "1.5.0" });
-    expect(migrated.schemaVersion).toBe("1.7.0");
+    expect(migrated.schemaVersion).toBe("1.8.0");
     expect(migrated.screens[0].interactionRules[0].localVariables).toBeUndefined();
   });
 
   it("migrates version 1.6 projects and round-trips persisted flow positions", () => {
     const project = createCompleteProject();
     const legacy = { ...project, schemaVersion: "1.6.0" };
-    expect(parseProject(legacy).schemaVersion).toBe("1.7.0");
+    expect(parseProject(legacy).schemaVersion).toBe("1.8.0");
 
     project.screens[0].flowPosition = { x: 320, y: 180 };
     expect(parseProject(serializeProject(project)).screens[0].flowPosition)
@@ -238,6 +238,30 @@ describe("ProtoFlow project schema", () => {
         }],
       }],
     })).toThrow(/non-reserved/i);
+  });
+
+  it("migrates 1.7 projects and round-trips widget annotations", () => {
+    const project = createCompleteProject();
+    const widget = project.screens[0].widgets[0];
+    const legacy = { ...project, schemaVersion: "1.7.0" };
+    expect(parseProject(legacy).schemaVersion).toBe("1.8.0");
+
+    widget.notes = {
+      description: "Supports **accessible** checkout.",
+      requirementId: "REQ-104",
+      priority: "high",
+      status: "in review",
+      tags: ["checkout", "accessibility"],
+      custom: { owner: "Design systems" },
+    };
+    expect(parseProject(serializeProject(project))).toEqual(project);
+    expect(() => parseProject({
+      ...project,
+      screens: [{
+        ...project.screens[0],
+        widgets: [{ ...widget, notes: { ...widget.notes, priority: "urgent" } }],
+      }],
+    })).toThrow(/priority/i);
   });
 
   it("migrates legacy named dynamic-panel states to stable IDs", () => {

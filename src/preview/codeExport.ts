@@ -1,5 +1,6 @@
 import type { Project } from "../project/schema";
 import { EXPRESSION_RUNTIME_SOURCE } from "../project/expressions";
+import { widgetNotesCodeComments } from "../project/widgetNotes";
 
 export type CodeExportScope = "all" | "current";
 export type CodeExportTailwindVersion = "3" | "4";
@@ -85,7 +86,9 @@ function jsxString(value: unknown): string {
 }
 
 export function generateSingleFileJsx(project: Project): string {
+  const notesComments = widgetNotesCodeComments(project);
   return `import { useState, type CSSProperties, type ReactNode } from "react";
+${notesComments ? `\n${notesComments}\n` : ""}
 
 const project = ${jsxString(project)};
 type Widget = typeof project.screens[number]["widgets"][number];

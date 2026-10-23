@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { DragEvent as ReactDragEvent, FormEvent } from "react";
-import { Group, Layer, Line, Rect, Shape, Stage, Text, Transformer } from "react-konva";
+import { Circle, Group, Layer, Line, Rect, Shape, Stage, Text, Transformer } from "react-konva";
 import type Konva from "konva";
 import {
   ArrowDownToLine,
@@ -462,6 +462,14 @@ function WidgetNode({
   onContextMenu: (event: Konva.KonvaEventObject<MouseEvent>) => void;
   symbolDefinition?: SymbolDefinition;
 }) {
+  const noteTooltipText = widget.notes?.description.slice(0, 100) ||
+    widget.notes?.requirementId ||
+    widget.notes?.tags.join(", ") ||
+    "";
+  const noteTooltipWidth = Math.min(
+    260 / zoom,
+    Math.max(140 / zoom, noteTooltipText.length * 6 / zoom + 12 / zoom),
+  );
   return (
     <Group
       id={widget.id}
@@ -572,6 +580,62 @@ function WidgetNode({
           listening={false}
           perfectDrawEnabled={false}
         />
+      )}
+      {widget.notes && (
+        <Group listening={false}>
+          <Circle
+            x={widget.width - 9 / zoom}
+            y={-9 / zoom}
+            radius={9 / zoom}
+            fill={{
+              low: "#7196e8",
+              medium: "#d5a446",
+              high: "#e57945",
+              critical: "#e04f59",
+            }[widget.notes.priority]}
+            stroke="#17181b"
+            strokeWidth={1 / zoom}
+            perfectDrawEnabled={false}
+          />
+          <Text
+            x={widget.width - 13 / zoom}
+            y={-13 / zoom}
+            width={8 / zoom}
+            height={8 / zoom}
+            text="N"
+            fontSize={7 / zoom}
+            fontStyle="bold"
+            fill="#ffffff"
+            align="center"
+            verticalAlign="middle"
+            perfectDrawEnabled={false}
+          />
+        </Group>
+      )}
+      {widget.notes && hovered && (
+        <Group listening={false} y={widget.height + 5 / zoom}>
+          <Rect
+            width={noteTooltipWidth}
+            height={28 / zoom}
+            cornerRadius={4 / zoom}
+            fill="#24232b"
+            stroke="#7664a7"
+            strokeWidth={1 / zoom}
+            perfectDrawEnabled={false}
+          />
+          <Text
+            x={6 / zoom}
+            y={5 / zoom}
+            width={(noteTooltipWidth * zoom - 12) / zoom}
+            height={18 / zoom}
+            text={noteTooltipText}
+            fontSize={10 / zoom}
+            fill="#f2eff8"
+            ellipsis
+            wrap="none"
+            perfectDrawEnabled={false}
+          />
+        </Group>
       )}
     </Group>
   );
@@ -738,6 +802,7 @@ export function CanvasStage({
   const statusBarTimeMode = useStore((state) => state.statusBarTimeMode);
   const showBattery = useStore((state) => state.showBattery);
   const showSignal = useStore((state) => state.showSignal);
+  const notesOverlay = useStore((state) => state.notesOverlay);
   const activeScreen = useStore((state) =>
     state.project.screens.find((screen) => screen.id === state.getActiveScreenId()),
   );
@@ -2882,6 +2947,58 @@ export function CanvasStage({
               perfectDrawEnabled={false}
             />
           </Layer>
+          {notesOverlay && (
+            <Layer>
+              {screenWidgets.filter((widget) => widget.notes).map((widget) => {
+                const priorityColor = {
+                  low: "#7196e8",
+                  medium: "#d5a446",
+                  high: "#e57945",
+                  critical: "#e04f59",
+                }[widget.notes!.priority];
+                return (
+                  <Group
+                    key={`note-pin-${widget.id}`}
+                    x={widget.x + widget.width - 8}
+                    y={widget.y - 10}
+                    onClick={() => {
+                      const state = useStore.getState();
+                      state.select([widget.id]);
+                      state.setInspectorTab("notes");
+                    }}
+                    onTap={() => {
+                      const state = useStore.getState();
+                      state.select([widget.id]);
+                      state.setInspectorTab("notes");
+                    }}
+                  >
+                    <Circle
+                      radius={11}
+                      fill={priorityColor}
+                      stroke="#fff"
+                      strokeWidth={1}
+                      shadowColor="#000"
+                      shadowBlur={4}
+                      shadowOpacity={0.35}
+                    />
+                    <Text
+                      x={-7}
+                      y={-7}
+                      width={14}
+                      height={14}
+                      text="N"
+                      fontSize={10}
+                      fontStyle="bold"
+                      fill="#fff"
+                      align="center"
+                      verticalAlign="middle"
+                      listening={false}
+                    />
+                  </Group>
+                );
+              })}
+            </Layer>
+          )}
           {selectionDraft && (
             <Layer listening={false} perfectDrawEnabled={false}>
               <Rect

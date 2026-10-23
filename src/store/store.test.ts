@@ -30,6 +30,8 @@ function resetStore(): void {
     statusBarTimeMode: "static",
     showBattery: true,
     showSignal: true,
+    notesOverlay: false,
+    inspectorTab: "design",
   });
 }
 

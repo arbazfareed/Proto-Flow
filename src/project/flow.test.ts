@@ -117,4 +117,39 @@ describe("flow diagram model", () => {
     expect(svg).toContain("onClick");
     expect(svg).toContain("marker-end");
   });
+
+  it("exports widget annotation markers and escaped note details", () => {
+    const project = projectWithScreens(1);
+    project.screens[0].widgets = [{
+      id: crypto.randomUUID(),
+      type: "button",
+      x: 10,
+      y: 20,
+      width: 120,
+      height: 40,
+      rotation: 0,
+      opacity: 1,
+      visible: true,
+      locked: false,
+      zIndex: 0,
+      style: {},
+      props: {},
+      notes: {
+        description: "Keep <checkout> accessible",
+        requirementId: "REQ-9",
+        priority: "critical",
+        status: "approved",
+        tags: ["accessibility"],
+        custom: {},
+      },
+    }];
+    const svg = buildFlowSvg(project, getInitialFlowPositions(
+      project.screens,
+      [],
+      project.startScreenId,
+    ));
+
+    expect(svg).toContain('fill="#e04f59"');
+    expect(svg).toContain("Keep &lt;checkout&gt; accessible");
+  });
 });

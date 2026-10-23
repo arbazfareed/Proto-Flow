@@ -462,7 +462,10 @@ export function FlowDiagram({ onNotify, onOpenScreen }: FlowDiagramProps) {
                     {screen.widgets.filter((widget) => widget.visible).slice(0, 24).map((widget) => (
                       <span
                         key={widget.id}
-                        className="flow-preview-widget"
+                        className={`flow-preview-widget${widget.notes ? ` has-notes note-priority-${widget.notes.priority}` : ""}`}
+                        title={widget.notes
+                          ? `${widget.notes.priority} priority${widget.notes.requirementId ? ` · ${widget.notes.requirementId}` : ""}${widget.notes.description ? ` · ${widget.notes.description.slice(0, 100)}` : ""}`
+                          : undefined}
                         style={{
                           left: `${widget.x / deviceWidth * 100}%`,
                           top: `${widget.y / deviceHeight * 100}%`,

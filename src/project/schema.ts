@@ -17,8 +17,8 @@ export type {
   InteractionRule,
 } from "./interactionSchema";
 
-export const PROJECT_SCHEMA_VERSION = "1.7.0";
-const LEGACY_PROJECT_SCHEMA_VERSIONS = new Set(["1.0.0", "1.1.0", "1.2.0", "1.3.0", "1.4.0", "1.5.0", "1.6.0"]);
+export const PROJECT_SCHEMA_VERSION = "1.8.0";
+const LEGACY_PROJECT_SCHEMA_VERSIONS = new Set(["1.0.0", "1.1.0", "1.2.0", "1.3.0", "1.4.0", "1.5.0", "1.6.0", "1.7.0"]);
 const COORDINATE_LIMIT = 100_000;
 const HexColorSchema = z
   .string()
@@ -161,6 +161,15 @@ export const ResponsiveConstraintsSchema = z.object({
   vertical: z.enum(["top", "bottom", "center", "scale", "stretch"]),
 }).strict();
 
+export const WidgetNotesSchema = z.object({
+  description: z.string().max(20_000).default(""),
+  requirementId: z.string().trim().max(120).default(""),
+  priority: z.enum(["low", "medium", "high", "critical"]).default("low"),
+  status: z.enum(["draft", "in review", "approved", "blocked"]).default("draft"),
+  tags: z.array(z.string().trim().min(1).max(60)).max(50).default([]),
+  custom: z.record(z.string().trim().min(1).max(80), z.string().max(1_000)).default({}),
+}).strict();
+
 export const ProtoWidgetSchema = z
   .object({
     id: z.string().uuid(),
@@ -184,6 +193,7 @@ export const ProtoWidgetSchema = z
     constraints: ResponsiveConstraintsSchema.optional(),
     important: z.boolean().optional(),
     overrides: z.record(z.string(), WidgetOverrideSchema).optional(),
+    notes: WidgetNotesSchema.optional(),
   })
   .strict();
 
@@ -464,6 +474,7 @@ export type VariableDefinition = z.infer<typeof VariableDefinitionSchema>;
 export type WidgetShadow = z.infer<typeof WidgetShadowSchema>;
 export type WidgetStyle = z.infer<typeof WidgetStyleSchema>;
 export type Widget = z.infer<typeof ProtoWidgetSchema>;
+export type WidgetNotes = z.infer<typeof WidgetNotesSchema>;
 export type SymbolDefinition = z.infer<typeof SymbolDefinitionSchema>;
 export type WidgetOverride = z.infer<typeof WidgetOverrideSchema>;
 export type Breakpoint = z.infer<typeof BreakpointSchema>;

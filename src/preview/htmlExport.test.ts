@@ -107,6 +107,45 @@ describe("local HTML bundle export", () => {
     expect(archive.file("assets/image-1.png")).toBeNull();
   });
 
+  it("includes escaped annotation comments in the HTML bundle", async () => {
+    const project = createEmptyProject("Annotated prototype");
+    project.screens[0].widgets.push({
+      id: crypto.randomUUID(),
+      type: "button",
+      name: "Continue",
+      x: 10,
+      y: 10,
+      width: 100,
+      height: 40,
+      rotation: 0,
+      opacity: 1,
+      visible: true,
+      locked: false,
+      zIndex: 0,
+      style: {},
+      props: {},
+      notes: {
+        description: "Review --> approve",
+        requirementId: "REQ-15",
+        priority: "critical",
+        status: "in review",
+        tags: ["checkout"],
+        custom: {},
+      },
+    } satisfies Widget);
+    const archive = await JSZip.loadAsync(await generateLocalHtmlArchive(project, {
+      includeInteractions: true,
+      includeAssets: true,
+    }));
+    const html = await archive.file("index.html")!.async("text");
+
+    expect(html).toContain("Widget note for Screen 1 / Continue");
+    expect(html).toContain("critical, in review | requirement REQ-15");
+    expect(html).toContain("Review —› approve");
+    expect(html.match(/-->/g)).toHaveLength(1);
+    expect(html).toContain("Review --\\u003e approve");
+  });
+
   it("rejects remote image URLs instead of silently producing a non-offline bundle", async () => {
     const project = createEmptyProject("Remote image");
     project.screens[0].widgets.push({
