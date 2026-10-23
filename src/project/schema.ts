@@ -2,6 +2,7 @@ import { z } from "zod";
 import { DEFAULT_DEVICE_PRESET, toScreenDevice } from "../devices/catalog";
 import { ScreenDeviceSchema } from "../devices/schema";
 import type { ScreenDevice } from "../devices/types";
+import { inferScreenInputMode, type ScreenInputMode } from "./inputModes";
 import {
   InteractionRuleSchema,
 } from "./interactionSchema";
@@ -17,8 +18,8 @@ export type {
   InteractionRule,
 } from "./interactionSchema";
 
-export const PROJECT_SCHEMA_VERSION = "1.8.0";
-const LEGACY_PROJECT_SCHEMA_VERSIONS = new Set(["1.0.0", "1.1.0", "1.2.0", "1.3.0", "1.4.0", "1.5.0", "1.6.0", "1.7.0"]);
+export const PROJECT_SCHEMA_VERSION = "1.9.0";
+const LEGACY_PROJECT_SCHEMA_VERSIONS = new Set(["1.0.0", "1.1.0", "1.2.0", "1.3.0", "1.4.0", "1.5.0", "1.6.0", "1.7.0", "1.8.0"]);
 const COORDINATE_LIMIT = 100_000;
 const HexColorSchema = z
   .string()
@@ -277,6 +278,7 @@ export const ProtoScreenSchema = z
       y: z.number().finite().min(-COORDINATE_LIMIT).max(COORDINATE_LIMIT),
     }).strict().optional(),
     device: ScreenDeviceSchema.optional(),
+    inputMode: z.enum(["touch", "mouse", "both"]).default("both"),
     breakpoints: z.array(BreakpointSchema).optional(),
     widgets: z.array(ProtoWidgetSchema),
     interactionRules: z.array(InteractionRuleSchema),
@@ -540,6 +542,7 @@ export type Breakpoint = z.infer<typeof BreakpointSchema>;
 export type WidgetCascadeMode = z.infer<typeof WidgetCascadeModeSchema>;
 export type ResponsiveConstraints = z.infer<typeof ResponsiveConstraintsSchema>;
 export type { ScreenDevice };
+export type { ScreenInputMode };
 export type Screen = z.infer<typeof ProtoScreenSchema>;
 export type ProtoWidget = Widget;
 export type ProtoScreen = Screen;
@@ -758,6 +761,21 @@ export function parseProject(raw: unknown): Project {
     ]);
   }
 
+  if (typeof value === "object" && value !== null && "screens" in value && Array.isArray(value.screens)) {
+    value = {
+      ...value,
+      screens: value.screens.map((screen: unknown) => {
+        if (typeof screen !== "object" || screen === null || Array.isArray(screen)) return screen;
+        const candidate = screen as Record<string, unknown>;
+        return candidate.inputMode === undefined
+          ? { ...candidate, inputMode: inferScreenInputMode(
+              candidate.device as ScreenDevice | undefined,
+            ) }
+          : candidate;
+      }),
+    };
+  }
+
   const result = ProtoFlowProjectSchema.safeParse(value);
   if (!result.success) {
     throw new SchemaValidationError(result.error.issues);
@@ -781,6 +799,7 @@ export function createEmptyProject(name = "Untitled project"): Project {
         id: screenId,
         name: "Screen 1",
         device: toScreenDevice(DEFAULT_DEVICE_PRESET),
+        inputMode: inferScreenInputMode(toScreenDevice(DEFAULT_DEVICE_PRESET)),
         breakpoints: [
           { id: "mobile", name: "Mobile", minWidth: 0, maxWidth: 767, width: 390, height: 844 },
           { id: "tablet", name: "Tablet", minWidth: 768, maxWidth: 1023, width: 768, height: 1024 },

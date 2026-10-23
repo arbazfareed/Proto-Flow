@@ -77,14 +77,7 @@ function parseRepeaterActionConfig(
   return { ...config, field: config.field };
 }
 
-export type PreviewEvent =
-  | "onClick"
-  | "onHover"
-  | "onChange"
-  | "onLoad"
-  | "onTap"
-  | "onTouchStart"
-  | "onTouchEnd";
+export type PreviewEvent = InteractionRule["event"];
 
 export interface PreviewRuntimeSnapshot {
   screenId: string;

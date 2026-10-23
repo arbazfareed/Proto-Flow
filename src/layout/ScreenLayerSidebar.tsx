@@ -27,6 +27,7 @@ import { DEFAULT_DEVICE_PRESET, findDevicePreset, toScreenDevice } from "../devi
 import { getWidgetViewportOverflow } from "../devices/frame";
 import { DevicePicker } from "../devices/DevicePicker";
 import type { DeviceCategory, ScreenDevice } from "../devices/types";
+import { inferScreenInputMode, type ScreenInputMode } from "../project/inputModes";
 import { reorderScreens } from "../project/layers";
 import {
   createSymbolDefinition,
@@ -932,6 +933,7 @@ export function ScreenLayerSidebar() {
       id: crypto.randomUUID(),
       name,
       device,
+      inputMode: inferScreenInputMode(device),
       breakpoints: createDefaultBreakpoints(device.width, device.height),
       widgets: [],
       interactionRules: [],
@@ -956,6 +958,7 @@ export function ScreenLayerSidebar() {
           : {
               ...screen,
               device,
+              inputMode: inferScreenInputMode(device),
               widgets: scaleWidgets
                 ? screen.widgets.map((widget) => ({
                     ...widget,
@@ -2078,6 +2081,28 @@ export function ScreenLayerSidebar() {
             </button>
           </div>
         </div>
+        {activeScreen && (
+          <label className="screen-input-mode">
+            <span>Input mode</span>
+            <select
+              aria-label="Screen input mode"
+              value={activeScreen.inputMode}
+              onChange={(event) => {
+                const inputMode = event.currentTarget.value as ScreenInputMode;
+                editProject((current) => ({
+                  ...current,
+                  screens: current.screens.map((screen) =>
+                    screen.id === activeScreen.id ? { ...screen, inputMode } : screen,
+                  ),
+                }));
+              }}
+            >
+              <option value="touch">Touch</option>
+              <option value="mouse">Mouse</option>
+              <option value="both">Both</option>
+            </select>
+          </label>
+        )}
         <div
           className="screen-list"
           role="listbox"

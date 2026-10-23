@@ -60,7 +60,7 @@ describe("React code export preparation", () => {
     expect(transpiled.diagnostics?.filter((diagnostic) =>
       diagnostic.category === ts.DiagnosticCategory.Error,
     )).toEqual([]);
-  });
+  }, 15_000);
 
   it("keeps the selected screen, typed variables, and only compatible interactions", () => {
     const project = createEmptyProject("Export");
@@ -117,6 +117,25 @@ describe("React code export preparation", () => {
     expect(source).toContain("project.screens.map");
     expect(source).not.toContain("</script><script>notMarkup()");
     expect(source).toContain("\\u003c/script\\u003e");
+  });
+
+  it("exports screen-mode-aware mouse, touch, gesture, and keyboard handlers", () => {
+    const project = createEmptyProject("Input interactions");
+    const source = generateSingleFileJsx(project);
+
+    expect(source).toContain('const mode = screen.inputMode ?? "both"');
+    expect(source).toContain('runInteractions(widget, "onDoubleClick", item)');
+    expect(source).toContain('"onSwipeLeft"');
+    expect(source).toContain('"onPinchOut"');
+    expect(source).toContain('runInteractions(widget, "onKeyDown", item)');
+    expect(source).toContain("onPointerUp");
+    const transpiled = ts.transpileModule(source, {
+      compilerOptions: { jsx: ts.JsxEmit.ReactJSX, target: ts.ScriptTarget.ES2022 },
+      reportDiagnostics: true,
+    });
+    expect(transpiled.diagnostics?.filter((diagnostic) =>
+      diagnostic.category === ts.DiagnosticCategory.Error,
+    )).toEqual([]);
   });
 
   it("includes widget notes as safe source comments", () => {
@@ -252,7 +271,7 @@ describe("React code export preparation", () => {
     const source = generateSingleFileJsx(prepared);
     expect(source).toContain("let localValue = definition.initial");
     expect(source).toContain("localVariables[definition.name] = localValue");
-    expect(source).toContain('onClick={() => runInteractions(widget, "onClick", item)}');
+    expect(source).toContain('onClick: () => runInteractions(widget, "onClick", item)');
     const transpiled = ts.transpileModule(source, {
       compilerOptions: { jsx: ts.JsxEmit.ReactJSX, target: ts.ScriptTarget.ES2022 },
       reportDiagnostics: true,

@@ -24,6 +24,7 @@ import { handleGlobalShortcut } from "./commands/shortcuts";
 import { formatProjectValidationError, SchemaValidationError } from "./project/schema";
 import type { Screen } from "./project/schema";
 import { createDefaultBreakpoints } from "./project/responsive";
+import { inferScreenInputMode } from "./project/inputModes";
 import { DEVICE_PRESETS, toScreenDevice } from "./devices/catalog";
 import { fitWindowSizeToMonitor, getPreviewWindowSize } from "./preview/windowSizing";
 import { useWalletStore } from "./wallet/store";
@@ -539,6 +540,7 @@ function AppShell() {
       id: crypto.randomUUID(),
       name: preset.name,
       device,
+      inputMode: inferScreenInputMode(device),
       breakpoints: createDefaultBreakpoints(device.width, device.height),
       widgets: [],
       interactionRules: [],

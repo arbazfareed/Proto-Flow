@@ -234,7 +234,7 @@ function actions(rule, activeScreen, item, widget, localVariables) {
     }
   }
 }
-function fire(widget, event, item) {
+function fire(widget, event, item, renderAfter = true) {
   const activeScreen = screen();
   for (const rule of activeScreen.interactionRules.filter((item) => item.event === event && (!item.widgetId || item.widgetId === widget.id))) {
     const localVariables = Object.fromEntries((rule.localVariables || []).map((entry) => [entry.name, entry.initial]));
@@ -242,7 +242,130 @@ function fire(widget, event, item) {
     if (rule.conditions.length && (rule.conditionMode === "any" ? !checks.some(Boolean) : !checks.every(Boolean))) continue;
     actions(rule, activeScreen.id, item, widget, localVariables);
   }
-  render();
+  if (renderAfter) render();
+}
+function bindWidgetEvents(element, widget, item) {
+  const mode = screen().inputMode || "both";
+  const mouseEnabled = mode !== "touch";
+  const touchEnabled = mode !== "mouse";
+  if (mouseEnabled) {
+    if (mode === "both") {
+      element.addEventListener("pointerup", (event) => {
+        if (event.pointerType !== "mouse") return;
+        fire(widget, "onClick", item);
+        fire(widget, "onMouseUp", item);
+      });
+      element.addEventListener("pointerenter", (event) => {
+        if (event.pointerType === "mouse") fire(widget, "onHover", item);
+      });
+      element.addEventListener("pointerdown", (event) => {
+        if (event.pointerType === "mouse") fire(widget, "onMouseDown", item);
+      });
+    } else {
+      element.addEventListener("click", () => fire(widget, "onClick", item));
+      element.addEventListener("mouseenter", () => fire(widget, "onHover", item));
+      element.addEventListener("mousedown", () => fire(widget, "onMouseDown", item));
+      element.addEventListener("mouseup", () => fire(widget, "onMouseUp", item));
+    }
+    element.addEventListener("dblclick", () => fire(widget, "onDoubleClick", item));
+    element.addEventListener("contextmenu", (event) => {
+      event.preventDefault();
+      fire(widget, "onRightClick", item);
+    });
+  }
+  element.addEventListener("focusin", () => fire(widget, "onFocus", item));
+  element.addEventListener("focusout", () => fire(widget, "onBlur", item));
+  element.addEventListener("keydown", (event) => {
+    fire(widget, "onKeyDown", item);
+    if (mode === "touch" && (event.key === "Enter" || event.key === " ")) fire(widget, "onClick", item);
+  });
+  if (mode === "both") {
+    element.addEventListener("click", (event) => {
+      if (event.detail === 0) fire(widget, "onClick", item);
+    });
+  }
+  if (!touchEnabled) return;
+  let start = null;
+  let longPressTimer;
+  let longPressFired = false;
+  let multiTouchFired = false;
+  let lastTap = 0;
+  element.addEventListener("touchstart", (event) => {
+    fire(widget, "onTouchStart", item, false);
+    const touches = event.touches;
+    if (touches.length >= 2) {
+      const first = touches[0];
+      const second = touches[1];
+      start = {
+        x: (first.clientX + second.clientX) / 2,
+        y: (first.clientY + second.clientY) / 2,
+        distance: Math.hypot(first.clientX - second.clientX, first.clientY - second.clientY),
+      };
+      multiTouchFired = false;
+      clearTimeout(longPressTimer);
+      return;
+    }
+    const touch = touches[0];
+    if (!touch) return;
+    start = { x: touch.clientX, y: touch.clientY };
+    element.classList.add("touch-feedback");
+    longPressFired = false;
+    multiTouchFired = false;
+    element.classList.add("touch-feedback");
+    clearTimeout(longPressTimer);
+    longPressTimer = setTimeout(() => {
+      if (!start) return;
+      longPressFired = true;
+      fire(widget, "onLongPress", item, false);
+    }, 550);
+  }, { passive: true });
+  element.addEventListener("touchmove", (event) => {
+    if (!start) return;
+    if (event.touches.length >= 2 && start.distance !== undefined) {
+      const first = event.touches[0];
+      const second = event.touches[1];
+      const distance = Math.hypot(first.clientX - second.clientX, first.clientY - second.clientY);
+      const centerX = (first.clientX + second.clientX) / 2;
+      const centerY = (first.clientY + second.clientY) / 2;
+      if (!multiTouchFired && Math.abs(distance - start.distance) > 24) {
+        multiTouchFired = true;
+        fire(widget, distance < start.distance ? "onPinchIn" : "onPinchOut", item, false);
+      } else if (!multiTouchFired && Math.hypot(centerX - start.x, centerY - start.y) > 18) {
+        multiTouchFired = true;
+        fire(widget, "onPan", item, false);
+      }
+      return;
+    }
+    const touch = event.touches[0];
+    if (touch && Math.hypot(touch.clientX - start.x, touch.clientY - start.y) > 12) clearTimeout(longPressTimer);
+  }, { passive: true });
+  element.addEventListener("touchend", (event) => {
+    fire(widget, "onTouchEnd", item);
+    clearTimeout(longPressTimer);
+    element.classList.remove("touch-feedback");
+    const point = event.changedTouches[0];
+    if (!start || !point || start.distance !== undefined || longPressFired || multiTouchFired) {
+      start = null;
+      return;
+    }
+    const dx = point.clientX - start.x;
+    const dy = point.clientY - start.y;
+    start = null;
+    if (Math.max(Math.abs(dx), Math.abs(dy)) > 40) {
+      fire(widget, Math.abs(dx) > Math.abs(dy)
+        ? dx < 0 ? "onSwipeLeft" : "onSwipeRight"
+        : dy < 0 ? "onSwipeUp" : "onSwipeDown", item);
+      return;
+    }
+    const now = Date.now();
+    if (now - lastTap < 320) {
+      lastTap = 0;
+      fire(widget, "onDoubleTap", item);
+    } else {
+      lastTap = now;
+      fire(widget, "onTap", item);
+    }
+  }, { passive: true });
 }
 function renderWidget(widget, activeScreen, item) {
   const element = document.createElement(widget.type === "button" || widget.type === "icon-button" ? "button" : "div");
@@ -335,7 +458,7 @@ function renderWidget(widget, activeScreen, item) {
       row.style.width = widget.width + "px";
       row.style.height = widget.height + "px";
       row.style.overflow = "hidden";
-      row.addEventListener("click", () => fire(widget, "onClick", rowData));
+      bindWidgetEvents(row, widget, rowData);
       for (const child of template) {
         if (child.visible && visibility.get(child.id) !== false && repeaterItemVisible(child, rowData)) row.append(renderWidget(child, activeScreen, rowData));
       }
@@ -344,13 +467,11 @@ function renderWidget(widget, activeScreen, item) {
   } else {
     element.textContent = shownText || widget.type.replaceAll("-", " ");
   }
-  if (widget.type !== "repeater") element.addEventListener("click", () => fire(widget, "onClick", item));
-  element.addEventListener("mouseenter", () => fire(widget, "onHover", item));
-  element.addEventListener("touchstart", () => fire(widget, "onTouchStart", item), { passive: true });
-  element.addEventListener("touchend", () => {
-    fire(widget, "onTouchEnd", item);
-    fire(widget, "onTap", item);
-  }, { passive: true });
+  if (widget.type !== "repeater") bindWidgetEvents(element, widget, item);
+  if (element.tagName === "DIV") {
+    element.tabIndex = 0;
+    element.setAttribute("aria-label", String(widget.props.label || widget.props.text || widget.type));
+  }
   const panelState = panelStates.get(widget.id);
   if (panelState) element.dataset.panelState = panelState;
   const owner = widget.groupId ? allWidgets(activeScreen.widgets).find((item) => item.id === widget.groupId) : undefined;
@@ -396,6 +517,7 @@ function render() {
   stage.replaceChildren();
   const device = activeScreen.device || { width: 1280, height: 800 };
   stage.dataset.screenId = activeScreen.id;
+  stage.dataset.inputMode = activeScreen.inputMode || "both";
   stage.style.width = device.width + "px";
   stage.style.height = device.height + "px";
   resizeStage();
@@ -450,7 +572,7 @@ export const PREVIEW_RUNTIME_STYLES = `*{box-sizing:border-box}html,body{margin:
 .toolbar{position:sticky;top:0;z-index:2147483647;display:flex;gap:8px;align-items:center;padding:10px;background:#211e29;border-bottom:1px solid #37323f}
 .toolbar button,.toolbar select{min-height:32px;border:1px solid #494353;border-radius:6px;padding:5px 9px;background:#302b39;color:inherit}
 .toolbar button:disabled{opacity:.45}.stage-wrap{padding:28px;overflow:auto}.stage{position:relative;margin:0 auto;background:#fff;color:#24212b;overflow:hidden;box-shadow:0 12px 42px #0007}
-.widget{position:absolute;overflow:hidden;white-space:pre-wrap}.widget img{width:100%;height:100%;object-fit:cover}.widget textarea,.widget input{max-width:100%;font:inherit}ul{margin:0;padding-left:20px}
+.widget{position:absolute;overflow:hidden;white-space:pre-wrap}.widget img{width:100%;height:100%;object-fit:cover}.widget textarea,.widget input{max-width:100%;font:inherit}.widget:hover{filter:brightness(.96)}.widget:focus-visible{outline:2px solid #8b69ed;outline-offset:2px}.widget.touch-feedback{box-shadow:0 0 0 8px #9b7cf233;border-radius:8px}#stage[data-input-mode="touch"] .widget,#stage[data-input-mode="both"] .widget{touch-action:none}
 @keyframes protoflow-panel-fade{from{opacity:0}to{opacity:1}}
 @keyframes protoflow-panel-slide-left{from{translate:20px 0}to{translate:0 0}}
 @keyframes protoflow-panel-slide-right{from{translate:-20px 0}to{translate:0 0}}
