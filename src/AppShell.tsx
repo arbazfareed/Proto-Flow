@@ -17,6 +17,7 @@ import { HtmlExportDialog } from "./layout/HtmlExportDialog";
 import { PluginManagerDialog } from "./layout/PluginManagerDialog";
 import { CollaborationDialog } from "./layout/CollaborationDialog";
 import { CommandPalette } from "./layout/CommandPalette";
+import { VersionHistoryDialog } from "./layout/VersionHistoryDialog";
 import { commandRegistry, createCoreCommands } from "./commands/registry";
 import { handleGlobalShortcut } from "./commands/shortcuts";
 import { formatProjectValidationError, SchemaValidationError } from "./project/schema";
@@ -25,6 +26,7 @@ import { createDefaultBreakpoints } from "./project/responsive";
 import { DEVICE_PRESETS, toScreenDevice } from "./devices/catalog";
 import { getPreviewWindowSize } from "./preview/windowSizing";
 import { useWalletStore } from "./wallet/store";
+import { createProjectCheckpoint, startVersionHistoryAutosave } from "./project/versionHistory";
 import { checkCloudHealth } from "./wallet/api";
 import { startNetworkMonitor } from "./wallet/network";
 import type { DeviceCategory } from "./devices/types";
@@ -39,6 +41,9 @@ import {
 
 function AppShell() {
   const paletteOpen = useStore((state) => state.paletteOpen);
+  const currentProject = useStore((state) => state.project);
+  const currentFilePath = useStore((state) => state.filePath);
+  const projectIsDirty = useStore((state) => state.isDirty);
   const setPaletteOpen = useStore((state) => state.setPaletteOpen);
   const togglePalette = useStore((state) => state.togglePalette);
   const toggleLeftPanel = useStore((state) => state.toggleLeftPanel);
@@ -61,6 +66,7 @@ function AppShell() {
   const [collaborationMounted, setCollaborationMounted] = useState(false);
   const [collaborationOpen, setCollaborationOpen] = useState(false);
   const [collaborationInviteId, setCollaborationInviteId] = useState<string | null>(null);
+  const [versionHistoryOpen, setVersionHistoryOpen] = useState(false);
   const walletInitializationStarted = useRef(false);
   const previewConnected = useRef(false);
   const syncWallet = useWalletStore((state) => state.sync);
@@ -265,6 +271,27 @@ function AppShell() {
   );
 
   useEffect(
+    () => startVersionHistoryAutosave(
+      () => useStore.getState(),
+      (error) => {
+        console.error("Could not create an automatic project checkpoint.", error);
+        notify(error instanceof Error ? error.message : "Could not create an automatic checkpoint.", true);
+      },
+    ),
+    [notify],
+  );
+
+  const createManualCheckpoint = useCallback(async () => {
+    const current = useStore.getState();
+    try {
+      await createProjectCheckpoint(current.project, current.filePath, "Manual checkpoint", "manual", true);
+      notify("Manual checkpoint created");
+    } catch (error) {
+      notify(error instanceof Error ? error.message : "Could not create a checkpoint.", true);
+    }
+  }, [notify]);
+
+  useEffect(
     () =>
       startNetworkMonitor(
         checkCloudHealth,
@@ -359,8 +386,10 @@ function AppShell() {
       toggleSnap,
       checkForUpdates: requestUpdateCheck,
       openPlugins: () => setPluginManagerOpen(true),
+      openVersionHistory: () => setVersionHistoryOpen(true),
+      createCheckpoint: () => void createManualCheckpoint(),
     }),
-    [createNewProject, openFile, redo, requestUpdateCheck, save, toggleGrid, toggleSnap, undo],
+    [createManualCheckpoint, createNewProject, openFile, redo, requestUpdateCheck, save, toggleGrid, toggleSnap, undo],
   );
 
   useEffect(() => {
@@ -377,6 +406,7 @@ function AppShell() {
         togglePalette,
         closePalette: () => setPaletteOpen(false),
         saveProject: (saveAs) => void save(saveAs),
+        createCheckpoint: () => void createManualCheckpoint(),
         undo,
         redo,
         newProject: createNewProject,
@@ -389,6 +419,7 @@ function AppShell() {
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [
     createNewProject,
+    createManualCheckpoint,
     openFile,
     paletteOpen,
     redo,
@@ -549,6 +580,21 @@ function AppShell() {
       <RestoreModal />
       <UpdateToast requestId={updateCheckRequest} />
       <CommandPalette />
+      {versionHistoryOpen && (
+        <VersionHistoryDialog
+          project={currentProject}
+          filePath={currentFilePath}
+          isDirty={projectIsDirty}
+          onClose={() => setVersionHistoryOpen(false)}
+          onRestore={(checkpoint) => {
+            const current = useStore.getState();
+            const previousProject = current.project;
+            current.restoreProject(checkpoint, current.filePath);
+            useStore.getState().pushHistory(previousProject);
+          }}
+          onNotify={notify}
+        />
+      )}
       {walletOpen && <WalletDialog onClose={() => setWalletOpen(false)} />}
       {cloudPreviewOpen && <CloudPreviewDialog onClose={() => setCloudPreviewOpen(false)} />}
       {reactExportOpen && <ReactCodeExportDialog onClose={() => setReactExportOpen(false)} />}

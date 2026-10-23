@@ -16,6 +16,8 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             commands::file_io::save_project,
             commands::file_io::open_project,
+            commands::file_io::load_project_history,
+            commands::file_io::save_project_history,
             commands::file_io::save_project_as,
             commands::file_io::pick_project_save_path,
             commands::file_io::save_html_export,

@@ -3,6 +3,7 @@ export interface ShortcutActions {
   togglePalette: () => void;
   closePalette: () => void;
   saveProject: (saveAs?: boolean) => void;
+  createCheckpoint: () => void;
   undo: () => void;
   redo: () => void;
   newProject: () => void;
@@ -55,13 +56,19 @@ export function handleGlobalShortcut(
 
   if (!modifier) return;
 
-  if (key === "s") {
+  const editing = isEditingTarget(event.target);
+  if (key === "s" && event.shiftKey) {
     event.preventDefault();
-    actions.saveProject(event.shiftKey);
+    if (!editing) actions.createCheckpoint();
     return;
   }
 
-  const editing = isEditingTarget(event.target);
+  if (key === "s") {
+    event.preventDefault();
+    actions.saveProject(false);
+    return;
+  }
+
   if (!editing && key === "z") {
     event.preventDefault();
     if (event.shiftKey) actions.redo();

@@ -7,11 +7,12 @@ use std::{
 use base64::{Engine as _, engine::general_purpose::STANDARD as BASE64};
 use serde::Serialize;
 use sha2::{Digest, Sha256};
-use tauri::AppHandle;
+use tauri::{AppHandle, Manager};
 use tauri_plugin_dialog::{DialogExt, FilePath};
 use uuid::Uuid;
 
 const MAX_PROJECT_FILE_BYTES: u64 = 10 * 1024 * 1024;
+const MAX_VERSION_HISTORY_FILE_BYTES: u64 = 50 * 1024 * 1024;
 const MAX_HTML_EXPORT_FILE_BYTES: usize = 100 * 1024 * 1024;
 const PROJECT_EXTENSION: &str = "pflow";
 const PROJECT_FILTER_NAME: &str = "Proto Flow project";
@@ -206,6 +207,76 @@ fn atomic_write_project(path: &Path, content: &str) -> Result<(), String> {
     StagedProjectFile::create(path, content.as_bytes())?.commit(path)
 }
 
+fn version_history_path(
+    app: &AppHandle,
+    project_id: &str,
+    _file_path: Option<String>,
+) -> Result<PathBuf, String> {
+    Uuid::parse_str(project_id)
+        .map_err(|_| "The project ID for version history is invalid.".to_owned())?;
+    let directory = app
+        .path()
+        .app_data_dir()
+        .map_err(|error| format!("Could not locate project version history storage: {error}"))?
+        .join("version-history");
+    fs::create_dir_all(&directory)
+        .map_err(|error| format!("Could not create project version history storage: {error}"))?;
+    Ok(directory.join(format!("{project_id}.json")))
+}
+
+#[tauri::command]
+pub fn load_project_history(
+    app: AppHandle,
+    project_id: String,
+    file_path: Option<String>,
+) -> Result<Option<String>, String> {
+    let path = version_history_path(&app, &project_id, file_path)?;
+    let metadata = match fs::metadata(&path) {
+        Ok(metadata) => metadata,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(None),
+        Err(error) => {
+            return Err(format!(
+                "Could not inspect project version history: {error}"
+            ));
+        }
+    };
+    if metadata.len() > MAX_VERSION_HISTORY_FILE_BYTES {
+        return Err("Project version history exceeds the 50 MB limit.".into());
+    }
+    fs::read_to_string(path)
+        .map(Some)
+        .map_err(|error| format!("Could not read project version history: {error}"))
+}
+
+#[tauri::command]
+pub fn save_project_history(
+    app: AppHandle,
+    project_id: String,
+    file_path: Option<String>,
+    content: String,
+) -> Result<(), String> {
+    if content.len() as u64 > MAX_VERSION_HISTORY_FILE_BYTES {
+        return Err("Project version history exceeds the 50 MB limit.".into());
+    }
+    let document: serde_json::Value = serde_json::from_str(&content)
+        .map_err(|error| format!("Project version history is invalid JSON: {error}"))?;
+    if document
+        .get("projectId")
+        .and_then(serde_json::Value::as_str)
+        != Some(project_id.as_str())
+    {
+        return Err("Project version history does not match the current project.".into());
+    }
+    let path = version_history_path(&app, &project_id, file_path)?;
+    let parent = path
+        .parent()
+        .filter(|parent| !parent.as_os_str().is_empty())
+        .unwrap_or_else(|| Path::new("."));
+    fs::create_dir_all(parent)
+        .map_err(|error| format!("Could not create project version history directory: {error}"))?;
+    StagedProjectFile::create(&path, content.as_bytes())?.commit(&path)
+}
+
 fn with_html_export_extension(path: PathBuf) -> Result<PathBuf, String> {
     match path.extension().and_then(|extension| extension.to_str()) {
         None => Ok(path.with_extension(HTML_EXPORT_EXTENSION)),
@@ -237,7 +308,10 @@ fn safe_html_export_filename(filename: &str) -> String {
     format!("{stem}.{HTML_EXPORT_EXTENSION}")
 }
 
-fn html_export_save_dialog(app: &AppHandle, default_filename: &str) -> Result<Option<PathBuf>, String> {
+fn html_export_save_dialog(
+    app: &AppHandle,
+    default_filename: &str,
+) -> Result<Option<PathBuf>, String> {
     let selected = app
         .dialog()
         .file()
