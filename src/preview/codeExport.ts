@@ -330,10 +330,36 @@ ${EXPRESSION_RUNTIME_SOURCE}
     };
     return handlers;
   };
-  const style = (widget: Widget): CSSProperties => ({
+  const layoutPosition = (widget: Widget) => {
+    const parent = widget.groupId ? screen.widgets.find((item) => item.id === widget.groupId) : undefined;
+    if (!parent || (parent.type !== "flex-row" && parent.type !== "flex-column")) return undefined;
+    const siblings = screen.widgets.filter((item) => item.groupId === parent.id)
+      .sort((first, second) => first.zIndex - second.zIndex);
+    const index = siblings.findIndex((item) => item.id === widget.id);
+    const gap = typeof parent.props.gap === "number" ? Math.max(0, parent.props.gap) : 12;
+    const padding = typeof parent.props.padding === "number" ? Math.max(0, parent.props.padding) : 12;
+    const previous = siblings.slice(0, Math.max(0, index));
+    const cursor = previous.reduce((total, item) =>
+      total + (parent.type === "flex-row" ? item.width : item.height) + gap, 0);
+    const horizontal = parent.type === "flex-row";
+    const crossSize = horizontal ? parent.height : parent.width;
+    const childSize = horizontal ? widget.height : widget.width;
+    const crossOffset = parent.props.alignItems === "center"
+      ? Math.max(0, (crossSize - childSize) / 2)
+      : parent.props.alignItems === "flex-end"
+        ? Math.max(0, crossSize - childSize)
+        : 0;
+    return {
+      x: parent.x + padding + (horizontal ? cursor : crossOffset),
+      y: parent.y + padding + (horizontal ? crossOffset : cursor),
+    };
+  };
+  const style = (widget: Widget): CSSProperties => {
+    const position = layoutPosition(widget);
+    return ({
     position: "absolute",
-    left: widget.x,
-    top: widget.y,
+    left: position?.x ?? widget.x,
+    top: position?.y ?? widget.y,
     width: widget.width,
     height: widget.height,
     transform: widget.rotation ? \`rotate(\${widget.rotation}deg)\` : undefined,
@@ -349,6 +375,7 @@ ${EXPRESSION_RUNTIME_SOURCE}
     touchAction: screen.inputMode === "mouse" ? "manipulation" : "none",
     boxSizing: "border-box",
   });
+  };
   const resolveText = (value: unknown, widget: Widget, item?: Record<string, unknown>) =>
     String(value ?? "").replace(/\\{\\{\\s*item\\.([\\w$.-]+)\\s*\\}\\}/g, (_match, field: string) =>
       String(item?.[field] ?? ""))
@@ -430,6 +457,118 @@ ${EXPRESSION_RUNTIME_SOURCE}
     if (widget.type === "image") {
       const src = resolveText(widget.props.src, widget, item);
       if (src) return <img key={widget.id} src={src} alt={String(widget.props.alt ?? text)} style={{ ...style(widget), objectFit: "cover" }} {...interactionHandlers(widget, item)} />;
+    }
+    if (widget.type === "card") {
+      const imageSrc = resolveText(widget.props.imageSrc ?? widget.props.src, widget, item);
+      return <article key={widget.id} className="pf-card" style={{ ...style(widget), display: "flex",
+        flexDirection: "column", overflow: "hidden", border: "1px solid #d9d5e0",
+        borderRadius: 10, background: "#fff", boxShadow: "0 4px 14px #28203618" }}
+        {...interactionHandlers(widget, item)}>
+        {imageSrc ? <img src={imageSrc} alt={String(widget.props.imageAlt ?? widget.props.title ?? "")}
+          style={{ width: "100%", height: "43%", minHeight: 48, objectFit: "cover" }} />
+          : <div className="pf-card-image" aria-hidden="true" style={{ display: "grid", height: "43%",
+            minHeight: 48, placeItems: "center", color: "#767187", background: "linear-gradient(135deg,#ece9f4,#d9d6e3)" }}>Image</div>}
+        <div className="pf-card-content" style={{ display: "flex", minHeight: 0, flex: "1 1 auto",
+          flexDirection: "column", alignItems: "flex-start", gap: 4, padding: "10px 12px" }}>
+          <h2 style={{ maxWidth: "100%", margin: 0, overflow: "hidden", fontSize: 14, textOverflow: "ellipsis" }}>
+            {resolveText(widget.props.title ?? text, widget, item)}</h2>
+          <p style={{ maxWidth: "100%", margin: 0, overflow: "hidden", color: "#66616f",
+            fontSize: 11, textOverflow: "ellipsis" }}>{resolveText(widget.props.subtitle ?? "", widget, item)}</p>
+          <button type="button" tabIndex={-1} style={{ marginTop: "auto", padding: "4px 8px",
+            border: 0, borderRadius: 4, color: "#fff", background: "#7454cf" }}>
+            {resolveText(widget.props.actionLabel ?? "Learn more", widget, item)}</button>
+        </div>
+      </article>;
+    }
+    if (widget.type === "chart") {
+      const values = (Array.isArray(widget.props.values) ? widget.props.values : [38, 68, 50, 88, 62])
+        .slice(0, 8)
+        .map((value) => typeof value === "number" && Number.isFinite(value) ? Math.max(0, value) : 0);
+      const maximum = Math.max(1, ...values);
+      const chartType = widget.props.chartType;
+      return <figure key={widget.id} className="pf-chart" style={{ ...style(widget), display: "flex",
+        flexDirection: "column", gap: 4, margin: 0, padding: "8px 10px", border: "1px solid #ddd9e5",
+        borderRadius: 8, color: "#7454cf", background: "#fff" }}
+        aria-label={String(widget.props.label ?? "Chart")} {...interactionHandlers(widget, item)}>
+        <figcaption style={{ overflow: "hidden", color: "#45414c", fontSize: 11, fontWeight: 650,
+          textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{resolveText(widget.props.label ?? text, widget, item)}</figcaption>
+        <svg viewBox="0 0 200 100" role="img" aria-label={\`\${String(widget.props.label ?? "Chart")} (\${String(chartType ?? "bar")})\`}
+          style={{ width: "100%", minHeight: 0, flex: "1 1 auto" }}>
+          {chartType === "line"
+            ? <polyline points={values.map((value, index) => \`\${12 + index * (176 / Math.max(1, values.length - 1))},\${88 - value / maximum * 70}\`).join(" ")} fill="none" stroke="currentColor" strokeWidth="3" />
+            : chartType === "pie"
+              ? <circle cx="100" cy="50" r="34" fill="none" stroke="#8b69ed" strokeWidth="22" strokeDasharray="150 214" />
+              : values.map((value, index) => {
+                  const height = value / maximum * 70;
+                  return <rect key={index} x={12 + index * 23} y={88 - height} width="18" height={height} rx="3" fill={index % 2 ? "#55b6a8" : "#8b69ed"} />;
+                })}
+        </svg>
+      </figure>;
+    }
+    if (widget.type === "alert") {
+      const variant = String(widget.props.variant ?? "info");
+      const alertColors = variant === "success"
+        ? { borderColor: "#9ed9bb", color: "#17653e", background: "#effbf4" }
+        : variant === "warning"
+          ? { borderColor: "#f1d293", color: "#74500f", background: "#fff9e9" }
+          : variant === "error"
+            ? { borderColor: "#efb0b5", color: "#892c35", background: "#fff2f3" }
+            : { borderColor: "#acd7ff", color: "#16466f", background: "#eff8ff" };
+      return <aside key={widget.id} className={\`pf-alert is-\${variant}\`}
+        role={variant === "error" ? "alert" : "status"} style={{ ...style(widget), display: "flex",
+          alignItems: "flex-start", gap: 9, padding: "10px 12px", border: "1px solid",
+          borderRadius: 7, ...alertColors }}
+        {...interactionHandlers(widget, item)}>
+        <strong style={{ flex: "1 1 auto", fontSize: 11 }}>{resolveText(widget.props.label ?? text, widget, item)}</strong>
+        <span style={{ fontSize: 10 }}>{resolveText(widget.props.subtitle ?? "", widget, item)}</span>
+        {widget.props.dismissible === true && <button type="button" aria-label="Dismiss alert"
+          style={{ border: 0, color: "inherit", background: "transparent", fontSize: 18 }}>×</button>}
+      </aside>;
+    }
+    if (widget.type === "skeleton") {
+      return <div key={widget.id} className="pf-skeleton" aria-busy="true" style={{ ...style(widget),
+        display: "flex", flexDirection: "column", justifyContent: "center", gap: 8, padding: 12,
+        background: "#f1f0f4" }} {...interactionHandlers(widget, item)}>
+        <span style={{ height: 12, borderRadius: 5, background: "#e5e3e9" }} />
+        <span style={{ width: "78%", height: 12, borderRadius: 5, background: "#e5e3e9" }} />
+        <span style={{ width: "56%", height: 12, borderRadius: 5, background: "#e5e3e9" }} />
+      </div>;
+    }
+    if (widget.type === "video") {
+      const source = resolveText(widget.props.src, widget, item);
+      return <figure key={widget.id} className="pf-video" style={{ ...style(widget), display: "grid",
+        placeItems: "center", overflow: "hidden", margin: 0, borderRadius: 8, background: "#171923" }}
+        {...interactionHandlers(widget, item)}>
+        {source
+          ? <video controls src={source} poster={String(widget.props.poster ?? "")} aria-label={text}
+              style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+          : <div className="pf-video-placeholder" role="img" aria-label={\`\${text} video placeholder\`}
+              style={{ display: "grid", width: "100%", height: "100%", placeItems: "center",
+                color: "#fff", background: "linear-gradient(145deg,#2b3041,#171923)", fontSize: 30 }}>▶</div>}
+        <figcaption>{text}</figcaption>
+      </figure>;
+    }
+    if (widget.type === "flex-row" || widget.type === "flex-column" || widget.type === "container") {
+      return <section key={widget.id} className={\`pf-layout is-\${widget.type}\`}
+        aria-label={String(widget.props.label ?? widget.type)}
+        style={{ ...style(widget), display: widget.type === "container" ? "block" : "flex",
+          flexDirection: widget.type === "flex-row" ? "row" : "column",
+          gap: typeof widget.props.gap === "number" ? widget.props.gap : 12,
+          padding: typeof widget.props.padding === "number" ? widget.props.padding : 12,
+          border: "1px dashed #8d7eb7", borderRadius: 7, background: "#5a4a8020" }}
+        {...interactionHandlers(widget, item)} />;
+    }
+    if (widget.type === "spacer") {
+      return <div key={widget.id} aria-hidden="true" className="pf-spacer" style={{ ...style(widget),
+        border: "1px dashed #b6a6df", background: "repeating-linear-gradient(135deg,#8b69ed12 0 6px,transparent 6px 12px)" }}
+        {...interactionHandlers(widget, item)} />;
+    }
+    if (widget.type === "mobile-app" || widget.type === "web-app") {
+      return <div key={widget.id} role="img" aria-label={String(widget.props.label ?? widget.type)}
+        className={\`pf-icon-mark is-\${widget.type}\`} style={{ ...style(widget), display: "grid",
+          placeItems: "center", border: "1px solid #8b69ed", borderRadius: 9, color: "#7454cf",
+          background: "#f3efff", fontSize: 32 }}
+        {...interactionHandlers(widget, item)}>{widget.type === "mobile-app" ? "▯" : "▱"}</div>;
     }
     if (widget.type === "text" && widget.props.richText === true) {
       return <div key={widget.id} tabIndex={0} style={style(widget)}

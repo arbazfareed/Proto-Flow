@@ -93,6 +93,7 @@ const CATEGORY_TYPES: Record<Exclude<LayerCategoryId, "other">, ReadonlySet<stri
     "path",
     "icon",
     "custom-icon",
+    "spacer",
     "code-block",
   ]),
   widgets: new Set([
@@ -112,6 +113,8 @@ const CATEGORY_TYPES: Record<Exclude<LayerCategoryId, "other">, ReadonlySet<stri
     "image",
     "avatar",
     "video",
+    "mobile-app",
+    "web-app",
     "badge",
     "chip",
     "tag",
@@ -154,6 +157,9 @@ const CATEGORY_TYPES: Record<Exclude<LayerCategoryId, "other">, ReadonlySet<stri
   ]),
   symbols: new Set(["symbol", "symbol-instance", "symbolInstance", "component-master", "componentMaster"]),
   containers: new Set([
+    "container",
+    "flex-row",
+    "flex-column",
     "group",
     "frame",
     "card",

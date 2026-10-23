@@ -74,6 +74,7 @@ import { ScreenLayerSidebar } from "./ScreenLayerSidebar";
 import { createWidgetCopies } from "../project/widgetClipboard";
 import { SymbolLibrary } from "./SymbolLibrary";
 import { WidgetIcon } from "./widgetIcons";
+import { getWidgetLearningGuide } from "../project/learningWidgets";
 import { BreakpointToolbar, ResponsivePanel } from "./ResponsiveControls";
 import {
   evaluateGeometryExpression,
@@ -2509,6 +2510,182 @@ function RepeaterBindingSection({ screen, widget }: { screen: Project["screens"]
   );
 }
 
+function WidgetPropertiesSection({
+  widget,
+  screenId,
+}: {
+  widget: Widget;
+  screenId: string;
+}) {
+  const editSnapshotRef = useRef<Project | null>(null);
+  const timerRef = useRef<number | null>(null);
+  const guide = getWidgetLearningGuide(widget.type);
+
+  const finishEdit = useCallback(() => {
+    const snapshot = editSnapshotRef.current;
+    if (!snapshot) return;
+    if (timerRef.current !== null) window.clearTimeout(timerRef.current);
+    timerRef.current = null;
+    editSnapshotRef.current = null;
+    useStore.getState().pushHistory(snapshot);
+  }, []);
+
+  useEffect(() => () => finishEdit(), [finishEdit, widget.id]);
+
+  const updateProp = (key: string, value: unknown) => {
+    const current = useStore.getState();
+    if (!editSnapshotRef.current) editSnapshotRef.current = current.project;
+    const project: Project = {
+      ...current.project,
+      updatedAt: new Date().toISOString(),
+      screens: current.project.screens.map((screen) =>
+        screen.id !== screenId
+          ? screen
+          : {
+              ...screen,
+              widgets: mapWidgetsDeep(screen.widgets, (candidate) =>
+                candidate.id === widget.id
+                  ? { ...candidate, props: { ...candidate.props, [key]: value } }
+                  : candidate,
+              ),
+            },
+      ),
+    };
+    useStore.setState({ project, isDirty: true });
+    if (timerRef.current !== null) window.clearTimeout(timerRef.current);
+    timerRef.current = window.setTimeout(finishEdit, 500);
+  };
+
+  const textField = (key: string, label: string, fallback = "") => (
+    <label className="field-label widget-property-field" key={key}>
+      {label}
+      <input
+        className="text-field"
+        value={typeof widget.props[key] === "string" ? widget.props[key] as string : fallback}
+        onChange={(event) => updateProp(key, event.currentTarget.value)}
+        onBlur={finishEdit}
+      />
+    </label>
+  );
+  const selectField = (key: string, label: string, options: string[], fallback: string) => (
+    <label className="field-label widget-property-field" key={key}>
+      {label}
+      <select
+        className="text-field"
+        value={typeof widget.props[key] === "string" ? widget.props[key] as string : fallback}
+        onChange={(event) => {
+          updateProp(key, event.currentTarget.value);
+          finishEdit();
+        }}
+      >
+        {options.map((option) => <option key={option} value={option}>{option}</option>)}
+      </select>
+    </label>
+  );
+  const numberField = (key: string, label: string, fallback: number) => (
+    <label className="field-label widget-property-field" key={key}>
+      {label}
+      <input
+        className="text-field"
+        type="number"
+        min={0}
+        value={typeof widget.props[key] === "number" ? widget.props[key] as number : fallback}
+        onChange={(event) => updateProp(key, Math.max(0, Number(event.currentTarget.value) || 0))}
+        onBlur={finishEdit}
+      />
+    </label>
+  );
+
+  const fields = widget.type === "card"
+    ? <>
+        {textField("title", "Card title", "Product card")}
+        {textField("subtitle", "Description", "A short description goes here.")}
+        {textField("imageSrc", "Image source URL")}
+        {textField("imageAlt", "Image alternative text")}
+        {textField("actionLabel", "Action label", "Learn more")}
+      </>
+    : widget.type === "chart"
+      ? <>
+          {textField("label", "Chart title", "Monthly activity")}
+          {selectField("chartType", "Chart type", ["bar", "line", "pie"], "bar")}
+          <label className="field-label widget-property-field">
+            Values (comma separated)
+            <input
+              className="text-field"
+              value={Array.isArray(widget.props.values) ? widget.props.values.join(", ") : "38, 68, 50, 88, 62"}
+              onChange={(event) => updateProp("values", event.currentTarget.value
+                .split(",")
+                .map((value) => Number(value.trim()))
+                .filter((value) => Number.isFinite(value))
+                .slice(0, 8))}
+              onBlur={finishEdit}
+            />
+          </label>
+        </>
+      : widget.type === "alert"
+        ? <>
+            {textField("label", "Alert title", "Changes saved")}
+            {textField("subtitle", "Description")}
+            {selectField("variant", "Style", ["info", "success", "warning", "error"], "info")}
+            <label className="responsive-visible-field">
+              <input
+                type="checkbox"
+                checked={widget.props.dismissible === true}
+                onChange={(event) => {
+                  updateProp("dismissible", event.currentTarget.checked);
+                  finishEdit();
+                }}
+              />
+              Show dismiss button
+            </label>
+          </>
+        : widget.type === "video"
+          ? <>
+              {textField("label", "Video title", "Product overview")}
+              {textField("src", "Video source URL")}
+              {textField("poster", "Poster image URL")}
+            </>
+          : widget.type === "flex-row" || widget.type === "flex-column"
+            ? <>
+                {textField("label", "Layout name", widget.type === "flex-row" ? "Flex Row" : "Flex Column")}
+                {numberField("gap", "Gap (px)", 12)}
+                {numberField("padding", "Padding (px)", 12)}
+                {selectField("alignItems", "Align items", ["flex-start", "center", "flex-end", "stretch"], "center")}
+                {selectField("justifyContent", "Justify content", ["flex-start", "center", "flex-end", "space-between"], "flex-start")}
+              </>
+            : widget.type === "mobile-app" || widget.type === "web-app" || widget.type === "icon"
+              ? <>
+                  {textField("label", "Accessible label")}
+                  <label className="field-label widget-property-field">
+                    Icon
+                    <select
+                      className="text-field"
+                      value={typeof widget.props.iconName === "string" ? widget.props.iconName : ""}
+                      onChange={(event) => {
+                        updateProp("iconName", event.currentTarget.value);
+                        finishEdit();
+                      }}
+                    >
+                      {CANVAS_ICON_NAMES.map((name) => <option key={name} value={name}>{name}</option>)}
+                    </select>
+                  </label>
+                </>
+              : textField("label", "Label", String(widget.props.label ?? widget.type));
+
+  return (
+    <section className="widget-properties-section" aria-label="Widget properties">
+      <div className="section-label"><span>ELEMENT PROPERTIES</span></div>
+      <div className="widget-properties-fields">{fields}</div>
+      <div className="widget-learning-guide" aria-label="HTML and CSS learning guide">
+        <strong>Learn the structure</strong>
+        <code>{guide.element}</code>
+        <code>{guide.css}</code>
+        <p>{guide.note}</p>
+      </div>
+    </section>
+  );
+}
+
 export function RightInspector({ onToggle, onUpdates, onRename }: RightInspectorProps) {
   const inspectorTab = useStore((state) => state.inspectorTab);
   const setInspectorTab = useStore((state) => state.setInspectorTab);
@@ -2638,6 +2815,9 @@ export function RightInspector({ onToggle, onUpdates, onRename }: RightInspector
           <div id="inspector-design-panel" role="tabpanel" aria-labelledby="inspector-design-tab">
             <GeometrySection widgets={selectedWidgets} />
             <StyleSection widgets={selectedWidgets} />
+            {selectedWidget && selectedScreen && (
+              <WidgetPropertiesSection widget={selectedWidget} screenId={selectedScreen.id} />
+            )}
             {selectedWidget?.type === "dynamic-panel" && selectedScreen && (
               <DynamicPanelSection screen={selectedScreen} widget={selectedWidget} />
             )}

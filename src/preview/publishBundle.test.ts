@@ -8,6 +8,33 @@ import {
 } from "./publishBundle";
 
 describe("standalone published preview bundle", () => {
+  it("renders semantic cards, charts, and flex-layout elements", () => {
+    const project = createEmptyProject("Learning widget runtime");
+    project.screens[0].widgets.push(
+      {
+        id: crypto.randomUUID(), type: "card", x: 10, y: 20, width: 260, height: 196,
+        rotation: 0, opacity: 1, visible: true, locked: false, zIndex: 1, style: {},
+        props: { title: "Card title", subtitle: "Description", imageSrc: "", actionLabel: "Open" },
+      },
+      {
+        id: crypto.randomUUID(), type: "chart", x: 20, y: 30, width: 240, height: 160,
+        rotation: 0, opacity: 1, visible: true, locked: false, zIndex: 2, style: {},
+        props: { label: "Activity", chartType: "pie", values: [10, 40, 25] },
+      },
+      {
+        id: crypto.randomUUID(), type: "flex-row", x: 30, y: 40, width: 300, height: 120,
+        rotation: 0, opacity: 1, visible: true, locked: false, zIndex: 3, style: {},
+        props: { label: "Actions", gap: 12, padding: 12 },
+      },
+    );
+    const html = generatePublishedPreviewHtml(project);
+
+    expect(html).toContain('element.classList.add("card-widget")');
+    expect(html).toContain('element.classList.add("chart-widget")');
+    expect(html).toContain('element.classList.add("layout-widget"');
+    expect(html).toContain("autoLayoutPosition(widget, activeScreen)");
+  });
+
   it("embeds the project data and runtime without external requests or browser storage", () => {
     const project = createEmptyProject("Published prototype");
     const widget: Widget = {
@@ -42,7 +69,7 @@ describe("standalone published preview bundle", () => {
     expect(JSON.parse(serialized!)).toEqual(project);
     expect(html).toContain("{{status}}");
     expect(html).not.toMatch(/<script\s+src=/i);
-    expect(html).not.toMatch(/https?:\/\//i);
+    expect(html).not.toMatch(/https?:\/\/(?!www\.w3\.org\/2000\/svg)/i);
     expect(html).not.toMatch(/\b(?:fetch|XMLHttpRequest|localStorage|sessionStorage)\b/);
     expect(publishedBundleSize(html)).toBe(new TextEncoder().encode(html).byteLength);
   });
