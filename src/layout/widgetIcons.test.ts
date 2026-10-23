@@ -27,6 +27,24 @@ describe("widget icon registry", () => {
     expect(ELEMENT_LIBRARY_TOOL_TYPES.length).toBeGreaterThanOrEqual(65);
   });
 
+  it("uses distinct visual language for element-library categories", () => {
+    expect(getWidgetIconDefinition("grid").color).not.toBe(
+      getWidgetIconDefinition("search").color,
+    );
+    expect(getWidgetIconDefinition("navbar").color).not.toBe(
+      getWidgetIconDefinition("image").color,
+    );
+    expect(getWidgetIconDefinition("card").color).not.toBe(
+      getWidgetIconDefinition("alert").color,
+    );
+    expect(getWidgetIconDefinition("flex-row").icon).not.toBe(
+      getWidgetIconDefinition("flex-column").icon,
+    );
+    expect(getWidgetIconDefinition("spacer").icon).not.toBe(
+      getWidgetIconDefinition("container").icon,
+    );
+  });
+
   it("uses an indigo icon for each screen device category", () => {
     const categories = ["desktop", "laptop", "tablet", "phone", "watch"] as const;
     const icons = categories.map((category) => {

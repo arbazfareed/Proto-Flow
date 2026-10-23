@@ -7,6 +7,7 @@ import {
   CodeXml,
   Eye,
   EyeOff,
+  Info,
   Lock,
   Link2,
   Search,
@@ -105,7 +106,7 @@ function ElementLibraryContents({
   const searchRef = useRef<HTMLInputElement>(null);
   const suppressClickAfterDragRef = useRef(false);
   const [query, setQuery] = useState("");
-  const [learnMode, setLearnMode] = useState(false);
+  const [selectedGuide, setSelectedGuide] = useState<string | null>(null);
   const matchingToolTypes = ELEMENT_LIBRARY_TOOL_TYPES.filter((tool) =>
     `${tool} ${getShapeToolDefinition(tool)?.label ?? tool}`
       .toLowerCase()
@@ -163,20 +164,15 @@ function ElementLibraryContents({
           <strong>{mode === "sidebar" ? "ELEMENTS" : "Element library"}</strong>
           <span>
             {mode === "sidebar"
-              ? "Drag an element onto the canvas or select it to draw. To nest it, place it fully inside a container."
+              ? "Drag to place · click to draw"
               : "Drag an element onto the canvas to place it, or click it then drag to draw."}
           </span>
         </div>
         <div className="element-library-header-actions">
-          <button
-            className={`element-library-learn-toggle${learnMode ? " is-active" : ""}`}
-            type="button"
-            aria-pressed={learnMode}
-            onClick={() => setLearnMode((current) => !current)}
-          >
-            <CodeXml size={14} aria-hidden="true" />
-            Learn
-          </button>
+          <span className="element-library-hint">
+            <CodeXml size={13} aria-hidden="true" />
+            Click <Info size={12} aria-hidden="true" /> for code tips
+          </span>
           {mode === "popover" && (
             <button
               className="icon-button small-icon"
@@ -259,46 +255,66 @@ function ElementLibraryContents({
                 const definition = getShapeToolDefinition(tool);
                 if (!definition) return null;
                 const guide = getWidgetLearningGuide(tool);
+                const guideId = `element-guide-${tool}`;
+                const isGuideOpen = selectedGuide === tool;
                 return (
-                  <button
-                    className={`element-library-item${activeTool === tool ? " is-active" : ""}${learnMode ? " is-learning" : ""}`}
-                    key={tool}
-                    type="button"
-                    draggable
-                    title={`${definition.label} — drag onto the canvas or click, then drag to draw. HTML: ${guide.element} CSS: ${guide.css} ${guide.note}`}
-                    aria-label={`Add ${definition.label}`}
-                    aria-pressed={activeTool === tool}
-                    onDragStart={(event) => {
-                      suppressClickAfterDragRef.current = true;
-                      event.dataTransfer.effectAllowed = "copy";
-                      event.dataTransfer.setData(ELEMENT_DRAG_MIME, tool);
-                      event.dataTransfer.setData("text/plain", definition.label);
-                    }}
-                    onDragEnd={() => {
-                      window.setTimeout(() => {
-                        suppressClickAfterDragRef.current = false;
-                      }, 0);
-                    }}
-                    onClick={(event) => {
-                      if (suppressClickAfterDragRef.current) {
-                        suppressClickAfterDragRef.current = false;
-                        event.preventDefault();
-                        return;
-                      }
-                      onSelectTool(tool);
-                      if (mode === "popover") onClose();
-                    }}
-                  >
-                    <WidgetIcon type={tool} size={16} />
-                    <span>{definition.label}</span>
-                    {learnMode && (
-                      <small className="element-library-learn-copy">
-                        <code>{guide.element}</code>
-                        <span>{guide.css}</span>
-                        <span>{guide.note}</span>
-                      </small>
+                  <div className="element-library-entry" key={tool}>
+                    <button
+                      className={`element-library-item${activeTool === tool ? " is-active" : ""}`}
+                      type="button"
+                      draggable
+                      title={`Drag ${definition.label} onto the canvas or click to draw`}
+                      aria-label={`Add ${definition.label}`}
+                      aria-pressed={activeTool === tool}
+                      onDragStart={(event) => {
+                        suppressClickAfterDragRef.current = true;
+                        event.dataTransfer.effectAllowed = "copy";
+                        event.dataTransfer.setData(ELEMENT_DRAG_MIME, tool);
+                        event.dataTransfer.setData("text/plain", definition.label);
+                      }}
+                      onDragEnd={() => {
+                        window.setTimeout(() => {
+                          suppressClickAfterDragRef.current = false;
+                        }, 0);
+                      }}
+                      onClick={(event) => {
+                        if (suppressClickAfterDragRef.current) {
+                          suppressClickAfterDragRef.current = false;
+                          event.preventDefault();
+                          return;
+                        }
+                        onSelectTool(tool);
+                        if (mode === "popover") onClose();
+                      }}
+                    >
+                      <WidgetIcon type={tool} size={17} />
+                      <span>{definition.label}</span>
+                    </button>
+                    <button
+                      className={`element-library-info-button${isGuideOpen ? " is-active" : ""}`}
+                      type="button"
+                      aria-label={`${isGuideOpen ? "Hide" : "Show"} ${definition.label} code tips`}
+                      aria-expanded={isGuideOpen}
+                      aria-controls={guideId}
+                      title={`Learn about ${definition.label}`}
+                      onClick={() => setSelectedGuide(isGuideOpen ? null : tool)}
+                    >
+                      <Info size={14} aria-hidden="true" />
+                    </button>
+                    {isGuideOpen && (
+                      <div className="element-library-learn-copy" id={guideId}>
+                        <div className="element-library-guide-markup">
+                          <span>HTML</span>
+                          <code>{guide.element}</code>
+                        </div>
+                        <div className="element-library-guide-markup">
+                          <span>CSS</span>
+                          <code>{guide.css}</code>
+                        </div>
+                        <p>{guide.note}</p>
+                      </div>
                     )}
-                  </button>
+                  </div>
                 );
               })}
             </div>

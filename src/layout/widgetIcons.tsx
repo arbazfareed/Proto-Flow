@@ -6,39 +6,37 @@ import {
   AlertCircle,
   ArrowRight,
   Award,
-  Badge,
+  BadgeCheck,
   BadgeDollarSign,
-  BarChart3,
   BellRing,
-  Box,
   Calendar,
   CalendarDays,
+  ChartPie,
   CheckSquare,
   ChevronsLeftRight,
   ChevronsRight,
   ChevronsUpDown,
   ChevronDown,
   Circle,
+  CircleGauge,
   CircleDot,
-  CircleUser,
   CloudOff,
   Component,
   CodeXml,
-  Columns3,
-  Container,
+  Columns2,
   ContactRound,
+  CreditCard,
   FileText,
   Folder,
   Frame,
-  GalleryHorizontal,
+  GalleryVerticalEnd,
   Hash,
-  GitCommitHorizontal,
   Grid3X3,
   Heading1,
   Image,
   Inbox,
   Gauge,
-  Layers,
+  LayoutTemplate,
   LayoutDashboard,
   LayoutPanelTop,
   Laptop,
@@ -50,11 +48,13 @@ import {
   Loader2,
   Maximize,
   Megaphone,
+  MonitorPlay,
   MousePointer2,
   Menu,
   MessageCircle,
   MessageSquare,
   Minus,
+  MoveVertical,
   Monitor,
   Navigation,
   PanelBottom,
@@ -66,21 +66,21 @@ import {
   PanelsTopLeft,
   PenTool,
   ListPlus,
+  Rows2,
   Puzzle,
   RectangleHorizontal,
+  RectangleEllipsis,
   Repeat,
   Search,
   SeparatorHorizontal,
   Smartphone,
-  Rows3,
   SlidersHorizontal,
   Sparkles,
   Spline,
   Shapes,
-  Space,
   Square,
+  SquareDashed,
   SquareChevronDown,
-  SquareStack,
   Star,
   Table,
   Tablet,
@@ -88,11 +88,12 @@ import {
   Tags,
   TextCursorInput,
   ToggleRight,
+  UserRound,
   TrendingUp,
   Triangle,
+  Waypoints,
   Type,
   Upload,
-  Video,
   Watch,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
@@ -120,6 +121,11 @@ export interface WidgetIconDefinition {
 
 const SHAPE_COLOR = "#64748b";
 const WIDGET_COLOR = "#3b82f6";
+const FORM_COLOR = "#34d399";
+const DISPLAY_COLOR = "#a78bfa";
+const NAVIGATION_COLOR = "#38bdf8";
+const DATA_COLOR = "#fbbf24";
+const MEDIA_COLOR = "#f472b6";
 const ADVANCED_COLOR = "#f97316";
 const SYMBOL_COLOR = "#8b5cf6";
 const CONTAINER_COLOR = "#f59e0b";
@@ -136,21 +142,21 @@ function definition(
 const shape = (icon: LucideIcon) => definition(icon, SHAPE_COLOR, "shape");
 const text = (icon: LucideIcon) => definition(icon, SHAPE_COLOR, "text");
 const widget = (icon: LucideIcon) => definition(icon, WIDGET_COLOR, "widget");
-const form = (icon: LucideIcon) => definition(icon, WIDGET_COLOR, "form");
-const display = (icon: LucideIcon) => definition(icon, WIDGET_COLOR, "display");
-const navigation = (icon: LucideIcon) => definition(icon, WIDGET_COLOR, "navigation");
-const data = (icon: LucideIcon) => definition(icon, WIDGET_COLOR, "data");
+const form = (icon: LucideIcon) => definition(icon, FORM_COLOR, "form");
+const display = (icon: LucideIcon) => definition(icon, DISPLAY_COLOR, "display");
+const navigation = (icon: LucideIcon) => definition(icon, NAVIGATION_COLOR, "navigation");
+const data = (icon: LucideIcon) => definition(icon, DATA_COLOR, "data");
 const advanced = (icon: LucideIcon) => definition(icon, ADVANCED_COLOR, "advanced");
 const container = (icon: LucideIcon) => definition(icon, CONTAINER_COLOR, "container");
 const layout = (icon: LucideIcon) => definition(icon, CONTAINER_COLOR, "layout");
-const media = (icon: LucideIcon) => definition(icon, WIDGET_COLOR, "media");
+const media = (icon: LucideIcon) => definition(icon, MEDIA_COLOR, "media");
 const symbol = (icon: LucideIcon) => definition(icon, SYMBOL_COLOR, "symbol");
 
 export const WIDGET_ICON_REGISTRY: Record<string, WidgetIconDefinition> = {
-  container: layout(Container),
-  "flex-row": layout(Rows3),
-  "flex-column": layout(Columns3),
-  spacer: layout(Space),
+  container: layout(LayoutTemplate),
+  "flex-row": layout(Rows2),
+  "flex-column": layout(Columns2),
+  spacer: layout(MoveVertical),
   rectangle: shape(Square),
   ellipse: shape(Circle),
   circle: shape(Circle),
@@ -173,9 +179,9 @@ export const WIDGET_ICON_REGISTRY: Record<string, WidgetIconDefinition> = {
 
   frame: container(Frame),
   group: container(Folder),
-  card: container(SquareStack),
+  card: container(CreditCard),
   modal: container(Maximize),
-  overlay: container(Layers),
+  overlay: container(SquareDashed),
   drawer: container(PanelRightOpen),
   section: container(LayoutPanelTop),
 
@@ -184,7 +190,7 @@ export const WIDGET_ICON_REGISTRY: Record<string, WidgetIconDefinition> = {
   dynamicPanel: advanced(PanelLeftClose),
   repeater: advanced(Repeat),
   accordion: advanced(ChevronsUpDown),
-  carousel: advanced(GalleryHorizontal),
+  carousel: advanced(GalleryVerticalEnd),
   "tabs-container": advanced(LayoutDashboard),
   tabsContainer: advanced(LayoutDashboard),
 
@@ -212,22 +218,22 @@ export const WIDGET_ICON_REGISTRY: Record<string, WidgetIconDefinition> = {
   form: form(FileText),
 
   image: media(Image),
-  avatar: display(CircleUser),
-  video: media(Video),
+  avatar: display(UserRound),
+  video: media(MonitorPlay),
   "mobile-app": media(Smartphone),
   "web-app": media(AppWindow),
-  badge: display(Badge),
+  badge: display(BadgeCheck),
   chip: display(Tags),
   tag: display(Tag),
   tooltip: display(MessageSquare),
   popover: display(MessageCircle),
   alert: display(AlertCircle),
   banner: display(Megaphone),
-  progress: display(Loader),
+  progress: display(CircleGauge),
   "progress-bar": display(Loader),
   progressBar: display(Loader),
   spinner: display(Loader2),
-  skeleton: display(Box),
+  skeleton: display(RectangleEllipsis),
   rating: display(Award),
 
   navbar: navigation(PanelTop),
@@ -243,10 +249,10 @@ export const WIDGET_ICON_REGISTRY: Record<string, WidgetIconDefinition> = {
   table: data(Table),
   list: data(List),
   grid: data(Grid3X3),
-  chart: data(BarChart3),
+  chart: data(ChartPie),
   stat: data(TrendingUp),
   kpi: data(Activity),
-  timeline: data(GitCommitHorizontal),
+  timeline: data(Waypoints),
   calendar: data(CalendarDays),
 
   symbol: symbol(Puzzle),

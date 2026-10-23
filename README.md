@@ -276,7 +276,9 @@ Each screen has an **Input mode** selector: Touch, Mouse, or Both. New screens i
 
 The Element Library includes a **Layout** group with Container, Flex Row, Flex Column, and Spacer. Flex children flow from their saved layer order, gap, padding, and alignment; the same positions are used on the editor canvas, preview, and generated exports. Cards, charts, alerts, skeleton loaders, and video frames now have richer canvas/preview mockups. Card title, description, image URL, alt text, and action label are editable in the inspector; charts support bar, line, and doughnut-style pie views with editable values; alerts and videos expose their main display properties. The icon library includes mobile-device and web-application symbols such as Smartphone, TabletSmartphone, AppWindow, and CodeXml.
 
-Turn on **Learn** in the Element Library to see each element's semantic HTML tag, representative CSS, and a short usage note. The inspector repeats the guide for the selected element. Free HTML and React exports emit semantic article, figure/SVG, alert, media, and flex-layout markup with inline styles so the generated example remains useful without ProtoFlow's editor CSS.
+Element-library entries stay compact: select the small **info** button beside any element to reveal its semantic HTML, representative CSS, and a concise explanation; close it again without activating the drawing tool. Icons use distinct, category-tinted symbols to make forms, data, navigation, display, media, and layout elements easier to scan. The inspector repeats the guide for the selected element. Free HTML and React exports emit semantic article, figure/SVG, alert, media, and flex-layout markup with inline styles so the generated example remains useful without ProtoFlow's editor CSS.
+
+Open [`demos/two-screen-storefront-demo.html`](./demos/two-screen-storefront-demo.html) in a browser for a responsive, interactive two-screen storefront example. The product list links to a product-detail screen with color selection, quantity controls, and add-to-bag feedback; the demo is self-contained and works offline.
 
 ### PF-T413 — Local variables and interaction scope
 
