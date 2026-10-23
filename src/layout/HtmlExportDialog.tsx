@@ -4,9 +4,11 @@ import { Check, Download, FileArchive, X } from "lucide-react";
 import { useStore } from "../store";
 import { embedProjectAssets } from "../preview/exportAssets";
 import {
+  generateDeviceImageArchive,
   generateLocalHtmlArchive,
   localHtmlArchiveBase64,
   localHtmlExportFileName,
+  type LocalHtmlExportMode,
 } from "../preview/htmlExport";
 
 function downloadArchive(bytes: Uint8Array, fileName: string): void {
@@ -25,6 +27,7 @@ export function HtmlExportDialog({ onClose }: { onClose: () => void }) {
   const projectPath = useStore((state) => state.filePath);
   const [includeInteractions, setIncludeInteractions] = useState(true);
   const [includeAssets, setIncludeAssets] = useState(true);
+  const [exportMode, setExportMode] = useState<LocalHtmlExportMode>("responsive");
   const [isExporting, setIsExporting] = useState(false);
   const [message, setMessage] = useState("");
   const [isError, setIsError] = useState(false);
@@ -36,11 +39,16 @@ export function HtmlExportDialog({ onClose }: { onClose: () => void }) {
     setIsExporting(true);
     try {
       const exportProject = await embedProjectAssets(project, projectPath, includeAssets);
-      const bytes = await generateLocalHtmlArchive(exportProject, {
-        includeInteractions,
-        includeAssets,
-      });
-      const fileName = localHtmlExportFileName(project.name);
+      const bytes = exportMode === "device-images"
+        ? await generateDeviceImageArchive(exportProject, { includeInteractions, includeAssets })
+        : await generateLocalHtmlArchive(exportProject, {
+            includeInteractions,
+            includeAssets,
+            mode: exportMode,
+          });
+      const fileName = exportMode === "device-images"
+        ? localHtmlExportFileName(project.name).replace("-html-export.zip", "-device-images.zip")
+        : localHtmlExportFileName(project.name);
       if (isTauri()) {
         const savedPath = await invoke<string | null>("save_html_export", {
           defaultFilename: fileName,
@@ -88,8 +96,18 @@ export function HtmlExportDialog({ onClose }: { onClose: () => void }) {
         <span className="eyebrow">CLIENT-SIDE • OFFLINE • FREE</span>
         <h2 id="html-export-title">Export HTML bundle</h2>
         <p className="html-export-description">
-          Creates a ZIP you can extract and open locally. No cloud request or credits are used.
+            Create a responsive HTML prototype, per-device variants, or 2× device screenshots. All are generated locally for free.
         </p>
+          <label className="html-export-mode-label" htmlFor="html-export-mode">Export format</label>
+          <select
+            id="html-export-mode"
+            value={exportMode}
+            onChange={(event) => setExportMode(event.currentTarget.value as LocalHtmlExportMode)}
+          >
+            <option value="responsive">Single responsive HTML</option>
+            <option value="device-variants">Per-device HTML variants (ZIP)</option>
+            <option value="device-images">Per-device PNG screenshots (2×)</option>
+          </select>
         <fieldset className="react-export-toggles">
           <legend>Include in bundle</legend>
           <label>
@@ -110,7 +128,7 @@ export function HtmlExportDialog({ onClose }: { onClose: () => void }) {
           </label>
         </fieldset>
         <p className="html-export-summary">
-          {project.screens.length} screen{project.screens.length === 1 ? "" : "s"} · 0 credits · no upload
+          {project.screens.length} screen{project.screens.length === 1 ? "" : "s"} · 0 credits · no upload · local export
         </p>
         <div className="react-export-actions">
           <button
@@ -119,7 +137,13 @@ export function HtmlExportDialog({ onClose }: { onClose: () => void }) {
             disabled={isExporting}
           >
             {isExporting ? <Download size={14} /> : <FileArchive size={14} />}
-            {isExporting ? "Preparing bundle…" : isTauri() ? "Save HTML bundle" : "Download HTML bundle"}
+            {isExporting
+              ? "Preparing export…"
+              : exportMode === "device-images"
+                ? isTauri() ? "Save device images" : "Download device images"
+                : exportMode === "device-variants"
+                  ? isTauri() ? "Save device variants" : "Download device variants"
+                  : isTauri() ? "Save HTML bundle" : "Download HTML bundle"}
           </button>
         </div>
         {message && (
@@ -129,8 +153,12 @@ export function HtmlExportDialog({ onClose }: { onClose: () => void }) {
           </p>
         )}
         <p className="react-export-help">
-          The ZIP contains <code>index.html</code>, <code>runtime.js</code>, <code>style.css</code>, and an <code>assets/</code> folder.
-          Remote images are not downloaded so the export stays offline and private.
+          {exportMode === "device-images"
+            ? <>The ZIP contains Desktop, Tablet, and Mobile PNG screenshots rendered at 2× DPR.</>
+            : exportMode === "device-variants"
+              ? <>The ZIP includes <code>index.html</code>, <code>index-desktop.html</code>, <code>index-tablet.html</code>, <code>index-mobile.html</code>, the shared runtime and style, and an <code>assets/</code> folder.</>
+              : <>The ZIP includes <code>index.html</code>, the shared runtime and responsive breakpoint styles, and an <code>assets/</code> folder with 1×/2×/3× image variants where supported.</>}
+          {" "}Remote images are not downloaded so the export stays offline and private.
         </p>
       </section>
     </div>

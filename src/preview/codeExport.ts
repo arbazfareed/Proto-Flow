@@ -12,6 +12,7 @@ export interface CodeExportOptions {
   includeInteractions: boolean;
   includeVariables: boolean;
   includeAssets: boolean;
+  responsive: boolean;
   tailwindVersion: CodeExportTailwindVersion;
 }
 

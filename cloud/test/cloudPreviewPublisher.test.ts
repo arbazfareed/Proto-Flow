@@ -271,6 +271,7 @@ describe("metered cloud preview publishing", () => {
       includeInteractions: true,
       includeVariables: true,
       includeAssets: true,
+      responsive: false,
       tailwindVersion: "4",
     };
 

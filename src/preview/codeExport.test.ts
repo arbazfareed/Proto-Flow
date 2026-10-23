@@ -13,6 +13,7 @@ function options(overrides: Partial<CodeExportOptions> = {}): CodeExportOptions 
     includeInteractions: true,
     includeVariables: true,
     includeAssets: true,
+    responsive: false,
     tailwindVersion: "4",
     ...overrides,
   };

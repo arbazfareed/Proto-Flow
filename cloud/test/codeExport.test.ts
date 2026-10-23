@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import JSZip from "jszip";
+import ts from "typescript";
 import { createEmptyProject } from "../../src/project/schema";
 import { encodeProjectForCodeExport } from "../../src/preview/codeExport";
 import { generateReactCodeArchive } from "../src/codeExport";
@@ -9,6 +10,7 @@ const options = {
   includeInteractions: true,
   includeVariables: true,
   includeAssets: true,
+  responsive: false,
   tailwindVersion: "4",
 };
 
@@ -79,5 +81,34 @@ describe("React/Tailwind archive generator", () => {
       ...options,
       tailwindVersion: "5",
     })).rejects.toThrow("Export settings are invalid");
+  });
+
+  it("generates a responsive React export and emits type-safe responsive source", async () => {
+    const project = createEmptyProject("Responsive React");
+    const archive = await generateReactCodeArchive(encodeProjectForCodeExport(project), {
+      ...options,
+      responsive: true,
+    });
+    const zip = await JSZip.loadAsync(archive.zipBase64, { base64: true });
+    const renderer = await zip.file("src/components/ScreenRenderer.tsx")!.async("text");
+    const helper = await zip.file("src/project/responsive.ts")!.async("text");
+    const compilerOptions = {
+      jsx: ts.JsxEmit.ReactJSX,
+      target: ts.ScriptTarget.ES2022,
+      module: ts.ModuleKind.ESNext,
+    };
+
+    expect(zip.file("src/project/responsive.ts")).not.toBeNull();
+    expect(renderer).toContain("window.addEventListener(\"resize\", updateWidth)");
+    expect(renderer).toContain("resolveWidgetsForBreakpoint");
+    for (const source of [renderer, helper]) {
+      const output = ts.transpileModule(source, {
+        compilerOptions,
+        reportDiagnostics: true,
+      });
+      expect(output.diagnostics?.filter((diagnostic) =>
+        diagnostic.category === ts.DiagnosticCategory.Error,
+      )).toEqual([]);
+    }
   });
 });

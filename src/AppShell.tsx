@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { isTauri } from "@tauri-apps/api/core";
 import { currentMonitor, getCurrentWindow } from "@tauri-apps/api/window";
+import { LogicalSize } from "@tauri-apps/api/dpi";
 import { emitTo, listen } from "@tauri-apps/api/event";
 import { WebviewWindow } from "@tauri-apps/api/webviewWindow";
 import { getCurrent, onOpenUrl } from "@tauri-apps/plugin-deep-link";
@@ -24,7 +25,7 @@ import { formatProjectValidationError, SchemaValidationError } from "./project/s
 import type { Screen } from "./project/schema";
 import { createDefaultBreakpoints } from "./project/responsive";
 import { DEVICE_PRESETS, toScreenDevice } from "./devices/catalog";
-import { getPreviewWindowSize } from "./preview/windowSizing";
+import { fitWindowSizeToMonitor, getPreviewWindowSize } from "./preview/windowSizing";
 import { useWalletStore } from "./wallet/store";
 import { createProjectCheckpoint, startVersionHistoryAutosave } from "./project/versionHistory";
 import { checkCloudHealth } from "./wallet/api";
@@ -77,6 +78,28 @@ function AppShell() {
     setNoticeIsError(isError);
     window.setTimeout(() => setNotice(""), 4000);
   }, []);
+
+  useEffect(() => {
+    if (!isTauri()) return;
+    let disposed = false;
+    const fitToMonitor = async () => {
+      const monitor = await currentMonitor();
+      if (!monitor || disposed) return;
+      const nextSize = fitWindowSizeToMonitor(
+        { width: window.innerWidth, height: window.innerHeight },
+        monitor,
+      );
+      if (nextSize.width === window.innerWidth && nextSize.height === window.innerHeight) return;
+      await getCurrentWindow().setSize(new LogicalSize(nextSize.width, nextSize.height));
+    };
+    void fitToMonitor().catch((error: unknown) => {
+      console.error("Could not fit the main window to the current display.", error);
+      notify(error instanceof Error ? error.message : "Could not fit ProtoFlow on this display.", true);
+    });
+    return () => {
+      disposed = true;
+    };
+  }, [notify]);
 
   const openCollaboration = useCallback(() => {
     setCollaborationMounted(true);

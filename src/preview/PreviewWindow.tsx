@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { CSSProperties, ChangeEvent, ReactNode, TouchEvent } from "react";
-import { ArrowLeft, RotateCcw, SlidersHorizontal, X } from "lucide-react";
+import { ArrowLeft, Camera, RotateCcw, RotateCw, SlidersHorizontal, X } from "lucide-react";
+import { toPng } from "html-to-image";
 import { emit, listen } from "@tauri-apps/api/event";
 import { isTauri } from "@tauri-apps/api/core";
 import { currentMonitor, getCurrentWindow } from "@tauri-apps/api/window";
@@ -23,8 +24,14 @@ import {
   isRepeaterItemVisible,
   type RepeaterRecord,
 } from "../project/repeaters";
-import { DEVICE_PRESETS } from "../devices/catalog";
+import { DEVICE_PRESETS, findDevicePreset } from "../devices/catalog";
+import type { DevicePreset } from "../devices/types";
 import { getPreviewWindowSize } from "./windowSizing";
+import {
+  DEFAULT_MULTI_DEVICE_IDS,
+  getPreviewViewport,
+  resolvePreviewWidgets,
+} from "./deviceLayouts";
 import {
   PreviewRuntime,
   type PreviewEvent,
@@ -98,6 +105,8 @@ function PreviewWidget({
   onError,
   transitionStyle,
   item,
+  controlValues,
+  onControlValueChange,
 }: {
   widget: Widget;
   runtime: PreviewRuntime;
@@ -107,13 +116,19 @@ function PreviewWidget({
   onError: (error: unknown) => void;
   transitionStyle?: CSSProperties;
   item?: RepeaterRecord;
+  controlValues: Record<string, string | boolean>;
+  onControlValueChange: (key: string, value: string | boolean) => void;
 }) {
-  const [inputValue, setInputValue] = useState(stringProp(widget, "value"));
-  const [checked, setChecked] = useState(
-    widget.type === "checkbox"
+  const controlKey = item ? `${widget.id}:${JSON.stringify(item)}` : widget.id;
+  const storedControlValue = controlValues[controlKey];
+  const inputValue = typeof storedControlValue === "string"
+    ? storedControlValue
+    : stringProp(widget, "value");
+  const checked = typeof storedControlValue === "boolean"
+    ? storedControlValue
+    : widget.type === "checkbox"
       ? widget.props.checked === true
-      : widget.type === "radio" ? widget.props.selected === true : widget.props.on === true,
-  );
+      : widget.type === "radio" ? widget.props.selected === true : widget.props.on === true;
   const style = { ...widgetStyle(widget), ...transitionStyle };
   const text = getWidgetText(widget, runtime, screenId, item);
   const richRuns = widget.type === "text" && widget.props.richText === true
@@ -129,7 +144,7 @@ function PreviewWidget({
   };
   const handleChange = (event: ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
     const value = event.currentTarget.value;
-    setInputValue(value);
+    onControlValueChange(controlKey, value);
     const variableName = stringProp(widget, "variableName", stringProp(widget, "variable"));
     if (variableName) {
       const definition = runtime.snapshot().variables.find((entry) => entry.variable.name === variableName)?.variable;
@@ -169,7 +184,7 @@ function PreviewWidget({
           type={widget.type === "radio" ? "radio" : "checkbox"}
           checked={checked}
           onChange={(event) => {
-            setChecked(event.currentTarget.checked);
+            onControlValueChange(controlKey, event.currentTarget.checked);
             const variableName = stringProp(widget, "variableName", stringProp(widget, "variable"));
             if (variableName) {
               try {
@@ -263,6 +278,8 @@ function PreviewWidget({
                   runEvent={runEvent}
                   onError={onError}
                   item={record}
+                  controlValues={controlValues}
+                  onControlValueChange={onControlValueChange}
                 />
               ))}
           </div>
@@ -323,18 +340,95 @@ function PreviewWidget({
   );
 }
 
+function PreviewDeviceFrame({
+  device,
+  viewport,
+  screenName,
+  scalePercent,
+  showFrame,
+  children,
+}: {
+  device: DevicePreset;
+  viewport: { width: number; height: number };
+  screenName: string;
+  scalePercent: number;
+  showFrame: boolean;
+  children: ReactNode;
+}) {
+  const viewportRef = useRef<HTMLDivElement>(null);
+  const [bounds, setBounds] = useState({ width: 0, height: 0 });
+
+  useEffect(() => {
+    const element = viewportRef.current;
+    if (!element) return;
+    const observer = new ResizeObserver((entries) => {
+      const entry = entries[0];
+      if (!entry) return;
+      setBounds({
+        width: entry.contentRect.width,
+        height: entry.contentRect.height,
+      });
+    });
+    observer.observe(element);
+    return () => observer.disconnect();
+  }, []);
+
+  const scale = bounds.width > 0 && bounds.height > 0
+    ? Math.min(
+        1,
+        Math.max(0.01, (bounds.width - 28) / viewport.width),
+        Math.max(0.01, (bounds.height - 28) / viewport.height),
+      ) * scalePercent / 100
+    : 0.01;
+
+  return (
+    <article className="preview-frame-card" data-device-id={device.id}>
+      <header className="preview-frame-heading">
+        <strong>{device.name}</strong>
+        <span>{screenName} · {viewport.width} × {viewport.height}</span>
+      </header>
+      <div className="preview-frame-viewport" ref={viewportRef}>
+        <div
+          className={`preview-frame-stage${showFrame ? " has-frame" : ""}`}
+          style={{
+            width: viewport.width * scale,
+            height: viewport.height * scale,
+          }}
+        >
+          <div
+            className="preview-screen"
+            style={{
+              width: viewport.width,
+              height: viewport.height,
+              transform: `scale(${scale})`,
+              transformOrigin: "top left",
+            }}
+          >
+            {children}
+          </div>
+        </div>
+      </div>
+    </article>
+  );
+}
+
 export function PreviewWindow() {
   const [project, setProject] = useState<Project | null>(null);
   const [runtimeSnapshot, setRuntimeSnapshot] = useState<PreviewRuntimeSnapshot | null>(null);
   const [selectedDeviceId, setSelectedDeviceId] = useState("");
+  const [previewMode, setPreviewMode] = useState<"single" | "columns" | "grid">("single");
+  const [multiDeviceIds, setMultiDeviceIds] = useState<string[]>([...DEFAULT_MULTI_DEVICE_IDS]);
+  const [rotated, setRotated] = useState(false);
+  const [scalePercent, setScalePercent] = useState(100);
   const [showDeviceFrame, setShowDeviceFrame] = useState(true);
   const [showVariables, setShowVariables] = useState(false);
   const [toast, setToast] = useState("");
   const [runtimeRevision, setRuntimeRevision] = useState(0);
-  const [scale, setScale] = useState(1);
+  const [controlValues, setControlValues] = useState<Record<string, string | boolean>>({});
   const runtimeRef = useRef<PreviewRuntime | null>(null);
   const channelRef = useRef<BroadcastChannel | null>(null);
   const loadedScreenRef = useRef("");
+  const previewContentRef = useRef<HTMLDivElement>(null);
   const activeScreen = useMemo(
     () => project?.screens.find((screen) => screen.id === runtimeSnapshot?.screenId),
     [project, runtimeSnapshot?.screenId],
@@ -348,6 +442,15 @@ export function PreviewWindow() {
     ) ?? DEVICE_PRESETS[0],
     [activeScreen?.device?.height, activeScreen?.device?.presetId, activeScreen?.device?.width, selectedDeviceId],
   );
+  const selectedDevices = useMemo(() => {
+    if (previewMode === "single") return [device];
+    const ids = previewMode === "columns"
+      ? DEFAULT_MULTI_DEVICE_IDS.slice(0, 3)
+      : multiDeviceIds;
+    return ids
+      .map((id) => findDevicePreset(id))
+      .filter((preset): preset is DevicePreset => Boolean(preset));
+  }, [device, multiDeviceIds, previewMode]);
 
   const applyProject = useCallback((raw: unknown) => {
     try {
@@ -406,19 +509,6 @@ export function PreviewWindow() {
       channelRef.current = null;
     };
   }, [applyProject]);
-
-  useEffect(() => {
-    const updateScale = () => {
-      setScale(Math.min(
-        1,
-        (window.innerWidth - 36) / device.viewport.width,
-        (window.innerHeight - 132) / device.viewport.height,
-      ));
-    };
-    updateScale();
-    window.addEventListener("resize", updateScale);
-    return () => window.removeEventListener("resize", updateScale);
-  }, [device.viewport.height, device.viewport.width]);
 
   useEffect(() => {
     if (!toast) return;
@@ -488,7 +578,7 @@ export function PreviewWindow() {
       const selected = DEVICE_PRESETS.find((item) => item.id === deviceId);
       if (selected) {
         void currentMonitor().then((monitor) => {
-          const size = getPreviewWindowSize(selected.viewport, monitor);
+          const size = getPreviewWindowSize(getPreviewViewport(selected, rotated), monitor);
           return getCurrentWindow().setSize(new LogicalSize(size.width, size.height));
         }).catch((error: unknown) => {
           console.error("Could not resize the preview window for this device.", error);
@@ -498,38 +588,96 @@ export function PreviewWindow() {
     }
   };
 
+  const toggleMultiDevice = (deviceId: string, checked: boolean) => {
+    if (checked && !multiDeviceIds.includes(deviceId) && multiDeviceIds.length >= 8) {
+      setToast("Choose up to eight devices in the custom grid.");
+      return;
+    }
+    setMultiDeviceIds((current) => checked
+      ? current.includes(deviceId) ? current : [...current, deviceId]
+      : current.filter((id) => id !== deviceId));
+  };
+
+  const captureScreenshot = async () => {
+    const target = previewContentRef.current;
+    if (!target) {
+      setToast("The preview is not ready to capture.");
+      return;
+    }
+    try {
+      const dataUrl = await toPng(target, { pixelRatio: 2, cacheBust: true });
+      const link = document.createElement("a");
+      const safeName = (project?.name ?? "prototype")
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, "-")
+        .replace(/^-|-$/g, "") || "prototype";
+      link.download = `${safeName}-${previewMode}-preview.png`;
+      link.href = dataUrl;
+      link.click();
+      setToast("Preview screenshot saved as a 2× PNG.");
+    } catch (error) {
+      console.error("Could not capture the multi-device preview.", error);
+      setToast(error instanceof Error ? error.message : "Could not capture the preview screenshot.");
+    }
+  };
+
   if (!project || !runtimeSnapshot || !activeScreen) {
     return <main className="preview-loading" aria-live="polite">Waiting for the editor to send a project…</main>;
   }
 
-  const nestedWidgets = collectWidgetsDeep(activeScreen.widgets);
-  const visibleWidgets = flattenActivePanelWidgets(activeScreen.widgets, runtimeSnapshot.panelStates);
-  const previewWidget = (widget: Widget) => (
-    runtimeSnapshot.visibility[widget.id] !== false && (
-      <PreviewWidget
-        key={widget.id}
-        widget={widget}
-        runtime={runtimeRef.current!}
-        screenId={activeScreen.id}
-        snapshot={runtimeSnapshot}
-        runEvent={runEvent}
-        onError={(error) => setToast(error instanceof Error ? error.message : "Preview control failed.")}
-        transitionStyle={(() => {
-          const parent = widget.groupId
-            ? nestedWidgets.find((candidate) => candidate.id === widget.groupId)
-            : undefined;
-          const transition = parent
-            ? runtimeSnapshot.panelTransitions[parent.id]
-            : undefined;
-          return transition && transition.transition !== "none" && transition.duration > 0
-            ? {
-                animation: `protoflow-panel-${transition.transition} ${transition.duration}ms ease both`,
-              }
-            : undefined;
-        })()}
-      />
-    )
-  );
+  const frames = selectedDevices.map((preset) => {
+    const viewport = getPreviewViewport(preset, rotated);
+    const responsiveWidgets = resolvePreviewWidgets(activeScreen, viewport);
+    const nestedWidgets = collectWidgetsDeep(responsiveWidgets);
+    const visibleWidgets = flattenActivePanelWidgets(
+      responsiveWidgets,
+      runtimeSnapshot.panelStates,
+    );
+    return (
+      <PreviewDeviceFrame
+        key={preset.id}
+        device={preset}
+        viewport={viewport}
+        screenName={activeScreen.name}
+        scalePercent={scalePercent}
+        showFrame={showDeviceFrame}
+      >
+        {visibleWidgets
+          .filter((widget) => runtimeSnapshot.visibility[widget.id] !== false)
+          .sort((first, second) => first.zIndex - second.zIndex)
+          .map((widget) => {
+            const parent = widget.groupId
+              ? nestedWidgets.find((candidate) => candidate.id === widget.groupId)
+              : undefined;
+            const transition = parent
+              ? runtimeSnapshot.panelTransitions[parent.id]
+              : undefined;
+            const transitionStyle = transition && transition.transition !== "none" && transition.duration > 0
+              ? {
+                  animation: `protoflow-panel-${transition.transition} ${transition.duration}ms ease both`,
+                }
+              : undefined;
+            return (
+              <PreviewWidget
+                key={widget.id}
+                widget={widget}
+                runtime={runtimeRef.current!}
+                screenId={activeScreen.id}
+                snapshot={runtimeSnapshot}
+                runEvent={runEvent}
+                onError={(error) => setToast(error instanceof Error ? error.message : "Preview control failed.")}
+                transitionStyle={transitionStyle}
+                controlValues={controlValues}
+                onControlValueChange={(key, value) => setControlValues((current) => ({
+                  ...current,
+                  [key]: value,
+                }))}
+              />
+            );
+          })}
+      </PreviewDeviceFrame>
+    );
+  });
 
   return (
     <main className="preview-app">
@@ -539,40 +687,62 @@ export function PreviewWindow() {
           {project.screens.map((screen) => <option key={screen.id} value={screen.id}>{screen.name}</option>)}
         </select>
         <button type="button" aria-label="Restart preview" title="Restart preview" onClick={restart}><RotateCcw size={15} /></button>
-        <select aria-label="Device preset" value={device.id} onChange={(event) => changeDevice(event.currentTarget.value)}>
-          <optgroup label="Desktop">{DEVICE_PRESETS.filter((item) => item.category === "desktop").map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</optgroup>
-          <optgroup label="Tablet">{DEVICE_PRESETS.filter((item) => item.category === "tablet").map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</optgroup>
-          <optgroup label="Mobile">{DEVICE_PRESETS.filter((item) => item.category === "phone").map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</optgroup>
+        <select
+          className="preview-mode-picker"
+          aria-label="Preview layout"
+          value={previewMode}
+          onChange={(event) => setPreviewMode(event.currentTarget.value as typeof previewMode)}
+        >
+          <option value="single">Single device</option>
+          <option value="columns">Desktop · tablet · mobile</option>
+          <option value="grid">Custom device grid</option>
         </select>
+        {previewMode === "single" ? (
+          <select className="preview-device-select" aria-label="Device preset" value={device.id} onChange={(event) => changeDevice(event.currentTarget.value)}>
+            <optgroup label="Desktop">{DEVICE_PRESETS.filter((item) => item.category === "desktop").map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</optgroup>
+            <optgroup label="Tablet">{DEVICE_PRESETS.filter((item) => item.category === "tablet").map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</optgroup>
+            <optgroup label="Mobile">{DEVICE_PRESETS.filter((item) => item.category === "phone").map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</optgroup>
+          </select>
+        ) : (
+          <details className="preview-device-selection">
+            <summary>{previewMode === "columns" ? "3 devices" : `${selectedDevices.length} devices · choose`}</summary>
+            {previewMode === "grid" && (
+              <div className="preview-device-menu">
+                {DEVICE_PRESETS.map((preset) => (
+                  <label key={preset.id}>
+                    <input
+                      type="checkbox"
+                      checked={multiDeviceIds.includes(preset.id)}
+                      onChange={(event) => toggleMultiDevice(preset.id, event.currentTarget.checked)}
+                    />
+                    {preset.name}
+                  </label>
+                ))}
+              </div>
+            )}
+          </details>
+        )}
+        <button type="button" aria-label="Rotate devices" aria-pressed={rotated} title="Rotate devices" onClick={() => setRotated((value) => !value)}><RotateCw size={15} /></button>
         <button type="button" aria-label="Toggle device frame" aria-pressed={showDeviceFrame} title="Toggle device frame" onClick={() => setShowDeviceFrame((value) => !value)}><span className="preview-device-icon">▣</span></button>
+        <label className="preview-zoom">
+          Zoom {scalePercent}%
+          <input aria-label="Preview zoom" type="range" min="25" max="150" step="5" value={scalePercent} onChange={(event) => setScalePercent(Number(event.currentTarget.value))} />
+        </label>
+        <button className="preview-capture-button" type="button" aria-label="Capture preview screenshot" title="Capture 2× PNG screenshot" onClick={() => void captureScreenshot()}><Camera size={15} /></button>
         <button type="button" aria-label="Toggle variables" aria-pressed={showVariables} title="Runtime variables" onClick={() => setShowVariables((value) => !value)}><SlidersHorizontal size={15} /></button>
         {isTauri() && <button type="button" aria-label="Detach preview" title="Detach preview window" onClick={() => void getCurrentWindow().setFocus().catch((error: unknown) => {
           console.error("Could not focus the preview window.", error);
           setToast(error instanceof Error ? error.message : "Could not focus the preview window.");
         })}><X size={15} /></button>}
       </header>
-      <div className="preview-content">
-        <div
-          className={`preview-device${showDeviceFrame ? " has-frame" : ""}`}
-          style={{
-            width: device.viewport.width * scale,
-            height: device.viewport.height * scale,
-          }}
-        >
-          <div
-            className="preview-screen"
-            style={{
-              width: device.viewport.width,
-              height: device.viewport.height,
-              transform: `scale(${scale})`,
-              transformOrigin: "top left",
-            }}
-          >
-            {visibleWidgets
-              .slice()
-              .sort((first, second) => first.zIndex - second.zIndex)
-              .map(previewWidget)}
-          </div>
+      <div
+        className={`preview-content${previewMode === "single" ? "" : " is-multi"}`}
+        ref={previewContentRef}
+      >
+        <div className={`preview-frame-grid is-${previewMode}`}>
+          {previewMode === "grid" && selectedDevices.length === 0
+            ? <p>Select at least one device to build the preview grid.</p>
+            : frames}
         </div>
         {showVariables && (
           <aside className="preview-variable-inspector" aria-label="Runtime variables">
@@ -609,7 +779,9 @@ export function PreviewWindow() {
       </div>
       <footer className="preview-status">
         <span>{activeScreen.name}</span>
-        <span>{device.name} · {device.viewport.width} × {device.viewport.height}</span>
+        <span>{previewMode === "single"
+          ? `${device.name} · ${getPreviewViewport(device, rotated).width} × ${getPreviewViewport(device, rotated).height}`
+          : `${selectedDevices.length} devices · shared runtime state`}</span>
       </footer>
       {toast && <div className="preview-toast" role="alert">{toast}</div>}
     </main>
