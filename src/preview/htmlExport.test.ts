@@ -7,6 +7,39 @@ import {
 } from "./htmlExport";
 
 describe("local HTML bundle export", () => {
+  it("serializes rich runs and renders their semantic tags in the standalone runtime", async () => {
+    const project = createEmptyProject("Rich text export");
+    project.screens[0].widgets.push({
+      id: crypto.randomUUID(),
+      type: "text",
+      x: 12,
+      y: 18,
+      width: 220,
+      height: 60,
+      rotation: 0,
+      opacity: 1,
+      visible: true,
+      locked: false,
+      zIndex: 1,
+      style: {},
+      props: { richText: true, text: "**Hello {{name}}**" },
+    });
+    const archive = await JSZip.loadAsync(await generateLocalHtmlArchive(project, {
+      includeInteractions: true,
+      includeAssets: true,
+    }));
+    const html = await archive.file("index.html")!.async("text");
+    const runtime = await archive.file("runtime.js")!.async("text");
+    const exportedProject = JSON.parse(
+      html.match(/<script id="project-data" type="application\/json">([\s\S]*?)<\/script>/)![1],
+    );
+
+    expect(exportedProject.screens[0].widgets[0].props.richTextRuns[0].marks.bold).toBe(true);
+    expect(runtime).toContain("function renderRichText(element");
+    expect(runtime).toContain('make("strong", node)');
+    expect(runtime).toContain('widget.props.richText === true');
+  });
+
   it("creates a standalone offline ZIP with the preview runtime and extracted images", async () => {
     const project = createEmptyProject("Offline prototype");
     project.screens[0].widgets.push({

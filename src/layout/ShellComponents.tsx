@@ -1200,6 +1200,9 @@ function StyleSection({ widgets }: { widgets: Widget[] }) {
   const commonShadow = commonStyleValue("shadow", undefined);
   const shadowMixed = mixed(valuesFor("shadow"));
   const hasText = editableWidgets.some(isTextStyleWidget);
+  const richTextWidgets = editableWidgets.filter((widget) => widget.type === "text");
+  const richTextMode = richTextWidgets.length > 0 &&
+    richTextWidgets.every((widget) => widget.props.richText === true);
   const textProperty = (key: string, fallback: unknown): unknown[] =>
     editableWidgets
       .filter(isTextStyleWidget)
@@ -1370,6 +1373,16 @@ function StyleSection({ widgets }: { widgets: Widget[] }) {
       {hasText && <details className="style-text" open>
         <summary>Text</summary>
         <button type="button" className="icon-button small-icon style-details-reset" aria-label="Reset text style" onClick={() => resetSection("text")}><RotateCcw size={11} /></button>
+        {richTextWidgets.length > 0 && <label className="style-control rich-text-mode-toggle">
+          <span>Rich text</span>
+          <input
+            type="checkbox"
+            aria-label="Rich text mode"
+            checked={richTextMode}
+            disabled={richTextWidgets.length !== editableWidgets.length}
+            onChange={(event) => applyProps({ richText: event.currentTarget.checked })}
+          />
+        </label>}
         <div className="style-control-grid">
           <label className="style-control"><span>Font family</span><select aria-label="Font family" value={String(textValue("fontFamily", "Arial"))} onChange={(event) => applyText({ fontFamily: event.currentTarget.value })}>{textMixed("fontFamily") && <option value="Mixed" disabled>Mixed</option>}{["Arial", "Inter", "Georgia", "Times New Roman", "Verdana", "Trebuchet MS", "Courier New", "system-ui"].map((family) => <option key={family}>{family}</option>)}</select></label>
           <label className="style-control"><span>Weight</span><select aria-label="Font weight" value={String(textValue("fontWeight", "normal"))} onChange={(event) => applyText({ fontWeight: event.currentTarget.value })}>{textMixed("fontWeight") && <option value="Mixed" disabled>Mixed</option>}<option value="normal">Regular</option><option value="bold">Bold</option></select></label>

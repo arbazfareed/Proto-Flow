@@ -170,6 +170,24 @@ export const WidgetNotesSchema = z.object({
   custom: z.record(z.string().trim().min(1).max(80), z.string().max(1_000)).default({}),
 }).strict();
 
+export const RichTextMarksSchema = z.object({
+  bold: z.boolean().optional(),
+  italic: z.boolean().optional(),
+  underline: z.boolean().optional(),
+  strike: z.boolean().optional(),
+  code: z.boolean().optional(),
+  link: z.string().max(2_000).optional(),
+  highlight: HexColorSchema.optional(),
+  color: HexColorSchema.optional(),
+  fontSize: z.number().finite().min(1).max(500).optional(),
+  list: z.enum(["bullet", "number"]).optional(),
+}).strict();
+
+export const RichTextRunSchema = z.object({
+  text: z.string().max(20_000),
+  marks: RichTextMarksSchema.default({}),
+}).strict();
+
 export const ProtoWidgetSchema = z
   .object({
     id: z.string().uuid(),
@@ -195,7 +213,46 @@ export const ProtoWidgetSchema = z
     overrides: z.record(z.string(), WidgetOverrideSchema).optional(),
     notes: WidgetNotesSchema.optional(),
   })
-  .strict();
+  .strict()
+  .superRefine((widget, context) => {
+    const runs = widget.props.richTextRuns;
+    if (widget.props.richText !== undefined && typeof widget.props.richText !== "boolean") {
+      context.addIssue({
+        code: "custom",
+        path: ["props", "richText"],
+        message: "Rich text mode must be a boolean.",
+      });
+    }
+    if (runs === undefined) return;
+    if (!Array.isArray(runs) || runs.length > 1_000) {
+      context.addIssue({
+        code: "custom",
+        path: ["props", "richTextRuns"],
+        message: "Rich text content must contain at most 1,000 runs.",
+      });
+      return;
+    }
+    let totalLength = 0;
+    runs.forEach((run, index) => {
+      const parsed = RichTextRunSchema.safeParse(run);
+      if (!parsed.success) {
+        context.addIssue({
+          code: "custom",
+          path: ["props", "richTextRuns", index],
+          message: "Rich text run is invalid.",
+        });
+        return;
+      }
+      totalLength += parsed.data.text.length;
+    });
+    if (totalLength > 20_000) {
+      context.addIssue({
+        code: "custom",
+        path: ["props", "richTextRuns"],
+        message: "Rich text cannot exceed 20,000 characters.",
+      });
+    }
+  });
 
 const DynamicPanelStateSchema = z.object({
   id: z.string().uuid(),
@@ -475,6 +532,8 @@ export type WidgetShadow = z.infer<typeof WidgetShadowSchema>;
 export type WidgetStyle = z.infer<typeof WidgetStyleSchema>;
 export type Widget = z.infer<typeof ProtoWidgetSchema>;
 export type WidgetNotes = z.infer<typeof WidgetNotesSchema>;
+export type RichTextMarks = z.infer<typeof RichTextMarksSchema>;
+export type RichTextRun = z.infer<typeof RichTextRunSchema>;
 export type SymbolDefinition = z.infer<typeof SymbolDefinitionSchema>;
 export type WidgetOverride = z.infer<typeof WidgetOverrideSchema>;
 export type Breakpoint = z.infer<typeof BreakpointSchema>;

@@ -1,5 +1,6 @@
 import type { Project } from "../project/schema";
 import { EXPRESSION_RUNTIME_SOURCE } from "../project/expressions";
+import { ensureRichTextRuns } from "../project/richText";
 
 export const PREVIEW_RUNTIME_SCRIPT = String.raw`
 ${EXPRESSION_RUNTIME_SOURCE}
@@ -63,6 +64,58 @@ function text(value, activeScreen, item, widget, localVariables) {
       return result === null || result === undefined ? "" : String(result);
     } catch { return whole; }
   });
+}
+function renderRichText(element, widget, activeScreen, item, localVariables) {
+  const runs = Array.isArray(widget.props.richTextRuns)
+    ? widget.props.richTextRuns
+    : [{ text: widget.props.text || "", marks: {} }];
+  for (const run of runs) {
+    const marks = run && typeof run.marks === "object" ? run.marks : {};
+    const parts = String(run?.text ?? "").split("\n");
+    for (let index = 0; index < parts.length; index++) {
+      const content = text(parts[index], activeScreen.id, item, widget, localVariables);
+      if (content) {
+        let node = document.createTextNode(content);
+        const make = (tag, child) => {
+          const wrapper = document.createElement(tag);
+          wrapper.append(child);
+          return wrapper;
+        };
+        if (marks.code === true) node = make("code", node);
+        if (marks.bold === true) node = make("strong", node);
+        if (marks.italic === true) node = make("em", node);
+        if (marks.underline === true) node = make("u", node);
+        if (marks.strike === true) node = make("s", node);
+        if (marks.highlight || marks.color || marks.fontSize) {
+          const span = document.createElement(marks.highlight ? "mark" : "span");
+          if (typeof marks.highlight === "string" && /^#[\da-f]{3,8}$/i.test(marks.highlight)) span.style.backgroundColor = marks.highlight;
+          if (typeof marks.color === "string" && /^#[\da-f]{3,8}$/i.test(marks.color)) span.style.color = marks.color;
+          if (typeof marks.fontSize === "number" && marks.fontSize >= 1 && marks.fontSize <= 500) span.style.fontSize = marks.fontSize + "px";
+          span.append(node);
+          node = span;
+        }
+        if (typeof marks.link === "string") {
+          try {
+            const url = new URL(marks.link, location.href);
+            if (url.protocol === "http:" || url.protocol === "https:" || url.protocol === "mailto:") {
+              const link = make("a", node);
+              link.href = marks.link;
+              node = link;
+            }
+          } catch {}
+        }
+        if (marks.list === "bullet" || marks.list === "number") {
+          const list = document.createElement(marks.list === "bullet" ? "ul" : "ol");
+          const row = document.createElement("li");
+          row.append(node);
+          list.append(row);
+          node = list;
+        }
+        element.append(node);
+      }
+      if (index < parts.length - 1) element.append(document.createElement("br"));
+    }
+  }
 }
 function repeaterRows(value) {
   let rows = value;
@@ -257,6 +310,8 @@ function renderWidget(widget, activeScreen, item) {
       list.append(row);
     }
     element.append(list);
+  } else if (widget.type === "text" && widget.props.richText === true) {
+    renderRichText(element, widget, activeScreen, item, localVariables);
   } else if (widget.type === "repeater") {
     const rows = repeaterRows(repeaterData.get(widget.id) ?? widget.props.dataset ?? []);
     const template = widget.props.rowTemplate?.widgets || [];
@@ -394,7 +449,7 @@ function escapeHtml(value: string): string {
 }
 
 function serializeProject(project: Project): string {
-  return JSON.stringify(project)
+  return JSON.stringify(ensureRichTextRuns(project))
     .replaceAll("<", "\\u003c")
     .replaceAll(">", "\\u003e")
     .replaceAll("&", "\\u0026")
