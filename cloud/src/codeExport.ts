@@ -27,10 +27,11 @@ function isCodeExportOptions(value: unknown): value is CodeExportOptions {
     typeof options.includeInteractions === "boolean" &&
     typeof options.includeVariables === "boolean" &&
     typeof options.includeAssets === "boolean" &&
+    typeof options.responsive === "boolean" &&
     (options.tailwindVersion === "3" || options.tailwindVersion === "4") &&
     (options.scope !== "current" || typeof options.screenId === "string") &&
     !Object.keys(options).some((key) =>
-      !["scope", "screenId", "includeInteractions", "includeVariables", "includeAssets", "tailwindVersion"].includes(key),
+      !["scope", "screenId", "includeInteractions", "includeVariables", "includeAssets", "responsive", "tailwindVersion"].includes(key),
     )
   );
 }
@@ -89,7 +90,76 @@ function slug(value: string): string {
   return result || "prototype";
 }
 
-function buildFiles(project: Project, tailwindVersion: "3" | "4"): Record<string, string> {
+function responsiveHelperSource(): string {
+  return `import type { Breakpoint, Screen, Widget } from "../types";
+
+export function getScreenBreakpoints(screen: Screen): Breakpoint[] {
+  return screen.breakpoints?.length
+    ? screen.breakpoints
+    : [
+        { id: "mobile", name: "Mobile", minWidth: 0, maxWidth: 767, width: 390, height: 844 },
+        { id: "tablet", name: "Tablet", minWidth: 768, maxWidth: 1023, width: 768, height: 1024 },
+        { id: "desktop", name: "Desktop", minWidth: 1024, width: screen.device?.width ?? 1440, height: screen.device?.height ?? 900 },
+      ];
+}
+
+export function resolveWidgetsForBreakpoint(
+  widgets: Widget[],
+  breakpoint: Breakpoint,
+  baseWidth: number,
+  baseHeight: number,
+): Widget[] {
+  let stackY = 24;
+  return [...widgets].sort((first, second) => first.zIndex - second.zIndex).map((widget) => {
+    let next = { ...widget };
+    const mode = widget.cascadeMode;
+    if (mode === "hide") next.visible = false;
+    else if (breakpoint.width < baseWidth && mode === "fluid") {
+      next.width = Math.max(1, Math.min(breakpoint.width, widget.width * breakpoint.width / baseWidth));
+    } else if (breakpoint.width < baseWidth && mode === "stack") {
+      next.x = 0;
+      next.y = stackY;
+      next.width = Math.min(widget.width, breakpoint.width);
+      stackY += next.height + 16;
+    }
+    const constraints = widget.constraints;
+    if (constraints && (mode === undefined || mode === "absolute")) {
+      if (constraints.horizontal === "right") next.x = breakpoint.width - (baseWidth - widget.x - widget.width);
+      else if (constraints.horizontal === "center") next.x = (breakpoint.width - widget.width) / 2 + widget.x - (baseWidth - widget.width) / 2;
+      else if (constraints.horizontal === "scale") {
+        next.x *= breakpoint.width / baseWidth;
+        next.width *= breakpoint.width / baseWidth;
+      } else if (constraints.horizontal === "stretch") {
+        next.width = Math.max(1, breakpoint.width - (baseWidth - widget.x - widget.width) - widget.x);
+      }
+      if (constraints.vertical === "bottom") next.y = breakpoint.height - (baseHeight - widget.y - widget.height);
+      else if (constraints.vertical === "center") next.y = (breakpoint.height - widget.height) / 2 + widget.y - (baseHeight - widget.height) / 2;
+      else if (constraints.vertical === "scale") {
+        next.y *= breakpoint.height / baseHeight;
+        next.height *= breakpoint.height / baseHeight;
+      } else if (constraints.vertical === "stretch") {
+        next.height = Math.max(1, breakpoint.height - (baseHeight - widget.y - widget.height) - widget.y);
+      }
+    }
+    const overrides = widget.overrides as Record<string, Partial<Widget>> | undefined;
+    const override = overrides?.[breakpoint.id];
+    if (!override) return next;
+    return {
+      ...next,
+      ...override,
+      style: override.style ? { ...next.style, ...override.style } : next.style,
+      props: override.props ? { ...next.props, ...override.props } : next.props,
+    };
+  });
+}
+`;
+}
+
+function buildFiles(
+  project: Project,
+  tailwindVersion: "3" | "4",
+  responsive: boolean,
+): Record<string, string> {
   const packageJson = {
     name: slug(project.name).slice(0, 200),
     private: true,
@@ -158,11 +228,12 @@ createRoot(document.getElementById("root")!).render(<StrictMode><App /></StrictM
 `,
     "src/types.ts": `export type Value = string | number | boolean;
 export interface Variable { id: string; name: string; type: "string" | "number" | "boolean"; initial: Value; scope: "project" | "screen"; screenId?: string }
-export interface Widget { id: string; type: string; name?: string; groupId?: string; layerCategory?: string; x: number; y: number; width: number; height: number; rotation: number; opacity: number; visible: boolean; locked: boolean; zIndex: number; symbolId?: string; style: Record<string, unknown>; props: Record<string, unknown>; cascadeMode?: string; constraints?: Record<string, string>; important?: boolean; overrides?: Record<string, unknown> }
+export interface Breakpoint { id: string; name: string; minWidth: number; maxWidth?: number; width: number; height: number }
+export interface Widget { id: string; type: string; name?: string; groupId?: string; layerCategory?: string; x: number; y: number; width: number; height: number; rotation: number; opacity: number; visible: boolean; locked: boolean; zIndex: number; symbolId?: string; style: Record<string, unknown>; props: Record<string, unknown>; cascadeMode?: string; constraints?: { horizontal: string; vertical: string }; important?: boolean; overrides?: Record<string, unknown> }
 export interface Condition { variable: string; operator: string; value: unknown }
 export interface Action { type: string; target: string; value?: unknown }
 export interface Rule { id: string; widgetId?: string; event: string; conditionMode?: "all" | "any"; conditions: Condition[]; actions: Action[] }
-export interface Screen { id: string; name: string; device?: { width: number; height: number; [key: string]: unknown }; breakpoints?: unknown[]; widgets: Widget[]; interactionRules: Rule[] }
+export interface Screen { id: string; name: string; device?: { width: number; height: number; [key: string]: unknown }; breakpoints?: Breakpoint[]; widgets: Widget[]; interactionRules: Rule[] }
 export interface Project { schemaVersion: string; id: string; name: string; createdAt: string; updatedAt: string; startScreenId: string; variables: Variable[]; screens: Screen[]; symbols: Array<{ id: string; name: string; width: number; height: number; widgets: Widget[] }> }
 `,
     "src/project.ts": `import type { Project } from "./types";
@@ -337,7 +408,48 @@ export function WidgetRenderer({ screen, widget, project }: { screen: Screen; wi
   return <div {...common} data-panel-state={runtime.panelStates[widget.id]}>{text}</div>;
 }
 `,
-    "src/components/ScreenRenderer.tsx": `import { useEffect, useRef } from "react";
+    "src/components/ScreenRenderer.tsx": responsive ? `import { useEffect, useRef, useState } from "react";
+import { project } from "../project";
+import { useRuntime } from "../hooks/runtime";
+import { useInteractions } from "../hooks/useInteractions";
+import { WidgetRenderer } from "./WidgetRenderer";
+import { getScreenBreakpoints, resolveWidgetsForBreakpoint } from "../project/responsive";
+import type { Screen } from "../types";
+
+export function ScreenRenderer({ screen }: { screen: Screen }) {
+  const runtime = useRuntime();
+  const { runScreenLoad } = useInteractions(project);
+  const loadedScreen = useRef("");
+  const [viewportWidth, setViewportWidth] = useState(() => window.innerWidth);
+  useEffect(() => {
+    const updateWidth = () => setViewportWidth(window.innerWidth);
+    window.addEventListener("resize", updateWidth);
+    return () => window.removeEventListener("resize", updateWidth);
+  }, []);
+  useEffect(() => {
+    if (loadedScreen.current === screen.id) return;
+    loadedScreen.current = screen.id;
+    runScreenLoad(screen);
+  }, [runScreenLoad, screen]);
+  const breakpoints = getScreenBreakpoints(screen);
+  const breakpoint = breakpoints.find((item) =>
+    viewportWidth >= item.minWidth && (item.maxWidth === undefined || viewportWidth <= item.maxWidth),
+  ) ?? breakpoints.reduce((closest, item) =>
+    Math.abs(item.width - viewportWidth) < Math.abs(closest.width - viewportWidth) ? item : closest,
+  );
+  const baseWidth = screen.device?.width ?? breakpoint.width;
+  const baseHeight = screen.device?.height ?? breakpoint.height;
+  const responsiveWidgets = resolveWidgetsForBreakpoint(screen.widgets, breakpoint, baseWidth, baseHeight);
+  const scale = Math.min(1, Math.max(0.1, (viewportWidth - 48) / breakpoint.width));
+  return <main className="min-h-screen overflow-auto bg-slate-100 p-6">
+    <section className="relative mx-auto overflow-hidden bg-white shadow-xl" style={{ width: breakpoint.width, height: breakpoint.height, transform: \`scale(\${scale})\`, transformOrigin: "top center" }}>
+      {responsiveWidgets.filter((widget) => widget.visible && runtime.visibility[widget.id] !== false).sort((a, b) => a.zIndex - b.zIndex).map((widget) =>
+        <WidgetRenderer key={widget.id} screen={screen} widget={widget} project={project} />,
+      )}
+    </section>
+  </main>;
+}
+` : `import { useEffect, useRef } from "react";
 import { project } from "../project";
 import { useRuntime } from "../hooks/runtime";
 import { useInteractions } from "../hooks/useInteractions";
@@ -429,6 +541,7 @@ npm run dev
 `,
   };
 
+  if (responsive) files["src/project/responsive.ts"] = responsiveHelperSource();
   if (tailwindVersion === "3") {
     files["postcss.config.js"] = `export default { plugins: { tailwindcss: {}, autoprefixer: {} } };\n`;
   }
@@ -459,7 +572,11 @@ export async function generateReactCodeArchive(
     throw new CodeExportInputError(error instanceof Error ? error.message : "Export settings do not match this project.");
   }
   const zip = new JSZip();
-  for (const [path, contents] of Object.entries(buildFiles(selectedProject, options.tailwindVersion))) {
+  for (const [path, contents] of Object.entries(buildFiles(
+    selectedProject,
+    options.tailwindVersion,
+    options.responsive,
+  ))) {
     zip.file(path, contents);
   }
   const output = await zip.generateAsync({ type: "uint8array", compression: "DEFLATE", compressionOptions: { level: 6 } });

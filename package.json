@@ -21,6 +21,7 @@
     "clsx": "^2.1.1",
     "cmdk": "^1.1.1",
     "heic2any": "^0.0.4",
+    "html-to-image": "^1.11.13",
     "jsondiffpatch": "^0.7.6",
     "jszip": "^3.10.2",
     "konva": "^10.8.0",

@@ -1,9 +1,11 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import JSZip from "jszip";
 import { createEmptyProject, type Widget } from "../project/schema";
 import {
+  generateDeviceImageArchive,
   generateLocalHtmlArchive,
   localHtmlExportFileName,
+  responsiveLayoutStyles,
 } from "./htmlExport";
 
 describe("local HTML bundle export", () => {
@@ -76,6 +78,7 @@ describe("local HTML bundle export", () => {
       includeAssets: true,
     }));
     const html = await archive.file("index.html")!.async("text");
+    const runtime = await archive.file("runtime.js")!.async("text");
     const exportedProject = JSON.parse(
       html.match(/<script id="project-data" type="application\/json">([\s\S]*?)<\/script>/)![1],
     );
@@ -89,11 +92,13 @@ describe("local HTML bundle export", () => {
       "style.css",
     ]);
     expect(imagePath).toBe("assets/image-1.png");
+    expect(exportedProject.screens[0].widgets[0].props.srcset).toContain(`${imagePath} 1x`);
     expect(await archive.file(imagePath)!.async("uint8array")).toEqual(
       Uint8Array.from([137, 80, 78, 71, 13, 10, 26, 10]),
     );
     expect(html).toContain('<script src="./runtime.js" defer></script>');
     expect(html).toContain('<link rel="stylesheet" href="./style.css">');
+    expect(runtime).toContain("image.srcset =");
     expect(await archive.file("runtime.js")!.async("text")).toContain("setVariable");
     expect(html).not.toMatch(/https?:\/\//i);
     expect(await archive.file("runtime.js")!.async("text")).not.toMatch(
@@ -218,5 +223,101 @@ describe("local HTML bundle export", () => {
     expect(html).not.toContain("</title><script>alert(1)</script>");
     expect(localHtmlExportFileName("../../My Project")).toBe("my-project-html-export.zip");
     expect(localHtmlExportFileName("")).toBe("prototype-html-export.zip");
+  });
+
+  it("exports responsive breakpoint rules and per-device HTML variants for free local use", async () => {
+    const project = createEmptyProject("Responsive layout");
+    const widget: Widget = {
+      id: crypto.randomUUID(),
+      type: "button",
+      x: 120,
+      y: 80,
+      width: 260,
+      height: 48,
+      rotation: 0,
+      opacity: 1,
+      visible: true,
+      locked: false,
+      zIndex: 1,
+      cascadeMode: "fluid",
+      style: {},
+      props: {},
+      overrides: { mobile: { x: 12, width: 200 } },
+    };
+    project.screens[0].widgets.push(widget);
+
+    const styles = responsiveLayoutStyles(project);
+    const archive = await JSZip.loadAsync(await generateLocalHtmlArchive(project, {
+      includeInteractions: true,
+      includeAssets: true,
+      mode: "device-variants",
+    }));
+    const responsivePage = await archive.file("index.html")!.async("text");
+    const mobilePage = await archive.file("index-mobile.html")!.async("text");
+    const css = await archive.file("style.css")!.async("text");
+
+    expect(styles).toContain("@media (max-width:767px)");
+    expect(styles).toContain(`[data-widget-id="${widget.id}"]`);
+    expect(responsivePage).toContain("Multi-device export");
+    expect(css).toContain("width:200px!important");
+    expect(mobilePage).toContain(project.screens[0].id);
+    expect(archive.file("index-desktop.html")).not.toBeNull();
+    expect(archive.file("index-tablet.html")).not.toBeNull();
+    expect(archive.file("runtime.js")).not.toBeNull();
+  });
+
+  it("renders 2× desktop, tablet, and mobile image screenshots in a ZIP", async () => {
+    const project = createEmptyProject("Device images");
+    const htmlToImage = await import("html-to-image");
+    vi.spyOn(htmlToImage, "toPng").mockResolvedValue("data:image/png;base64,aGVsbG8=");
+    const originalRequestAnimationFrame = globalThis.requestAnimationFrame;
+    vi.stubGlobal("requestAnimationFrame", (callback: FrameRequestCallback) => {
+      callback(0);
+      return 1;
+    });
+    const originalDocument = globalThis.document;
+    const appended: HTMLIFrameElement[] = [];
+    const fakeStage = {} as HTMLElement;
+    const fakeDocument = {
+      images: [],
+      querySelector: () => fakeStage,
+    } as unknown as Document;
+    const fakeFrame = {
+      title: "",
+      style: {},
+      contentDocument: fakeDocument,
+      setAttribute: () => undefined,
+      remove: vi.fn(),
+      onload: null as (() => void) | null,
+      onerror: null as (() => void) | null,
+    } as unknown as HTMLIFrameElement;
+    Object.defineProperty(fakeFrame, "srcdoc", {
+      set: () => queueMicrotask(() => fakeFrame.onload?.(
+        new Event("load") as ProgressEvent<EventTarget>,
+      )),
+    });
+    vi.stubGlobal("document", {
+      createElement: (tagName: string) => tagName === "iframe" ? fakeFrame : document.createElement(tagName),
+      body: { append: (element: HTMLIFrameElement) => appended.push(element) },
+    });
+
+    try {
+      const output = await generateDeviceImageArchive(project, {
+        includeInteractions: true,
+        includeAssets: true,
+      });
+      const archive = await JSZip.loadAsync(output);
+      expect(Object.keys(archive.files).filter((path) => path.endsWith(".png")).sort()).toEqual([
+        "images/desktop-2x.png",
+        "images/mobile-2x.png",
+        "images/tablet-2x.png",
+      ]);
+      expect(appended).toHaveLength(3);
+      expect(fakeFrame.remove).toHaveBeenCalledTimes(3);
+    } finally {
+      vi.restoreAllMocks();
+      vi.stubGlobal("requestAnimationFrame", originalRequestAnimationFrame);
+      vi.stubGlobal("document", originalDocument);
+    }
   });
 });

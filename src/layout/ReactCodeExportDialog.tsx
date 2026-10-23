@@ -41,6 +41,7 @@ export function ReactCodeExportDialog({ onClose }: { onClose: () => void }) {
     includeInteractions: true,
     includeVariables: true,
     includeAssets: true,
+    responsive: false,
     tailwindVersion: "4",
   });
   const [message, setMessage] = useState("");
@@ -154,6 +155,7 @@ export function ReactCodeExportDialog({ onClose }: { onClose: () => void }) {
           <label><input type="checkbox" checked={options.includeInteractions} onChange={(event) => updateOption("includeInteractions", event.currentTarget.checked)} /> Interactions</label>
           <label><input type="checkbox" checked={options.includeVariables} onChange={(event) => updateOption("includeVariables", event.currentTarget.checked)} /> Variables</label>
           <label><input type="checkbox" checked={options.includeAssets} onChange={(event) => updateOption("includeAssets", event.currentTarget.checked)} /> Embedded assets</label>
+          <label><input type="checkbox" checked={options.responsive} onChange={(event) => updateOption("responsive", event.currentTarget.checked)} /> Responsive breakpoint layouts</label>
         </fieldset>
         <p className="react-export-summary">
           {project.screens.length} screen{project.screens.length === 1 ? "" : "s"} · {(projectBytes / 1024).toFixed(1)} KiB project · ZIP export costs 3 credits
@@ -167,7 +169,7 @@ export function ReactCodeExportDialog({ onClose }: { onClose: () => void }) {
             <Download size={14} /> {exporter.isRunning ? "Generating ZIP…" : "Download project ZIP (3 credits)"}
           </button>
           <button className="button button-secondary" onClick={exportJsx} disabled={projectBytes > MAX_PROJECT_BYTES}>
-            Export as JSX (free)
+            Export fixed-layout JSX (free)
           </button>
         </div>
         {projectBytes > MAX_PROJECT_BYTES && <p role="alert">This project exceeds the 10 MiB export limit.</p>}

@@ -247,6 +247,7 @@ function fire(widget, event, item) {
 function renderWidget(widget, activeScreen, item) {
   const element = document.createElement(widget.type === "button" || widget.type === "icon-button" ? "button" : "div");
   element.className = "widget";
+  element.dataset.widgetId = widget.id;
   element.style.left = widget.x + "px";
   element.style.top = widget.y + "px";
   element.style.width = widget.width + "px";
@@ -299,6 +300,9 @@ function renderWidget(widget, activeScreen, item) {
     if (src.startsWith("data:image/") || src.startsWith("assets/")) {
       const image = document.createElement("img");
       image.src = src;
+      if (typeof widget.props.srcset === "string") {
+        image.srcset = text(widget.props.srcset, activeScreen.id, item, widget);
+      }
       image.alt = text(widget.props.alt || shownText, activeScreen.id, item, widget);
       element.append(image);
     } else element.textContent = shownText || "Image";
@@ -366,6 +370,18 @@ function activeWidgets(widgets, depth = 0) {
     return [widget, ...(state ? activeWidgets(state.widgets || [], depth + 1) : [])];
   });
 }
+function resizeStage() {
+  const activeScreen = screen();
+  const device = activeScreen.device || { width: 1280, height: 800 };
+  const stageWrap = stage.parentElement;
+  if (!stageWrap) return;
+  const width = stage.offsetWidth || device.width;
+  const height = stage.offsetHeight || device.height;
+  const scale = Math.min(1, Math.max(0.1, (stageWrap.clientWidth - 56) / width));
+  stage.style.transform = "scale(" + scale + ")";
+  stage.style.transformOrigin = "top center";
+  stageWrap.style.height = height * scale + 56 + "px";
+}
 function render() {
   const activeScreen = screen();
   screenPicker.replaceChildren();
@@ -379,8 +395,10 @@ function render() {
   backButton.disabled = backStack.length === 0;
   stage.replaceChildren();
   const device = activeScreen.device || { width: 1280, height: 800 };
+  stage.dataset.screenId = activeScreen.id;
   stage.style.width = device.width + "px";
   stage.style.height = device.height + "px";
+  resizeStage();
   for (const widget of activeWidgets(activeScreen.widgets).sort((a, b) => a.zIndex - b.zIndex)) {
     if (visibility.get(widget.id) === false || widget.visible === false) continue;
     stage.append(renderWidget(widget, activeScreen));
@@ -425,6 +443,7 @@ document.getElementById("restart").addEventListener("click", () => {
   render();
 });
 render();
+window.addEventListener("resize", resizeStage);
 `;
 
 export const PREVIEW_RUNTIME_STYLES = `*{box-sizing:border-box}html,body{margin:0;min-height:100%;font:14px system-ui,sans-serif;background:#15131b;color:#f5f3fa}

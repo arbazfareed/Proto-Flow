@@ -15,6 +15,20 @@ export interface PreviewViewport {
 
 const WINDOW_CHROME_MARGIN = 48;
 
+export function fitWindowSizeToMonitor(
+  viewport: PreviewViewport,
+  monitor: PreviewMonitor | null,
+): PreviewViewport {
+  if (!monitor || !Number.isFinite(monitor.scaleFactor) || monitor.scaleFactor <= 0) {
+    return viewport;
+  }
+
+  return {
+    width: Math.min(viewport.width, Math.floor(monitor.workArea.size.width / monitor.scaleFactor)),
+    height: Math.min(viewport.height, Math.floor(monitor.workArea.size.height / monitor.scaleFactor)),
+  };
+}
+
 export function getPreviewWindowSize(
   viewport: PreviewViewport,
   monitor: PreviewMonitor | null,
