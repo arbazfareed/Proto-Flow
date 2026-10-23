@@ -29,6 +29,7 @@ import {
   RefreshCw,
   Sparkles,
   Square,
+  StickyNote,
   Undo2,
   RotateCcw,
   Wifi,
@@ -101,6 +102,7 @@ import { useWalletStore } from "../wallet/store";
 import { WalletHistoryDialog } from "./WalletHistoryDialog";
 import { VariablesPanel } from "./VariablesPanel";
 import { InteractionBuilder } from "./InteractionBuilder";
+import { WidgetNotesManager, WidgetNotesPanel } from "./WidgetNotes";
 
 const CanvasStage = lazy(() =>
   import("../canvas/CanvasStage").then((module) => ({
@@ -575,7 +577,10 @@ export function CanvasArea({
   const setStatusBarTimeMode = useStore((state) => state.setStatusBarTimeMode);
   const toggleBattery = useStore((state) => state.toggleBattery);
   const toggleSignal = useStore((state) => state.toggleSignal);
+  const notesOverlay = useStore((state) => state.notesOverlay);
+  const toggleNotesOverlay = useStore((state) => state.toggleNotesOverlay);
   const [viewMenuOpen, setViewMenuOpen] = useState(false);
+  const [notesManagerOpen, setNotesManagerOpen] = useState(false);
   const [viewMode, setViewMode] = useState<"design" | "flow">("design");
   const [orientationRequest, setOrientationRequest] = useState<{
     screenId: string;
@@ -692,6 +697,14 @@ export function CanvasArea({
               Flow
             </button>
           </div>
+          <button
+            className="icon-button small-icon"
+            title="Open widget notes manager"
+            aria-label="Open widget notes manager"
+            onClick={() => setNotesManagerOpen(true)}
+          >
+            <StickyNote size={15} />
+          </button>
           {!rightPanelOpen && <button className="icon-button small-icon" aria-label="Show inspector panel" onClick={onToggleRight}><PanelRightClose size={15} /></button>}
           <div className="canvas-view-menu-anchor">
             <button
@@ -714,6 +727,14 @@ export function CanvasArea({
                 }}
               >
                 <div className="view-popover-heading">VIEW</div>
+                <button
+                  className="view-popover-toggle"
+                  aria-pressed={notesOverlay}
+                  onClick={toggleNotesOverlay}
+                >
+                  <span>Notes overlay</span>
+                  <span className={`view-toggle-indicator${notesOverlay ? " is-on" : ""}`} />
+                </button>
                 <button
                   className="view-popover-toggle"
                   aria-pressed={gridVisible}
@@ -874,6 +895,7 @@ export function CanvasArea({
           </Suspense>
         )}
       </div>
+      {notesManagerOpen && <WidgetNotesManager onClose={() => setNotesManagerOpen(false)} />}
     </main>
   );
 }
@@ -2475,7 +2497,8 @@ function RepeaterBindingSection({ screen, widget }: { screen: Project["screens"]
 }
 
 export function RightInspector({ onToggle, onUpdates, onRename }: RightInspectorProps) {
-  const [inspectorTab, setInspectorTab] = useState<"design" | "responsive" | "interactions">("design");
+  const inspectorTab = useStore((state) => state.inspectorTab);
+  const setInspectorTab = useStore((state) => state.setInspectorTab);
   const project = useStore((state) => state.project);
   const activeScreenId = useStore((state) => state.getActiveScreenId());
   const selectedIds = useStore((state) => state.selectedIds);
@@ -2510,9 +2533,6 @@ export function RightInspector({ onToggle, onUpdates, onRename }: RightInspector
       useStore.getState().setActiveRepeaterEdit(null);
     }
   }, [selectedWidget?.groupId, selectedWidget?.id, selectedWidget?.type]);
-  useEffect(() => {
-    if (!selectedWidget || !selectedScreen) setInspectorTab("design");
-  }, [selectedScreen?.id, selectedWidget?.id]);
   const selectedDefinition = selectedWidget
     ? getShapeToolDefinition(selectedWidget.type)
     : undefined;
@@ -2589,6 +2609,17 @@ export function RightInspector({ onToggle, onUpdates, onRename }: RightInspector
           >
             Interactions
           </button>
+          <button
+            id="inspector-notes-tab"
+            role="tab"
+            aria-selected={inspectorTab === "notes"}
+            aria-controls="inspector-notes-panel"
+            className={inspectorTab === "notes" ? "inspector-tab is-active" : "inspector-tab"}
+            onClick={() => setInspectorTab("notes")}
+            disabled={!selectedWidget}
+          >
+            Notes
+          </button>
         </div>
         {inspectorTab === "design" ? (
           <div id="inspector-design-panel" role="tabpanel" aria-labelledby="inspector-design-tab">
@@ -2608,9 +2639,13 @@ export function RightInspector({ onToggle, onUpdates, onRename }: RightInspector
           <div id="inspector-responsive-panel" role="tabpanel" aria-labelledby="inspector-responsive-tab">
             <ResponsivePanel screen={selectedScreen} widget={selectedWidget} />
           </div>
-        ) : selectedWidget && selectedScreen ? (
+        ) : inspectorTab === "interactions" && selectedWidget && selectedScreen ? (
           <div id="inspector-interactions-panel" role="tabpanel" aria-labelledby="inspector-interactions-tab">
             <InteractionBuilder project={project} screen={selectedScreen} widget={selectedWidget} />
+          </div>
+        ) : inspectorTab === "notes" && selectedWidget ? (
+          <div id="inspector-notes-panel" role="tabpanel" aria-labelledby="inspector-notes-tab">
+            <WidgetNotesPanel widget={selectedWidget} />
           </div>
         ) : null}
         <div className="inspector-rule" />

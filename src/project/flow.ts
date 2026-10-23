@@ -198,7 +198,21 @@ export function buildFlowSvg(
       const color = /^#(?:[\da-f]{3}|[\da-f]{6})$/i.test(widget.style.fill ?? "")
         ? widget.style.fill
         : "#9a7cf2";
-      return `<rect x="${previewX + widget.x * scale}" y="${previewY + widget.y * scale}" width="${Math.max(2, widget.width * scale)}" height="${Math.max(2, widget.height * scale)}" rx="2" fill="${color}" opacity="${widget.opacity}"/>`;
+      const x = previewX + widget.x * scale;
+      const y = previewY + widget.y * scale;
+      const note = widget.notes;
+      const priorityColor = note ? {
+        low: "#7196e8",
+        medium: "#d5a446",
+        high: "#e57945",
+        critical: "#e04f59",
+      }[note.priority] : "";
+      return [
+        `<rect x="${x}" y="${y}" width="${Math.max(2, widget.width * scale)}" height="${Math.max(2, widget.height * scale)}" rx="2" fill="${color}" opacity="${widget.opacity}"/>`,
+        ...(note && (note.description || note.requirementId || note.tags.length || Object.keys(note.custom).length)
+          ? [`<circle cx="${x + Math.max(2, widget.width * scale)}" cy="${y}" r="4" fill="${priorityColor}"><title>${escapeXml(`${note.priority}: ${note.description.slice(0, 100) || note.requirementId || note.tags.join(", ") || Object.entries(note.custom).map(([key, value]) => `${key}: ${value}`).join(", ")}`)}</title></circle>`]
+          : []),
+      ].join("");
     }).join("");
     return [
       `<g><rect x="${position.x}" y="${position.y}" width="${FLOW_NODE_WIDTH}" height="${FLOW_NODE_HEIGHT}" rx="12" fill="#202126" stroke="#8067c4" stroke-width="2"/>`,

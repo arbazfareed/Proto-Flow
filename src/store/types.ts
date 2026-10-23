@@ -75,6 +75,8 @@ export interface UISlice {
   statusBarTimeMode: "static" | "real";
   showBattery: boolean;
   showSignal: boolean;
+  notesOverlay: boolean;
+  inspectorTab: "design" | "responsive" | "interactions" | "notes";
   setPaletteOpen: (open: boolean) => void;
   togglePalette: () => void;
   toggleLeftPanel: () => void;
@@ -85,6 +87,8 @@ export interface UISlice {
   setStatusBarTimeMode: (mode: "static" | "real") => void;
   toggleBattery: () => void;
   toggleSignal: () => void;
+  toggleNotesOverlay: () => void;
+  setInspectorTab: (tab: UISlice["inspectorTab"]) => void;
 }
 
 export type StoreState = DocumentSlice & CanvasSlice & HistorySlice & UISlice;

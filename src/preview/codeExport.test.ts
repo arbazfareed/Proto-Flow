@@ -76,6 +76,39 @@ describe("React code export preparation", () => {
     expect(source).toContain("\\u003c/script\\u003e");
   });
 
+  it("includes widget notes as safe source comments", () => {
+    const project = createEmptyProject("Annotated export");
+    project.screens[0].widgets.push({
+      id: crypto.randomUUID(),
+      type: "button",
+      name: "Confirm",
+      x: 0,
+      y: 0,
+      width: 100,
+      height: 40,
+      rotation: 0,
+      opacity: 1,
+      visible: true,
+      locked: false,
+      zIndex: 0,
+      style: {},
+      props: {},
+      notes: {
+        description: "Never emit */ as executable markup",
+        requirementId: "REQ-12",
+        priority: "high",
+        status: "approved",
+        tags: ["checkout"],
+        custom: {},
+      },
+    });
+
+    const source = generateSingleFileJsx(project);
+
+    expect(source).toContain('// Widget note for "Screen 1" / "Confirm"');
+    expect(source).toContain('"description Never emit */ as executable markup"');
+  });
+
   it("exports repeater datasets through a bounded map with item-bound template widgets", () => {
     const project = createEmptyProject("Repeater export");
     const panel = {

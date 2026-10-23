@@ -250,6 +250,10 @@ The vertical, horizontal, and grid layouts render in the browser/Tauri preview, 
 
 Choose **Flow** beside **Design** in the workspace toolbar to view screen thumbnails and their navigate-action links. Drag node headers to persist positions, use **Auto layout** to arrange screens by navigation depth, and drag a node's arrow handle onto another screen to add a navigate action to the selected source widget's click interaction. Select a link to edit its interaction or remove that action. Export the graph as SVG or PNG; the live preview remains available from the **Preview** button.
 
+### PF-T415 — Widget annotations and notes
+
+Select a widget and open the **Notes** Inspector tab to add a Markdown-formatted description, requirement ID, priority, status, tags, and custom key/value fields. Annotated widgets show a priority-colored canvas marker; **Canvas view options → Notes overlay** displays clickable pins that open the widget's Notes tab. Use the notes manager beside the Design/Flow controls to search notes, filter by status and priority, bulk-add a tag or set shared metadata, and export a CSV or Markdown specification. Notes are stored with widgets in schema version 1.8.0 and older projects migrate automatically. Flow SVG/PNG exports include note markers and note text in SVG tooltips. See the [widget notes reference](./docs/widget-notes.md).
+
 ### PF-T413 — Local variables and interaction scope
 
 The Interactions editor lets each rule declare local text, number, and boolean variables with initial values. During a rule invocation, expression and action lookup precedence is interaction-local, active screen, then project scope. Local values are isolated to that one invocation, so each rule trigger starts from its declared initial values; repeater row actions also receive the current `item.field` record. Shadowing a variable with a different type and locals that are never read are flagged in the rule editor. Preview, standalone HTML, and React exports all evaluate local variables without requiring a cloud connection. See the [local variables reference](./docs/local-variables.md).

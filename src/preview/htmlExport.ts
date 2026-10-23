@@ -4,6 +4,7 @@ import {
   PREVIEW_RUNTIME_SCRIPT,
   PREVIEW_RUNTIME_STYLES,
 } from "./publishBundle";
+import { widgetNotesHtmlComments } from "../project/widgetNotes";
 
 export const MAX_LOCAL_HTML_EXPORT_BYTES = 100 * 1024 * 1024;
 const MAX_IMAGE_ASSET_BYTES = 25 * 1024 * 1024;
@@ -120,6 +121,7 @@ export async function generateLocalHtmlArchive(
   }
 
   const title = escapeHtml(prepared.name);
+  const notesComments = widgetNotesHtmlComments(prepared);
   const html = `<!doctype html>
 <html lang="en">
 <head>
@@ -130,6 +132,7 @@ export async function generateLocalHtmlArchive(
 <link rel="stylesheet" href="./style.css">
 </head>
 <body>
+${notesComments}
 <header class="toolbar"><button id="back" type="button" aria-label="Back">Back</button><select id="screen-picker" aria-label="Preview screen"></select><button id="restart" type="button">Restart</button><span>Exported with ProtoFlow</span></header>
 <main class="stage-wrap"><section id="stage" class="stage" aria-label="Prototype preview"></section></main>
 <script id="project-data" type="application/json">${serializeProject(prepared)}</script>
