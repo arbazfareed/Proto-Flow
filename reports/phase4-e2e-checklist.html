@@ -1,0 +1,707 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#101322">
+  <title>ProtoFlow · Phase 4 QA Console</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --ink: #20243a;
+      --muted: #737991;
+      --line: #e7e8f0;
+      --paper: #fff;
+      --canvas: #f5f6fb;
+      --violet: #7258e8;
+      --violet-dark: #5941c9;
+      --mint: #16a982;
+      --amber: #cc8b24;
+      --rose: #d55f76;
+      --navy: #101322;
+      --shadow: 0 18px 52px rgba(27, 31, 57, .09);
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+    * { box-sizing: border-box; }
+    body {
+      min-width: 320px;
+      min-height: 100vh;
+      margin: 0;
+      color: var(--ink);
+      background:
+        radial-gradient(ellipse at 4% 0%, rgba(128, 103, 238, .13), transparent 35rem),
+        radial-gradient(ellipse at 94% 12%, rgba(44, 202, 165, .11), transparent 30rem),
+        var(--canvas);
+    }
+    button, input { font: inherit; }
+    button { cursor: pointer; }
+    .topbar {
+      position: sticky;
+      z-index: 5;
+      top: 0;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 20px;
+      min-height: 68px;
+      padding: 12px clamp(18px, 4vw, 56px);
+      color: #f6f5ff;
+      background: rgba(16, 19, 34, .96);
+      border-bottom: 1px solid rgba(255, 255, 255, .09);
+      backdrop-filter: blur(18px);
+    }
+    .brand { display: flex; align-items: center; gap: 11px; font-weight: 750; letter-spacing: -.025em; }
+    .brand-mark {
+      display: grid;
+      width: 35px;
+      height: 35px;
+      place-items: center;
+      color: #fff;
+      background: linear-gradient(145deg, #9a82ff, #6349df);
+      border-radius: 11px;
+      box-shadow: 0 5px 18px rgba(114, 88, 232, .4);
+    }
+    .brand small { display: block; margin-top: 2px; color: #a6a9bc; font-size: 10px; font-weight: 550; letter-spacing: .12em; text-transform: uppercase; }
+    .top-actions, .hero-actions, .filters { display: flex; align-items: center; gap: 9px; }
+    .button {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      min-height: 38px;
+      padding: 0 13px;
+      color: #f8f7ff;
+      background: rgba(255, 255, 255, .08);
+      border: 1px solid rgba(255, 255, 255, .15);
+      border-radius: 10px;
+      font-size: 12px;
+      font-weight: 650;
+      transition: transform .16s ease, background .16s ease, border-color .16s ease;
+    }
+    .button:hover { transform: translateY(-1px); background: rgba(255, 255, 255, .14); }
+    .button.primary { color: white; background: var(--violet); border-color: var(--violet); }
+    .button.primary:hover { background: var(--violet-dark); }
+    .button.light { color: var(--ink); background: white; border-color: var(--line); }
+    .button.light:hover { background: #f8f7ff; border-color: #d7d0fb; }
+    main { width: min(1180px, calc(100% - 36px)); margin: 34px auto 60px; }
+    .hero {
+      position: relative;
+      overflow: hidden;
+      padding: clamp(24px, 4vw, 42px);
+      color: white;
+      background:
+        radial-gradient(circle at 85% 17%, rgba(182, 166, 255, .35), transparent 16rem),
+        linear-gradient(115deg, #181a31 0%, #25204a 55%, #373076 100%);
+      border: 1px solid rgba(255, 255, 255, .14);
+      border-radius: 22px;
+      box-shadow: var(--shadow);
+    }
+    .hero::after {
+      position: absolute;
+      right: 8%;
+      bottom: -145px;
+      width: 260px;
+      height: 260px;
+      border: 1px solid rgba(255, 255, 255, .13);
+      border-radius: 50%;
+      box-shadow: 0 0 0 30px rgba(255, 255, 255, .035), 0 0 0 66px rgba(255, 255, 255, .025);
+      content: "";
+      pointer-events: none;
+    }
+    .eyebrow { display: flex; align-items: center; gap: 8px; color: #c8bfff; font-size: 11px; font-weight: 760; letter-spacing: .15em; text-transform: uppercase; }
+    .live-dot { width: 7px; height: 7px; background: #6be0bd; border-radius: 50%; box-shadow: 0 0 0 4px rgba(107, 224, 189, .13); }
+    h1 { max-width: 690px; margin: 14px 0 10px; font-size: clamp(29px, 5vw, 46px); line-height: 1.08; letter-spacing: -.045em; }
+    .hero-copy { max-width: 660px; margin: 0; color: #d0d0e0; font-size: 14px; line-height: 1.7; }
+    .hero-actions { position: relative; z-index: 1; margin-top: 23px; flex-wrap: wrap; }
+    .stats {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 13px;
+      margin: 17px 0;
+    }
+    .stat {
+      min-height: 105px;
+      padding: 17px 18px;
+      background: var(--paper);
+      border: 1px solid var(--line);
+      border-radius: 15px;
+      box-shadow: 0 5px 20px rgba(27, 31, 57, .035);
+    }
+    .stat-label { color: var(--muted); font-size: 11px; font-weight: 680; letter-spacing: .08em; text-transform: uppercase; }
+    .stat-value { display: flex; align-items: baseline; gap: 7px; margin-top: 9px; font-size: 27px; font-weight: 780; letter-spacing: -.04em; }
+    .stat-value small { color: var(--muted); font-size: 12px; font-weight: 550; letter-spacing: 0; }
+    .stat-detail { margin-top: 4px; color: var(--muted); font-size: 11px; }
+    .progress-card {
+      padding: 17px 19px;
+      background: rgba(255, 255, 255, .88);
+      border: 1px solid var(--line);
+      border-radius: 15px;
+    }
+    .progress-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; font-size: 12px; font-weight: 730; }
+    .progress-head span:last-child { color: var(--muted); font-weight: 560; }
+    .progress-track { height: 8px; margin-top: 12px; overflow: hidden; background: #ececf5; border-radius: 999px; }
+    .progress-fill { width: 0; height: 100%; background: linear-gradient(90deg, #8064ee, #39c8a0); border-radius: inherit; transition: width .25s ease; }
+    .notice {
+      display: flex;
+      align-items: flex-start;
+      gap: 12px;
+      margin: 17px 0 22px;
+      padding: 15px 17px;
+      background: #fffaf0;
+      border: 1px solid #f0dfb8;
+      border-radius: 13px;
+      color: #594b2d;
+      font-size: 12px;
+      line-height: 1.55;
+    }
+    .notice strong { display: block; margin-bottom: 2px; color: #4a3b1e; }
+    .notice-icon { flex: 0 0 auto; font-size: 17px; }
+    .section-toolbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      margin: 22px 0 12px;
+    }
+    .section-toolbar h2 { margin: 0; font-size: 18px; letter-spacing: -.025em; }
+    .filters { flex-wrap: wrap; justify-content: flex-end; }
+    .search {
+      width: min(245px, 48vw);
+      height: 38px;
+      padding: 0 12px;
+      color: var(--ink);
+      background: white;
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      outline: none;
+      font-size: 12px;
+    }
+    .search:focus { border-color: #a89afa; box-shadow: 0 0 0 3px rgba(114, 88, 232, .12); }
+    .filter-button {
+      min-height: 36px;
+      padding: 0 11px;
+      color: #656b80;
+      background: white;
+      border: 1px solid var(--line);
+      border-radius: 9px;
+      font-size: 11px;
+      font-weight: 680;
+    }
+    .filter-button[aria-pressed="true"] { color: var(--violet-dark); background: #f0edff; border-color: #d9d1ff; }
+    .groups { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 13px; align-items: start; }
+    details.group {
+      overflow: hidden;
+      background: var(--paper);
+      border: 1px solid var(--line);
+      border-radius: 15px;
+      box-shadow: 0 5px 18px rgba(27, 31, 57, .035);
+    }
+    details.group[hidden] { display: none; }
+    .group summary {
+      display: flex;
+      align-items: center;
+      gap: 11px;
+      min-height: 63px;
+      padding: 12px 15px;
+      cursor: pointer;
+      list-style: none;
+    }
+    .group summary::-webkit-details-marker { display: none; }
+    .group-icon {
+      display: grid;
+      flex: 0 0 auto;
+      width: 34px;
+      height: 34px;
+      place-items: center;
+      background: #f2efff;
+      border-radius: 10px;
+      font-size: 16px;
+    }
+    .group-title { min-width: 0; flex: 1; font-size: 12px; font-weight: 740; }
+    .group-meta { display: block; margin-top: 3px; color: var(--muted); font-size: 10px; font-weight: 540; }
+    .group-count { color: #83889a; font-size: 10px; font-weight: 650; white-space: nowrap; }
+    .chevron { margin-left: 3px; color: #a0a3b2; transition: transform .16s ease; }
+    details[open] .chevron { transform: rotate(180deg); }
+    .group-body { padding: 0 15px 13px; border-top: 1px solid #f0f0f5; }
+    .check-row {
+      display: flex;
+      align-items: flex-start;
+      gap: 10px;
+      padding: 10px 2px;
+      border-bottom: 1px solid #f2f2f6;
+      color: #42475c;
+      font-size: 11px;
+      line-height: 1.5;
+      cursor: pointer;
+    }
+    .check-row:last-of-type { border-bottom: 0; }
+    .check-row input { flex: 0 0 auto; width: 15px; height: 15px; margin: 1px 0 0; accent-color: var(--violet); cursor: pointer; }
+    .check-row:has(input:checked) { color: #85899a; text-decoration: line-through; text-decoration-color: #b9bdca; }
+    .evidence {
+      margin-top: 8px;
+      padding: 9px 10px;
+      color: #667087;
+      background: #f6f7fb;
+      border-radius: 8px;
+      font-size: 10px;
+      line-height: 1.5;
+    }
+    .evidence strong { color: #454c63; }
+    .empty { display: none; grid-column: 1/-1; padding: 32px; color: var(--muted); background: white; border: 1px dashed #d9dbe6; border-radius: 15px; text-align: center; font-size: 13px; }
+    .empty.visible { display: block; }
+    footer { display: flex; justify-content: space-between; gap: 14px; margin-top: 22px; padding: 15px 2px; color: var(--muted); font-size: 10px; }
+    .toast {
+      position: fixed;
+      z-index: 10;
+      right: 20px;
+      bottom: 20px;
+      max-width: min(380px, calc(100vw - 40px));
+      padding: 12px 15px;
+      color: white;
+      background: #20243a;
+      border-radius: 11px;
+      box-shadow: var(--shadow);
+      font-size: 12px;
+      opacity: 0;
+      transform: translateY(8px);
+      transition: .2s ease;
+      pointer-events: none;
+    }
+    .toast.show { opacity: 1; transform: translateY(0); }
+    @media (max-width: 760px) {
+      main { width: min(100% - 24px, 620px); margin-top: 18px; }
+      .topbar { padding-inline: 14px; }
+      .top-actions .button span { display: none; }
+      .top-actions .button { width: 38px; padding: 0; }
+      .stats { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 9px; }
+      .stat { min-height: 91px; padding: 13px; }
+      .groups { grid-template-columns: 1fr; }
+      .section-toolbar { align-items: flex-start; flex-direction: column; }
+      .filters { width: 100%; justify-content: flex-start; }
+      .search { flex: 1; width: auto; }
+    }
+    @media print {
+      body { background: white; }
+      .topbar, .hero-actions, .section-toolbar .filters, .toast { display: none !important; }
+      main { width: 100%; margin: 0; }
+      .hero { padding: 20px; color: #20243a; background: white; box-shadow: none; }
+      .hero-copy, .eyebrow { color: #51566b; }
+      .stats { grid-template-columns: repeat(4, 1fr); }
+      .groups { grid-template-columns: repeat(2, 1fr); }
+      details.group { break-inside: avoid; box-shadow: none; }
+      details.group > .group-body { display: block !important; }
+      .progress-card, .stat { box-shadow: none; }
+    }
+  </style>
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">
+      <span class="brand-mark" aria-hidden="true">PF</span>
+      <span>protoflow<small>Quality console</small></span>
+    </div>
+    <div class="top-actions">
+      <button class="button" id="download-html" type="button" title="Download a copy of this standalone checklist"><span>↓</span><span>Download checklist</span></button>
+      <button class="button" id="download-progress" type="button" title="Export completed checks as JSON"><span>⇩</span><span>Export progress</span></button>
+      <button class="button" id="print" type="button" title="Print or save as PDF"><span>▤</span><span>Print / PDF</span></button>
+    </div>
+  </header>
+
+  <main>
+    <section class="hero" aria-labelledby="page-title">
+      <div class="eyebrow"><span class="live-dot"></span> Phase 4 · End-to-end verification</div>
+      <h1 id="page-title">Ship confidence,<br>one check at a time.</h1>
+      <p class="hero-copy">A practical verification board for the complete Phase 4 feature set—from variables and exports to collaboration, plugins, and rich widgets. Your progress stays on this device and works offline.</p>
+      <div class="hero-actions">
+        <button class="button primary" id="start-checking" type="button">Start verification <span aria-hidden="true">→</span></button>
+        <button class="button" id="reset-progress" type="button">Reset progress</button>
+      </div>
+    </section>
+
+    <section class="stats" aria-label="Checklist summary">
+      <article class="stat"><div class="stat-label">Checklist items</div><div class="stat-value"><span id="total-count">0</span><small>across all areas</small></div><div class="stat-detail">Feature and platform checks</div></article>
+      <article class="stat"><div class="stat-label">Completed</div><div class="stat-value"><span id="done-count">0</span><small id="done-percent">0%</small></div><div class="stat-detail">Saved automatically in this browser</div></article>
+      <article class="stat"><div class="stat-label">Areas covered</div><div class="stat-value"><span id="area-count">0</span><small>workstreams</small></div><div class="stat-detail">Phase 4 + cross-platform</div></article>
+      <article class="stat"><div class="stat-label">Automated suite</div><div class="stat-value">368<small> / 368 passed</small></div><div class="stat-detail">Vitest run · 55 test files</div></article>
+    </section>
+
+    <section class="progress-card" aria-label="Overall verification progress">
+      <div class="progress-head"><span>Verification progress</span><span id="progress-copy">0 of 0 checks completed</span></div>
+      <div class="progress-track" role="progressbar" aria-label="Checklist completion" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><div class="progress-fill"></div></div>
+    </section>
+
+    <aside class="notice" role="note">
+      <span class="notice-icon" aria-hidden="true">ⓘ</span>
+      <div><strong>Test status is not the same as feature status.</strong>
+        The latest available run passed all 368 automated tests. Those are mostly unit and component tests—not evidence that every workflow below passed end-to-end. Start items unchecked, record only checks you actually run, and use the area notes to see representative test files. Cloud, fresh desktop, Ubuntu, and Kali checks still need their own environments.
+      </div>
+    </aside>
+
+    <div class="section-toolbar" id="checklist">
+      <h2>Verification areas</h2>
+      <div class="filters" role="group" aria-label="Filter checklist">
+        <input class="search" id="search" type="search" placeholder="Search checklist…" aria-label="Search checklist">
+        <button class="filter-button" data-filter="all" aria-pressed="true" type="button">All areas</button>
+        <button class="filter-button" data-filter="open" aria-pressed="false" type="button">Remaining</button>
+        <button class="filter-button" data-filter="done" aria-pressed="false" type="button">Completed</button>
+      </div>
+    </div>
+    <section class="groups" id="groups" aria-label="Phase 4 verification items"></section>
+    <div class="empty" id="empty">No checklist items match this search and filter.</div>
+    <footer><span>ProtoFlow · Phase 4 QA Console</span><span>Standalone · Offline-first · Progress stored locally</span></footer>
+  </main>
+  <div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+  <script>
+    const sections = [
+      { title: "Variables", icon: "⌘", evidence: "Representative tests: src/project/variables.test.ts, interactions.test.ts", items: [
+        "Add string, number, and boolean variables.",
+        "Verify {{name}} interpolation in design and runtime.",
+        "Verify variable autocomplete in text fields.",
+        "Rename a variable and confirm all references update.",
+        "Confirm unknown-reference warnings appear.",
+        "Confirm type-mismatch warnings appear."
+      ]},
+      { title: "Rule Builder", icon: "↯", evidence: "Representative tests: src/project/interactions.test.ts, store/store.test.ts", items: [
+        "Bind supported events to supported actions.",
+        "Verify multi-condition rules with AND and OR.",
+        "Confirm target pickers validate targets.",
+        "Use the test action and verify the expected outcome.",
+        "Reorder rules and verify execution order changes.",
+        "Verify rule edits support undo and redo."
+      ]},
+      { title: "Local Preview Runtime", icon: "▷", evidence: "Representative tests: src/preview/runtime.test.ts, deviceLayouts.test.ts", items: [
+        "Open the secondary preview window.",
+        "Navigate between screens.",
+        "Show and hide widgets.",
+        "Set a variable and verify bound text updates.",
+        "Restart preview and verify runtime state resets.",
+        "Verify device frames render in preview.",
+        "Edit the design and verify hot reload preserves runtime state.",
+        "Trigger a rule error and confirm preview remains usable."
+      ]},
+      { title: "AI Generator · 1 credit", icon: "✳", evidence: "Representative tests: src/wallet/api.test.ts, meteredActions.test.ts; full provider/rate-limit E2E not established.", items: [
+        "Generate a valid rule from a prompt.",
+        "Confirm one credit is deducted only after success.",
+        "Force a failure and confirm no credit is deducted.",
+        "Verify rate limits are enforced.",
+        "Verify rejected prompts do not deduct credits.",
+        "Verify token usage is logged without exposing prompt content."
+      ]},
+      { title: "Cloud Publish · 2 credits", icon: "↥", evidence: "Representative tests: src/preview/publishBundle.test.ts, src/wallet/api.test.ts; live Worker/R2 E2E remains separate.", items: [
+        "Compile and upload a publish bundle.",
+        "Open the public URL and exercise the prototype.",
+        "Verify the 30-day expiry behavior.",
+        "Confirm two credits are charged only after successful publish.",
+        "Submit an oversized bundle and verify a clear rejection.",
+        "Unpublish and verify the public URL no longer serves the prototype.",
+        "Verify published previews are sandboxed."
+      ]},
+      { title: "React / Tailwind Export · 3 credits", icon: "⌘", evidence: "Representative tests: src/preview/codeExport.test.ts; downloading, installing, and running the archive still needs a runtime check.", items: [
+        "Download, unzip, install dependencies, and run the generated project.",
+        "Compare exported layout with the design.",
+        "Exercise exported interactions.",
+        "Verify variable interpolation in the generated app.",
+        "Confirm three credits are deducted only on success.",
+        "Force export failure and verify no credits are deducted."
+      ]},
+      { title: "Free HTML Export · 0 credits", icon: "◇", evidence: "Representative tests: src/preview/htmlExport.test.ts, publishBundle.test.ts; browser/offline matrix not covered by unit tests.", items: [
+        "Export and open the HTML entirely client-side.",
+        "Verify the bundle runs offline in supported browsers.",
+        "Exercise interactions in the exported prototype.",
+        "Verify local and remote assets render as intended.",
+        "Confirm free export does not contact credit-metering endpoints."
+      ]},
+      { title: "Collaboration · 1 credit per session", icon: "◎", evidence: "Representative tests: src/collaboration/provider.test.ts; live presence, R2 snapshots, and expiry need deployed-service tests.", items: [
+        "Create a session and copy its share link.",
+        "Join from a second client and verify live edits.",
+        "Verify multi-cursor positions update.",
+        "Verify the presence panel reflects joins and leaves.",
+        "Verify snapshots persist to R2.",
+        "Verify sessions end automatically after four hours.",
+        "Verify the host is charged once and joining is free."
+      ]},
+      { title: "Plugins", icon: "▦", evidence: "Representative tests: src/plugins/manifest.test.ts, runtime.test.ts, storage.test.ts; permission-boundary security QA remains manual.", items: [
+        "Verify the plugin SDK artifact is published and versioned.",
+        "Run an extension in the sandbox.",
+        "Install, disable, re-enable, and uninstall a plugin.",
+        "Verify each permission is enforced at runtime.",
+        "Verify custom shapes appear in the element library.",
+        "Verify custom exporters appear and work.",
+        "Verify custom AI providers work within allowed capabilities.",
+        "Confirm plugins cannot access wallet or JWT data.",
+        "Revoke a plugin and confirm its capabilities stop."
+      ]},
+      { title: "Dynamic Panels", icon: "▤", evidence: "Representative tests: src/project/dynamicPanels.test.ts, preview/runtime.test.ts", items: [
+        "Create a panel with multiple states.",
+        "Switch states in the editor and preview.",
+        "Verify none, fade, and slide transitions.",
+        "Verify nested panels through depth five.",
+        "Verify panel states render in HTML and React exports."
+      ]},
+      { title: "Repeaters", icon: "☷", evidence: "Representative tests: src/project/repeaters.test.ts, preview/runtime.test.ts, codeExport.test.ts", items: [
+        "Create a repeater with row template and dataset.",
+        "Add, edit, delete, and CSV-import dataset rows.",
+        "Verify {{item.field}} binding in each row.",
+        "Exercise set, add, remove, sort, and filter actions.",
+        "Exercise interactions scoped to a repeater row.",
+        "Verify repeater output in both export formats."
+      ]},
+      { title: "Rich Expressions", icon: "ƒ", evidence: "Representative tests: src/project/expressions.test.ts; documentation at docs/rich-expressions.md", items: [
+        "Verify arithmetic, comparisons, and logical expressions.",
+        "Verify every documented built-in function.",
+        "Verify autocomplete and live expression preview.",
+        "Enter invalid expressions and confirm a safe, visible error.",
+        "Review expression parsing for unsafe evaluation or browser-global access.",
+        "Verify the rich expressions reference is present and current."
+      ]},
+      { title: "Local Variables", icon: "⌁", evidence: "Representative tests: src/project/interactions.test.ts, preview/runtime.test.ts, preview/codeExport.test.ts", items: [
+        "Read and write invocation-scoped local variables in rules.",
+        "Verify screen/project scope precedence.",
+        "Verify local variables shadow outer variables.",
+        "Verify repeater item scope is isolated per row.",
+        "Compile and run exported projects using local variables."
+      ]},
+      { title: "Flow Diagrams", icon: "⑂", evidence: "Representative tests: src/project/flow.test.ts; canvas gesture/export interactions need browser QA.", items: [
+        "Switch between Design and Flow views.",
+        "Render screen nodes and navigation edges.",
+        "Run auto-layout and inspect edge routing.",
+        "Move nodes and verify positions persist.",
+        "Create and delete edges, then verify design actions sync.",
+        "Export a readable PNG and SVG."
+      ]},
+      { title: "Annotations", icon: "▧", evidence: "Representative tests: src/project/widgetNotes.test.ts; overlay and bulk-edit flows need interactive QA.", items: [
+        "Edit notes and verify all fields persist.",
+        "Verify widget note indicators and priority styling.",
+        "Toggle the notes overlay and open notes from a pin.",
+        "Export annotations as CSV and Markdown.",
+        "Search and filter annotations; bulk-edit selected widgets."
+      ]},
+      { title: "Rich Text", icon: "B", evidence: "Representative tests: src/project/richText.test.ts, preview/codeExport.test.ts, canvas/shapes.test.ts", items: [
+        "Edit rich text and verify supported formatting marks.",
+        "Verify Markdown shortcuts.",
+        "Verify variable and expression interpolation within runs.",
+        "Verify semantic HTML and React export output.",
+        "Verify styled runs render correctly on the Konva canvas."
+      ]},
+      { title: "Version History", icon: "◷", evidence: "Representative tests: src/project/versionHistory.test.ts; timing/performance and storage QA remain manual.", items: [
+        "Verify automatic checkpoints occur every five minutes when dirty.",
+        "Create a manually named checkpoint.",
+        "Browse the timeline and preview a checkpoint read-only.",
+        "Restore a checkpoint and undo the restore.",
+        "Compare checkpoints and inspect widget, geometry, style, and logic changes.",
+        "Export and import a checkpoint file.",
+        "Verify optional cloud sync when configured."
+      ]},
+      { title: "Multi-Device Preview & Export", icon: "▣", evidence: "Representative tests: src/preview/deviceLayouts.test.ts, project/responsive.test.ts, codeExport.test.ts", items: [
+        "Verify single-device, column, grid, and rotated preview modes.",
+        "Verify shared runtime state across device frames.",
+        "Hot reload and confirm state is preserved.",
+        "Capture a device screenshot.",
+        "Resize responsive HTML across target breakpoints.",
+        "Verify per-device HTML variants and image exports.",
+        "Build and run responsive React export.",
+        "Verify free exports cost zero and React export costs three credits."
+      ]},
+      { title: "Touch vs. Mouse", icon: "⌖", evidence: "Representative tests: src/project/inputModes.test.ts, preview/runtime.test.ts, codeExport.test.ts", items: [
+        "Set Touch, Mouse, and Both input modes per screen.",
+        "Verify gesture and mouse events appear correctly in the rule builder.",
+        "Exercise touch gestures and pointer feedback in preview.",
+        "Verify event filtering follows the selected input mode.",
+        "Verify exported handlers match each input mode.",
+        "Confirm keyboard interactions remain available in every mode."
+      ]},
+      { title: "Rich Element Library · PF-T420", icon: "✦", evidence: "Representative tests: src/project/learningWidgets.test.ts, widgetLayout.test.ts, canvas/shapes.test.ts, preview exports.", items: [
+        "Verify Flex Row, Grid, and Spacer on canvas and in preview.",
+        "Inspect Card, Chart, and Alert visual states.",
+        "Exercise Search Bar, Slider, and File Upload in preview.",
+        "Exercise Tabs and Navbar navigation.",
+        "Verify Toast, Skeleton, and Spinner visuals.",
+        "Inspect the Learn guidance for HTML and CSS mappings.",
+        "Drag library elements onto the canvas and verify placement.",
+        "Inspect semantic HTML and React exports.",
+        "Measure canvas responsiveness with multiple rich widgets."
+      ]},
+      { title: "Cross-Platform", icon: "⊞", evidence: "Automated Windows host suite only; Ubuntu 24.04 and Kali Linux have not been run here.", items: [
+        "Run the complete supported flow on Windows 11.",
+        "Run the complete supported flow on Ubuntu 24.04.",
+        "Run the complete supported flow on Kali Linux."
+      ]},
+      { title: "Credits & Cost Controls", icon: "◈", evidence: "Representative tests: src/wallet/api.test.ts, meteredActions.test.ts, network.test.ts; verify ledger against live service separately.", items: [
+        "Verify every metered action uses the Phase 3 wallet path.",
+        "Verify a successful action cannot be double-charged.",
+        "Verify failures never deduct credits.",
+        "Verify each successful charge appears in the ledger.",
+        "Verify free actions do not call credit-metering APIs."
+      ]}
+    ];
+
+    const storageKey = "protoflow-phase4-e2e-checklist-v1";
+    const groupRoot = document.getElementById("groups");
+    const allItems = sections.flatMap((section, sectionIndex) =>
+      section.items.map((text, itemIndex) => ({ id: `${sectionIndex}-${itemIndex}`, sectionIndex, itemIndex, text })));
+    let saved = {};
+    let activeFilter = "all";
+    let toastTimer;
+    try {
+      const parsed = JSON.parse(localStorage.getItem(storageKey) || "{}");
+      if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) saved = parsed;
+    } catch (error) {
+      console.warn("Could not read saved checklist progress.", error);
+    }
+
+    const escapeHtml = (value) => String(value).replace(/[&<>"']/g, (character) => ({
+      "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"
+    })[character]);
+
+    sections.forEach((section, sectionIndex) => {
+      const group = document.createElement("details");
+      group.className = "group";
+      group.dataset.section = String(sectionIndex);
+      group.open = sectionIndex < 3;
+      const items = section.items.map((text, itemIndex) => {
+        const id = `${sectionIndex}-${itemIndex}`;
+        const checked = saved[id] === true;
+        return `<label class="check-row" data-item="${id}"><input type="checkbox" ${checked ? "checked" : ""} aria-label="${escapeHtml(text)}"><span>${escapeHtml(text)}</span></label>`;
+      }).join("");
+      group.innerHTML = `
+        <summary>
+          <span class="group-icon" aria-hidden="true">${escapeHtml(section.icon)}</span>
+          <span class="group-title">${escapeHtml(section.title)}<span class="group-meta">${section.items.length} verification steps</span></span>
+          <span class="group-count" data-section-count="${sectionIndex}">0 / ${section.items.length}</span>
+          <span class="chevron" aria-hidden="true">⌄</span>
+        </summary>
+        <div class="group-body">${items}<div class="evidence"><strong>Test evidence:</strong> ${escapeHtml(section.evidence)}</div></div>`;
+      groupRoot.appendChild(group);
+    });
+
+    function persist() {
+      try {
+        localStorage.setItem(storageKey, JSON.stringify(saved));
+      } catch (error) {
+        showToast("Could not save progress in this browser. Export the report to keep a copy.");
+        console.error("Could not save checklist progress.", error);
+      }
+    }
+
+    function updateSummary() {
+      const done = allItems.filter((item) => saved[item.id] === true).length;
+      const total = allItems.length;
+      const percent = total ? Math.round(done * 100 / total) : 0;
+      document.getElementById("total-count").textContent = String(total);
+      document.getElementById("done-count").textContent = String(done);
+      document.getElementById("done-percent").textContent = `${percent}%`;
+      document.getElementById("area-count").textContent = String(sections.length);
+      document.getElementById("progress-copy").textContent = `${done} of ${total} checks completed`;
+      document.querySelector(".progress-fill").style.width = `${percent}%`;
+      document.querySelector('[role="progressbar"]').setAttribute("aria-valuenow", String(percent));
+      sections.forEach((section, sectionIndex) => {
+        const rows = [...document.querySelectorAll(`details[data-section="${sectionIndex}"] input[type="checkbox"]`)];
+        const sectionDone = rows.filter((checkbox) => checkbox.checked).length;
+        document.querySelector(`[data-section-count="${sectionIndex}"]`).textContent = `${sectionDone} / ${rows.length}`;
+      });
+      applyFilters();
+    }
+
+    function applyFilters() {
+      const query = document.getElementById("search").value.trim().toLowerCase();
+      let visibleCount = 0;
+      for (const [sectionIndex, section] of sections.entries()) {
+        const group = document.querySelector(`details[data-section="${sectionIndex}"]`);
+        const rows = [...group.querySelectorAll(".check-row")];
+        let matched = 0;
+        for (const row of rows) {
+          const checkbox = row.querySelector("input");
+          const textMatches = !query || row.textContent.toLowerCase().includes(query);
+          const stateMatches = activeFilter === "all" ||
+            (activeFilter === "done" ? checkbox.checked : !checkbox.checked);
+          row.hidden = !(textMatches && stateMatches);
+          if (!row.hidden) matched++;
+        }
+        const sectionMatches = !query || section.title.toLowerCase().includes(query) ||
+          section.evidence.toLowerCase().includes(query);
+        group.hidden = !(matched || sectionMatches && activeFilter === "all");
+        if (query && !group.hidden) group.open = true;
+        if (!group.hidden) visibleCount++;
+      }
+      document.getElementById("empty").classList.toggle("visible", visibleCount === 0);
+    }
+
+    function showToast(message) {
+      const toast = document.getElementById("toast");
+      toast.textContent = message;
+      toast.classList.add("show");
+      clearTimeout(toastTimer);
+      toastTimer = setTimeout(() => toast.classList.remove("show"), 2600);
+    }
+
+    groupRoot.addEventListener("change", (event) => {
+      const checkbox = event.target.closest('input[type="checkbox"]');
+      if (!checkbox) return;
+      const row = checkbox.closest(".check-row");
+      const id = row.dataset.item;
+      saved[id] = checkbox.checked;
+      persist();
+      updateSummary();
+    });
+    document.getElementById("search").addEventListener("input", applyFilters);
+    document.querySelectorAll(".filter-button").forEach((button) => {
+      button.addEventListener("click", () => {
+        activeFilter = button.dataset.filter;
+        document.querySelectorAll(".filter-button").forEach((entry) =>
+          entry.setAttribute("aria-pressed", String(entry === button)));
+        applyFilters();
+      });
+    });
+    document.getElementById("start-checking").addEventListener("click", () => {
+      document.getElementById("checklist").scrollIntoView({ behavior: "smooth" });
+      document.querySelector("details.group").open = true;
+      document.querySelector("details.group input").focus({ preventScroll: true });
+    });
+    document.getElementById("reset-progress").addEventListener("click", () => {
+      if (!confirm("Reset all saved Phase 4 checklist progress on this browser?")) return;
+      saved = {};
+      groupRoot.querySelectorAll('input[type="checkbox"]').forEach((checkbox) => { checkbox.checked = false; });
+      persist();
+      updateSummary();
+      showToast("Checklist progress reset.");
+    });
+    document.getElementById("print").addEventListener("click", () => window.print());
+    document.getElementById("download-html").addEventListener("click", () => {
+      const source = "<!doctype html>\n" + document.documentElement.outerHTML;
+      const blob = new Blob([source], { type: "text/html;charset=utf-8" });
+      const link = document.createElement("a");
+      link.href = URL.createObjectURL(blob);
+      link.download = "protoflow-phase4-e2e-checklist.html";
+      link.click();
+      setTimeout(() => URL.revokeObjectURL(link.href), 1000);
+      showToast("Standalone checklist downloaded.");
+    });
+    document.getElementById("download-progress").addEventListener("click", () => {
+      const report = {
+        title: "ProtoFlow Phase 4 E2E Checklist",
+        exportedAt: new Date().toISOString(),
+        automatedSuite: { status: "passed", tests: 368, files: 55, scope: "Automated unit/component suite; not full end-to-end verification." },
+        summary: { completed: allItems.filter((item) => saved[item.id] === true).length, total: allItems.length },
+        sections: sections.map((section, sectionIndex) => ({
+          title: section.title,
+          evidence: section.evidence,
+          items: section.items.map((text, itemIndex) => ({
+            text,
+            completed: saved[`${sectionIndex}-${itemIndex}`] === true
+          }))
+        }))
+      };
+      const blob = new Blob([JSON.stringify(report, null, 2)], { type: "application/json" });
+      const link = document.createElement("a");
+      link.href = URL.createObjectURL(blob);
+      link.download = "protoflow-phase4-test-progress.json";
+      link.click();
+      setTimeout(() => URL.revokeObjectURL(link.href), 1000);
+      showToast("Progress report downloaded.");
+    });
+
+    updateSummary();
+  </script>
+</body>
+</html>
