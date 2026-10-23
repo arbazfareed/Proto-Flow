@@ -1,6 +1,7 @@
 import type { Project } from "../project/schema";
 import { EXPRESSION_RUNTIME_SOURCE } from "../project/expressions";
 import { widgetNotesCodeComments } from "../project/widgetNotes";
+import { ensureRichTextRuns } from "../project/richText";
 
 export type CodeExportScope = "all" | "current";
 export type CodeExportTailwindVersion = "3" | "4";
@@ -87,10 +88,11 @@ function jsxString(value: unknown): string {
 
 export function generateSingleFileJsx(project: Project): string {
   const notesComments = widgetNotesCodeComments(project);
+  const exportProject = ensureRichTextRuns(project);
   return `import { useState, type CSSProperties, type ReactNode } from "react";
 ${notesComments ? `\n${notesComments}\n` : ""}
 
-const project = ${jsxString(project)};
+const project = ${jsxString(exportProject)};
 type Widget = typeof project.screens[number]["widgets"][number];
 const repeaterItemVisible = (widget: Widget, item: Record<string, unknown>): boolean => {
   const rule = widget.props.visibleWhen;
@@ -209,7 +211,14 @@ ${EXPRESSION_RUNTIME_SOURCE}
     boxSizing: "border-box",
   });
   const resolveText = (value: unknown, widget: Widget, item?: Record<string, unknown>) =>
-    String(value ?? "").replace(/\\{\\{\\s*item\\.([\\w$.-]+)\\s*\\}\\}/g, (_match, field: string) => String(item?.[field] ?? ""))
+    String(value ?? "").replace(/\\{\\{\\s*item\\.([\\w$.-]+)\\s*\\}\\}/g, (_match, field: string) =>
+      String(item?.[field] ?? ""))
+      .replace(/\\{\\{\\s*([\\w$.-]+)\\s*\\}\\}/g, (whole, name: string) => {
+      const resolved = name.startsWith("item.")
+        ? item?.[name.slice(5)]
+        : getVariableValues()[name];
+      return resolved === undefined ? whole : String(resolved);
+    })
       .replace(/\\[\\[([\\s\\S]*?)\\]\\]/g, (whole, source: string) => {
         try {
           const variables = getVariableValues();
@@ -218,6 +227,42 @@ ${EXPRESSION_RUNTIME_SOURCE}
           return result === null || result === undefined ? "" : String(result);
         } catch { return whole; }
       });
+  const renderRichText = (widget: Widget, item?: Record<string, unknown>): ReactNode[] => {
+    const runs = Array.isArray(widget.props.richTextRuns)
+      ? widget.props.richTextRuns as Array<{ text: string; marks?: Record<string, unknown> }>
+      : [{ text: String(widget.props.text ?? ""), marks: {} }];
+    return runs.flatMap((run, runIndex) => {
+      const marks = run.marks ?? {};
+      return String(run.text ?? "").split("\\n").flatMap((part, lineIndex, parts) => {
+        if (!part) return lineIndex < parts.length - 1
+          ? [<br key={\`rich-break-\${runIndex}-\${lineIndex}\`} />]
+          : [];
+        let content: ReactNode = resolveText(part, widget, item);
+        const style: CSSProperties = {
+          ...(typeof marks.color === "string" ? { color: marks.color } : {}),
+          ...(typeof marks.fontSize === "number" ? { fontSize: marks.fontSize } : {}),
+          ...(typeof marks.highlight === "string" ? { backgroundColor: marks.highlight } : {}),
+        };
+        if (Object.keys(style).length) content = <span style={style}>{content}</span>;
+        if (marks.code === true) content = <code>{content}</code>;
+        if (marks.bold === true) content = <strong>{content}</strong>;
+        if (marks.italic === true) content = <em>{content}</em>;
+        if (marks.underline === true) content = <u>{content}</u>;
+        if (marks.strike === true) content = <s>{content}</s>;
+        if (typeof marks.link === "string" && /^(https?:|mailto:)/i.test(marks.link)) {
+          content = <a href={marks.link}>{content}</a>;
+        }
+        if (marks.list === "bullet" || marks.list === "number") {
+          const List = marks.list === "bullet" ? "ul" : "ol";
+          content = <List><li>{content}</li></List>;
+        }
+        return [
+          content,
+          ...(lineIndex < parts.length - 1 ? [<br key={\`rich-break-\${runIndex}-\${lineIndex}\`} />] : []),
+        ];
+      });
+    });
+  };
   const label = (widget: Widget, item?: Record<string, unknown>) =>
     resolveText(widget.props.text ?? widget.props.label ?? widget.props.title ?? widget.type, widget, item);
   const renderWidget = (widget: Widget, item?: Record<string, unknown>): ReactNode => {
@@ -246,6 +291,10 @@ ${EXPRESSION_RUNTIME_SOURCE}
     if (widget.type === "image") {
       const src = resolveText(widget.props.src, widget, item);
       if (src) return <img key={widget.id} src={src} alt={String(widget.props.alt ?? text)} style={{ ...style(widget), objectFit: "cover" }} />;
+    }
+    if (widget.type === "text" && widget.props.richText === true) {
+      return <div key={widget.id} style={style(widget)}
+        onClick={() => runInteractions(widget, "onClick", item)}>{renderRichText(widget, item)}</div>;
     }
     if (["input", "search", "textarea"].includes(widget.type)) {
       return widget.type === "textarea"

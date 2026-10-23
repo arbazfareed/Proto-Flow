@@ -5,6 +5,7 @@ import {
   PREVIEW_RUNTIME_STYLES,
 } from "./publishBundle";
 import { widgetNotesHtmlComments } from "../project/widgetNotes";
+import { ensureRichTextRuns } from "../project/richText";
 
 export const MAX_LOCAL_HTML_EXPORT_BYTES = 100 * 1024 * 1024;
 const MAX_IMAGE_ASSET_BYTES = 25 * 1024 * 1024;
@@ -31,7 +32,7 @@ function escapeHtml(value: string): string {
 }
 
 function serializeProject(project: Project): string {
-  return JSON.stringify(project)
+  return JSON.stringify(ensureRichTextRuns(project))
     .replaceAll("<", "\\u003c")
     .replaceAll(">", "\\u003e")
     .replaceAll("&", "\\u0026")

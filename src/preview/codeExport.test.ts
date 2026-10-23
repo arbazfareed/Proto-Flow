@@ -19,6 +19,48 @@ function options(overrides: Partial<CodeExportOptions> = {}): CodeExportOptions 
 }
 
 describe("React code export preparation", () => {
+  it("exports rich text as semantic JSX and keeps variable interpolation in runs", () => {
+    const project = createEmptyProject("Rich text");
+    project.variables.push({
+      id: crypto.randomUUID(),
+      name: "name",
+      type: "string",
+      initial: "Ada",
+      scope: "project",
+    });
+    project.screens[0].widgets.push({
+      id: crypto.randomUUID(),
+      type: "text",
+      x: 0,
+      y: 0,
+      width: 240,
+      height: 60,
+      rotation: 0,
+      opacity: 1,
+      visible: true,
+      locked: false,
+      zIndex: 1,
+      style: {},
+      props: {
+        richText: true,
+        text: "**Hello {{name}}**",
+        richTextRuns: [{ text: "Hello {{name}}", marks: { bold: true } }],
+      },
+    });
+
+    const source = generateSingleFileJsx(project);
+    const transpiled = ts.transpileModule(source, {
+      compilerOptions: { jsx: ts.JsxEmit.ReactJSX, target: ts.ScriptTarget.ES2022 },
+      reportDiagnostics: true,
+    });
+    expect(source).toContain("if (marks.bold === true) content = <strong>{content}</strong>");
+    expect(source).toContain("getVariableValues()[name]");
+    expect(source).toContain("richTextRuns");
+    expect(transpiled.diagnostics?.filter((diagnostic) =>
+      diagnostic.category === ts.DiagnosticCategory.Error,
+    )).toEqual([]);
+  });
+
   it("keeps the selected screen, typed variables, and only compatible interactions", () => {
     const project = createEmptyProject("Export");
     const first = project.screens[0];

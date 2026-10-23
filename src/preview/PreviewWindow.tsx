@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import type { CSSProperties, ChangeEvent, TouchEvent } from "react";
+import type { CSSProperties, ChangeEvent, ReactNode, TouchEvent } from "react";
 import { ArrowLeft, RotateCcw, SlidersHorizontal, X } from "lucide-react";
 import { emit, listen } from "@tauri-apps/api/event";
 import { isTauri } from "@tauri-apps/api/core";
@@ -7,6 +7,11 @@ import { currentMonitor, getCurrentWindow } from "@tauri-apps/api/window";
 import { LogicalSize } from "@tauri-apps/api/dpi";
 import type { Project, Widget } from "../project/schema";
 import { parseProject } from "../project/schema";
+import {
+  normalizeRichTextRuns,
+  parseRichTextMarkdown,
+  sanitizeRichTextHref,
+} from "../project/richText";
 import {
   collectWidgetsDeep,
   flattenActivePanelWidgets,
@@ -111,6 +116,11 @@ function PreviewWidget({
   );
   const style = { ...widgetStyle(widget), ...transitionStyle };
   const text = getWidgetText(widget, runtime, screenId, item);
+  const richRuns = widget.type === "text" && widget.props.richText === true
+    ? Array.isArray(widget.props.richTextRuns)
+      ? normalizeRichTextRuns(widget.props.richTextRuns)
+      : parseRichTextMarkdown(stringProp(widget, "text"))
+    : [];
   const commonHandlers = {
     onClick: () => runEvent(widget, "onClick", item),
     onMouseEnter: () => runEvent(widget, "onHover", item),
@@ -280,7 +290,35 @@ function PreviewWidget({
       style={style}
       {...commonHandlers}
     >
-      {text || widget.type.replaceAll("-", " ")}{stateLabel}{repeaterLabel}
+      {widget.type === "text" && widget.props.richText === true
+        ? richRuns.flatMap((run, runIndex) => String(run.text).split("\n").flatMap((part, lineIndex, parts) => {
+            if (!part) return lineIndex < parts.length - 1
+              ? [<br key={`rich-break-${runIndex}-${lineIndex}`} />]
+              : [];
+            const marks = run.marks;
+            let content: ReactNode = runtime.interpolate(part, screenId, item, widget);
+            const richStyle: CSSProperties = {
+              ...(marks.color ? { color: marks.color } : {}),
+              ...(marks.fontSize ? { fontSize: marks.fontSize } : {}),
+              ...(marks.highlight ? { backgroundColor: marks.highlight } : {}),
+            };
+            if (Object.keys(richStyle).length) content = <span style={richStyle}>{content}</span>;
+            if (marks.code) content = <code>{content}</code>;
+            if (marks.bold) content = <strong>{content}</strong>;
+            if (marks.italic) content = <em>{content}</em>;
+            if (marks.underline) content = <u>{content}</u>;
+            if (marks.strike) content = <s>{content}</s>;
+            const href = typeof marks.link === "string" ? sanitizeRichTextHref(marks.link) : null;
+            if (href) content = <a href={href}>{content}</a>;
+            if (marks.list === "bullet") content = <ul><li>{content}</li></ul>;
+            if (marks.list === "number") content = <ol><li>{content}</li></ol>;
+            return [
+              content,
+              ...(lineIndex < parts.length - 1 ? [<br key={`rich-break-${runIndex}-${lineIndex}`} />] : []),
+            ];
+          }))
+        : text || widget.type.replaceAll("-", " ")}
+      {stateLabel}{repeaterLabel}
     </div>
   );
 }

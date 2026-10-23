@@ -13,7 +13,8 @@ import {
   Text as KonvaText,
 } from "react-konva";
 import type Konva from "konva";
-import type { Widget } from "../project/schema";
+import type { RichTextMarks, RichTextRun, Widget } from "../project/schema";
+import { normalizeRichTextRuns, parseRichTextMarkdown } from "../project/richText";
 import { useStore } from "../store";
 import {
   SHAPE_TOOL_DEFINITIONS,
@@ -95,6 +96,9 @@ function EllipseShape({ widget, fill, stroke, strokeWidth }: ShapeComponentProps
 }
 
 function TextShape({ widget, fill, stroke, strokeWidth }: ShapeComponentProps) {
+  if (widget.props.richText === true) {
+    return <RichTextShape widget={widget} fill={fill} />;
+  }
   const fontSize = typeof widget.props.fontSize === "number" ? widget.props.fontSize : 24;
   const fontFamily =
     typeof widget.props.fontFamily === "string" ? widget.props.fontFamily : "Arial";
@@ -129,6 +133,114 @@ function TextShape({ widget, fill, stroke, strokeWidth }: ShapeComponentProps) {
       perfectDrawEnabled={false}
     />
   );
+}
+
+function RichTextShape({ widget, fill }: Pick<ShapeComponentProps, "widget" | "fill">) {
+  const source = typeof widget.props.text === "string" ? widget.props.text : "";
+  const runs = Array.isArray(widget.props.richTextRuns)
+    ? normalizeRichTextRuns(widget.props.richTextRuns, source)
+    : parseRichTextMarkdown(source);
+  const fontFamily = typeof widget.props.fontFamily === "string" ? widget.props.fontFamily : "Arial";
+  const baseSize = typeof widget.props.fontSize === "number" ? widget.props.fontSize : 24;
+  const lineHeight = typeof widget.props.lineHeight === "number" ? widget.props.lineHeight : 1.2;
+  const defaultColor = fill ?? "#e9e9ec";
+  const measureContext = typeof document === "undefined"
+    ? null
+    : document.createElement("canvas").getContext("2d");
+  const measure = (text: string, marks: RichTextMarks): number => {
+    const fontSize = marks.fontSize ?? baseSize;
+    const family = marks.code ? "monospace" : fontFamily;
+    const fontStyle = `${marks.italic ? "italic " : ""}${marks.bold ? "bold " : ""}${fontSize}px ${family}`;
+    if (!measureContext) return text.length * fontSize * 0.55;
+    measureContext.font = fontStyle;
+    return measureContext.measureText(text).width;
+  };
+  const nodes: ReactNode[] = [
+    <Rect
+      key="hit-area"
+      width={widget.width}
+      height={widget.height}
+      fill="#000000"
+      opacity={0.001}
+      perfectDrawEnabled={false}
+    />,
+  ];
+  let x = 0;
+  let y = 0;
+  let listIndex = 0;
+  const newLine = () => {
+    x = 0;
+    y += baseSize * lineHeight;
+    listIndex += 1;
+  };
+  const addText = (text: string, marks: RichTextMarks) => {
+    if (!text) return;
+    const fontSize = marks.fontSize ?? baseSize;
+    const prefix = marks.list
+      ? x === 0 ? `${marks.list === "number" ? `${listIndex + 1}.` : "•"} ` : ""
+      : "";
+    if (prefix) {
+      const prefixWidth = measure(prefix, marks);
+      nodes.push(<KonvaText
+        key={`list-${nodes.length}`}
+        x={x}
+        y={y}
+        text={prefix}
+        fontFamily={fontFamily}
+        fontSize={baseSize}
+        fill={defaultColor}
+        listening={false}
+        perfectDrawEnabled={false}
+      />);
+      x += prefixWidth;
+    }
+    const pieces = text.match(/\s+|[^\s]+/g) ?? [];
+    for (const piece of pieces) {
+      const width = measure(piece, marks);
+      if (x > 0 && x + width > widget.width && !/^\s+$/.test(piece)) newLine();
+      const atX = x;
+      const atY = y;
+      const atWidth = Math.max(width, 1);
+      if (marks.highlight) {
+        nodes.push(<Rect
+          key={`highlight-${nodes.length}`}
+          x={atX}
+          y={atY}
+          width={atWidth}
+          height={fontSize * lineHeight}
+          fill={marks.highlight}
+          listening={false}
+          perfectDrawEnabled={false}
+        />);
+      }
+      const color = marks.color ?? (marks.link ? "#60a5fa" : defaultColor);
+      nodes.push(<KonvaText
+        key={`text-${nodes.length}`}
+        x={atX}
+        y={atY}
+        width={atWidth}
+        height={fontSize * lineHeight}
+        text={piece}
+        fontFamily={marks.code ? "monospace" : fontFamily}
+        fontSize={fontSize}
+        fontStyle={`${marks.italic ? "italic " : ""}${marks.bold ? "bold" : ""}`.trim() || "normal"}
+        textDecoration={marks.underline || marks.link ? "underline" : marks.strike ? "line-through" : undefined}
+        fill={color}
+        listening={false}
+        perfectDrawEnabled={false}
+      />);
+      x += width;
+    }
+  };
+
+  for (const run of runs as RichTextRun[]) {
+    const parts = run.text.split("\n");
+    parts.forEach((part, index) => {
+      addText(part, run.marks);
+      if (index < parts.length - 1) newLine();
+    });
+  }
+  return <>{nodes}</>;
 }
 
 function ListShape({ widget, fill }: ShapeComponentProps) {

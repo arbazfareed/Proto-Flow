@@ -100,6 +100,8 @@ import {
   renderWidgetShape,
   type ShapeTool,
 } from "./shapes";
+import { RichTextEditor } from "./RichTextEditor";
+import { richTextRunsToPlainText } from "../project/richText";
 import { normalizeListItems } from "./styleInspector";
 import { getShapeToolDefinition } from "./shapeTools";
 import {
@@ -3148,6 +3150,35 @@ export function CanvasStage({
             return whole;
           }
         });
+        if (widget.type === "text" && widget.props.richText === true) {
+          return (
+            <RichTextEditor
+              label={`Edit ${widget.type} rich text`}
+              text={editValue}
+              runs={widget.props.richTextRuns}
+              contrastBackground={typeof widget.style.fill === "string" ? widget.style.fill : "#ffffff"}
+              style={{
+                left,
+                top: Math.max(0, top - 38),
+                width: Math.max(180, width),
+                minHeight: height + 38,
+                transform: `rotate(${widget.rotation}deg)`,
+                transformOrigin: "top left",
+                fontFamily: typeof widget.props.fontFamily === "string" ? widget.props.fontFamily : "Arial",
+                fontSize: `${(typeof widget.props.fontSize === "number" ? widget.props.fontSize : 14) * zoom}px`,
+                lineHeight: String(typeof widget.props.lineHeight === "number" ? widget.props.lineHeight : 1.2),
+              }}
+              onCommit={(runs) => {
+                updateWidgetProps(widget.id, {
+                  richTextRuns: runs,
+                  text: richTextRunsToPlainText(runs),
+                });
+                setEditing(null);
+              }}
+              onCancel={cancelWidgetTextEdit}
+            />
+          );
+        }
         return (
           <>
             <textarea
