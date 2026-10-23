@@ -278,7 +278,7 @@ The Element Library includes a **Layout** group with Container, Flex Row, Flex C
 
 Element-library entries stay compact: select the small **info** button beside any element to reveal its semantic HTML, representative CSS, and a concise explanation; close it again without activating the drawing tool. Icons use distinct, category-tinted symbols to make forms, data, navigation, display, media, and layout elements easier to scan. The inspector repeats the guide for the selected element. Free HTML and React exports emit semantic article, figure/SVG, alert, media, and flex-layout markup with inline styles so the generated example remains useful without ProtoFlow's editor CSS.
 
-Open [`demos/two-screen-storefront-demo.html`](./demos/two-screen-storefront-demo.html) in a browser for a responsive, interactive two-screen storefront example. The product list links to a product-detail screen with color selection, quantity controls, and add-to-bag feedback; the demo is self-contained and works offline.
+Open [`demos/forma-storefront.pflow`](./demos/forma-storefront.pflow) in the ProtoFlow desktop editor for an editable two-screen storefront prototype built from native canvas elements, Lucide icons, and screen-navigation interactions.
 
 ### PF-T413 — Local variables and interaction scope
 
