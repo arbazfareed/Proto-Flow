@@ -256,7 +256,9 @@ export function TopBar({
           <span className="document-name">{projectName}</span>
           <span className={`save-state ${isDirty ? "is-dirty" : ""}`}>
             <span className="state-dot" />
-            {isDirty ? "Unsaved changes" : "All changes saved"}
+            <span className="save-state-label">
+              {isDirty ? "Unsaved changes" : "All changes saved"}
+            </span>
           </span>
         </div>
       </div>
@@ -277,10 +279,10 @@ export function TopBar({
         <button className="button button-quiet command-trigger" onClick={onOpenPalette}>
           <span>Quick actions</span><kbd>Ctrl K</kbd>
         </button>
-        <button className="button button-secondary" onClick={onSaveAs}>
+        <button className="button button-secondary" title="Save as" aria-label="Save as" onClick={onSaveAs}>
           <ArrowDownToLine size={14} /> Save as
         </button>
-        <button className="button button-primary" onClick={onSave}>
+        <button className="button button-primary" title="Save project" aria-label="Save project" onClick={onSave}>
           Save <kbd>Ctrl S</kbd>
         </button>
         <button className="button button-secondary" aria-label="Open preview" title="Open live preview" onClick={onOpenPreview}>

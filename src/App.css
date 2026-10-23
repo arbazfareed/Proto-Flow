@@ -16,7 +16,8 @@
 .topbar-divider { height:25px; width:1px; margin:0 5px; background:var(--border); }
 .document-heading { position:static; min-width:0; margin-left:auto; align-items:flex-start; flex-direction:column; gap:2px; }
 .document-name { max-width:190px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:#f0eff4; font-size:12px; font-weight:600; }
-.save-state { display:flex; align-items:center; gap:5px; color:#a2a2aa; font-size:10px; }
+.save-state { display:flex; align-items:center; gap:5px; min-width:0; color:#a2a2aa; font-size:10px; white-space:nowrap; }
+.save-state-label { min-width:0; overflow:hidden; text-overflow:ellipsis; }
 .state-dot,.status-indicator,.mode-dot,.version-pulse { width:6px; height:6px; border-radius:50%; background:var(--success); }
 .save-state.is-dirty .state-dot { background:var(--warning); }
 .topbar-actions { flex-shrink:0; gap:7px; }
@@ -982,6 +983,11 @@
   .inspector { width:320px; }
   .left-sidebar { width:240px; }
   .command-trigger>span { margin-right:3px; }
+  .topbar { gap:6px; padding:0 8px; }
+  .topbar-actions { gap:4px; }
+  .topbar-actions>.button-secondary,.command-trigger { width:32px; min-width:32px; padding:0; font-size:0; }
+  .topbar-actions>.button-secondary { gap:0; }
+  .command-trigger kbd { display:none; }
 }
 @media (max-width:900px) {
   .left-sidebar { display:none; }
