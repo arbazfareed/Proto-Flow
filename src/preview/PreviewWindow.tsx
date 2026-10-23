@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import type { CSSProperties, ChangeEvent, ReactNode, TouchEvent } from "react";
+import type { CSSProperties, ChangeEvent, MouseEvent, ReactNode, TouchEvent } from "react";
 import { ArrowLeft, Camera, RotateCcw, RotateCw, SlidersHorizontal, X } from "lucide-react";
 import { toPng } from "html-to-image";
 import { emit, listen } from "@tauri-apps/api/event";
@@ -107,6 +107,7 @@ function PreviewWidget({
   item,
   controlValues,
   onControlValueChange,
+  onGestureFeedback,
 }: {
   widget: Widget;
   runtime: PreviewRuntime;
@@ -118,7 +119,13 @@ function PreviewWidget({
   item?: RepeaterRecord;
   controlValues: Record<string, string | boolean>;
   onControlValueChange: (key: string, value: string | boolean) => void;
+  onGestureFeedback: (event: PreviewEvent, x: number, y: number) => void;
 }) {
+  const touchStart = useRef<{ x: number; y: number; distance?: number; centerX?: number; centerY?: number } | null>(null);
+  const longPressTimer = useRef<number | undefined>(undefined);
+  const longPressFired = useRef(false);
+  const multiTouchFired = useRef(false);
+  const lastTap = useRef(0);
   const controlKey = item ? `${widget.id}:${JSON.stringify(item)}` : widget.id;
   const storedControlValue = controlValues[controlKey];
   const inputValue = typeof storedControlValue === "string"
@@ -136,12 +143,120 @@ function PreviewWidget({
       ? normalizeRichTextRuns(widget.props.richTextRuns)
       : parseRichTextMarkdown(stringProp(widget, "text"))
     : [];
-  const commonHandlers = {
-    onClick: () => runEvent(widget, "onClick", item),
-    onMouseEnter: () => runEvent(widget, "onHover", item),
-    onTouchStart: (_event: TouchEvent<HTMLElement>) => runEvent(widget, "onTouchStart", item),
-    onTouchEnd: (_event: TouchEvent<HTMLElement>) => runEvent(widget, "onTouchEnd", item),
+  const inputMode = runtime.currentScreen.inputMode;
+  const fireTouch = (event: PreviewEvent, x: number, y: number) => {
+    runEvent(widget, event, item);
+    onGestureFeedback(event, x, y);
   };
+  const commonHandlers = {
+    onClick: (event: MouseEvent<HTMLElement>) => {
+      if (inputMode !== "touch" || event.detail === 0) runEvent(widget, "onClick", item);
+    },
+    onDoubleClick: () => {
+      if (inputMode !== "touch") runEvent(widget, "onDoubleClick", item);
+    },
+    onContextMenu: (event: MouseEvent<HTMLElement>) => {
+      if (inputMode === "touch") return;
+      event.preventDefault();
+      runEvent(widget, "onRightClick", item);
+    },
+    onMouseEnter: () => {
+      if (inputMode !== "touch") runEvent(widget, "onHover", item);
+    },
+    onMouseDown: () => {
+      if (inputMode !== "touch") runEvent(widget, "onMouseDown", item);
+    },
+    onMouseUp: () => {
+      if (inputMode !== "touch") runEvent(widget, "onMouseUp", item);
+    },
+    onFocus: () => runEvent(widget, "onFocus", item),
+    onBlur: () => runEvent(widget, "onBlur", item),
+    onKeyDown: () => {
+      runEvent(widget, "onKeyDown", item);
+    },
+    onTouchStart: (event: TouchEvent<HTMLElement>) => {
+      if (inputMode === "mouse") return;
+      runEvent(widget, "onTouchStart", item);
+      const touches = event.touches;
+      if (touches.length >= 2) {
+        const first = touches[0];
+        const second = touches[1];
+        const x = (first.clientX + second.clientX) / 2;
+        const y = (first.clientY + second.clientY) / 2;
+        touchStart.current = {
+          x, y,
+          distance: Math.hypot(first.clientX - second.clientX, first.clientY - second.clientY),
+          centerX: x, centerY: y,
+        };
+        multiTouchFired.current = false;
+        window.clearTimeout(longPressTimer.current);
+        return;
+      }
+      const touch = touches[0];
+      if (!touch) return;
+      touchStart.current = { x: touch.clientX, y: touch.clientY };
+      onGestureFeedback("onTouchStart", touch.clientX, touch.clientY);
+      longPressFired.current = false;
+      multiTouchFired.current = false;
+      window.clearTimeout(longPressTimer.current);
+      longPressTimer.current = window.setTimeout(() => {
+        if (!touchStart.current) return;
+        longPressFired.current = true;
+        fireTouch("onLongPress", touchStart.current.x, touchStart.current.y);
+      }, 550);
+    },
+    onTouchMove: (event: TouchEvent<HTMLElement>) => {
+      if (inputMode === "mouse" || !touchStart.current) return;
+      const start = touchStart.current;
+      if (event.touches.length >= 2 && start.distance !== undefined) {
+        const first = event.touches[0];
+        const second = event.touches[1];
+        const distance = Math.hypot(first.clientX - second.clientX, first.clientY - second.clientY);
+        const centerX = (first.clientX + second.clientX) / 2;
+        const centerY = (first.clientY + second.clientY) / 2;
+        if (!multiTouchFired.current && Math.abs(distance - start.distance) > 24) {
+          multiTouchFired.current = true;
+          fireTouch(distance < start.distance ? "onPinchIn" : "onPinchOut", centerX, centerY);
+        } else if (!multiTouchFired.current &&
+          Math.hypot(centerX - (start.centerX ?? centerX), centerY - (start.centerY ?? centerY)) > 18) {
+          multiTouchFired.current = true;
+          fireTouch("onPan", centerX, centerY);
+        }
+        return;
+      }
+      const touch = event.touches[0];
+      if (touch && Math.hypot(touch.clientX - start.x, touch.clientY - start.y) > 12) {
+        window.clearTimeout(longPressTimer.current);
+      }
+    },
+    onTouchEnd: (event: TouchEvent<HTMLElement>) => {
+      if (inputMode === "mouse") return;
+      runEvent(widget, "onTouchEnd", item);
+      window.clearTimeout(longPressTimer.current);
+      const start = touchStart.current;
+      const touch = event.changedTouches[0];
+      touchStart.current = null;
+      if (!start || !touch || start.distance !== undefined || longPressFired.current || multiTouchFired.current) return;
+      const dx = touch.clientX - start.x;
+      const dy = touch.clientY - start.y;
+      if (Math.max(Math.abs(dx), Math.abs(dy)) > 40) {
+        const swipe: PreviewEvent = Math.abs(dx) > Math.abs(dy)
+          ? dx < 0 ? "onSwipeLeft" : "onSwipeRight"
+          : dy < 0 ? "onSwipeUp" : "onSwipeDown";
+        fireTouch(swipe, touch.clientX, touch.clientY);
+        return;
+      }
+      const now = Date.now();
+      if (now - lastTap.current < 320) {
+        lastTap.current = 0;
+        fireTouch("onDoubleTap", touch.clientX, touch.clientY);
+      } else {
+        lastTap.current = now;
+        fireTouch("onTap", touch.clientX, touch.clientY);
+      }
+    },
+  };
+  useEffect(() => () => window.clearTimeout(longPressTimer.current), []);
   const handleChange = (event: ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
     const value = event.currentTarget.value;
     onControlValueChange(controlKey, value);
@@ -213,7 +328,7 @@ function PreviewWidget({
   }
 
   if (widget.type === "button" || widget.type === "icon-button") {
-    return <button className={`preview-widget is-button is-${stringProp(widget, "variant", "primary")}`} style={style} onClick={commonHandlers.onClick} onMouseEnter={commonHandlers.onMouseEnter} onTouchStart={commonHandlers.onTouchStart} onTouchEnd={commonHandlers.onTouchEnd}>{text || "Button"}</button>;
+    return <button className={`preview-widget is-button is-${stringProp(widget, "variant", "primary")}`} style={style} {...commonHandlers}>{text || "Button"}</button>;
   }
 
   if (widget.type === "list") {
@@ -254,9 +369,7 @@ function PreviewWidget({
         className={`preview-widget preview-repeater is-${layout}`}
         data-widget-type="repeater"
         style={{ ...style, height: layout === "horizontal" ? widget.height : Math.max(widget.height, rows.length * (widget.height + gap)), overflow: "visible", ...rowStyle }}
-        onMouseEnter={commonHandlers.onMouseEnter}
-        onTouchStart={commonHandlers.onTouchStart}
-        onTouchEnd={commonHandlers.onTouchEnd}
+        {...commonHandlers}
       >
         {rows.map((record, index) => (
           <div className="preview-repeater-row" key={`${widget.id}-${index}`} style={{
@@ -265,7 +378,9 @@ function PreviewWidget({
             width: widget.width,
             height: widget.height,
             overflow: "hidden",
-          }} onClick={() => runEvent(widget, "onClick", record)}>
+          }} onClick={() => {
+            if (inputMode !== "touch") runEvent(widget, "onClick", record);
+          }}>
             {template
               .filter((child) => child.visible && snapshot.visibility[child.id] !== false && isRepeaterItemVisible(child, record))
               .map((child) => (
@@ -280,6 +395,7 @@ function PreviewWidget({
                   item={record}
                   controlValues={controlValues}
                   onControlValueChange={onControlValueChange}
+                  onGestureFeedback={onGestureFeedback}
                 />
               ))}
           </div>
@@ -301,6 +417,7 @@ function PreviewWidget({
   return (
     <div
       className={`preview-widget${shapeClass}`}
+      tabIndex={0}
       data-widget-type={widget.type}
       data-panel-state={panelState}
       data-repeater-data={repeater === undefined ? undefined : JSON.stringify(repeater)}
@@ -346,6 +463,7 @@ function PreviewDeviceFrame({
   screenName,
   scalePercent,
   showFrame,
+  inputMode,
   children,
 }: {
   device: DevicePreset;
@@ -353,6 +471,7 @@ function PreviewDeviceFrame({
   screenName: string;
   scalePercent: number;
   showFrame: boolean;
+  inputMode: Project["screens"][number]["inputMode"];
   children: ReactNode;
 }) {
   const viewportRef = useRef<HTMLDivElement>(null);
@@ -397,6 +516,7 @@ function PreviewDeviceFrame({
         >
           <div
             className="preview-screen"
+            data-input-mode={inputMode}
             style={{
               width: viewport.width,
               height: viewport.height,
@@ -423,12 +543,14 @@ export function PreviewWindow() {
   const [showDeviceFrame, setShowDeviceFrame] = useState(true);
   const [showVariables, setShowVariables] = useState(false);
   const [toast, setToast] = useState("");
+  const [touchFeedback, setTouchFeedback] = useState<{ x: number; y: number; event: PreviewEvent } | null>(null);
   const [runtimeRevision, setRuntimeRevision] = useState(0);
   const [controlValues, setControlValues] = useState<Record<string, string | boolean>>({});
   const runtimeRef = useRef<PreviewRuntime | null>(null);
   const channelRef = useRef<BroadcastChannel | null>(null);
   const loadedScreenRef = useRef("");
   const previewContentRef = useRef<HTMLDivElement>(null);
+  const touchFeedbackTimer = useRef<number | undefined>(undefined);
   const activeScreen = useMemo(
     () => project?.screens.find((screen) => screen.id === runtimeSnapshot?.screenId),
     [project, runtimeSnapshot?.screenId],
@@ -641,6 +763,7 @@ export function PreviewWindow() {
         screenName={activeScreen.name}
         scalePercent={scalePercent}
         showFrame={showDeviceFrame}
+        inputMode={activeScreen.inputMode}
       >
         {visibleWidgets
           .filter((widget) => runtimeSnapshot.visibility[widget.id] !== false)
@@ -672,6 +795,13 @@ export function PreviewWindow() {
                   ...current,
                   [key]: value,
                 }))}
+                onGestureFeedback={(event, x, y) => {
+                  const bounds = previewContentRef.current?.getBoundingClientRect();
+                  if (!bounds) return;
+                  setTouchFeedback({ x: x - bounds.left, y: y - bounds.top, event });
+                  window.clearTimeout(touchFeedbackTimer.current);
+                  touchFeedbackTimer.current = window.setTimeout(() => setTouchFeedback(null), 700);
+                }}
               />
             );
           })}
@@ -744,6 +874,17 @@ export function PreviewWindow() {
             ? <p>Select at least one device to build the preview grid.</p>
             : frames}
         </div>
+        {touchFeedback && (
+          <span
+            aria-hidden="true"
+            className="preview-touch-feedback"
+            data-event={touchFeedback.event}
+            style={{ left: touchFeedback.x, top: touchFeedback.y }}
+          >
+            <span className="preview-touch-ripple" />
+            <span className="preview-touch-label">{touchFeedback.event.replace(/^on/, "")}</span>
+          </span>
+        )}
         {showVariables && (
           <aside className="preview-variable-inspector" aria-label="Runtime variables">
             <strong>Runtime variables</strong>

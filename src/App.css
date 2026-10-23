@@ -67,6 +67,8 @@
 .nav-unsaved { color:var(--warning); }
 .pages-section { flex-shrink:0; margin-top:17px; }
 .screen-list { min-height:0; max-height:min(36vh,300px); overflow-y:auto; padding:3px 3px 1px; overscroll-behavior:contain; scrollbar-color:#383940 transparent; scrollbar-width:thin; }
+.screen-input-mode { display:flex; align-items:center; justify-content:space-between; gap:8px; padding:5px 4px; color:#a09eaa; font-size:9px; }
+.screen-input-mode select { min-width:90px; padding:4px 6px; border:1px solid #393a42; border-radius:4px; color:#e6e3ec; background:#202126; font:inherit; }
 .page-item { position:relative; box-sizing:border-box; display:grid; width:100%; height:146px; grid-template-rows:18px 12px 100px; gap:2px 4px; margin:0 0 6px; padding:5px; border:1px solid #34353c; border-radius:7px; color:#c5c5cc; background:#1b1c20; text-align:left; font-size:10px; cursor:pointer; }
 .page-item.selected { border:1px solid #9376e7; background:#24212e; box-shadow:inset 0 0 0 1px #9376e7,0 0 0 1px #9376e733; }
 .page-item:hover { border-color:#66568c; background:#222129; }
@@ -833,10 +835,19 @@
 .preview-capture-button { flex:0 0 auto; }
 .preview-device-icon { color:#cbb7ff; font-size:17px; line-height:1; }
 .preview-content { position:relative; display:grid; flex:1 1 auto; place-items:center; min-height:0; overflow:auto; padding:10px; }
+.preview-touch-feedback { position:absolute; z-index:2147483002; width:0; height:0; pointer-events:none; }
+.preview-touch-ripple { position:absolute; top:-13px; left:-13px; width:26px; height:26px; border:2px solid #9273ed; border-radius:50%; background:#9d80f544; box-shadow:0 0 0 5px #9d80f526; animation:preview-touch-ripple 650ms ease-out both; }
+.preview-touch-label { position:absolute; top:17px; left:0; padding:2px 5px; border-radius:4px; color:#fff; background:#302649e8; font-size:9px; white-space:nowrap; }
+@keyframes preview-touch-ripple { from { transform:scale(.55); opacity:.9; } to { transform:scale(1.55); opacity:0; } }
 .preview-device { position:relative; flex:0 0 auto; }
 .preview-device.has-frame::after { position:absolute; z-index:2147483000; inset:-7px; border:7px solid #34343b; border-radius:18px; box-shadow:0 8px 28px #0007; content:""; pointer-events:none; }
 .preview-screen { position:relative; overflow:hidden; background:#fff; transform-origin:top left; contain:layout paint style; }
 .preview-widget { display:flex; align-items:flex-start; color:#24212b; cursor:default; }
+.preview-widget:focus-visible,.preview-widget-label:focus-within { outline:2px solid #8b69ed; outline-offset:2px; }
+.preview-widget:not(.is-button) { cursor:pointer; }
+.preview-screen[data-input-mode="touch"] .preview-widget { touch-action:none; }
+.preview-screen[data-input-mode="mouse"] .preview-widget { touch-action:manipulation; }
+.preview-screen[data-input-mode="both"] .preview-widget { touch-action:none; }
 .preview-widget.is-button { align-items:center; justify-content:center; border:1px solid #8b69ed; border-radius:8px; color:#fff; background:#8b69ed; cursor:pointer; font-weight:650; text-align:center; }
 .preview-widget.is-button.is-secondary { border-color:#45464e; color:#e9e9ec; background:#292a30; }
 .preview-widget.is-button.is-ghost { border-color:transparent; color:#5d5277; background:transparent; }

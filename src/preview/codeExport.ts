@@ -90,11 +90,22 @@ function jsxString(value: unknown): string {
 export function generateSingleFileJsx(project: Project): string {
   const notesComments = widgetNotesCodeComments(project);
   const exportProject = ensureRichTextRuns(project);
-  return `import { useState, type CSSProperties, type ReactNode } from "react";
+  return `import { useRef, useState, type CSSProperties, type ReactNode, type TouchEvent } from "react";
 ${notesComments ? `\n${notesComments}\n` : ""}
 
 const project = ${jsxString(exportProject)};
 type Widget = typeof project.screens[number]["widgets"][number];
+type TouchGestureState = {
+  x: number;
+  y: number;
+  distance?: number;
+  centerX?: number;
+  centerY?: number;
+  lastTap: number;
+  timer?: number;
+  longFired: boolean;
+  multiFired: boolean;
+};
 const repeaterItemVisible = (widget: Widget, item: Record<string, unknown>): boolean => {
   const rule = widget.props.visibleWhen;
   if (typeof rule !== "object" || rule === null || Array.isArray(rule)) return true;
@@ -115,6 +126,7 @@ ${EXPRESSION_RUNTIME_SOURCE}
   const [screenId, setScreenId] = useState(project.startScreenId);
   const [runtimeVariables, setRuntimeVariables] = useState<Record<string, unknown>>(() =>
     Object.fromEntries(project.variables.map((entry) => [entry.id, entry.initial])));
+  const touchGestures = useRef(new WeakMap<HTMLElement, TouchGestureState>());
   const screen = project.screens.find((item) => item.id === screenId) ?? project.screens[0];
   const getVariableValues = (updates: Record<string, unknown> = {}) => Object.fromEntries([
     ...project.variables.filter((entry) => entry.scope === "project"),
@@ -193,6 +205,131 @@ ${EXPRESSION_RUNTIME_SOURCE}
     }
     if (Object.keys(updates).length) setRuntimeVariables((current) => ({ ...current, ...updates }));
   };
+  const interactionHandlers = (widget: Widget, item?: Record<string, unknown>) => {
+    const mode = screen.inputMode ?? "both";
+    const stateFor = (element: HTMLElement): TouchGestureState => {
+      let state = touchGestures.current.get(element);
+      if (!state) {
+        state = { x: 0, y: 0, lastTap: 0, longFired: false, multiFired: false };
+        touchGestures.current.set(element, state);
+      }
+      return state;
+    };
+    const handlers = {
+      onFocus: () => runInteractions(widget, "onFocus", item),
+      onBlur: () => runInteractions(widget, "onBlur", item),
+      onKeyDown: (event: { key: string }) => {
+        runInteractions(widget, "onKeyDown", item);
+        if (mode === "touch" && (event.key === "Enter" || event.key === " ")) {
+          runInteractions(widget, "onClick", item);
+        }
+      },
+      onChange: () => runInteractions(widget, "onChange", item),
+      ...(mode === "mouse" ? {
+        onClick: () => runInteractions(widget, "onClick", item),
+        onDoubleClick: () => runInteractions(widget, "onDoubleClick", item),
+        onContextMenu: (event: { preventDefault: () => void }) => {
+          event.preventDefault();
+          runInteractions(widget, "onRightClick", item);
+        },
+        onMouseEnter: () => runInteractions(widget, "onHover", item),
+        onMouseDown: () => runInteractions(widget, "onMouseDown", item),
+        onMouseUp: () => runInteractions(widget, "onMouseUp", item),
+      } : {}),
+      ...(mode === "both" ? {
+        onClick: (event: { detail: number }) => {
+          if (event.detail === 0) runInteractions(widget, "onClick", item);
+        },
+        onPointerUp: (event: { pointerType: string }) => {
+          if (event.pointerType === "mouse") {
+            runInteractions(widget, "onClick", item);
+            runInteractions(widget, "onMouseUp", item);
+          }
+        },
+        onPointerEnter: (event: { pointerType: string }) => {
+          if (event.pointerType === "mouse") runInteractions(widget, "onHover", item);
+        },
+        onPointerDown: (event: { pointerType: string }) => {
+          if (event.pointerType === "mouse") runInteractions(widget, "onMouseDown", item);
+        },
+        onDoubleClick: () => runInteractions(widget, "onDoubleClick", item),
+        onContextMenu: (event: { preventDefault: () => void }) => {
+          event.preventDefault();
+          runInteractions(widget, "onRightClick", item);
+        },
+      } : {}),
+      ...(mode !== "mouse" ? {
+        onTouchStart: (event: TouchEvent<HTMLElement>) => {
+          const element = event.currentTarget;
+          const state = stateFor(element);
+          const first = event.touches[0];
+          if (!first) return;
+          runInteractions(widget, "onTouchStart", item);
+          state.x = first.clientX;
+          state.y = first.clientY;
+          state.longFired = false;
+          state.multiFired = false;
+          if (event.touches.length > 1) {
+            const second = event.touches[1];
+            state.x = (first.clientX + second.clientX) / 2;
+            state.y = (first.clientY + second.clientY) / 2;
+            state.centerX = state.x;
+            state.centerY = state.y;
+            state.distance = Math.hypot(first.clientX - second.clientX, first.clientY - second.clientY);
+            return;
+          }
+          state.timer = window.setTimeout(() => {
+            state.longFired = true;
+            runInteractions(widget, "onLongPress", item);
+          }, 550);
+        },
+        onTouchMove: (event: TouchEvent<HTMLElement>) => {
+          const state = stateFor(event.currentTarget);
+          if (event.touches.length > 1 && state.distance !== undefined) {
+            const first = event.touches[0];
+            const second = event.touches[1];
+            const distance = Math.hypot(first.clientX - second.clientX, first.clientY - second.clientY);
+            const centerX = (first.clientX + second.clientX) / 2;
+            const centerY = (first.clientY + second.clientY) / 2;
+            if (!state.multiFired && Math.abs(distance - state.distance) > 24) {
+              state.multiFired = true;
+              runInteractions(widget, distance < state.distance ? "onPinchIn" : "onPinchOut", item);
+            } else if (!state.multiFired && Math.hypot(centerX - (state.centerX ?? centerX), centerY - (state.centerY ?? centerY)) > 18) {
+              state.multiFired = true;
+              runInteractions(widget, "onPan", item);
+            }
+            return;
+          }
+          const touch = event.touches[0];
+          if (touch && Math.hypot(touch.clientX - state.x, touch.clientY - state.y) > 12) window.clearTimeout(state.timer);
+        },
+        onTouchEnd: (event: TouchEvent<HTMLElement>) => {
+          const state = stateFor(event.currentTarget);
+          window.clearTimeout(state.timer);
+          runInteractions(widget, "onTouchEnd", item);
+          const touch = event.changedTouches[0];
+          if (!touch || state.distance !== undefined || state.longFired || state.multiFired) return;
+          const dx = touch.clientX - state.x;
+          const dy = touch.clientY - state.y;
+          if (Math.max(Math.abs(dx), Math.abs(dy)) > 40) {
+            runInteractions(widget, Math.abs(dx) > Math.abs(dy)
+              ? dx < 0 ? "onSwipeLeft" : "onSwipeRight"
+              : dy < 0 ? "onSwipeUp" : "onSwipeDown", item);
+            return;
+          }
+          const now = Date.now();
+          if (now - state.lastTap < 320) {
+            state.lastTap = 0;
+            runInteractions(widget, "onDoubleTap", item);
+          } else {
+            state.lastTap = now;
+            runInteractions(widget, "onTap", item);
+          }
+        },
+      } : {}),
+    };
+    return handlers;
+  };
   const style = (widget: Widget): CSSProperties => ({
     position: "absolute",
     left: widget.x,
@@ -209,6 +346,7 @@ ${EXPRESSION_RUNTIME_SOURCE}
     textAlign: typeof widget.props.align === "string" ? widget.props.align as CSSProperties["textAlign"] : "left",
     whiteSpace: "pre-wrap",
     padding: typeof widget.props.padding === "number" ? widget.props.padding : 8,
+    touchAction: screen.inputMode === "mouse" ? "manipulation" : "none",
     boxSizing: "border-box",
   });
   const resolveText = (value: unknown, widget: Widget, item?: Record<string, unknown>) =>
@@ -279,7 +417,7 @@ ${EXPRESSION_RUNTIME_SOURCE}
         gridTemplateColumns: layout === "grid" ? "repeat(auto-fill,minmax(120px,1fr))" : undefined,
         gap: typeof widget.props.gap === "number" ? widget.props.gap : 8, overflow: "visible" }}>
         {rows.slice(0, 1000).map((row, index) => <div key={index}
-          onClick={() => runInteractions(widget, "onClick", row)} style={{ position: "relative",
+          {...interactionHandlers(widget, row)} style={{ position: "relative",
           width: widget.width, height: widget.height, flex: layout === "horizontal" ? "0 0 auto" : undefined }}>
           {template.filter((child) => child.visible && repeaterItemVisible(child, row)).map((child) => renderWidget(child, row))}
         </div>)}
@@ -287,23 +425,23 @@ ${EXPRESSION_RUNTIME_SOURCE}
     }
     if (["button", "icon-button"].includes(widget.type)) {
       return <button key={widget.id} type="button" style={style(widget)}
-        onClick={() => runInteractions(widget, "onClick", item)}>{text}</button>;
+        {...interactionHandlers(widget, item)}>{text}</button>;
     }
     if (widget.type === "image") {
       const src = resolveText(widget.props.src, widget, item);
-      if (src) return <img key={widget.id} src={src} alt={String(widget.props.alt ?? text)} style={{ ...style(widget), objectFit: "cover" }} />;
+      if (src) return <img key={widget.id} src={src} alt={String(widget.props.alt ?? text)} style={{ ...style(widget), objectFit: "cover" }} {...interactionHandlers(widget, item)} />;
     }
     if (widget.type === "text" && widget.props.richText === true) {
-      return <div key={widget.id} style={style(widget)}
-        onClick={() => runInteractions(widget, "onClick", item)}>{renderRichText(widget, item)}</div>;
+      return <div key={widget.id} tabIndex={0} style={style(widget)}
+        {...interactionHandlers(widget, item)}>{renderRichText(widget, item)}</div>;
     }
     if (["input", "search", "textarea"].includes(widget.type)) {
       return widget.type === "textarea"
-        ? <textarea key={widget.id} aria-label={String(widget.props.label ?? "Preview input")} placeholder={String(widget.props.placeholder ?? "")} style={style(widget)} />
-        : <input key={widget.id} type={widget.type === "search" ? "search" : String(widget.props.type ?? "text")} aria-label={String(widget.props.label ?? "Preview input")} placeholder={String(widget.props.placeholder ?? "")} style={style(widget)} />;
+        ? <textarea key={widget.id} aria-label={String(widget.props.label ?? "Preview input")} placeholder={String(widget.props.placeholder ?? "")} style={style(widget)} {...interactionHandlers(widget, item)} />
+        : <input key={widget.id} type={widget.type === "search" ? "search" : String(widget.props.type ?? "text")} aria-label={String(widget.props.label ?? "Preview input")} placeholder={String(widget.props.placeholder ?? "")} style={style(widget)} {...interactionHandlers(widget, item)} />;
     }
-    return <div key={widget.id} style={style(widget)}
-      onClick={() => runInteractions(widget, "onClick", item)}>{text}</div>;
+    return <div key={widget.id} tabIndex={0} style={style(widget)}
+      {...interactionHandlers(widget, item)}>{text}</div>;
   };
   return (
     <main style={{ fontFamily: "system-ui, sans-serif", padding: 16 }}>

@@ -121,7 +121,10 @@ describe("standalone published preview bundle", () => {
     expect(html).toContain("function evaluateExpression(source, context = {})");
     expect(html).toContain("evaluateExpression(source.trim(), { variables: variablesByName");
     expect(html).not.toMatch(/\beval\s*\(/);
-    expect(html).toContain('row.addEventListener("click", () => fire(widget, "onClick", rowData))');
+    expect(html).toContain("bindWidgetEvents(row, widget, rowData)");
+    expect(html).toContain('element.addEventListener("dblclick", () => fire(widget, "onDoubleClick", item))');
+    expect(html).toContain('"onPinchIn" : "onPinchOut"');
+    expect(html).toContain('fire(widget, "onPan", item, false)');
     expect(() => new Function(PREVIEW_RUNTIME_SCRIPT)).not.toThrow();
   });
 

@@ -22,16 +22,57 @@ import { useMeteredAction } from "../wallet/meteredActions";
 import { useWalletStore } from "../wallet/store";
 import { collectWidgetsDeep, getPanelStates, PANEL_TRANSITIONS } from "../project/dynamicPanels";
 import { ExpressionField } from "./ExpressionField";
+import type { ScreenInputMode } from "../project/inputModes";
 
 const EVENTS = [
   ["onClick", "Click"],
+  ["onDoubleClick", "Double click"],
+  ["onRightClick", "Right click"],
   ["onHover", "Hover"],
+  ["onMouseDown", "Mouse down"],
+  ["onMouseUp", "Mouse up"],
   ["onChange", "Change"],
   ["onLoad", "Load"],
   ["onTap", "Tap"],
+  ["onDoubleTap", "Double tap"],
+  ["onLongPress", "Long press"],
+  ["onSwipeLeft", "Swipe left"],
+  ["onSwipeRight", "Swipe right"],
+  ["onSwipeUp", "Swipe up"],
+  ["onSwipeDown", "Swipe down"],
+  ["onPinchIn", "Pinch in"],
+  ["onPinchOut", "Pinch out"],
+  ["onPan", "Two-finger pan"],
   ["onTouchStart", "Touch start"],
   ["onTouchEnd", "Touch end"],
+  ["onFocus", "Focus"],
+  ["onBlur", "Blur"],
+  ["onKeyDown", "Key down"],
 ] as const;
+
+const ALWAYS_AVAILABLE_EVENTS = new Set(["onChange", "onLoad", "onFocus", "onBlur", "onKeyDown"]);
+const MOUSE_EVENTS = new Set([
+  "onClick", "onDoubleClick", "onRightClick", "onHover", "onMouseDown", "onMouseUp",
+]);
+const TOUCH_EVENTS = new Set([
+  "onTap", "onDoubleTap", "onLongPress", "onSwipeLeft", "onSwipeRight", "onSwipeUp",
+  "onSwipeDown", "onPinchIn", "onPinchOut", "onPan", "onTouchStart", "onTouchEnd",
+]);
+
+function getEventsForInputMode(mode: ScreenInputMode, currentEvent: InteractionRule["event"]) {
+  return EVENTS.filter(([event]) =>
+    ALWAYS_AVAILABLE_EVENTS.has(event) ||
+    (mode !== "touch" && MOUSE_EVENTS.has(event)) ||
+    (mode !== "mouse" && TOUCH_EVENTS.has(event)) ||
+    event === currentEvent,
+  );
+}
+
+function isEventAvailableInMode(mode: ScreenInputMode, event: InteractionRule["event"]): boolean {
+  return ALWAYS_AVAILABLE_EVENTS.has(event) ||
+    (mode !== "touch" && MOUSE_EVENTS.has(event)) ||
+    (mode !== "mouse" && TOUCH_EVENTS.has(event));
+}
 
 const OPERATORS = [
   ["equals", "=="],
@@ -227,6 +268,10 @@ export function InteractionBuilder({
   const relevantRules = useMemo(
     () => rules.filter((rule) => rule.widgetId === widget.id || !rule.widgetId),
     [rules, widget.id],
+  );
+  const availableEvents = useMemo(
+    () => new Map(rules.map((rule) => [rule.id, getEventsForInputMode(screen.inputMode, rule.event)])),
+    [rules, screen.inputMode],
   );
   const issues = useMemo(
     () => validateInteractionRules({ ...project, screens: project.screens.map((item) =>
@@ -445,7 +490,13 @@ export function InteractionBuilder({
                 updateRule(rule.id, (item) => ({ ...item, event: eventName }));
               }}
             >
-              {EVENTS.map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+              {(availableEvents.get(rule.id) ?? EVENTS).map(([value, label]) => (
+                <option key={value} value={value}>
+                  {value === rule.event && !isEventAvailableInMode(screen.inputMode, value)
+                    ? `${label} (not available in ${screen.inputMode} mode)`
+                    : label}
+                </option>
+              ))}
             </select>
           </label>
           <div className="interaction-subheading">

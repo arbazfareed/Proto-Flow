@@ -77,14 +77,36 @@ describe("ProtoFlow project schema", () => {
   it("creates a valid starter project with a UUID start screen", () => {
     const project = createEmptyProject("Checkout flow");
 
-    expect(project.schemaVersion).toBe("1.8.0");
+    expect(project.schemaVersion).toBe("1.9.0");
     expect(project.name).toBe("Checkout flow");
     expect(project.screens).toHaveLength(1);
     expect(project.screens[0].id).toBe(project.startScreenId);
     expect(project.screens[0].widgets).toEqual([]);
     expect(project.screens[0].interactionRules).toEqual([]);
+    expect(project.screens[0].inputMode).toBe("mouse");
     expect(project.variables).toEqual([]);
     expect(() => crypto.randomUUID()).not.toThrow();
+  });
+
+  it("infers input modes for screens migrated from schema 1.8", () => {
+    const project = createEmptyProject("Input mode migration");
+    const [screen] = project.screens;
+    const { inputMode: _inputMode, ...legacyScreen } = screen;
+    const migrated = parseProject({
+      ...project,
+      schemaVersion: "1.8.0",
+      screens: [{
+        ...legacyScreen,
+        device: {
+          ...screen.device!,
+          presetId: "iphone-15-pro",
+          width: 393,
+        },
+      }],
+    });
+
+    expect(migrated.screens[0].inputMode).toBe("touch");
+    expect(migrated.schemaVersion).toBe("1.9.0");
   });
 
   it("validates and round-trips variables, widgets, styles and interactions", () => {
@@ -92,6 +114,32 @@ describe("ProtoFlow project schema", () => {
 
     expect(parseProject(project)).toEqual(project);
     expect(parseProject(serializeProject(project))).toEqual(project);
+  });
+
+  it("accepts the touch, mouse, gesture, and keyboard interaction events", () => {
+    const project = createCompleteProject();
+    const screen = project.screens[0];
+    const events = [
+      "onTap", "onDoubleTap", "onLongPress", "onSwipeLeft", "onSwipeRight",
+      "onSwipeUp", "onSwipeDown", "onPinchIn", "onPinchOut", "onPan",
+      "onClick", "onDoubleClick", "onRightClick", "onHover", "onMouseDown",
+      "onMouseUp", "onFocus", "onBlur", "onKeyDown",
+    ] as const;
+    const validated = parseProject({
+      ...project,
+      screens: [{
+        ...screen,
+        interactionRules: events.map((event) => ({
+          id: crypto.randomUUID(),
+          widgetId: screen.widgets[0].id,
+          event,
+          conditions: [],
+          actions: [{ type: "setVariable", target: "attempts", value: 1 }],
+        })),
+      }],
+    });
+
+    expect(validated.screens[0].interactionRules.map((rule) => rule.event)).toEqual(events);
   });
 
   it("validates nested dynamic-panel states, active state references, and the nesting limit", () => {
@@ -150,7 +198,7 @@ describe("ProtoFlow project schema", () => {
     const project = createCompleteProject();
     const { symbols: _symbols, ...legacy } = project;
     const migrated = parseProject({ ...legacy, schemaVersion: "1.0.0" });
-    expect(migrated.schemaVersion).toBe("1.8.0");
+    expect(migrated.schemaVersion).toBe("1.9.0");
     expect(migrated.symbols).toEqual([]);
   });
 
@@ -179,7 +227,7 @@ describe("ProtoFlow project schema", () => {
   it("migrates version 1.2 interaction rules to the current format", () => {
     const project = createCompleteProject();
     const migrated = parseProject({ ...project, schemaVersion: "1.2.0" });
-    expect(migrated.schemaVersion).toBe("1.8.0");
+    expect(migrated.schemaVersion).toBe("1.9.0");
     expect(migrated.screens[0].interactionRules[0].conditionMode).toBe("all");
     expect(migrated.screens[0].interactionRules[0].widgetId).toBeUndefined();
   });
@@ -187,14 +235,14 @@ describe("ProtoFlow project schema", () => {
   it("migrates version 1.5 projects with interaction-local variables", () => {
     const project = createCompleteProject();
     const migrated = parseProject({ ...project, schemaVersion: "1.5.0" });
-    expect(migrated.schemaVersion).toBe("1.8.0");
+    expect(migrated.schemaVersion).toBe("1.9.0");
     expect(migrated.screens[0].interactionRules[0].localVariables).toBeUndefined();
   });
 
   it("migrates version 1.6 projects and round-trips persisted flow positions", () => {
     const project = createCompleteProject();
     const legacy = { ...project, schemaVersion: "1.6.0" };
-    expect(parseProject(legacy).schemaVersion).toBe("1.8.0");
+    expect(parseProject(legacy).schemaVersion).toBe("1.9.0");
 
     project.screens[0].flowPosition = { x: 320, y: 180 };
     expect(parseProject(serializeProject(project)).screens[0].flowPosition)
@@ -244,7 +292,7 @@ describe("ProtoFlow project schema", () => {
     const project = createCompleteProject();
     const widget = project.screens[0].widgets[0];
     const legacy = { ...project, schemaVersion: "1.7.0" };
-    expect(parseProject(legacy).schemaVersion).toBe("1.8.0");
+    expect(parseProject(legacy).schemaVersion).toBe("1.9.0");
 
     widget.notes = {
       description: "Supports **accessible** checkout.",
@@ -583,7 +631,7 @@ describe("ProtoFlow project schema", () => {
         screens: [
           {
             ...screen,
-            interactionRules: [{ ...rule, event: "onDoubleClick" }],
+            interactionRules: [{ ...rule, event: "onDefinitelyNotAnEvent" }],
           },
         ],
       }),
