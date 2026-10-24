@@ -8,6 +8,7 @@ interface DeviceFrameProps {
   device: ScreenDevice;
   preset?: DevicePreset;
   widgets: readonly Widget[];
+  visible?: boolean;
   showFrame: boolean;
   showSafeArea: boolean;
   statusBarTheme: "light" | "dark";
@@ -27,9 +28,10 @@ function clockLabel(): string {
 function DeviceViewportLayer({
   device,
   preset,
+  visible,
   showFrame,
   showSafeArea,
-}: Pick<DeviceFrameProps, "device" | "preset" | "showFrame" | "showSafeArea">) {
+}: Pick<DeviceFrameProps, "device" | "preset" | "visible" | "showFrame" | "showSafeArea">) {
   const chrome = preset?.frameChrome;
   const bezel = showFrame ? chrome?.bezel ?? 0 : 0;
   const radius = showFrame ? chrome?.cornerRadius ?? 0 : 0;
@@ -39,7 +41,7 @@ function DeviceViewportLayer({
   const safeArea = getSafeAreaBounds(device);
 
   return (
-    <Layer listening={false} perfectDrawEnabled={false}>
+    <Layer visible={visible} listening={false} perfectDrawEnabled={false}>
       {showFrame && bezel > 0 && (
         <Rect
           x={-bezel}
@@ -105,6 +107,7 @@ function DeviceChromeLayer({
   device,
   preset,
   widgets,
+  visible,
   showFrame,
   statusBarTheme,
   statusBarTimeMode,
@@ -133,7 +136,7 @@ function DeviceChromeLayer({
   }, [statusBarTimeMode]);
 
   return (
-    <Layer listening={false} perfectDrawEnabled={false}>
+    <Layer visible={visible} listening={false} perfectDrawEnabled={false}>
       {showFrame && isBrowserFrame && (
         <Group>
           <Rect
@@ -322,6 +325,7 @@ export function DeviceFrame({
   device,
   preset,
   widgets,
+  visible,
   showFrame,
   showSafeArea,
   statusBarTheme,
@@ -334,6 +338,7 @@ export function DeviceFrame({
       <DeviceViewportLayer
         device={device}
         preset={preset}
+        visible={visible}
         showFrame={showFrame}
         showSafeArea={showSafeArea}
       />
@@ -341,6 +346,7 @@ export function DeviceFrame({
         device={device}
         preset={preset}
         widgets={widgets}
+        visible={visible}
         showFrame={showFrame}
         statusBarTheme={statusBarTheme}
         statusBarTimeMode={statusBarTimeMode}

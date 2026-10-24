@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { DragEvent as ReactDragEvent, FormEvent } from "react";
-import { Circle, Group, Layer, Line, Rect, Shape, Stage, Text, Transformer } from "react-konva";
+import { Circle, Group, Layer, Line, Rect, Stage, Text, Transformer } from "react-konva";
 import type Konva from "konva";
 import {
   ArrowDownToLine,
@@ -47,7 +47,12 @@ import {
   mergeActivePanelWidgets,
 } from "../project/dynamicPanels";
 import { mergeActiveRepeaterWidgets } from "../project/repeaters";
-import { evaluateExpression, EXPRESSION_FUNCTIONS } from "../project/expressions";
+import {
+  clearExpressionCache,
+  evaluateExpression,
+  EXPRESSION_FUNCTIONS,
+} from "../project/expressions";
+import { getRepeaterDataset } from "../project/repeaters";
 import {
   createDraggedWidgetCopies,
   getActiveLayerDragPayload,
@@ -91,6 +96,8 @@ import {
   normalizeCanvasViewport,
   worldToScreen,
   zoomAroundPointer,
+  getCanvasViewportBounds,
+  intersectsCanvasViewport,
 } from "./navigation";
 import { snapWidgetPosition, type CanvasGuide, type CanvasPoint } from "./snapping";
 import {
@@ -338,43 +345,62 @@ function GridLayer({
   const right = (size.width - pan.x) / zoom;
   const bottom = (size.height - pan.y) / zoom;
   const spacing = getVisibleGridSpacing(gridSize, zoom);
+  const zoomBucket = Math.pow(2, Math.round(Math.log2(zoom) * 4) / 4);
+  const [pattern, setPattern] = useState<{ image: HTMLImageElement; scale: number } | null>(null);
+  useEffect(() => {
+    const pixelRatio = window.devicePixelRatio || 1;
+    const tile = document.createElement("canvas");
+    tile.width = Math.max(1, Math.ceil(spacing * pixelRatio));
+    tile.height = tile.width;
+    const context = tile.getContext("2d");
+    if (!context) {
+      console.error("Could not create the canvas grid pattern.");
+      setPattern(null);
+      return;
+    }
+    context.scale(pixelRatio, pixelRatio);
+    context.strokeStyle = "#34353b";
+    context.fillStyle = "#34353b";
+    if (gridStyle === "dots") {
+      context.beginPath();
+      context.arc(spacing / 2, spacing / 2, 0.65 / zoomBucket, 0, Math.PI * 2);
+      context.fill();
+    } else {
+      context.lineWidth = 0.45 / zoomBucket;
+      context.beginPath();
+      context.moveTo(0, 0);
+      context.lineTo(0, spacing);
+      context.moveTo(0, 0);
+      context.lineTo(spacing, 0);
+      context.stroke();
+    }
+    const image = new Image();
+    image.onload = () => setPattern({ image, scale: 1 / pixelRatio });
+    image.onerror = () => {
+      console.error("Could not load the canvas grid pattern.");
+      setPattern(null);
+    };
+    image.src = tile.toDataURL();
+    return () => {
+      image.onload = null;
+      image.onerror = null;
+    };
+  }, [gridStyle, spacing, zoomBucket]);
 
   return (
     <Layer listening={false} perfectDrawEnabled={false}>
-      <Shape
+      <Rect
         x={left}
         y={top}
         width={right - left}
         height={bottom - top}
-        fill={gridStyle === "dots" ? "#34353b" : undefined}
+        fillPatternImage={pattern?.image}
+        fillPatternRepeat="repeat"
+        fillPatternScaleX={pattern?.scale}
+        fillPatternScaleY={pattern?.scale}
+        fillPatternOffsetX={-(((left % spacing) + spacing) % spacing)}
+        fillPatternOffsetY={-(((top % spacing) + spacing) % spacing)}
         perfectDrawEnabled={false}
-        sceneFunc={(context, shape) => {
-          const firstX = Math.ceil(left / spacing) * spacing;
-          const firstY = Math.ceil(top / spacing) * spacing;
-          const radius = 0.65 / zoom;
-
-          context.beginPath();
-          if (gridStyle === "dots") {
-            for (let x = firstX; x <= right; x += spacing) {
-              for (let y = firstY; y <= bottom; y += spacing) {
-                context.moveTo(x - left + radius, y - top);
-                context.arc(x - left, y - top, radius, 0, Math.PI * 2);
-              }
-            }
-          } else {
-            for (let x = firstX; x <= right; x += spacing) {
-              context.moveTo(x - left, 0);
-              context.lineTo(x - left, bottom - top);
-            }
-            for (let y = firstY; y <= bottom; y += spacing) {
-              context.moveTo(0, y - top);
-              context.lineTo(right - left, y - top);
-            }
-          }
-          context.fillStrokeShape(shape);
-        }}
-        stroke={gridStyle === "lines" ? "#34353b" : undefined}
-        strokeWidth={gridStyle === "lines" ? 0.45 / zoom : undefined}
       />
     </Layer>
   );
@@ -424,6 +450,54 @@ function GuideLayer({
         </Group>
       ))}
     </Layer>
+  );
+}
+
+function CanvasPerformanceOverlay({
+  nodeCount,
+  culledNodeCount,
+  activePanelCount,
+  repeaterRowCount,
+}: {
+  nodeCount: number;
+  culledNodeCount: number;
+  activePanelCount: number;
+  repeaterRowCount: number;
+}) {
+  const [frame, setFrame] = useState({ fps: 0, frameTime: 0 });
+
+  useEffect(() => {
+    let animationFrame = 0;
+    let previousFrameTime = performance.now();
+    let intervalStart = previousFrameTime;
+    let intervalFrames = 0;
+    const measure = (timestamp: number) => {
+      intervalFrames += 1;
+      const frameTime = timestamp - previousFrameTime;
+      previousFrameTime = timestamp;
+      if (timestamp - intervalStart >= 500) {
+        setFrame({
+          fps: (intervalFrames * 1000) / (timestamp - intervalStart),
+          frameTime,
+        });
+        intervalFrames = 0;
+        intervalStart = timestamp;
+      }
+      animationFrame = window.requestAnimationFrame(measure);
+    };
+    animationFrame = window.requestAnimationFrame(measure);
+    return () => window.cancelAnimationFrame(animationFrame);
+  }, []);
+
+  return (
+    <output className="canvas-performance-overlay" data-testid="canvas-performance-overlay">
+      <span>{frame.fps.toFixed(0)} FPS</span>
+      <span>{frame.frameTime.toFixed(1)} ms</span>
+      <span>{nodeCount} nodes</span>
+      <span>{culledNodeCount} culled</span>
+      <span>{activePanelCount} panels</span>
+      <span>{repeaterRowCount} repeater rows</span>
+    </output>
   );
 }
 
@@ -739,6 +813,7 @@ export function CanvasStage({
   const surfaceRef = useRef<HTMLDivElement>(null);
   const stageRef = useRef<KonvaStage>(null);
   const contentLayerRef = useRef<KonvaLayer>(null);
+  const transformerLayerRef = useRef<KonvaLayer>(null);
   const transformerRef = useRef<Konva.Transformer>(null);
   const imageInputRef = useRef<HTMLInputElement>(null);
   const textEditorRef = useRef<HTMLTextAreaElement>(null);
@@ -819,24 +894,55 @@ export function CanvasStage({
   useEffect(() => {
     activeToolRef.current = activeTool;
   }, [activeTool]);
+  useEffect(() => {
+    clearExpressionCache();
+  }, [project.id]);
   const activeBreakpoint = activeScreen
     ? resolveActiveBreakpoint(activeScreen, activeBreakpointId)
     : undefined;
-  const baseScreenWidgets = activeScreen
-    ? getCanvasWidgets(activeScreen, activeRepeaterEdit)
-    : [];
-  const screenWidgets = activeScreen && activeBreakpoint
-    ? resolveWidgetsForBreakpoint(
-        baseScreenWidgets,
-        activeBreakpoint,
-        activeScreen.device?.width ?? DEFAULT_DEVICE_PRESET.viewport.width,
-        activeScreen.device?.height ?? DEFAULT_DEVICE_PRESET.viewport.height,
-        activeScreen.compactLayout,
-      )
-    : [...baseScreenWidgets].sort((first, second) => first.zIndex - second.zIndex);
+  const baseScreenWidgets = useMemo(
+    () => activeScreen ? getCanvasWidgets(activeScreen, activeRepeaterEdit) : [],
+    [activeRepeaterEdit, activeScreen],
+  );
+  const screenWidgets = useMemo(
+    () => activeScreen && activeBreakpoint
+      ? resolveWidgetsForBreakpoint(
+          baseScreenWidgets,
+          activeBreakpoint,
+          activeScreen.device?.width ?? DEFAULT_DEVICE_PRESET.viewport.width,
+          activeScreen.device?.height ?? DEFAULT_DEVICE_PRESET.viewport.height,
+          activeScreen.compactLayout,
+        )
+      : [...baseScreenWidgets].sort((first, second) => first.zIndex - second.zIndex),
+    [activeBreakpoint, activeScreen, baseScreenWidgets],
+  );
   const autoLayoutPositions = useMemo(
     () => getAutoLayoutPositions(screenWidgets),
     [screenWidgets],
+  );
+  const canvasViewportBounds = useMemo(
+    () => getCanvasViewportBounds(size, { zoom, pan }),
+    [pan, size, zoom],
+  );
+  const renderableWidgets = useMemo(
+    () => screenWidgets.filter((widget) =>
+      widget.visible &&
+      intersectsCanvasViewport(
+        {
+          x: previewPositions[widget.id]?.x ?? autoLayoutPositions.get(widget.id)?.x ?? widget.x,
+          y: previewPositions[widget.id]?.y ?? autoLayoutPositions.get(widget.id)?.y ?? widget.y,
+          width: widget.width,
+          height: widget.height,
+          rotation: widget.rotation,
+        },
+        canvasViewportBounds,
+      ),
+    ),
+    [autoLayoutPositions, canvasViewportBounds, previewPositions, screenWidgets],
+  );
+  const renderableWidgetIds = useMemo(
+    () => new Set(renderableWidgets.map((widget) => widget.id)),
+    [renderableWidgets],
   );
   const selectedParentWidgetIds = useMemo(
     () => getSelectedParentWidgetIds(screenWidgets, selectedIds),
@@ -869,6 +975,22 @@ export function CanvasStage({
   const selectedWidgets = screenWidgets.filter((widget) =>
     selectedIds.includes(widget.id),
   );
+  const activePanelCount = useMemo(
+    () => screenWidgets.filter((widget) => widget.type === "dynamic-panel").length,
+    [screenWidgets],
+  );
+  const culledNodeCount = useMemo(
+    () => screenWidgets.filter((widget) =>
+      widget.visible && !renderableWidgetIds.has(widget.id),
+    ).length,
+    [renderableWidgetIds, screenWidgets],
+  );
+  const repeaterRowCount = useMemo(
+    () => screenWidgets
+      .filter((widget) => widget.type === "repeater")
+      .reduce((total, widget) => total + getRepeaterDataset(widget).length, 0),
+    [screenWidgets],
+  );
   const selectedHasSemanticGroup = selectedWidgets.some(
     (widget) =>
       widget.groupId &&
@@ -882,13 +1004,14 @@ export function CanvasStage({
     const stage = stageRef.current;
     if (!transformer || !stage) return;
     transformer.nodes(
-      selectedWidgets
+      renderableWidgets
         .filter((widget) => !widget.locked && widget.visible)
         .map((widget) => stage.findOne(`#${widget.id}`))
         .filter((node): node is Konva.Node => node !== undefined),
     );
     contentLayerRef.current?.batchDraw();
-  }, [selectedIds, activeScreen?.widgets]);
+    transformerLayerRef.current?.batchDraw();
+  }, [renderableWidgets, selectedIds]);
 
   const commitViewOnFrame = useCallback((view: PendingView) => {
     pendingViewRef.current = view;
@@ -2704,6 +2827,23 @@ export function CanvasStage({
             device={activeDevice}
             preset={activeDevicePreset}
             widgets={screenWidgets}
+            visible={intersectsCanvasViewport(
+              {
+                x: -(showDeviceFrame ? activeDevicePreset?.frameChrome?.bezel ?? 0 : 0),
+                y: -(showDeviceFrame
+                  ? Math.max(
+                      activeDevicePreset?.frameChrome?.bezel ?? 0,
+                      activeDevicePreset?.frameChrome?.notch === "browser" ? 30 : 0,
+                    )
+                  : 0),
+                width: activeDevice.width +
+                  (showDeviceFrame ? (activeDevicePreset?.frameChrome?.bezel ?? 0) * 2 : 0),
+                height: activeDevice.height +
+                  (showDeviceFrame ? (activeDevicePreset?.frameChrome?.bezel ?? 0) * 2 : 0) +
+                  (showDeviceFrame && activeDevicePreset?.id.startsWith("macbook-") ? 10 : 0),
+              },
+              canvasViewportBounds,
+            )}
             showFrame={showDeviceFrame}
             showSafeArea={showSafeArea}
             statusBarTheme={statusBarTheme}
@@ -2717,9 +2857,10 @@ export function CanvasStage({
             clipY={0}
             clipWidth={activeDevice.width}
             clipHeight={activeDevice.height}
+            visible={renderableWidgets.length > 0}
             perfectDrawEnabled={false}
           >
-            {screenWidgets.map((widget) => {
+            {renderableWidgets.map((widget) => {
               const snapPosition = (position: CanvasPoint, altKey = altHeldRef.current) =>
                 snapWidgetPosition(
                   {
@@ -2859,6 +3000,8 @@ export function CanvasStage({
                 />
               );
             })}
+          </Layer>
+          <Layer ref={transformerLayerRef} perfectDrawEnabled={false}>
             <Transformer
               ref={transformerRef}
               enabledAnchors={[
@@ -2960,7 +3103,9 @@ export function CanvasStage({
           </Layer>
           {notesOverlay && (
             <Layer>
-              {screenWidgets.filter((widget) => widget.notes).map((widget) => {
+              {screenWidgets.filter((widget) =>
+                widget.notes && renderableWidgetIds.has(widget.id),
+              ).map((widget) => {
                 const priorityColor = {
                   low: "#7196e8",
                   medium: "#d5a446",
@@ -3040,6 +3185,14 @@ export function CanvasStage({
           )}
           <GuideLayer guides={guides} size={size} zoom={zoom} pan={pan} />
         </Stage>
+      )}
+      {import.meta.env.DEV && (
+        <CanvasPerformanceOverlay
+          nodeCount={screenWidgets.length}
+          culledNodeCount={culledNodeCount}
+          activePanelCount={activePanelCount}
+          repeaterRowCount={repeaterRowCount}
+        />
       )}
       {(widgetsOutsideBreakpointViewport.length > 0 ||
         widgetsOutsideSafeArea.length > 0 ||

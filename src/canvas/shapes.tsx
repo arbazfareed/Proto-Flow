@@ -730,6 +730,7 @@ function ImageShape({ widget, stroke, strokeWidth, onThumbnailReady }: ShapeComp
         image={image}
         width={widget.width}
         height={widget.height}
+        imageSmoothingEnabled={widget.props.pixelPerfect !== true}
         stroke={stroke}
         strokeWidth={strokeWidth}
         perfectDrawEnabled={false}
@@ -2584,6 +2585,7 @@ export function renderWidgetShape(
       shadowOffsetY={widget.style.shadow?.offsetY ?? 0}
       shadowOpacity={widget.style.shadow?.opacity ?? 0.5}
       shadowEnabled={Boolean(widget.style.shadow)}
+      shadowForStrokeEnabled={Boolean(widget.style.shadow)}
     >
       <ShapeComponent
         widget={widget}

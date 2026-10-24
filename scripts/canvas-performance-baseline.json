@@ -1,0 +1,9 @@
+{
+  "durationMs": 30000,
+  "minimumFps": 55,
+  "gatedScenarios": [
+    "500 nodes",
+    "1000 nodes",
+    "50 panels + 500 repeater rows"
+  ]
+}

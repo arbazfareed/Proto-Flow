@@ -18,7 +18,10 @@ export const EXPRESSION_FUNCTIONS = [
 export const EXPRESSION_RUNTIME_SOURCE = String.raw`
 function evaluateExpression(source, context = {}) {
   if (source.length > 2000) throw new Error("Expression is too long.");
-  const tokens = [];
+  const cache = evaluateExpression.tokenCache || (evaluateExpression.tokenCache = new Map());
+  let tokens = cache.get(source);
+  if (!tokens) {
+    tokens = [];
   let index = 0;
   while (index < source.length) {
     if (/\s/.test(source[index])) { index++; continue; }
@@ -48,6 +51,12 @@ function evaluateExpression(source, context = {}) {
     if (tokens.length > 500) throw new Error("Expression contains too many tokens.");
   }
   tokens.push({ type: "eof", value: "" });
+    if (cache.size >= 1000) cache.delete(cache.keys().next().value);
+    cache.set(source, tokens);
+  } else {
+    cache.delete(source);
+    cache.set(source, tokens);
+  }
   let cursor = 0;
   let depth = 0;
   const peek = () => tokens[cursor];
@@ -149,6 +158,9 @@ function evaluateExpression(source, context = {}) {
   if (typeof result === "number" && !Number.isFinite(result)) throw new Error("Expression result is not finite.");
   return result;
 }
+function clearExpressionCache() {
+  evaluateExpression.tokenCache?.clear();
+}
 `;
 
 type Token = { type: "number" | "string" | "identifier" | "operator" | "eof"; value: string };
@@ -180,6 +192,18 @@ const PRECEDENCE: Record<string, number> = {
   "%": 6,
   "**": 7,
 };
+
+const MAX_COMPILED_EXPRESSIONS = 1_000;
+interface CompiledExpression {
+  tree: ExpressionNode;
+  dependencies: string[][];
+  cacheable: boolean;
+  hasCachedResult: boolean;
+  cachedValues: unknown[];
+  cachedResult: unknown;
+}
+
+const compiledExpressions = new Map<string, CompiledExpression>();
 
 function tokenize(source: string): Token[] {
   if (source.length > MAX_EXPRESSION_LENGTH) throw new Error("Expression is too long.");
@@ -467,14 +491,80 @@ function evaluateNode(node: ExpressionNode, context: ExpressionContext): unknown
   }
 }
 
+function inspectExpression(
+  node: ExpressionNode,
+  dependencies: Map<string, string[]>,
+): boolean {
+  switch (node.type) {
+    case "literal":
+      return true;
+    case "reference":
+      dependencies.set(node.path.join("."), node.path);
+      return true;
+    case "unary":
+      return inspectExpression(node.value, dependencies);
+    case "binary":
+      return inspectExpression(node.left, dependencies) &&
+        inspectExpression(node.right, dependencies);
+    case "call":
+      if (node.name === "random" || node.name === "now" || node.name === "formatDate") {
+        return false;
+      }
+      return node.args.every((argument) => inspectExpression(argument, dependencies));
+  }
+}
+
 export function evaluateExpression(source: string, context: ExpressionContext = {}): unknown {
-  const tokens = tokenize(source);
-  const tree = new Parser(tokens).parse();
-  const result = evaluateNode(tree, context);
+  let compiled = compiledExpressions.get(source);
+  if (compiled) {
+    compiledExpressions.delete(source);
+    compiledExpressions.set(source, compiled);
+  } else {
+    const tree = new Parser(tokenize(source)).parse();
+    const dependencies = new Map<string, string[]>();
+    const cacheable = inspectExpression(tree, dependencies);
+    compiled = {
+      tree,
+      dependencies: [...dependencies.values()],
+      cacheable,
+      hasCachedResult: false,
+      cachedValues: [],
+      cachedResult: undefined,
+    };
+    if (compiledExpressions.size >= MAX_COMPILED_EXPRESSIONS) {
+      const oldest = compiledExpressions.keys().next().value;
+      if (oldest !== undefined) compiledExpressions.delete(oldest);
+    }
+    compiledExpressions.set(source, compiled);
+  }
+  const values = compiled.cacheable
+    ? compiled.dependencies.map((path) => resolveReference(path, context))
+    : [];
+  if (
+    compiled.hasCachedResult &&
+    values.length === compiled.cachedValues.length &&
+    values.every((value, index) => Object.is(value, compiled.cachedValues[index]))
+  ) {
+    return compiled.cachedResult;
+  }
+  const result = evaluateNode(compiled.tree, context);
   if (typeof result === "number" && !Number.isFinite(result)) {
     throw new Error("Expression result is not a finite number.");
   }
+  if (compiled.cacheable) {
+    compiled.cachedValues = values;
+    compiled.cachedResult = result;
+    compiled.hasCachedResult = true;
+  }
   return result;
+}
+
+export function clearExpressionCache(): void {
+  compiledExpressions.clear();
+}
+
+export function getExpressionCacheSize(): number {
+  return compiledExpressions.size;
 }
 
 export function interpolateExpressions(text: string, context: ExpressionContext = {}): string {
