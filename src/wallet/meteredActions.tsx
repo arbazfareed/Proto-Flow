@@ -15,7 +15,10 @@ import {
   type MeteredActionType,
 } from "./api";
 import { useWalletStore } from "./store";
-import { trackEvent } from "../diagnostics/observability";
+import {
+  trackEvent,
+  type ActionFailureReason,
+} from "../diagnostics/observability";
 
 const CONFIRMATION_KEY_PREFIX = "protoflow.metered.skip-confirmation.";
 const TELEMETRY_ENABLED_KEY = "protoflow.metered.telemetry.enabled";
@@ -151,6 +154,7 @@ function errorMessage(error: unknown): string {
   if (!(error instanceof WalletApiError)) {
     return error instanceof Error ? error.message : "The cloud action could not be completed.";
   }
+
   switch (error.code) {
     case "INSUFFICIENT_BALANCE":
       return "Your credit balance is too low. Claim daily credits or try again later.";
@@ -183,6 +187,18 @@ function errorMessage(error: unknown): string {
     default:
       return "The cloud action failed. No credits were deducted; try again later.";
   }
+}
+
+function analyticsFailureReason(error: unknown): ActionFailureReason {
+  if (error instanceof WalletApiError) {
+    if (error.code === "INSUFFICIENT_BALANCE") return "insufficient_balance";
+    if (error.code === "RATE_LIMITED") return "rate_limited";
+    if (error.code === "NETWORK_ERROR") return "network";
+    if (error.code === "INVALID_PAYLOAD" || error.code === "BAD_REQUEST") return "invalid_request";
+    if (error.code === "INVALID_TOKEN" || error.code === "MISSING_TOKEN") return "provider";
+  }
+  if (error instanceof TypeError && /network|fetch/i.test(error.message)) return "network";
+  return "other";
 }
 
 const MeteredActionContext = createContext<MeteredActionContextValue | null>(null);
@@ -268,7 +284,6 @@ export function MeteredActionProvider({ children }: MeteredActionProviderProps) 
   }, []);
 
   const recordUsage = useCallback((actionType: MeteredActionType) => {
-    trackEvent("metered_action_used", { actionType });
     try {
       recordLocalActionUsage(actionType);
     } catch (error) {
@@ -417,6 +432,7 @@ export function useMeteredAction<T = unknown>(
   const run = useCallback(async (payloadOverride?: Record<string, unknown>): Promise<T | undefined> => {
     if (isRunning) return undefined;
     setError(null);
+    trackEvent("action_attempted", { actionType });
 
     let requestPayload: Record<string, unknown>;
     try {
@@ -425,6 +441,7 @@ export function useMeteredAction<T = unknown>(
       const message = cause instanceof Error ? cause.message : "The action payload is invalid.";
       setError(message);
       context.notify(message);
+      trackEvent("action_failed", { actionType, reason: "invalid_request" });
       return undefined;
     }
 
@@ -444,11 +461,13 @@ export function useMeteredAction<T = unknown>(
             : "Your wallet is not synced. Refresh it before using cloud actions.";
         setError(message);
         context.notify(message);
+        trackEvent("action_failed", { actionType, reason: "network" });
         return undefined;
       }
 
       if (definition.cost > 0 && wallet.balance < definition.cost) {
         context.promptForCredits(definition.cost);
+        trackEvent("action_failed", { actionType, reason: "insufficient_balance" });
         return undefined;
       }
 
@@ -463,7 +482,10 @@ export function useMeteredAction<T = unknown>(
           actionName: definition.name,
           cost: definition.cost,
         });
-        if (!confirmation.confirmed) return undefined;
+        if (!confirmation.confirmed) {
+          trackEvent("action_failed", { actionType, reason: "cancelled" });
+          return undefined;
+        }
       }
 
       wallet = useWalletStore.getState();
@@ -471,10 +493,12 @@ export function useMeteredAction<T = unknown>(
         const message = "Cloud actions require an internet connection. No credits were deducted.";
         setError(message);
         context.notify(message);
+        trackEvent("action_failed", { actionType, reason: "network" });
         return undefined;
       }
       if (definition.cost > 0 && wallet.balance < definition.cost) {
         context.promptForCredits(definition.cost);
+        trackEvent("action_failed", { actionType, reason: "insufficient_balance" });
         return undefined;
       }
 
@@ -500,11 +524,13 @@ export function useMeteredAction<T = unknown>(
 
       if (definition.cost > 0) useWalletStore.getState().optimisticSpend(definition.cost);
       useWalletStore.getState().setWallet(response.wallet, wallet.jwt);
+      trackEvent("action_succeeded", { actionType });
       context.recordUsage(actionType);
       context.notify(`${definition.name} completed.`, "success");
       return response.result;
     } catch (cause) {
       const message = errorMessage(cause);
+      trackEvent("action_failed", { actionType, reason: analyticsFailureReason(cause) });
       setError(message);
       if (cause instanceof WalletApiError && cause.code === "INSUFFICIENT_BALANCE") {
         context.promptForCredits(METERED_ACTIONS[actionType].cost);

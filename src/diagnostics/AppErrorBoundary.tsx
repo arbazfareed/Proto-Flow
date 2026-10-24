@@ -1,6 +1,6 @@
 import { Component, type ErrorInfo, type ReactNode } from "react";
 import { CircleAlert, RotateCcw } from "lucide-react";
-import { recordDiagnostic, reportException } from "./observability";
+import { recordDiagnostic, reportException, trackEvent } from "./observability";
 
 interface AppErrorBoundaryProps {
   children: ReactNode;
@@ -22,6 +22,7 @@ export class AppErrorBoundary extends Component<
 
   componentDidCatch(error: Error, _info: ErrorInfo): void {
     recordDiagnostic("error", "The application UI encountered an unrecoverable error.");
+    trackEvent("error_shown", { category: "application" });
     void reportException(error).catch(() => {
       recordDiagnostic("warning", "Crash reporting could not process the UI error.");
     });

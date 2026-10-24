@@ -8,7 +8,12 @@ import { getCurrent, onOpenUrl } from "@tauri-apps/plugin-deep-link";
 import { Check, CircleAlert } from "lucide-react";
 import { PrivacySettingsDialog } from "./diagnostics/PrivacySettingsDialog";
 import { readPrivacySettings } from "./diagnostics/privacy";
-import { recordDiagnostic, startObservability, trackEvent } from "./diagnostics/observability";
+import {
+  categorizeTelemetryError,
+  recordDiagnostic,
+  startObservability,
+  trackEvent,
+} from "./diagnostics/observability";
 import { clearAutosave, subscribeAutosaveErrors } from "./project/autosave";
 import { openProjectFile, saveProjectFile } from "./project/files";
 import { useStore } from "./store";
@@ -82,6 +87,7 @@ function AppShell() {
   const notify = useCallback((message: string, isError = false) => {
     setNotice(message);
     setNoticeIsError(isError);
+    if (isError) trackEvent("error_shown", { category: categorizeTelemetryError(message) });
     window.setTimeout(() => setNotice(""), 4000);
   }, []);
 
@@ -252,8 +258,10 @@ function AppShell() {
       await useWalletStore.getState().sync();
       if (magicToken) {
         await useWalletStore.getState().verifyEmailSignIn(magicToken);
+        trackEvent("signin_completed", { provider: "email" });
       } else if (googleTicket) {
         await useWalletStore.getState().verifyGoogleSignIn(googleTicket);
+        trackEvent("signin_completed", { provider: "google" });
       }
       notify(`Wallet linked to ${useWalletStore.getState().email}.`);
     } catch (callbackError) {
@@ -370,6 +378,7 @@ function AppShell() {
       useStore.setState({ project: result.project });
       useStore.getState().markSaved(result.path);
       useStore.getState().markClean();
+      trackEvent("project_saved");
       try {
         clearAutosave();
       } catch (error) {
@@ -395,6 +404,7 @@ function AppShell() {
       const result = await openProjectFile();
       if (!result) return;
       loadProject(result.project, result.path);
+      trackEvent("project_opened");
       try {
         clearAutosave();
       } catch (error) {

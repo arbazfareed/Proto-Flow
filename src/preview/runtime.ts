@@ -126,6 +126,9 @@ export class PreviewRuntime {
   private panelStates: Record<string, string> = {};
   private panelTransitions: Record<string, { transition: PanelTransition; duration: number }> = {};
   private repeaterData: Record<string, unknown> = {};
+  lastRunRuleCount = 0;
+  lastAddedRepeaterRows = 0;
+  lastPanelStateChanges = 0;
 
   constructor(project: Project) {
     this.project = structuredClone(project);
@@ -256,6 +259,9 @@ export class PreviewRuntime {
   }
 
   runEvent(widget: Widget, event: PreviewEvent, item?: RepeaterRecord): string[] {
+    this.lastRunRuleCount = 0;
+    this.lastAddedRepeaterRows = 0;
+    this.lastPanelStateChanges = 0;
     const screen = this.currentScreen;
     const errors: string[] = [];
     const rules = screen.interactionRules.filter((rule) =>
@@ -264,6 +270,7 @@ export class PreviewRuntime {
     for (const rule of rules) {
       const localVariables = this.initializeLocalVariables(rule.localVariables);
       if (!this.conditionsMatch(rule, screen.id, item, widget, localVariables)) continue;
+      this.lastRunRuleCount += 1;
       try {
         this.runActions(rule, screen, item, widget, localVariables);
       } catch (error) {
@@ -408,7 +415,9 @@ export class PreviewRuntime {
           if (states.length > 0 && !state) {
             throw new Error(`Panel "${panel.id}" does not contain the requested state.`);
           }
-          this.panelStates[action.target] = state?.id ?? String(action.stateId ?? actionValue);
+          const nextStateId = state?.id ?? String(action.stateId ?? actionValue);
+          if (this.panelStates[action.target] !== nextStateId) this.lastPanelStateChanges += 1;
+          this.panelStates[action.target] = nextStateId;
           this.panelTransitions[action.target] = {
             transition: action.transition ?? "none",
             duration: action.duration ?? 0,
@@ -440,6 +449,7 @@ export class PreviewRuntime {
             ...rows,
             row,
           ]);
+          this.lastAddedRepeaterRows += 1;
           break;
           }
         case "removeRepeaterRow":

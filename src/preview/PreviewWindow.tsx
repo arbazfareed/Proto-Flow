@@ -30,6 +30,7 @@ import { DEVICE_PRESETS, findDevicePreset } from "../devices/catalog";
 import type { DevicePreset } from "../devices/types";
 import { getPreviewWindowSize } from "./windowSizing";
 import { getVirtualRowRange } from "./virtualization";
+import { trackEvent } from "../diagnostics/observability";
 import {
   DEFAULT_MULTI_DEVICE_IDS,
   getPreviewViewport,
@@ -842,6 +843,9 @@ export function PreviewWindow() {
   const [toast, setToast] = useState("");
   const [touchFeedback, setTouchFeedback] = useState<{ x: number; y: number; event: PreviewEvent } | null>(null);
   const [runtimeRevision, setRuntimeRevision] = useState(0);
+  useEffect(() => {
+    trackEvent("preview_opened");
+  }, []);
   const [controlValues, setControlValues] = useState<Record<string, string | boolean>>({});
   const runtimeRef = useRef<PreviewRuntime | null>(null);
   const channelRef = useRef<BroadcastChannel | null>(null);
@@ -939,6 +943,11 @@ export function PreviewWindow() {
     const runtime = runtimeRef.current;
     if (!runtime) return;
     const errors = runtime.runEvent(widget, event, item);
+    if (runtime.lastRunRuleCount > 0) trackEvent("preview_rule_fired");
+    if (runtime.lastAddedRepeaterRows > 0) {
+      trackEvent("repeater_row_added", { count: runtime.lastAddedRepeaterRows });
+    }
+    if (runtime.lastPanelStateChanges > 0) trackEvent("panel_state_changed");
     setRuntimeSnapshot(runtime.snapshot());
     setRuntimeRevision((revision) => revision + 1);
     if (errors.length > 0) {

@@ -19,9 +19,6 @@ export function UpdateToast({ requestId }: UpdateToastProps) {
     let active = true;
     setCheckError(false);
     void checkForUpdate().then((availableUpdate) => {
-      trackEvent("update_result", {
-        updateResult: availableUpdate ? "available" : "not_available",
-      });
       if (active && availableUpdate) setUpdate(availableUpdate);
       else if (availableUpdate) {
         void availableUpdate.close().catch((error) => {
@@ -30,7 +27,6 @@ export function UpdateToast({ requestId }: UpdateToastProps) {
       }
     }).catch((error: unknown) => {
       if (active) setCheckError(true);
-      trackEvent("update_result", { updateResult: "failed" });
       console.error("Could not check for a Proto Flow update.", error);
     });
     return () => {
@@ -45,7 +41,7 @@ export function UpdateToast({ requestId }: UpdateToastProps) {
     setInstallError(false);
     try {
       await installAvailableUpdate(update);
-      trackEvent("update_result", { updateResult: "installed" });
+      trackEvent("app_updated");
     } catch (error) {
       console.error("Could not install the Proto Flow update.", error);
       setInstallError(true);

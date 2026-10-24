@@ -65,11 +65,13 @@ export function HtmlExportDialog({ onClose }: { onClose: () => void }) {
         setMessage("Offline HTML bundle downloaded for free.");
       }
       trackEvent("export_used", {
-        exportType: exportMode === "responsive"
-          ? "responsive"
-          : exportMode === "device-variants" || exportMode === "device-images"
-            ? "per_device"
-            : "html",
+        exportType: exportMode === "device-images"
+          ? "images"
+          : exportMode === "responsive"
+            ? "responsive"
+            : exportMode === "device-variants"
+              ? "per_device"
+              : "html",
       });
     } catch (error) {
       setIsError(true);

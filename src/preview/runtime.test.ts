@@ -49,6 +49,29 @@ function createProject(): Project {
 }
 
 describe("PreviewRuntime", () => {
+  it("counts fired rules, panel-state changes, and repeater rows without exposing row data", () => {
+    const project = createProject();
+    const screen = project.screens[0];
+    const [trigger, , panel, repeater] = screen.widgets;
+    screen.interactionRules = [{
+      id: crypto.randomUUID(),
+      widgetId: trigger.id,
+      event: "onClick",
+      conditionMode: "all",
+      conditions: [],
+      actions: [
+        { type: "setPanelState", target: panel.id, value: "open" },
+        { type: "addRepeaterRow", target: repeater.id, value: '{"label":"private row value"}' },
+      ],
+    }];
+
+    const runtime = new PreviewRuntime(project);
+    expect(runtime.runEvent(trigger, "onClick")).toEqual([]);
+    expect(runtime.lastRunRuleCount).toBe(1);
+    expect(runtime.lastPanelStateChanges).toBe(1);
+    expect(runtime.lastAddedRepeaterRows).toBe(1);
+  });
+
   it("evaluates ordered event rules and executes navigation, visibility, and variable actions", () => {
     const project = createProject();
     const screen = project.screens[0];
