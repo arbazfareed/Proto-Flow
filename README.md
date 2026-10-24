@@ -23,6 +23,19 @@ npm run build
 npm test
 ```
 
+## Privacy and diagnostics
+
+Crash reports and anonymous feature telemetry are independent, off-by-default choices in the app's Privacy & diagnostics settings. Local logs are sanitized and can be exported from the same dialog. Crash reports use the GlitchTip-compatible Sentry SDK; feature events are sent to Umami only when both telemetry consent and the provider configuration are present.
+
+To configure providers for a build, set these public ingestion values in the build environment (for local development, use an untracked `.env.local`):
+
+- `VITE_GLITCHTIP_DSN` — Sentry-compatible public DSN
+- `VITE_UMAMI_ENDPOINT` — Umami server base URL
+- `VITE_UMAMI_WEBSITE_ID` — Umami website identifier
+- `VITE_APP_VERSION` — optional version attached to sanitized crash reports
+
+Do not put provider administration tokens or other secrets in `VITE_*` variables. The application does not include a hosted provider, dashboards, alert rules, or weekly digest; those require separately provisioned GlitchTip/Sentry and Umami infrastructure. Events are allow-listed and contain only event/action enums, aggregate counts, and a validated crash correlation ID. Crash payloads discard user/request data, project content, and source paths.
+
 ## Desktop bundles
 
 `src-tauri/tauri.conf.json` targets Windows MSI and Linux DEB/AppImage packages. The `.pflow` file association is declared as `application/x-protoflow+json`.

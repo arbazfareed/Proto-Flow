@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 import { Code2, Download, X } from "lucide-react";
 import { useStore } from "../store";
 import { embedProjectAssets } from "../preview/exportAssets";
+import { trackEvent } from "../diagnostics/observability";
 import {
   encodeProjectForCodeExport,
   generateSingleFileJsx,
@@ -82,6 +83,7 @@ export function ReactCodeExportDialog({ onClose }: { onClose: () => void }) {
     try {
       downloadArchive(archive);
       setMessage("React project ZIP downloaded.");
+      trackEvent("export_used", { exportType: "react" });
     } catch (error) {
       console.error("The generated React project could not be downloaded.", error);
       setMessage(error instanceof Error ? error.message : "The React project could not be downloaded.");
@@ -99,6 +101,7 @@ export function ReactCodeExportDialog({ onClose }: { onClose: () => void }) {
       const safeName = screenName.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "prototype";
       downloadBlob(new Blob([generateSingleFileJsx(selectedProject)], { type: "text/tsx;charset=utf-8" }), `${safeName}.tsx`);
       setMessage("Single-file JSX downloaded for free.");
+      trackEvent("export_used", { exportType: "react" });
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "The JSX file could not be generated.");
     }

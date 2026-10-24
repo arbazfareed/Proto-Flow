@@ -28,6 +28,7 @@ import {
   RotateCw,
   RefreshCw,
   Sparkles,
+  Settings2,
   Square,
   StickyNote,
   Undo2,
@@ -104,6 +105,7 @@ import { WalletHistoryDialog } from "./WalletHistoryDialog";
 import { VariablesPanel } from "./VariablesPanel";
 import { InteractionBuilder } from "./InteractionBuilder";
 import { WidgetNotesManager, WidgetNotesPanel } from "./WidgetNotes";
+import { trackEvent } from "../diagnostics/observability";
 
 const CanvasStage = lazy(() =>
   import("../canvas/CanvasStage").then((module) => ({
@@ -130,6 +132,7 @@ interface TopBarProps {
   onExportReactCode: () => void;
   onExportHtml: () => void;
   onOpenWallet: () => void;
+  onOpenPrivacySettings: () => void;
   onNotify: (message: string, isError?: boolean) => void;
   onStartDragging: () => void;
   onWindowAction: (action: "minimize" | "maximize" | "close") => void;
@@ -170,6 +173,7 @@ export function TopBar({
   onExportReactCode,
   onExportHtml,
   onOpenWallet,
+  onOpenPrivacySettings,
   onNotify,
   onStartDragging,
   onWindowAction,
@@ -425,6 +429,14 @@ export function TopBar({
             </section>
           )}
         </div>
+        <button
+          className="icon-button topbar-icon"
+          title="Privacy and diagnostics settings"
+          aria-label="Open privacy and diagnostics settings"
+          onClick={onOpenPrivacySettings}
+        >
+          <Settings2 size={15} />
+        </button>
         {walletHistoryOpen && walletJwt && (
           <WalletHistoryDialog token={walletJwt} onClose={() => setWalletHistoryOpen(false)} />
         )}
@@ -693,7 +705,10 @@ export function CanvasArea({
             <button
               className={`workspace-view-button${viewMode === "flow" ? " is-active" : ""}`}
               aria-pressed={viewMode === "flow"}
-              onClick={() => setViewMode("flow")}
+              onClick={() => {
+                if (viewMode !== "flow") trackEvent("flow_diagram_opened");
+                setViewMode("flow");
+              }}
             >
               Flow
             </button>

@@ -6,6 +6,9 @@ import { emitTo, listen } from "@tauri-apps/api/event";
 import { WebviewWindow } from "@tauri-apps/api/webviewWindow";
 import { getCurrent, onOpenUrl } from "@tauri-apps/plugin-deep-link";
 import { Check, CircleAlert } from "lucide-react";
+import { PrivacySettingsDialog } from "./diagnostics/PrivacySettingsDialog";
+import { readPrivacySettings } from "./diagnostics/privacy";
+import { recordDiagnostic, startObservability, trackEvent } from "./diagnostics/observability";
 import { clearAutosave, subscribeAutosaveErrors } from "./project/autosave";
 import { openProjectFile, saveProjectFile } from "./project/files";
 import { useStore } from "./store";
@@ -69,6 +72,8 @@ function AppShell() {
   const [collaborationOpen, setCollaborationOpen] = useState(false);
   const [collaborationInviteId, setCollaborationInviteId] = useState<string | null>(null);
   const [versionHistoryOpen, setVersionHistoryOpen] = useState(false);
+  const [privacyDialogOpen, setPrivacyDialogOpen] = useState(false);
+  const [privacyFirstLaunch, setPrivacyFirstLaunch] = useState(false);
   const walletInitializationStarted = useRef(false);
   const previewConnected = useRef(false);
   const syncWallet = useWalletStore((state) => state.sync);
@@ -79,6 +84,26 @@ function AppShell() {
     setNoticeIsError(isError);
     window.setTimeout(() => setNotice(""), 4000);
   }, []);
+
+  useEffect(() => {
+    let active = true;
+    void startObservability().then(() => {
+      if (!active) return;
+      const settings = readPrivacySettings();
+      setPrivacyFirstLaunch(settings === null);
+      setPrivacyDialogOpen(settings === null);
+    }).catch((error: unknown) => {
+      recordDiagnostic("error", "Privacy settings initialization failed.");
+      notify(error instanceof Error ? error.message : "Privacy settings could not be loaded.", true);
+      if (active) {
+        setPrivacyFirstLaunch(true);
+        setPrivacyDialogOpen(true);
+      }
+    });
+    return () => {
+      active = false;
+    };
+  }, [notify]);
 
   useEffect(() => {
     if (!isTauri()) return;
@@ -391,6 +416,7 @@ function AppShell() {
   const createNewProject = useCallback(() => {
     if (!confirmDiscard()) return;
     useStore.getState().newProject();
+    trackEvent("project_created");
     try {
       clearAutosave();
     } catch (error) {
@@ -570,6 +596,10 @@ function AppShell() {
         onExportReactCode={() => setReactExportOpen(true)}
         onExportHtml={() => setHtmlExportOpen(true)}
         onOpenWallet={() => setWalletOpen(true)}
+        onOpenPrivacySettings={() => {
+          setPrivacyFirstLaunch(false);
+          setPrivacyDialogOpen(true);
+        }}
         onNotify={notify}
         onStartDragging={startWindowDragging}
         onWindowAction={runWindowAction}
@@ -605,6 +635,16 @@ function AppShell() {
       <RestoreModal />
       <UpdateToast requestId={updateCheckRequest} />
       <CommandPalette />
+      {privacyDialogOpen && (
+        <PrivacySettingsDialog
+          firstLaunch={privacyFirstLaunch}
+          onClose={() => setPrivacyDialogOpen(false)}
+          onSaved={() => {
+            setPrivacyFirstLaunch(false);
+            setPrivacyDialogOpen(false);
+          }}
+        />
+      )}
       {versionHistoryOpen && (
         <VersionHistoryDialog
           project={currentProject}
@@ -616,6 +656,7 @@ function AppShell() {
             const previousProject = current.project;
             current.restoreProject(checkpoint, current.filePath);
             useStore.getState().pushHistory(previousProject);
+            trackEvent("version_history_restored");
           }}
           onNotify={notify}
         />
