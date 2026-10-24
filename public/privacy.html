@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="referrer" content="no-referrer">
+    <title>Privacy Policy - ProtoFlow</title>
+    <style>
+      :root { color-scheme: light; font: 16px/1.65 system-ui, sans-serif; color: #20212a; background: #f7f7fa; }
+      body { max-width: 760px; margin: 0 auto; padding: 40px 24px 72px; }
+      a { color: #5142c4; }
+      h1, h2 { line-height: 1.2; }
+      h1 { margin-bottom: 4px; }
+      .updated { color: #656575; }
+      li { margin: 8px 0; }
+      .back { display: inline-block; margin-bottom: 20px; }
+    </style>
+  </head>
+  <body>
+    <a class="back" href="./">Back to ProtoFlow</a>
+    <h1>ProtoFlow Privacy Policy</h1>
+    <p class="updated">Last updated: 24 October 2026</p>
+    <p>ProtoFlow is a desktop prototyping app. Your local project files stay on your device unless you choose a cloud feature that sends project data to ProtoFlow. Wallet, diagnostics, and telemetry are separate controls; crash reporting and anonymous telemetry are off until you opt in.</p>
+
+    <h2>Information ProtoFlow processes</h2>
+    <ul>
+      <li><strong>Local app data:</strong> project files you save, app preferences, privacy choices, and a short in-memory diagnostic log. Local project files are not uploaded by autosave.</li>
+      <li><strong>Cloud wallet:</strong> an account ID, random installation ID, SHA-256 device fingerprint, wallet totals, and credit-ledger entries. Anonymous wallets do not need email. A linked email or Google account is stored only if you choose account linking.</li>
+      <li><strong>Cloud publishing and collaboration:</strong> when you publish a preview or start collaboration, the selected project content, project name, preview/session metadata, and collaboration checkpoints are sent to ProtoFlow's Cloudflare services. Published previews are accessible to anyone with their unlisted link until they expire or are removed.</li>
+      <li><strong>Abuse prevention:</strong> Cloudflare supplies a client IP to the Worker. ProtoFlow stores keyed hashes, not raw IP addresses, for abuse limits. Keyed IP activity is pruned after 30 days; abuse flags are retained for up to 90 days.</li>
+      <li><strong>AI actions:</strong> when you explicitly use an AI feature, the prompt and selected context required for that action are sent to the configured AI provider. Do not include information you are not comfortable sharing with that provider.</li>
+      <li><strong>Crash reporting and telemetry:</strong> these independent settings are optional. If enabled and configured, sanitized crash diagnostics may be sent to a Sentry/GlitchTip-compatible endpoint and allow-listed feature events may be sent to Umami. They are not used to upload project content. No third-party analytics cookies are used.</li>
+    </ul>
+
+    <h2>Why and where data is processed</h2>
+    <p>ProtoFlow processes cloud account data to provide wallet synchronization, account recovery, cloud previews, and real-time collaboration. Cloudflare is the infrastructure provider and processor for the Worker, D1 database, KV, R2 storage, and Durable Objects. Resend sends email sign-in links when configured. Google handles Google sign-in and, when configured, Gemini AI requests. Sentry/GlitchTip and Umami are optional diagnostic and analytics subprocessors; they receive data only when the relevant preference is enabled and the endpoint is configured.</p>
+    <p>Cloud requests use HTTPS in production. The app does not use third-party cookies. Browser previews store a random install ID in local storage and a short-lived session token in session storage. The desktop app stores its session token in the operating system credential store; local wallet display data and preferences are stored on the device.</p>
+
+    <h2>Retention</h2>
+    <ul>
+      <li>Cloud previews expire after 30 days unless removed sooner.</li>
+      <li>Inactive collaboration sessions end after four hours. Their session and checkpoint records remain while the cloud account is active, unless the account owner requests cloud-data deletion.</li>
+      <li>When you request cloud-data deletion, ProtoFlow disables the account immediately and attempts to remove published previews, collaboration sessions, and checkpoints immediately. Remaining wallet, ledger, authentication, and account records are queued for permanent deletion after a 30-day recovery period. If cloud-content cleanup is temporarily unavailable, the Worker retries it during scheduled retention cleanup.</li>
+      <li>Abuse-prevention IP hashes are kept for up to 30 days, and abuse flags for up to 90 days. Email sign-in links expire after 15 minutes.</li>
+      <li>Local project files, local preferences, and local diagnostic logs are not deleted by cloud-data deletion. Export local diagnostic logs separately from Privacy &amp; diagnostics settings.</li>
+    </ul>
+
+    <h2>Your choices and rights</h2>
+    <p>You can independently turn crash reporting and anonymous telemetry on or off in <strong>Privacy &amp; diagnostics</strong>. Cloud features are optional. In Wallet settings, <strong>Export my data</strong> downloads a JSON copy of account and wallet details, the complete credit ledger, cloud preview/collaboration metadata, and (only when crash reporting is enabled) recent sanitized diagnostic lines held in memory. Crash reports sent to an external provider are not linked to a ProtoFlow account and cannot be retrieved by this export.</p>
+    <p>In Wallet settings, <strong>Delete my cloud data</strong> requires typing <code>DELETE</code>. It clears the local cloud session and wallet cache after the Worker accepts the request. The action does not remove local project files or local diagnostic logs. You can also request access, correction, or deletion by emailing <a href="mailto:privacy@protoflow.app">privacy@protoflow.app</a>. We target a response within 30 days. Deletion requests are subject to the 30-day recovery period described above and any data that must be retained by law.</p>
+
+    <h2>Children and age</h2>
+    <p>ProtoFlow is intended for people aged 13 or older, and 16 or older in the European Union. The app does not perform age verification or knowingly seek personal information from children below those ages.</p>
+
+    <h2>Contact</h2>
+    <p>For privacy questions or data-rights requests, contact <a href="mailto:privacy@protoflow.app">privacy@protoflow.app</a>. Do not email project files, passwords, authentication tokens, or other sensitive material.</p>
+  </body>
+</html>

@@ -1151,6 +1151,8 @@
 .wallet-data-controls { display:grid; gap:8px; margin-top:18px; padding-top:14px; border-top:1px solid #303137; }
 .wallet-data-controls h3 { margin:0; color:#dddde2; font-size:12px; font-weight:600; }
 .wallet-data-controls>p { margin:0; color:#9999a3; font-size:10px; line-height:1.55; }
+.wallet-privacy-policy-link { justify-self:start; color:#aaa2ff; font-size:11px; text-decoration:underline; text-underline-offset:3px; }
+.wallet-privacy-policy-link:hover { color:#d1cdff; }
 .wallet-data-export { width:100%; justify-content:center; }
 .wallet-data-delete { display:grid; gap:7px; margin-top:4px; padding:10px; border:1px solid #50353a; border-radius:7px; background:#241b1e; }
 .wallet-data-delete label { color:#d2a3a7; font-size:10px; }

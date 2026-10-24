@@ -47,7 +47,11 @@ interface WalletState {
   sync: () => Promise<void>;
   initialize: () => Promise<number>;
   claimDaily: () => Promise<boolean>;
-  deleteCloudData: () => Promise<{ deletedAt: string; purgeAfter: string }>;
+  deleteCloudData: () => Promise<{
+    deletedAt: string;
+    purgeAfter: string;
+    cloudContentRemoved: boolean;
+  }>;
   resetIdentity: () => Promise<void>;
   startEmailSignIn: (email: string, callbackUri: string) => Promise<void>;
   verifyEmailSignIn: (token: string) => Promise<void>;

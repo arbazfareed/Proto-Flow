@@ -586,7 +586,7 @@ describe("wallet history and data controls API", () => {
   it("validates a JSON export and sends typed DELETE confirmation", async () => {
     const fetchMock = vi.fn()
       .mockResolvedValueOnce(new Response(JSON.stringify({
-        schemaVersion: 1,
+        schemaVersion: 2,
         exportedAt: new Date(now).toISOString(),
         account: {
           id: "account-1",
@@ -602,18 +602,33 @@ describe("wallet history and data controls API", () => {
           metadata: {},
           createdAt: new Date(now).toISOString(),
         }],
+        cloudData: {
+          publishedPreviews: [],
+          collaborations: [],
+        },
       }), { status: 200, headers: { "Content-Type": "application/json" } }))
       .mockResolvedValueOnce(new Response(JSON.stringify({
         deleted: true,
         deletedAt: new Date(now).toISOString(),
         purgeAfter: new Date(now + 30 * 24 * 60 * 60 * 1000).toISOString(),
+        cloudContentRemoved: true,
       }), { status: 200, headers: { "Content-Type": "application/json" } }));
     vi.stubGlobal("fetch", fetchMock);
 
-    const exported = await exportWalletData("session-token");
+    const exported = await exportWalletData("session-token", {
+      crashReportsEnabled: true,
+      recentLogLines: ["2026-10-24T00:00:00.000Z ERROR sanitized"],
+    });
     expect(exported.account.email).toBe("owner@example.com");
     expect(exported.ledger).toHaveLength(1);
-    await expect(deleteCloudWalletData("session-token")).resolves.toMatchObject({ purgeAfter: expect.any(String) });
+    expect(exported.diagnostics).toEqual({
+      crashReportsEnabled: true,
+      recentLogLines: ["2026-10-24T00:00:00.000Z ERROR sanitized"],
+    });
+    await expect(deleteCloudWalletData("session-token")).resolves.toMatchObject({
+      purgeAfter: expect.any(String),
+      cloudContentRemoved: true,
+    });
     const [url, request] = fetchMock.mock.calls[1] as [string, RequestInit];
     expect(url).toContain("/account/data");
     expect(request.method).toBe("DELETE");

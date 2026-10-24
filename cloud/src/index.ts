@@ -178,7 +178,10 @@ app.get("/p/:id", async (context) => {
   try {
     const now = new Date().toISOString();
     const preview = await context.env.DB.prepare(
-      "SELECT id, project_name, object_key, expires_at FROM published_previews WHERE id = ?",
+      `SELECT previews.id, previews.project_name, previews.object_key, previews.expires_at
+       FROM published_previews AS previews
+       JOIN accounts ON accounts.id = previews.account_id
+       WHERE previews.id = ? AND accounts.merged_into IS NULL AND accounts.deleted_at IS NULL`,
     ).bind(id).first<{
       id: string;
       project_name: string;
@@ -389,6 +392,109 @@ type MeteredActionType = keyof typeof METERED_ACTION_COSTS;
 interface MeteredActionRequest {
   type: MeteredActionType;
   payload: Record<string, unknown>;
+}
+
+interface StoredPreviewRow {
+  id: string;
+  object_key: string;
+}
+
+interface StoredCollaborationRow {
+  id: string;
+  object_key: string;
+}
+
+async function removeAccountCloudArtifacts(
+  env: WorkerEnv,
+  accountId: string | null,
+  purgeBefore?: string,
+): Promise<void> {
+  const accountFilter = accountId ? "= ?" : `IN ${DELETED_ACCOUNT_IDS}`;
+  const parameters = accountId ? [accountId] : [purgeBefore ?? ""];
+  const [previews, sessions, versions] = await Promise.all([
+    env.DB.prepare(
+      `SELECT id, object_key FROM published_previews WHERE account_id ${accountFilter}`,
+    ).bind(...parameters).all<StoredPreviewRow>(),
+    env.DB.prepare(
+      `SELECT id, object_key FROM collaboration_sessions WHERE account_id ${accountFilter}`,
+    ).bind(...parameters).all<StoredCollaborationRow>(),
+    env.DB.prepare(
+      `SELECT versions.object_key
+       FROM collaboration_versions AS versions
+       JOIN collaboration_sessions AS sessions ON sessions.id = versions.session_id
+       WHERE sessions.account_id ${accountFilter}`,
+    ).bind(...parameters).all<{ object_key: string }>(),
+  ]);
+  if (!previews.success || !sessions.success || !versions.success) {
+    throw new Error("Cloud content records could not be loaded for deletion.");
+  }
+  if (sessions.results.length > 0 && !env.COLLABORATION) {
+    throw new Error("Collaboration storage is not configured for cloud data deletion.");
+  }
+
+  for (const preview of previews.results) {
+    if (!PREVIEW_ID_PATTERN.test(preview.id) || preview.object_key !== `previews/${preview.id}/index.html`) {
+      throw new Error("A cloud preview has an invalid storage key.");
+    }
+  }
+  for (const session of sessions.results) {
+    if (
+      !COLLABORATION_ID_PATTERN.test(session.id) ||
+      session.object_key !== `collaboration/${session.id}/initial.json`
+    ) {
+      throw new Error("A collaboration session has an invalid storage key.");
+    }
+  }
+  const sessionIds = new Set(sessions.results.map((session) => session.id));
+  for (const version of versions.results) {
+    if (![...sessionIds].some((id) =>
+      version.object_key.startsWith(`collaboration/${id}/versions/`) &&
+      version.object_key.endsWith(".json") &&
+      !version.object_key.includes(".."),
+    )) {
+      throw new Error("A collaboration checkpoint has an invalid storage key.");
+    }
+  }
+
+  if (env.COLLABORATION) {
+    for (const session of sessions.results) {
+      const room = env.COLLABORATION.get(env.COLLABORATION.idFromName(session.id));
+      const response = await room.fetch(new Request("https://collaboration.internal/erase", {
+        method: "POST",
+      }));
+      if (!response.ok) {
+        throw new Error(`Collaboration session ${session.id} could not be erased.`);
+      }
+    }
+  }
+  for (const preview of previews.results) {
+    await env.ASSETS.delete(preview.object_key);
+    await env.CACHE.delete(`short:${preview.id}`);
+  }
+  for (const session of sessions.results) {
+    await env.ASSETS.delete(session.object_key);
+  }
+  for (const version of versions.results) {
+    await env.ASSETS.delete(version.object_key);
+  }
+
+  const result = await env.DB.batch([
+    env.DB.prepare(
+      `DELETE FROM collaboration_versions
+       WHERE session_id IN (
+         SELECT id FROM collaboration_sessions WHERE account_id ${accountFilter}
+       )`,
+    ).bind(...parameters),
+    env.DB.prepare(
+      `DELETE FROM collaboration_sessions WHERE account_id ${accountFilter}`,
+    ).bind(...parameters),
+    env.DB.prepare(
+      `DELETE FROM published_previews WHERE account_id ${accountFilter}`,
+    ).bind(...parameters),
+  ]);
+  if (result.some((statement) => !statement.success)) {
+    throw new Error("Cloud content records could not be removed.");
+  }
 }
 
 function isMeteredActionRequest(value: unknown): value is MeteredActionRequest {
@@ -881,18 +987,69 @@ app.get("/account/export", requireJwt, async (context) => {
       return errorResponse(context, 404, "WALLET_NOT_FOUND", "The requested wallet does not exist.");
     }
 
-    const ledger = await context.env.DB
-      .prepare(
-        `SELECT id, delta, reason, metadata_json, created_at
-         FROM ledger WHERE account_id = ?
-         ORDER BY created_at DESC, id DESC`,
-      )
-      .bind(accountId)
-      .all<LedgerRow>();
-    if (!ledger.success) throw new Error("Could not read the complete wallet ledger.");
+    const [ledger, previews, collaborations, checkpoints] = await Promise.all([
+      context.env.DB
+        .prepare(
+          `SELECT id, delta, reason, metadata_json, created_at
+           FROM ledger WHERE account_id = ?
+           ORDER BY created_at DESC, id DESC`,
+        )
+        .bind(accountId)
+        .all<LedgerRow>(),
+      context.env.DB
+        .prepare(
+          `SELECT id, project_name, created_at, expires_at, size_bytes, view_count
+           FROM published_previews WHERE account_id = ?
+           ORDER BY created_at DESC, id DESC`,
+        )
+        .bind(accountId)
+        .all<{
+          id: string;
+          project_name: string;
+          created_at: string;
+          expires_at: string;
+          size_bytes: number;
+          view_count: number;
+        }>(),
+      context.env.DB
+        .prepare(
+          `SELECT id, project_name, created_at, last_activity_at, expires_at, view_only, ended_at
+           FROM collaboration_sessions WHERE account_id = ?
+           ORDER BY created_at DESC, id DESC`,
+        )
+        .bind(accountId)
+        .all<{
+          id: string;
+          project_name: string;
+          created_at: string;
+          last_activity_at: string;
+          expires_at: string;
+          view_only: number;
+          ended_at: string | null;
+        }>(),
+      context.env.DB
+        .prepare(
+          `SELECT versions.session_id, versions.created_at, versions.size_bytes
+           FROM collaboration_versions AS versions
+           JOIN collaboration_sessions AS sessions ON sessions.id = versions.session_id
+           WHERE sessions.account_id = ?
+           ORDER BY versions.created_at DESC, versions.id DESC`,
+        )
+        .bind(accountId)
+        .all<{ session_id: string; created_at: string; size_bytes: number }>(),
+    ]);
+    if (!ledger.success || !previews.success || !collaborations.success || !checkpoints.success) {
+      throw new Error("Could not read all cloud account data.");
+    }
+    const checkpointsBySession = new Map<string, Array<{ createdAt: string; sizeBytes: number }>>();
+    for (const checkpoint of checkpoints.results) {
+      const records = checkpointsBySession.get(checkpoint.session_id) ?? [];
+      records.push({ createdAt: checkpoint.created_at, sizeBytes: checkpoint.size_bytes });
+      checkpointsBySession.set(checkpoint.session_id, records);
+    }
 
     return context.json({
-      schemaVersion: 1,
+      schemaVersion: 2,
       exportedAt: new Date().toISOString(),
       account: {
         id: account.id,
@@ -906,6 +1063,26 @@ app.get("/account/export", requireJwt, async (context) => {
         lifetimeSpent: account.lifetime_spent,
       },
       ledger: ledger.results.map(serializeLedgerEntry),
+      cloudData: {
+        publishedPreviews: previews.results.map((preview) => ({
+          id: preview.id,
+          projectName: preview.project_name,
+          createdAt: preview.created_at,
+          expiresAt: preview.expires_at,
+          sizeBytes: preview.size_bytes,
+          viewCount: preview.view_count,
+        })),
+        collaborations: collaborations.results.map((session) => ({
+          id: session.id,
+          projectName: session.project_name,
+          createdAt: session.created_at,
+          lastActivityAt: session.last_activity_at,
+          expiresAt: session.expires_at,
+          viewOnly: session.view_only === 1,
+          endedAt: session.ended_at,
+          checkpoints: checkpointsBySession.get(session.id) ?? [],
+        })),
+      },
     });
   } catch (error) {
     console.error("Wallet data export failed.", {
@@ -939,6 +1116,7 @@ app.delete("/account/data", requireJwt, async (context) => {
   }
 
   const deletedAt = new Date().toISOString();
+  const accountId = context.get("auth").accountId;
   try {
     const deleted = await context.env.DB
       .prepare(
@@ -947,12 +1125,27 @@ app.delete("/account/data", requireJwt, async (context) => {
          WHERE id = ? AND merged_into IS NULL AND deleted_at IS NULL
          RETURNING id`,
       )
-      .bind(deletedAt, context.get("auth").accountId)
+      .bind(deletedAt, accountId)
       .first<{ id: string }>();
     if (!deleted) {
       return errorResponse(context, 404, "WALLET_NOT_FOUND", "The requested wallet does not exist.");
     }
-    return context.json({ deleted: true, deletedAt, purgeAfter: new Date(Date.parse(deletedAt) + 30 * 24 * 60 * 60 * 1000).toISOString() });
+    let cloudContentRemoved = false;
+    try {
+      await removeAccountCloudArtifacts(context.env, accountId);
+      cloudContentRemoved = true;
+    } catch (cleanupError) {
+      console.error("Cloud account content cleanup is pending.", {
+        accountId,
+        message: cleanupError instanceof Error ? cleanupError.message : "Unknown cloud cleanup error.",
+      });
+    }
+    return context.json({
+      deleted: true,
+      deletedAt,
+      purgeAfter: new Date(Date.parse(deletedAt) + 30 * 24 * 60 * 60 * 1000).toISOString(),
+      cloudContentRemoved,
+    });
   } catch (error) {
     console.error("Cloud wallet deletion request failed.", {
       accountId: context.get("auth").accountId,
@@ -1912,7 +2105,10 @@ app.post("/collaboration/:id/connect-ticket", requireJwt, async (context) => {
   try {
     const session = await context.env.DB.prepare(
       `SELECT account_id, ended_at, expires_at
-       FROM collaboration_sessions WHERE id = ?`,
+       FROM collaboration_sessions
+       JOIN accounts AS owner ON owner.id = collaboration_sessions.account_id
+       WHERE collaboration_sessions.id = ?
+         AND owner.merged_into IS NULL AND owner.deleted_at IS NULL`,
     ).bind(sessionId).first<{
       account_id: string;
       ended_at: string | null;
@@ -1967,7 +2163,10 @@ app.get("/collaboration/:id/socket", async (context) => {
     }
     const session = await context.env.DB.prepare(
       `SELECT account_id, object_key, view_only, ended_at, expires_at
-       FROM collaboration_sessions WHERE id = ?`,
+       FROM collaboration_sessions
+       JOIN accounts AS owner ON owner.id = collaboration_sessions.account_id
+       WHERE collaboration_sessions.id = ?
+         AND owner.merged_into IS NULL AND owner.deleted_at IS NULL`,
     ).bind(sessionId).first<{
       account_id: string;
       object_key: string;
@@ -2213,7 +2412,9 @@ const DELETED_ACCOUNT_IDS = `(
 export async function runScheduledTasks(env: WorkerEnv): Promise<void> {
   const now = Math.floor(Date.now() / 1000);
   const purgeBefore = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
+  const deletedAccountsBefore = new Date().toISOString();
   try {
+    await removeAccountCloudArtifacts(env, null, deletedAccountsBefore);
     const results = await env.DB.batch([
       env.DB
         .prepare("DELETE FROM abuse_signups WHERE created_at < ?")
@@ -2244,6 +2445,27 @@ export async function runScheduledTasks(env: WorkerEnv): Promise<void> {
         .bind(purgeBefore),
       env.DB
         .prepare(`DELETE FROM daily_grants WHERE account_id IN ${DELETED_ACCOUNT_IDS}`)
+        .bind(purgeBefore),
+      env.DB
+        .prepare(
+          `DELETE FROM collaboration_versions
+           WHERE session_id IN (
+             SELECT id FROM collaboration_sessions
+             WHERE account_id IN ${DELETED_ACCOUNT_IDS}
+           )`,
+        )
+        .bind(purgeBefore),
+      env.DB
+        .prepare(`DELETE FROM collaboration_sessions WHERE account_id IN ${DELETED_ACCOUNT_IDS}`)
+        .bind(purgeBefore),
+      env.DB
+        .prepare(`DELETE FROM published_previews WHERE account_id IN ${DELETED_ACCOUNT_IDS}`)
+        .bind(purgeBefore),
+      env.DB
+        .prepare(`DELETE FROM ai_interaction_feedback WHERE account_id IN ${DELETED_ACCOUNT_IDS}`)
+        .bind(purgeBefore),
+      env.DB
+        .prepare(`DELETE FROM usage_events WHERE account_id IN ${DELETED_ACCOUNT_IDS}`)
         .bind(purgeBefore),
       env.DB
         .prepare(`DELETE FROM wallets WHERE account_id IN ${DELETED_ACCOUNT_IDS}`)

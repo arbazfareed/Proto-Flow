@@ -44,6 +44,37 @@ interface MemoryLedgerEntry {
   created_at: string;
 }
 
+interface MemoryPreview {
+  id: string;
+  account_id: string;
+  project_name: string;
+  object_key: string;
+  created_at: string;
+  expires_at: string;
+  size_bytes: number;
+  view_count: number;
+}
+
+interface MemoryCollaboration {
+  id: string;
+  account_id: string;
+  project_name: string;
+  object_key: string;
+  created_at: string;
+  last_activity_at: string;
+  expires_at: string;
+  view_only: number;
+  ended_at: string | null;
+}
+
+interface MemoryCheckpoint {
+  id: string;
+  session_id: string;
+  object_key: string;
+  created_at: string;
+  size_bytes: number;
+}
+
 interface MemoryDailyGrant {
   granted_at: string;
   amount: number;
@@ -87,6 +118,11 @@ class MemoryD1Database {
   readonly wallets = new Map<string, MemoryWallet>();
   readonly starterGrants = new Set<string>();
   readonly ledger = new Map<string, MemoryLedgerEntry>();
+  readonly previews = new Map<string, MemoryPreview>();
+  readonly collaborations = new Map<string, MemoryCollaboration>();
+  readonly checkpoints = new Map<string, MemoryCheckpoint>();
+  readonly deletedAssetKeys: string[] = [];
+  readonly erasedCollaborationIds: string[] = [];
   readonly dailyGrants = new Map<string, MemoryDailyGrant>();
   readonly ipActivity = new Map<string, MemoryIpActivity>();
   readonly dailyIpGrants = new Map<string, { account_id: string; granted_at: string }>();
@@ -565,6 +601,85 @@ class MemoryD1Database {
           (entry.created_at === cursorCreatedAt && entry.id < cursorId!))
         .sort((left, right) => right.created_at.localeCompare(left.created_at) || right.id.localeCompare(left.id))
         .slice(0, limit);
+    } else if (
+      statement.startsWith("select id, project_name, created_at, expires_at, size_bytes, view_count from published_previews") ||
+      statement.startsWith("select id, object_key from published_previews")
+    ) {
+      const accountId = statement.includes("account_id = ?")
+        ? parameters[0] as string
+        : null;
+      const deletedBefore = statement.includes("account_id in")
+        ? parameters[0] as string
+        : null;
+      results = [...this.previews.values()]
+        .filter((preview) => accountId
+          ? preview.account_id === accountId
+          : deletedBefore !== null &&
+            (this.accounts.get(preview.account_id)?.deleted_at ?? "") <= deletedBefore)
+        .map((preview) => statement.startsWith("select id, object_key")
+          ? { id: preview.id, object_key: preview.object_key }
+          : {
+              id: preview.id,
+              project_name: preview.project_name,
+              created_at: preview.created_at,
+              expires_at: preview.expires_at,
+              size_bytes: preview.size_bytes,
+              view_count: preview.view_count,
+            });
+    } else if (
+      statement.startsWith("select id, object_key from collaboration_sessions") ||
+      statement.startsWith("select id, project_name, created_at, last_activity_at, expires_at, view_only, ended_at from collaboration_sessions")
+    ) {
+      const accountId = statement.includes("account_id = ?")
+        ? parameters[0] as string
+        : null;
+      const deletedBefore = statement.includes("account_id in")
+        ? parameters[0] as string
+        : null;
+      results = [...this.collaborations.values()]
+        .filter((session) => accountId
+          ? session.account_id === accountId
+          : deletedBefore !== null &&
+            (this.accounts.get(session.account_id)?.deleted_at ?? "") <= deletedBefore)
+        .map((session) => statement.startsWith("select id, object_key")
+          ? { id: session.id, object_key: session.object_key }
+          : {
+              id: session.id,
+              project_name: session.project_name,
+              created_at: session.created_at,
+              last_activity_at: session.last_activity_at,
+              expires_at: session.expires_at,
+              view_only: session.view_only,
+              ended_at: session.ended_at,
+            });
+    } else if (
+      statement.startsWith("select versions.object_key from collaboration_versions") ||
+      statement.startsWith("select versions.session_id, versions.created_at, versions.size_bytes from collaboration_versions")
+    ) {
+      const accountId = parameters[0] as string;
+      const ownedSessions = new Set([...this.collaborations.values()]
+        .filter((session) => session.account_id === accountId)
+        .map((session) => session.id));
+      results = [...this.checkpoints.values()]
+        .filter((checkpoint) => ownedSessions.has(checkpoint.session_id))
+        .map((checkpoint) => statement.startsWith("select versions.object_key")
+          ? { object_key: checkpoint.object_key }
+          : {
+              session_id: checkpoint.session_id,
+              created_at: checkpoint.created_at,
+              size_bytes: checkpoint.size_bytes,
+            });
+    } else if (
+      statement.startsWith("delete from collaboration_versions") ||
+      statement.startsWith("delete from collaboration_sessions") ||
+      statement.startsWith("delete from published_previews") ||
+      statement.startsWith("delete from ai_interaction_feedback") ||
+      statement.startsWith("delete from usage_events")
+    ) {
+      if (statement.startsWith("delete from collaboration_versions")) this.checkpoints.clear();
+      if (statement.startsWith("delete from collaboration_sessions")) this.collaborations.clear();
+      if (statement.startsWith("delete from published_previews")) this.previews.clear();
+      this.changes = 0;
     } else if (statement.startsWith("select balance, lifetime_granted, lifetime_spent from wallets")) {
       const [accountId] = parameters as [string];
       const wallet = this.wallets.get(accountId);
@@ -761,22 +876,71 @@ describe("anonymous wallet provisioning", () => {
     expect((await request("/wallet/ledger?limit=51")).status).toBe(400);
     expect((await request("/wallet/ledger?reason=email")).status).toBe(400);
 
+    const createdAt = new Date().toISOString();
+    const sessionId = "abcdefghijklmnopqrstuvwx";
+    database.previews.set("abcdefgh", {
+      id: "abcdefgh",
+      account_id: wallet.accountId,
+      project_name: "Sample project",
+      object_key: "previews/abcdefgh/index.html",
+      created_at: createdAt,
+      expires_at: new Date(Date.now() + 60_000).toISOString(),
+      size_bytes: 2048,
+      view_count: 3,
+    });
+    database.collaborations.set(sessionId, {
+      id: sessionId,
+      account_id: wallet.accountId,
+      project_name: "Shared project",
+      object_key: `collaboration/${sessionId}/initial.json`,
+      created_at: createdAt,
+      last_activity_at: createdAt,
+      expires_at: new Date(Date.now() + 60_000).toISOString(),
+      view_only: 1,
+      ended_at: null,
+    });
+    database.checkpoints.set("checkpoint-1", {
+      id: "checkpoint-1",
+      session_id: sessionId,
+      object_key: `collaboration/${sessionId}/versions/checkpoint-1.json`,
+      created_at: createdAt,
+      size_bytes: 1024,
+    });
+
     const exportResponse = await request("/account/export");
     const exported = await exportResponse.json() as {
       schemaVersion: number;
       account: { deviceIdHash: string; email: string | null };
       wallet: { balance: number; lifetimeGranted: number; lifetimeSpent: number };
       ledger: Array<{ id: string; metadata: Record<string, unknown> }>;
+      cloudData: {
+        publishedPreviews: Array<{ id: string; projectName: string; sizeBytes: number }>;
+        collaborations: Array<{
+          id: string;
+          projectName: string;
+          viewOnly: boolean;
+          checkpoints: Array<{ createdAt: string; sizeBytes: number }>;
+        }>;
+      };
     };
     expect(exportResponse.status).toBe(200);
     expect(exported).toMatchObject({
-      schemaVersion: 1,
+      schemaVersion: 2,
       account: { deviceIdHash: "e".repeat(64), email: null },
       wallet: { balance: 50, lifetimeGranted: 50, lifetimeSpent: 0 },
     });
     expect(exported.ledger).toHaveLength(54);
     expect(exported.ledger.find((entry) => entry.id === "ledger-001")).toMatchObject({
       metadata: { promptTokens: 17 },
+    });
+    expect(exported.cloudData).toMatchObject({
+      publishedPreviews: [{ id: "abcdefgh", projectName: "Sample project", sizeBytes: 2048 }],
+      collaborations: [{
+        id: sessionId,
+        projectName: "Shared project",
+        viewOnly: true,
+        checkpoints: [{ createdAt, sizeBytes: 1024 }],
+      }],
     });
     expect(JSON.stringify(exported.ledger)).not.toContain("private@example.com");
     expect(JSON.stringify(exported.ledger)).not.toContain("private prompt");
@@ -805,9 +969,14 @@ describe("anonymous wallet provisioning", () => {
 
     expect((await request(JSON.stringify({ confirmation: "delete" }))).status).toBe(400);
     const deletion = await request(JSON.stringify({ confirmation: "DELETE" }));
-    const result = await deletion.json() as { deleted: boolean; purgeAfter: string };
+    const result = await deletion.json() as {
+      deleted: boolean;
+      purgeAfter: string;
+      cloudContentRemoved: boolean;
+    };
     expect(deletion.status).toBe(200);
     expect(result.deleted).toBe(true);
+    expect(result.cloudContentRemoved).toBe(true);
     expect(Date.parse(result.purgeAfter) - Date.now()).toBeGreaterThan(29 * 24 * 60 * 60 * 1000);
     expect(database.wallets.get(wallet.accountId)?.balance).toBe(50);
     expect(database.accounts.get(wallet.accountId)?.deleted_at).toBeTruthy();
@@ -826,7 +995,134 @@ describe("anonymous wallet provisioning", () => {
     expect(sameIdentity.status).toBe(410);
   });
 
-  it("hard-deletes wallet data and the account after 30 days", async () => {
+  it("removes published previews and collaboration checkpoints when cloud deletion is requested", async () => {
+    const database = new MemoryD1Database();
+    const created = await provision(
+      database,
+      "b".repeat(64),
+      "b23e4567-e89b-42d3-a456-426614174000",
+    );
+    const wallet = await created.json() as WalletResponse;
+    const sessionId = "abcdefghijklmnopqrstuvwx";
+    database.previews.set("abcdefgh", {
+      id: "abcdefgh",
+      account_id: wallet.accountId,
+      project_name: "Sample project",
+      object_key: "previews/abcdefgh/index.html",
+      created_at: new Date().toISOString(),
+      expires_at: new Date(Date.now() + 60_000).toISOString(),
+      size_bytes: 2048,
+      view_count: 3,
+    });
+    database.collaborations.set(sessionId, {
+      id: sessionId,
+      account_id: wallet.accountId,
+      project_name: "Shared project",
+      object_key: `collaboration/${sessionId}/initial.json`,
+      created_at: new Date().toISOString(),
+      last_activity_at: new Date().toISOString(),
+      expires_at: new Date(Date.now() + 60_000).toISOString(),
+      view_only: 0,
+      ended_at: null,
+    });
+    database.checkpoints.set("checkpoint-1", {
+      id: "checkpoint-1",
+      session_id: sessionId,
+      object_key: `collaboration/${sessionId}/versions/checkpoint-1.json`,
+      created_at: new Date().toISOString(),
+      size_bytes: 1024,
+    });
+    const assets = {
+      delete: async (key: string) => {
+        database.deletedAssetKeys.push(key);
+      },
+    } as unknown as R2Bucket;
+    const collaboration = {
+      idFromName: (id: string) => id,
+      get: (id: string) => ({
+        fetch: async () => {
+          database.erasedCollaborationIds.push(id);
+          return Response.json({ erased: true });
+        },
+      }),
+    } as unknown as DurableObjectNamespace;
+    const request = app.request(
+      "/account/data",
+      {
+        method: "DELETE",
+        headers: {
+          Authorization: `Bearer ${wallet.token}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ confirmation: "DELETE" }),
+      },
+      environment(database, { ASSETS: assets, COLLABORATION: collaboration }),
+    );
+
+    const response = await request;
+    expect(response.status).toBe(200);
+    expect(await response.json()).toMatchObject({ deleted: true, cloudContentRemoved: true });
+    expect(database.deletedAssetKeys).toEqual([
+      "previews/abcdefgh/index.html",
+      `collaboration/${sessionId}/initial.json`,
+      `collaboration/${sessionId}/versions/checkpoint-1.json`,
+    ]);
+    expect(database.erasedCollaborationIds).toEqual([sessionId]);
+    expect(database.previews.size).toBe(0);
+    expect(database.collaborations.size).toBe(0);
+    expect(database.checkpoints.size).toBe(0);
+  });
+
+  it("reports when cloud content cleanup needs a scheduled retry", async () => {
+    const database = new MemoryD1Database();
+    const created = await provision(
+      database,
+      "c".repeat(64),
+      "c23e4567-e89b-42d3-a456-426614174000",
+    );
+    const wallet = await created.json() as WalletResponse;
+    database.previews.set("abcdefgh", {
+      id: "abcdefgh",
+      account_id: wallet.accountId,
+      project_name: "Sample project",
+      object_key: "previews/abcdefgh/index.html",
+      created_at: new Date().toISOString(),
+      expires_at: new Date(Date.now() + 60_000).toISOString(),
+      size_bytes: 2048,
+      view_count: 3,
+    });
+    const assets = {
+      delete: async () => {
+        throw new Error("storage unavailable");
+      },
+    } as unknown as R2Bucket;
+    const response = await app.request(
+      "/account/data",
+      {
+        method: "DELETE",
+        headers: {
+          Authorization: `Bearer ${wallet.token}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ confirmation: "DELETE" }),
+      },
+      environment(database, { ASSETS: assets }),
+    );
+
+    expect(response.status).toBe(200);
+    expect(await response.json()).toMatchObject({ deleted: true, cloudContentRemoved: false });
+    expect(database.accounts.get(wallet.accountId)?.deleted_at).toBeTruthy();
+    expect(database.previews.has("abcdefgh")).toBe(true);
+
+    await runScheduledTasks(environment(database, {
+      ASSETS: { delete: async () => undefined } as unknown as R2Bucket,
+    }));
+
+    expect(database.previews.has("abcdefgh")).toBe(false);
+    expect(database.wallets.has(wallet.accountId)).toBe(true);
+  });
+
+  it("retries pending cloud-content deletion before hard-deleting the account", async () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date("2026-10-20T12:00:00.000Z"));
     const database = new MemoryD1Database();

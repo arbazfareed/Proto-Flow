@@ -1,37 +1,46 @@
-# ProtoFlow privacy notes
+# ProtoFlow Privacy Policy
 
-This document describes the data used by ProtoFlow's cloud wallet, usage history, and data controls. It is a technical disclosure for these features, not a complete legal privacy policy.
+**Last updated: 24 October 2026**
 
-## Anonymous wallet identity
+ProtoFlow is a desktop prototyping app. Your local project files stay on your device unless you choose a cloud feature that sends project data to ProtoFlow. Wallet, diagnostics, and telemetry are separate controls; crash reporting and anonymous telemetry are off until you opt in.
 
-- On desktop, ProtoFlow computes a SHA-256 device ID locally from the hostname, operating system, and CPU architecture, then hashes that result together with the install UUID. The raw hostname and other source values are not sent to the Worker.
-- ProtoFlow generates a random UUID install ID and stores it in the app's data directory. It is sent to the Worker with the hashed device ID to keep the wallet associated with the installation if the device fingerprint changes.
-- The Worker stores the account UUID, hashed device fingerprint, install UUID, wallet balance, and wallet ledger entries in Cloudflare D1. Anonymous accounts do not include an email address.
-- The app stores the signed wallet token in the operating system credential store. The balance and last-sync time are cached in local storage for offline display; the balance cache is not authoritative.
-- Browser previews use a random installation UUID in browser local storage, derive the device ID hash from that random UUID, and keep the token only in session storage.
+## Information ProtoFlow processes
 
-## Offline behavior and identity reset
+- **Local app data:** project files you save, app preferences, privacy choices, and a short in-memory diagnostic log. Local project files are not uploaded by autosave.
+- **Cloud wallet:** an account ID, a random installation ID, a SHA-256 device fingerprint, wallet totals, and credit-ledger entries. Anonymous wallets do not need an email. A linked email or Google account is stored only if you choose account linking.
+- **Cloud publishing and collaboration:** when you publish a preview or start collaboration, the selected project content, project name, preview/session metadata, and collaboration checkpoints are sent to ProtoFlow's Cloudflare services. Published previews are accessible to anyone with their unlisted link until they expire or are removed.
+- **Abuse prevention:** Cloudflare supplies a client IP to the Worker. ProtoFlow stores keyed hashes, not raw IP addresses, for abuse limits. Keyed IP activity is pruned after 30 days; abuse flags are retained for up to 90 days.
+- **AI actions:** when you explicitly use an AI feature, the prompt and the selected context required for that action are sent to the configured AI provider. Do not include information you are not comfortable sharing with that provider.
+- **Crash reporting and telemetry:** these are independent, optional settings. If enabled and configured, sanitized crash diagnostics may be sent to a Sentry/GlitchTip-compatible endpoint and allow-listed feature events may be sent to Umami. They are not used to upload project content. No third-party analytics cookies are used.
 
-When Cloudflare cannot be reached, the app may show the last synced balance for up to 24 hours after the last successful wallet sync. This is a display-only grace period; the server remains authoritative and cloud actions are unavailable offline. The app checks the Worker health endpoint every 30 seconds while reachable and backs off to 30 seconds, 1 minute, 5 minutes, and then 15 minutes after failures. The status bar reflects Worker reachability.
+## Why and where data is processed
 
-The wallet dialog's **Reset cloud identity** action creates a new random install ID, clears the locally cached wallet and signed token, and creates a new anonymous wallet when online. The previous cloud account and its records remain on the server. If the device fingerprint changes while the install ID remains stable, the Worker can still resolve the existing account using that install ID.
+ProtoFlow processes cloud account data to provide wallet synchronization, account recovery, cloud previews, and real-time collaboration. Cloudflare is the infrastructure provider and processor for the Worker, D1 database, KV, R2 storage, and Durable Objects. Resend sends email sign-in links when configured. Google handles Google sign-in and, when configured, Gemini AI requests. Sentry/GlitchTip and Umami are optional diagnostic and analytics subprocessors; they receive data only when the relevant preference is enabled and the endpoint is configured.
 
-## Usage history, export, and deletion
+Cloud requests use HTTPS in production. The app does not use third-party cookies. Browser previews store a random install ID in local storage and a short-lived session token in session storage. The desktop app stores its session token in the operating system credential store; local wallet display data and preferences are stored on the device.
 
-The wallet menu can retrieve the complete credit ledger in pages of up to 50 entries, filter by event reason, and download the selected history as CSV. **Export my data** downloads a JSON document containing the account UUID, hashed device fingerprint, verified email when linked, account creation time, wallet totals, export time, and complete ledger. Export is available only while connected to the Worker.
+## Retention
 
-**Delete my cloud data** requires typing `DELETE`. The Worker immediately marks the account for deletion, clears its linked email/Google identity, rejects the existing session, and the client clears its cached balance and JWT. The account tombstone prevents the same install identity from silently creating a replacement wallet during the 30-day recovery period. The scheduled retention task then hard-deletes the account and its wallet, ledger, authentication, abuse, and daily-refill records after 30 days. Recovery during the grace period requires contacting the service operator; the app does not currently provide an undo flow.
+- Cloud previews expire after 30 days unless removed sooner.
+- Inactive collaboration sessions end after four hours. Their session and checkpoint records remain while the cloud account is active, unless the account owner requests cloud-data deletion.
+- When you request cloud-data deletion, ProtoFlow disables the account immediately and attempts to remove published previews, collaboration sessions, and checkpoints immediately. Remaining wallet, ledger, authentication, and account records are queued for permanent deletion after a 30-day recovery period. If cloud-content cleanup is temporarily unavailable, the Worker retries it during scheduled retention cleanup.
+- Abuse-prevention IP hashes are kept for up to 30 days, and abuse flags for up to 90 days. Email sign-in links expire after 15 minutes.
+- Local project files, local preferences, and local diagnostic logs are not deleted by cloud-data deletion. Export local diagnostic logs separately from Privacy & diagnostics settings.
 
-## Optional account sign-in
+## Your choices and rights
 
-Signing in is optional. When a user requests an email link, the email address is sent to the Worker and Resend to deliver a one-time sign-in link. The Worker stores the address with the wallet only after verification; link tokens are single-use and expire after 15 minutes. Email requests are rate-limited by an HMAC of the normalized email address.
+You can independently turn crash reporting and anonymous telemetry on or off in **Privacy & diagnostics**. Cloud features are optional. In Wallet settings, **Export my data** downloads a JSON copy of account and wallet details, the complete credit ledger, cloud preview/collaboration metadata, and (only when crash reporting is enabled) recent sanitized diagnostic lines held in memory. Crash reports sent to an external provider are not linked to a ProtoFlow account and cannot be retrieved by this export.
 
-Google sign-in uses OAuth authorization-code flow with PKCE. Google returns a verified Google subject ID and email to the Worker; ProtoFlow stores those identifiers only when the user completes linking. OAuth state and short-lived verification tickets expire and are single-use. The desktop app uses the `protoflow://` callback scheme; browser previews return to the configured app origin.
+In Wallet settings, **Delete my cloud data** requires typing `DELETE`. It clears the local cloud session and wallet cache after the Worker accepts the request. The action does not remove local project files or local diagnostic logs. You can also request access, correction, or deletion by emailing [privacy@protoflow.app](mailto:privacy@protoflow.app). We target a response within 30 days. Deletion requests are subject to the 30-day recovery period described above and any data that must be retained by law.
 
-When a verified email or Google identity already belongs to a different wallet, the Worker merges that wallet into the currently active wallet. It migrates ledger history and lifetime totals and caps the merged balance at 100 credits. Signing out unlinks the email and Google identifiers and removes the local session token without clearing the local wallet balance. Linked email addresses are held in app memory and the cloud account record, not the browser's local storage.
+## Children and age
 
-## Data handling
+ProtoFlow is intended for people aged 13 or older, and 16 or older in the European Union. The app does not perform age verification or knowingly seek personal information from children below those ages.
 
-Wallet requests are sent to the configured Cloudflare Worker over HTTPS in production. For daily-refill abuse prevention, the Worker reads Cloudflare's `CF-Connecting-IP` request header and stores an HMAC hash of the address with recent wallet activity; it does not store the raw address in D1. The IP hash is keyed with the Worker JWT secret and is used to limit refills when five or more distinct wallets claim from the same IP within 24 hours. Hashed IP activity and IP grant markers are pruned after 30 days. Local requests without Cloudflare's IP header use per-account limits only. If Turnstile is configured later, suspicious claims may submit a challenge token to Cloudflare for verification.
+## Contact
 
-The Worker uses the device and install IDs to resolve the anonymous account and returns a signed session token and wallet summary. Rate-limit counters are held in Cloudflare KV with short expirations. For abuse prevention, the Worker stores a keyed HMAC of the Cloudflare client IP with new-account activity for up to 30 days; it does not store the raw IP. Persistent abuse flags contain a scope, reason, mode, timestamps, and (for account flags) the account UUID; they do not contain raw IP addresses and are removed after 90 days. Flags support temporary challenge/read-only enforcement and future admin review. Repeated AI prompt detection stores only a keyed hash as a short-lived KV counter; raw prompt text is not retained by this detection mechanism. If configured, a weekly Resend digest contains aggregate counts and flag reasons, not IP or account identifiers. Cloudflare Turnstile receives the challenge token and, when available, the client IP for verification. Ledger metadata must contain only minimal action context and must not contain prompts, email addresses, raw IP addresses, or other personal data. Account deletion is scheduled for hard deletion after the 30-day grace period.
+For privacy questions or data-rights requests, contact [privacy@protoflow.app](mailto:privacy@protoflow.app). Do not email project files, passwords, authentication tokens, or other sensitive material.
+
+## Implementation notes
+
+The app's JSON export includes metadata about cloud previews, collaboration sessions, and checkpoints; it does not include the content of cloud checkpoint objects. The app does not associate Sentry/GlitchTip crash events with wallet accounts. A live public website for this policy is not configured in this repository; deploy the packaged `public/privacy.html` page to the production website before representing this policy as publicly published.

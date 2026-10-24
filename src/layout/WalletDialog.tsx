@@ -2,6 +2,7 @@ import { useState, type FormEvent } from "react";
 import { isTauri } from "@tauri-apps/api/core";
 import { open } from "@tauri-apps/plugin-shell";
 import { CircleAlert, Coins, Download, RotateCcw, Trash2, X } from "lucide-react";
+import { getRecentDiagnosticLines, readPrivacySettings } from "../diagnostics/privacy";
 import { exportWalletData } from "../wallet/api";
 import { useWalletStore } from "../wallet/store";
 
@@ -37,7 +38,11 @@ export function WalletDialog({ onClose }: WalletDialogProps) {
     setDataError("");
     setDataMessage("");
     try {
-      const data = await exportWalletData(jwt);
+      const privacy = readPrivacySettings();
+      const data = await exportWalletData(jwt, {
+        crashReportsEnabled: privacy?.crashReports ?? false,
+        recentLogLines: privacy?.crashReports ? getRecentDiagnosticLines() : [],
+      });
       const url = URL.createObjectURL(new Blob([JSON.stringify(data, null, 2)], {
         type: "application/json;charset=utf-8",
       }));
@@ -61,7 +66,10 @@ export function WalletDialog({ onClose }: WalletDialogProps) {
     try {
       const result = await deleteCloudData();
       setDeleteConfirmation("");
-      setDataMessage(`Deletion requested. Wallet and usage records will be permanently erased after ${new Date(result.purgeAfter).toLocaleDateString()}.`);
+      const purgeDate = new Date(result.purgeAfter).toLocaleDateString();
+      setDataMessage(result.cloudContentRemoved
+        ? `Deletion requested. Shared previews, collaboration sessions, and checkpoints were removed. Wallet and account records will be permanently erased after ${purgeDate}.`
+        : `Deletion requested and cloud access disabled. Some shared content could not be removed yet; cleanup will retry, with remaining account records erased after ${purgeDate}.`);
     } catch (failure) {
       setDataError(failure instanceof Error ? failure.message : "Could not request data deletion.");
     } finally {
@@ -214,7 +222,7 @@ export function WalletDialog({ onClose }: WalletDialogProps) {
         </div>
         <section className="wallet-data-controls" aria-labelledby="wallet-data-title">
           <h3 id="wallet-data-title">Data &amp; privacy</h3>
-          <p>Download a copy of your account, wallet totals, and full usage ledger.</p>
+          <p>Cloud wallet and collaboration features send account and project metadata to ProtoFlow’s Cloudflare services when used. Local project files stay on this device.</p>
           <button
             className="button button-secondary wallet-data-export"
             onClick={() => void exportData()}
@@ -243,6 +251,9 @@ export function WalletDialog({ onClose }: WalletDialogProps) {
           {dataMessage && <p className="wallet-data-message" role="status">{dataMessage}</p>}
           {dataError && <p className="wallet-dialog-error" role="alert"><CircleAlert size={14} /> {dataError}</p>}
         </section>
+        <a className="wallet-privacy-policy-link" href="/privacy.html">
+          Read the privacy policy
+        </a>
         <p className="wallet-privacy-note">
           ProtoFlow uses a hashed device ID and random install ID to identify this wallet. Cloudflare also provides an IP address for refill-abuse limits; ProtoFlow stores only a keyed hash of it, not the raw address.
         </p>

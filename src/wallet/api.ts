@@ -58,7 +58,7 @@ export type LedgerReason =
   | "admin_adjust";
 
 export interface WalletDataExport {
-  schemaVersion: 1;
+  schemaVersion: 2;
   exportedAt: string;
   account: {
     id: string;
@@ -72,6 +72,35 @@ export interface WalletDataExport {
     lifetimeSpent: number;
   };
   ledger: LedgerEntry[];
+  cloudData: {
+    publishedPreviews: Array<{
+      id: string;
+      projectName: string;
+      createdAt: string;
+      expiresAt: string;
+      sizeBytes: number;
+      viewCount: number;
+    }>;
+    collaborations: Array<{
+      id: string;
+      projectName: string;
+      createdAt: string;
+      lastActivityAt: string;
+      expiresAt: string;
+      viewOnly: boolean;
+      endedAt: string | null;
+      checkpoints: Array<{ createdAt: string; sizeBytes: number }>;
+    }>;
+  };
+  diagnostics: {
+    crashReportsEnabled: boolean;
+    recentLogLines: string[];
+  };
+}
+
+export interface WalletExportDiagnostics {
+  crashReportsEnabled: boolean;
+  recentLogLines: string[];
 }
 
 interface AnonymousWalletResponse {
@@ -741,18 +770,24 @@ export async function fetchAllLedgerEntries(
   return entries;
 }
 
-export async function exportWalletData(token: string): Promise<WalletDataExport> {
+export async function exportWalletData(
+  token: string,
+  diagnostics: WalletExportDiagnostics = { crashReportsEnabled: false, recentLogLines: [] },
+): Promise<WalletDataExport> {
   const response = await authenticatedRequest<unknown>("/account/export", token);
   if (typeof response !== "object" || response === null || Array.isArray(response)) {
     throw new Error("The cloud wallet service returned an invalid data export.");
   }
   const result = response as Partial<WalletDataExport>;
   if (
-    result.schemaVersion !== 1 ||
+    result.schemaVersion !== 2 ||
     typeof result.exportedAt !== "string" || !Number.isFinite(Date.parse(result.exportedAt)) ||
     typeof result.account !== "object" || result.account === null ||
     typeof result.wallet !== "object" || result.wallet === null ||
-    !Array.isArray(result.ledger)
+    !Array.isArray(result.ledger) ||
+    typeof result.cloudData !== "object" || result.cloudData === null ||
+    !Array.isArray(result.cloudData.publishedPreviews) ||
+    !Array.isArray(result.cloudData.collaborations)
   ) {
     throw new Error("The cloud wallet service returned an invalid data export.");
   }
@@ -779,14 +814,74 @@ export async function exportWalletData(token: string): Promise<WalletDataExport>
     }
     return entry;
   });
-  return { schemaVersion: 1, exportedAt: result.exportedAt, account, wallet, ledger };
+  const publishedPreviews = result.cloudData.publishedPreviews.map((preview) => {
+    if (
+      typeof preview !== "object" || preview === null || Array.isArray(preview) ||
+      typeof preview.id !== "string" || typeof preview.projectName !== "string" ||
+      typeof preview.createdAt !== "string" || !Number.isFinite(Date.parse(preview.createdAt)) ||
+      typeof preview.expiresAt !== "string" || !Number.isFinite(Date.parse(preview.expiresAt)) ||
+      !isNonNegativeSafeInteger(preview.sizeBytes) ||
+      !isNonNegativeSafeInteger(preview.viewCount)
+    ) {
+      throw new Error("The cloud wallet service returned an invalid published-preview record.");
+    }
+    return preview;
+  });
+  const collaborations = result.cloudData.collaborations.map((collaboration) => {
+    if (
+      typeof collaboration !== "object" || collaboration === null || Array.isArray(collaboration) ||
+      typeof collaboration.id !== "string" || typeof collaboration.projectName !== "string" ||
+      typeof collaboration.createdAt !== "string" || !Number.isFinite(Date.parse(collaboration.createdAt)) ||
+      typeof collaboration.lastActivityAt !== "string" || !Number.isFinite(Date.parse(collaboration.lastActivityAt)) ||
+      typeof collaboration.expiresAt !== "string" || !Number.isFinite(Date.parse(collaboration.expiresAt)) ||
+      typeof collaboration.viewOnly !== "boolean" ||
+      !(collaboration.endedAt === null ||
+        (typeof collaboration.endedAt === "string" && Number.isFinite(Date.parse(collaboration.endedAt)))) ||
+      !Array.isArray(collaboration.checkpoints)
+    ) {
+      throw new Error("The cloud wallet service returned an invalid collaboration record.");
+    }
+    const checkpoints = collaboration.checkpoints.map((checkpoint) => {
+      if (
+        typeof checkpoint !== "object" || checkpoint === null || Array.isArray(checkpoint) ||
+        typeof checkpoint.createdAt !== "string" || !Number.isFinite(Date.parse(checkpoint.createdAt)) ||
+        !isNonNegativeSafeInteger(checkpoint.sizeBytes)
+      ) {
+        throw new Error("The cloud wallet service returned an invalid collaboration checkpoint.");
+      }
+      return checkpoint;
+    });
+    return { ...collaboration, checkpoints };
+  });
+  if (
+    typeof diagnostics.crashReportsEnabled !== "boolean" ||
+    !Array.isArray(diagnostics.recentLogLines) ||
+    diagnostics.recentLogLines.some((line) => typeof line !== "string")
+  ) {
+    throw new Error("Local diagnostic history for the data export is invalid.");
+  }
+  return {
+    schemaVersion: 2,
+    exportedAt: result.exportedAt,
+    account,
+    wallet,
+    ledger,
+    cloudData: { publishedPreviews, collaborations },
+    diagnostics: {
+      crashReportsEnabled: diagnostics.crashReportsEnabled,
+      recentLogLines: diagnostics.crashReportsEnabled ? [...diagnostics.recentLogLines] : [],
+    },
+  };
 }
 
-export async function deleteCloudWalletData(token: string): Promise<{ deletedAt: string; purgeAfter: string }> {
+export async function deleteCloudWalletData(
+  token: string,
+): Promise<{ deletedAt: string; purgeAfter: string; cloudContentRemoved: boolean }> {
   const response = await authenticatedRequest<{
     deleted?: boolean;
     deletedAt?: string;
     purgeAfter?: string;
+    cloudContentRemoved?: boolean;
   }>("/account/data", token, {
     method: "DELETE",
     body: JSON.stringify({ confirmation: "DELETE" }),
@@ -794,11 +889,16 @@ export async function deleteCloudWalletData(token: string): Promise<{ deletedAt:
   if (
     response.deleted !== true || typeof response.deletedAt !== "string" ||
     !Number.isFinite(Date.parse(response.deletedAt)) || typeof response.purgeAfter !== "string" ||
-    !Number.isFinite(Date.parse(response.purgeAfter))
+    !Number.isFinite(Date.parse(response.purgeAfter)) ||
+    typeof response.cloudContentRemoved !== "boolean"
   ) {
     throw new Error("The cloud wallet service did not confirm data deletion.");
   }
-  return { deletedAt: response.deletedAt, purgeAfter: response.purgeAfter };
+  return {
+    deletedAt: response.deletedAt,
+    purgeAfter: response.purgeAfter,
+    cloudContentRemoved: response.cloudContentRemoved,
+  };
 }
 
 export async function startEmailSignIn(

@@ -117,6 +117,11 @@ export function PrivacySettingsDialog({
           Both options are independent and off by default. You can change them here at any time.
           Project content, file paths, project names, emails, and variable values are never included.
         </p>
+        <p>
+          Cloud wallet, publishing, and collaboration features are optional and send the data needed
+          for those features to ProtoFlow’s Cloudflare services. AI actions disclose and send the
+          selected prompt and context to the configured AI provider when used.
+        </p>
 
         <label className="privacy-setting-option">
           <input
@@ -167,6 +172,9 @@ export function PrivacySettingsDialog({
             <Download size={14} /> Export logs
           </button>
         </div>
+        <a className="wallet-privacy-policy-link" href="/privacy.html">
+          Read the privacy policy
+        </a>
 
         {message && <p className={isError ? "privacy-message is-error" : "privacy-message"} role={isError ? "alert" : "status"}>{message}</p>}
         <div className="dialog-actions">

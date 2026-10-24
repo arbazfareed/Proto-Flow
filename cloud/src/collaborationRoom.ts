@@ -82,6 +82,9 @@ export class CollaborationRoom {
     if (url.pathname === "/end" && request.method === "POST") {
       return this.endSession();
     }
+    if (url.pathname === "/erase" && request.method === "POST") {
+      return this.eraseSession();
+    }
     return new Response("Not found", { status: 404 });
   }
 
@@ -266,6 +269,20 @@ export class CollaborationRoom {
     }
     await this.state.storage.deleteAlarm();
     return Response.json({ ended: true });
+  }
+
+  private async eraseSession(): Promise<Response> {
+    for (const socket of this.state.getWebSockets()) {
+      try {
+        socket.send(JSON.stringify({ type: "ended" }));
+        socket.close(1000, "Cloud account data deleted.");
+      } catch {
+        // A peer may have disconnected before deletion completed.
+      }
+    }
+    await this.state.storage.deleteAll();
+    this.doc.destroy();
+    return Response.json({ erased: true });
   }
 
   private async writeSnapshot(initialObjectKey: string, force = false): Promise<void> {
