@@ -1,0 +1,199 @@
+name: Signed Windows release
+
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/signed-windows-release.yml"
+      - "src-tauri/**"
+      - "src/**"
+      - "package.json"
+      - "package-lock.json"
+      - "tsconfig*.json"
+      - "vite.config.ts"
+      - "SECURITY.md"
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: windows-2022
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: x86_64-pc-windows-msvc
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri -> target
+      - run: npm ci
+      - run: npm test -- --testTimeout 20000
+      - run: npm run build
+      - run: cargo check --manifest-path src-tauri/Cargo.toml --target x86_64-pc-windows-msvc
+
+  release:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: verify
+    runs-on: windows-2022
+    timeout-minutes: 45
+    permissions:
+      contents: write
+    env:
+      WINDOWS_SIGNING_CERTIFICATE_PFX: ${{ secrets.WINDOWS_SIGNING_CERTIFICATE_PFX }}
+      WINDOWS_SIGNING_CERTIFICATE_PASSWORD: ${{ secrets.WINDOWS_SIGNING_CERTIFICATE_PASSWORD }}
+      TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+      TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: x86_64-pc-windows-msvc
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri -> target
+      - run: npm ci
+      - name: Require signing secrets
+        shell: pwsh
+        run: |
+          $required = @(
+            "WINDOWS_SIGNING_CERTIFICATE_PFX",
+            "WINDOWS_SIGNING_CERTIFICATE_PASSWORD",
+            "TAURI_SIGNING_PRIVATE_KEY",
+            "TAURI_SIGNING_PRIVATE_KEY_PASSWORD"
+          )
+          foreach ($name in $required) {
+            if ([string]::IsNullOrWhiteSpace([Environment]::GetEnvironmentVariable($name))) {
+              throw "Missing required release secret: $name"
+            }
+          }
+          if ($env:GITHUB_REF_NAME -notmatch '^v\d+\.\d+\.\d+([.-][0-9A-Za-z.-]+)?$') {
+            throw "Release tag must use semantic version format (for example, v1.2.3)."
+          }
+          $config = Get-Content "src-tauri\tauri.conf.json" -Raw | ConvertFrom-Json
+          if ($env:GITHUB_REF_NAME -ne "v$($config.version)") {
+            throw "Release tag must match the version in src-tauri/tauri.conf.json."
+          }
+      - name: Build Windows application binary
+        run: npm run tauri -- build --target x86_64-pc-windows-msvc --no-bundle
+      - name: Sign and verify the Windows application binary
+        shell: pwsh
+        run: |
+          $certificatePath = Join-Path $env:RUNNER_TEMP "protoflow-release.pfx"
+          [IO.File]::WriteAllBytes(
+            $certificatePath,
+            [Convert]::FromBase64String($env:WINDOWS_SIGNING_CERTIFICATE_PFX)
+          )
+          $kits = Join-Path ${env:ProgramFiles(x86)} "Windows Kits\10\bin"
+          $signTool = Get-ChildItem -Path $kits -Filter signtool.exe -Recurse |
+            Where-Object { $_.Directory.Name -eq "x64" } |
+            Sort-Object FullName -Descending |
+            Select-Object -First 1 -ExpandProperty FullName
+          if (-not $signTool) {
+            throw "Windows SDK signtool.exe was not found."
+          }
+          $application = "src-tauri\target\x86_64-pc-windows-msvc\release\proto-flow.exe"
+          if (-not (Test-Path $application)) {
+            throw "The Windows application binary was not produced."
+          }
+          & $signTool sign /fd SHA256 /td SHA256 /tr "http://timestamp.digicert.com" `
+            /f $certificatePath /p $env:WINDOWS_SIGNING_CERTIFICATE_PASSWORD $application
+          if ($LASTEXITCODE -ne 0) {
+            throw "Authenticode signing failed for the application binary."
+          }
+          & $signTool verify /pa /all /tw /v $application
+          if ($LASTEXITCODE -ne 0) {
+            throw "Authenticode verification failed for the application binary."
+          }
+      - name: Build Windows installers from the signed application binary
+        run: npm run tauri -- bundle --ci --target x86_64-pc-windows-msvc --bundles msi,nsis --no-binary-patching
+      - name: Sign installers and refresh Tauri updater signatures
+        shell: pwsh
+        run: |
+          $certificatePath = Join-Path $env:RUNNER_TEMP "protoflow-release.pfx"
+          $bundleRoot = "src-tauri\target\x86_64-pc-windows-msvc\release\bundle"
+          $installers = Get-ChildItem -Path $bundleRoot -Recurse -File |
+            Where-Object { $_.Extension -in @(".msi", ".exe") }
+          if (-not ($installers | Where-Object { $_.Extension -eq ".msi" })) {
+            throw "No MSI installer was produced."
+          }
+          if (-not ($installers | Where-Object { $_.Extension -eq ".exe" })) {
+            throw "No NSIS installer was produced."
+          }
+          $kits = Join-Path ${env:ProgramFiles(x86)} "Windows Kits\10\bin"
+          $signTool = Get-ChildItem -Path $kits -Filter signtool.exe -Recurse |
+            Where-Object { $_.Directory.Name -eq "x64" } |
+            Sort-Object FullName -Descending |
+            Select-Object -First 1 -ExpandProperty FullName
+          $config = Get-Content "src-tauri\tauri.conf.json" -Raw | ConvertFrom-Json
+          $appVersion = $config.version
+          foreach ($installer in $installers) {
+            & $signTool sign /fd SHA256 /td SHA256 /tr "http://timestamp.digicert.com" `
+              /f $certificatePath /p $env:WINDOWS_SIGNING_CERTIFICATE_PASSWORD $installer.FullName
+            if ($LASTEXITCODE -ne 0) {
+              throw "Authenticode signing failed for $($installer.Name)."
+            }
+            & $signTool verify /pa /all /tw /v $installer.FullName
+            if ($LASTEXITCODE -ne 0) {
+              throw "Authenticode verification failed for $($installer.Name)."
+            }
+            npm run tauri -- signer sign $installer.FullName --app-version $appVersion
+            if ($LASTEXITCODE -ne 0 -or -not (Test-Path "$($installer.FullName).sig")) {
+              throw "Tauri updater signing failed for $($installer.Name)."
+            }
+          }
+      - name: Remove temporary signing certificate
+        if: always()
+        shell: pwsh
+        run: Remove-Item (Join-Path $env:RUNNER_TEMP "protoflow-release.pfx") -Force -ErrorAction SilentlyContinue
+      - name: Generate CycloneDX SBOM
+        uses: anchore/sbom-action@v0
+        with:
+          format: cyclonedx-json
+          output-file: protoflow-${{ github.ref_name }}.cdx.json
+          upload-artifact: false
+      - name: Collect signed release files and checksums
+        shell: pwsh
+        run: |
+          $bundleRoot = "src-tauri\target\x86_64-pc-windows-msvc\release\bundle"
+          $releaseDirectory = Join-Path $env:RUNNER_TEMP "protoflow-release"
+          New-Item -ItemType Directory -Path $releaseDirectory | Out-Null
+          $releaseFiles = Get-ChildItem -Path $bundleRoot -Recurse -File |
+            Where-Object { $_.Extension -in @(".msi", ".exe", ".sig") }
+          if (-not ($releaseFiles | Where-Object { $_.Extension -eq ".msi" })) {
+            throw "No signed MSI installer is available for release."
+          }
+          if (-not ($releaseFiles | Where-Object { $_.Extension -eq ".sig" })) {
+            throw "No Tauri updater signatures were generated."
+          }
+          foreach ($file in $releaseFiles) {
+            Copy-Item $file.FullName $releaseDirectory
+          }
+          Copy-Item "protoflow-$env:GITHUB_REF_NAME.cdx.json" $releaseDirectory
+          Get-ChildItem $releaseDirectory -File |
+            Where-Object { $_.Name -ne "SHA256SUMS.txt" } |
+            ForEach-Object {
+              $hash = (Get-FileHash $_.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
+              "$hash  $($_.Name)"
+            } |
+            Set-Content (Join-Path $releaseDirectory "SHA256SUMS.txt")
+      - name: Publish signed GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: pwsh
+        run: |
+          $releaseFiles = Get-ChildItem (Join-Path $env:RUNNER_TEMP "protoflow-release") -File
+          gh release create $env:GITHUB_REF_NAME @($releaseFiles.FullName) `
+            --title "ProtoFlow $env:GITHUB_REF_NAME" `
+            --notes "Signed Windows installers, Tauri updater signatures, SHA-256 checksums, and CycloneDX SBOM."

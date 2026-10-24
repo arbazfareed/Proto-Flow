@@ -42,9 +42,9 @@ describe("production updater checks", () => {
     expect(checkMock).toHaveBeenCalledOnce();
   });
 
-  it("silently handles updater network errors", async () => {
+  it("surfaces updater verification and network errors to the caller", async () => {
     checkMock.mockRejectedValue(new Error("offline"));
 
-    await expect(checkForUpdate()).resolves.toBeNull();
+    await expect(checkForUpdate()).rejects.toThrow("offline");
   });
 });
