@@ -1237,7 +1237,8 @@
   .topbar-actions>.topbar-icon,
   .topbar-actions>button[aria-label="Publish to cloud"],
   .topbar-actions>button[aria-label="Open collaboration"] { display:none; }
-  .topbar-actions>button[aria-label="Open privacy and diagnostics settings"] { display:inline-flex; }
+  .topbar-actions>button[aria-label="Open privacy and diagnostics settings"],
+  .topbar-actions>button[aria-label="Share beta feedback"] { display:inline-flex; }
   .topbar-actions>.button-secondary,.command-trigger { width:32px; min-width:32px; padding:0; font-size:0; }
   .topbar-actions>.button-secondary { gap:0; }
   .topbar-actions>.command-trigger>span,
@@ -1265,7 +1266,8 @@
   .topbar-actions>button[aria-label="Open collaboration"],
   .topbar-actions>button[aria-label="Export React code"],
   .topbar-actions>button[aria-label="Export HTML bundle"] { display:none; }
-  .topbar-actions>button[aria-label="Open privacy and diagnostics settings"] { display:inline-flex; }
+  .topbar-actions>button[aria-label="Open privacy and diagnostics settings"],
+  .topbar-actions>button[aria-label="Share beta feedback"] { display:inline-flex; }
   .topbar-actions>.command-trigger,
   .topbar-actions>button[aria-label="Save as"],
   .topbar-actions>button[aria-label="Open preview"] { width:30px; min-width:30px; padding:0; gap:0; font-size:0; }
@@ -1282,7 +1284,8 @@
   .topbar { gap:6px; padding:0 8px; }
   .brand-lockup { flex:0 0 auto; }
   .brand-name,.topbar-divider,.document-heading,.topbar-actions>.icon-button,.command-trigger,.topbar-actions>.button-secondary { display:none; }
-  .topbar-actions>button[aria-label="Open privacy and diagnostics settings"] { display:inline-flex; }
+  .topbar-actions>button[aria-label="Open privacy and diagnostics settings"],
+  .topbar-actions>button[aria-label="Share beta feedback"] { display:inline-flex; }
   .topbar-actions { gap:0; margin-left:auto; }
   .topbar-actions>.button-primary { padding:0 8px; }
   .document-heading { display:none; }

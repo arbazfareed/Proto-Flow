@@ -1,0 +1,94 @@
+name: Beta feedback
+description: Report a reproducible beta issue or share workflow feedback
+title: "[Beta] "
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for testing ProtoFlow. Issues submitted here are public.
+        Do not include project files, private customer data, passwords, access tokens, or other secrets.
+  - type: dropdown
+    id: severity
+    attributes:
+      label: Severity
+      description: Choose the impact on your work.
+      options:
+        - S1 - Blocks core work or causes data loss
+        - S2 - Major feature is unusable; no practical workaround
+        - S3 - Feature is impaired; workaround exists
+        - S4 - Minor issue or suggestion
+    validations:
+      required: true
+  - type: dropdown
+    id: category
+    attributes:
+      label: Category
+      options:
+        - Crash or data loss
+        - Canvas and editing
+        - Responsive or device preview
+        - Dynamic panels
+        - Repeaters
+        - Expressions and interactions
+        - Flow diagrams or annotations
+        - Rich text
+        - Version history
+        - Export or preview
+        - Performance
+        - Accessibility or usability
+        - Other
+    validations:
+      required: true
+  - type: dropdown
+    id: parity
+    attributes:
+      label: Axure RP workflow comparison
+      description: Select the closest match; leave as not applicable for unrelated feedback.
+      options:
+        - Not applicable
+        - I use Axure RP and this workflow works for me in ProtoFlow
+        - I use Axure RP and found a parity gap
+        - I do not use Axure RP
+    validations:
+      required: true
+  - type: input
+    id: workflow
+    attributes:
+      label: What were you trying to do?
+      description: Describe the task without sharing project or customer data.
+      placeholder: "For example: create a mobile panel with two states and a tap transition"
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      description: List the smallest steps that reproduce the issue. If this is feedback rather than a bug, write "Suggestion".
+      placeholder: |
+        1. Open...
+        2. Select...
+        3. Observe...
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual result
+      description: What happened? Include the exact error text if relevant, after removing private data.
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected result
+      description: What did you expect to happen?
+    validations:
+      required: true
+  - type: input
+    id: environment
+    attributes:
+      label: Environment
+      description: ProtoFlow version, OS version, and display scale if relevant. Do not include file paths or device identifiers.
+      placeholder: "ProtoFlow 0.1.0; Windows 11; 100% display scale"
+    validations:
+      required: true

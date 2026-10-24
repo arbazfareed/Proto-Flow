@@ -4,8 +4,10 @@ import { currentMonitor, getCurrentWindow } from "@tauri-apps/api/window";
 import { LogicalSize } from "@tauri-apps/api/dpi";
 import { emitTo, listen } from "@tauri-apps/api/event";
 import { WebviewWindow } from "@tauri-apps/api/webviewWindow";
+import { open as openExternal } from "@tauri-apps/plugin-shell";
 import { getCurrent, onOpenUrl } from "@tauri-apps/plugin-deep-link";
 import { Check, CircleAlert } from "lucide-react";
+import { BETA_FEEDBACK_URL } from "./beta/feedback";
 import { PrivacySettingsDialog } from "./diagnostics/PrivacySettingsDialog";
 import { readPrivacySettings } from "./diagnostics/privacy";
 import {
@@ -90,6 +92,23 @@ function AppShell() {
     if (isError) trackEvent("error_shown", { category: categorizeTelemetryError(message) });
     window.setTimeout(() => setNotice(""), 4000);
   }, []);
+
+  const openBetaFeedback = useCallback(async () => {
+    try {
+      if (isTauri()) {
+        await openExternal(BETA_FEEDBACK_URL);
+      } else {
+        const link = document.createElement("a");
+        link.href = BETA_FEEDBACK_URL;
+        link.target = "_blank";
+        link.rel = "noopener noreferrer";
+        link.referrerPolicy = "no-referrer";
+        link.click();
+      }
+    } catch (error) {
+      notify(error instanceof Error ? error.message : "Could not open the beta feedback form.", true);
+    }
+  }, [notify]);
 
   useEffect(() => {
     let active = true;
@@ -610,6 +629,7 @@ function AppShell() {
           setPrivacyFirstLaunch(false);
           setPrivacyDialogOpen(true);
         }}
+        onOpenBetaFeedback={() => void openBetaFeedback()}
         onNotify={notify}
         onStartDragging={startWindowDragging}
         onWindowAction={runWindowAction}

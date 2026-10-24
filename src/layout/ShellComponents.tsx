@@ -18,6 +18,7 @@ import {
   Lock,
   Layers2,
   MonitorPlay,
+  MessageSquareText,
   MoreHorizontal,
   Minus,
   PanelLeftClose,
@@ -133,6 +134,7 @@ interface TopBarProps {
   onExportHtml: () => void;
   onOpenWallet: () => void;
   onOpenPrivacySettings: () => void;
+  onOpenBetaFeedback: () => void;
   onNotify: (message: string, isError?: boolean) => void;
   onStartDragging: () => void;
   onWindowAction: (action: "minimize" | "maximize" | "close") => void;
@@ -174,6 +176,7 @@ export function TopBar({
   onExportHtml,
   onOpenWallet,
   onOpenPrivacySettings,
+  onOpenBetaFeedback,
   onNotify,
   onStartDragging,
   onWindowAction,
@@ -429,6 +432,14 @@ export function TopBar({
             </section>
           )}
         </div>
+        <button
+          className="icon-button topbar-icon"
+          title="Share beta feedback"
+          aria-label="Share beta feedback"
+          onClick={onOpenBetaFeedback}
+        >
+          <MessageSquareText size={15} />
+        </button>
         <button
           className="icon-button topbar-icon"
           title="Privacy and diagnostics settings"

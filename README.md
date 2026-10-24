@@ -36,6 +36,10 @@ To configure providers for a build, set these public ingestion values in the bui
 
 Do not put provider administration tokens or other secrets in `VITE_*` variables. The application does not include a hosted provider, dashboards, alert rules, or weekly digest; those require separately provisioned GlitchTip/Sentry and Umami infrastructure. Events are allow-listed and contain only event/action enums, aggregate counts, and a validated crash correlation ID. Crash payloads discard user/request data, project content, and source paths.
 
+## Private beta feedback
+
+The in-app **Share beta feedback** button opens a public GitHub issue form. Do not include private project/customer data, credentials, or secrets. The maintainer's recruiting, onboarding, triage, and launch-readiness checklist is in [docs/beta-program.md](./docs/beta-program.md); the runbook does not mean a beta cohort or external feedback channels have been provisioned.
+
 ## Desktop bundles
 
 `src-tauri/tauri.conf.json` targets Windows MSI and Linux DEB/AppImage packages. The `.pflow` file association is declared as `application/x-protoflow+json`.
