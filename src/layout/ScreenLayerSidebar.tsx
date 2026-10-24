@@ -392,6 +392,7 @@ export function ScreenLayerSidebar() {
       activeBreakpoint,
       activeScreen.device?.width ?? DEFAULT_DEVICE_PRESET.viewport.width,
       activeScreen.device?.height ?? DEFAULT_DEVICE_PRESET.viewport.height,
+      activeScreen.compactLayout,
     );
   }, [activeScreen, activeBreakpoint]);
   const overflowByWidgetId = useMemo(() => {

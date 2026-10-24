@@ -114,6 +114,7 @@ export function responsiveLayoutStyles(project: Project): string {
         breakpoint,
         baseWidth,
         baseHeight,
+        screen.compactLayout,
       );
       const screenSelector = `#stage[data-screen-id=${JSON.stringify(screen.id)}]`;
       const stageRule = `${screenSelector}{width:${breakpoint.width}px!important;height:${breakpoint.height}px!important}`;

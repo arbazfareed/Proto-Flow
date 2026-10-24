@@ -394,6 +394,7 @@ export function ResponsivePanel({
     breakpoint,
     screen.device?.width ?? 1440,
     screen.device?.height ?? 900,
+    screen.compactLayout,
   ).find((item) => item.id === widget.id) ?? widget;
   const overflows = getWidgetsOutsideBreakpointViewport(
     [effectiveWidget],

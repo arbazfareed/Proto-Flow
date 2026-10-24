@@ -79,6 +79,51 @@ describe("responsive breakpoints", () => {
     expect(widgets[0]).toMatchObject({ x: 20, y: 20, width: 500 });
   });
 
+  it("hides desktop-only widgets in opt-in compact layouts while retaining explicit compact overrides", () => {
+    const desktopOnly = makeWidget({ x: 80, y: 90, width: 400, height: 100 });
+    const compactWidget = makeWidget({
+      x: 800,
+      y: 600,
+      width: 300,
+      height: 80,
+      cascadeMode: "absolute",
+      overrides: { mobile: { x: 16, y: 24, width: 358, height: 80, visible: true } },
+    });
+    const mobile = createDefaultBreakpoints()[0];
+    const resolved = resolveWidgetsForBreakpoint(
+      [desktopOnly, compactWidget],
+      mobile,
+      1440,
+      900,
+      true,
+    );
+
+    expect(resolved[0].visible).toBe(false);
+    expect(resolved[1]).toMatchObject({ x: 16, y: 24, width: 358, visible: true });
+    expect(desktopOnly.visible).toBe(true);
+  });
+
+  it("scales compact mobile widgets vertically to fit shorter phone viewports", () => {
+    const widget = makeWidget({
+      x: 18,
+      y: 800,
+      width: 354,
+      height: 40,
+      cascadeMode: "absolute",
+      props: { fontSize: 12 },
+      overrides: { mobile: { x: 18, y: 800, width: 354, height: 40, visible: true } },
+    });
+    const shortPhone = { ...createDefaultBreakpoints()[0], width: 375, height: 667 };
+    const [resolved] = resolveWidgetsForBreakpoint([widget], shortPhone, 1440, 900, true);
+
+    expect(resolved.y).toBeCloseTo(800 * 667 / 844);
+    expect(resolved.x).toBeCloseTo(18 * 375 / 390);
+    expect(resolved.width).toBeCloseTo(354 * 375 / 390);
+    expect(resolved.y + resolved.height).toBeLessThanOrEqual(667);
+    expect(resolved.props.fontSize).toBe(10);
+    expect(widget).toMatchObject({ y: 800, height: 40 });
+  });
+
   it("uses a valid default when the transient breakpoint ID is absent or stale", () => {
     const screen = createEmptyProject().screens[0];
     expect(resolveActiveBreakpoint(screen, "missing").id).toBe("desktop");

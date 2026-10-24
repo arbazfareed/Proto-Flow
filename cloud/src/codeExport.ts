@@ -108,11 +108,12 @@ export function resolveWidgetsForBreakpoint(
   breakpoint: Breakpoint,
   baseWidth: number,
   baseHeight: number,
+  compactLayout = false,
 ): Widget[] {
   let stackY = 24;
   return [...widgets].sort((first, second) => first.zIndex - second.zIndex).map((widget) => {
     let next = { ...widget };
-    const mode = widget.cascadeMode;
+    const mode = widget.cascadeMode ?? (compactLayout && breakpoint.width < baseWidth ? "hide" : undefined);
     if (mode === "hide") next.visible = false;
     else if (breakpoint.width < baseWidth && mode === "fluid") {
       next.width = Math.max(1, Math.min(breakpoint.width, widget.width * breakpoint.width / baseWidth));
@@ -143,13 +144,24 @@ export function resolveWidgetsForBreakpoint(
     }
     const overrides = widget.overrides as Record<string, Partial<Widget>> | undefined;
     const override = overrides?.[breakpoint.id];
-    if (!override) return next;
-    return {
+    const resolved = override ? {
       ...next,
       ...override,
       style: override.style ? { ...next.style, ...override.style } : next.style,
       props: override.props ? { ...next.props, ...override.props } : next.props,
-    };
+    } : next;
+    if (compactLayout && breakpoint.width < 768) {
+      const horizontalScale = breakpoint.width / 390;
+      const verticalScale = breakpoint.height < 844 ? breakpoint.height / 844 : 1;
+      resolved.x *= horizontalScale;
+      resolved.width = Math.max(1, resolved.width * horizontalScale);
+      resolved.y *= verticalScale;
+      resolved.height = Math.max(1, resolved.height * verticalScale);
+      if (typeof resolved.props.fontSize === "number") {
+        resolved.props = { ...resolved.props, fontSize: Math.max(10, resolved.props.fontSize * verticalScale) };
+      }
+    }
+    return resolved;
   });
 }
 `;
@@ -233,7 +245,7 @@ export interface Widget { id: string; type: string; name?: string; groupId?: str
 export interface Condition { variable: string; operator: string; value: unknown }
 export interface Action { type: string; target: string; value?: unknown }
 export interface Rule { id: string; widgetId?: string; event: string; conditionMode?: "all" | "any"; conditions: Condition[]; actions: Action[] }
-export interface Screen { id: string; name: string; device?: { width: number; height: number; [key: string]: unknown }; breakpoints?: Breakpoint[]; widgets: Widget[]; interactionRules: Rule[] }
+export interface Screen { id: string; name: string; device?: { width: number; height: number; [key: string]: unknown }; compactLayout?: boolean; breakpoints?: Breakpoint[]; widgets: Widget[]; interactionRules: Rule[] }
 export interface Project { schemaVersion: string; id: string; name: string; createdAt: string; updatedAt: string; startScreenId: string; variables: Variable[]; screens: Screen[]; symbols: Array<{ id: string; name: string; width: number; height: number; widgets: Widget[] }> }
 `,
     "src/project.ts": `import type { Project } from "./types";
@@ -439,7 +451,7 @@ export function ScreenRenderer({ screen }: { screen: Screen }) {
   );
   const baseWidth = screen.device?.width ?? breakpoint.width;
   const baseHeight = screen.device?.height ?? breakpoint.height;
-  const responsiveWidgets = resolveWidgetsForBreakpoint(screen.widgets, breakpoint, baseWidth, baseHeight);
+  const responsiveWidgets = resolveWidgetsForBreakpoint(screen.widgets, breakpoint, baseWidth, baseHeight, screen.compactLayout);
   const scale = Math.min(1, Math.max(0.1, (viewportWidth - 48) / breakpoint.width));
   return <main className="min-h-screen overflow-auto bg-slate-100 p-6">
     <section className="relative mx-auto overflow-hidden bg-white shadow-xl" style={{ width: breakpoint.width, height: breakpoint.height, transform: \`scale(\${scale})\`, transformOrigin: "top center" }}>
