@@ -3,6 +3,7 @@ import { Download, X } from "lucide-react";
 import type { Update } from "@tauri-apps/plugin-updater";
 import { checkForUpdate } from "../updater/check";
 import { installAvailableUpdate } from "../updater/install";
+import { trackEvent } from "../diagnostics/observability";
 
 type UpdateToastProps = {
   requestId: number;
@@ -16,12 +17,18 @@ export function UpdateToast({ requestId }: UpdateToastProps) {
   useEffect(() => {
     let active = true;
     void checkForUpdate().then((availableUpdate) => {
+      trackEvent("update_result", {
+        updateResult: availableUpdate ? "available" : "not_available",
+      });
       if (active && availableUpdate) setUpdate(availableUpdate);
       else if (availableUpdate) {
         void availableUpdate.close().catch((error) => {
           console.error("Could not release the unused Proto Flow update.", error);
         });
       }
+    }).catch((error: unknown) => {
+      trackEvent("update_result", { updateResult: "failed" });
+      console.error("Could not check for a Proto Flow update.", error);
     });
     return () => {
       active = false;
@@ -35,6 +42,7 @@ export function UpdateToast({ requestId }: UpdateToastProps) {
     setInstallError(false);
     try {
       await installAvailableUpdate(update);
+      trackEvent("update_result", { updateResult: "installed" });
     } catch (error) {
       console.error("Could not install the Proto Flow update.", error);
       setInstallError(true);

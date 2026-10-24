@@ -15,6 +15,7 @@ import {
   type MeteredActionType,
 } from "./api";
 import { useWalletStore } from "./store";
+import { trackEvent } from "../diagnostics/observability";
 
 const CONFIRMATION_KEY_PREFIX = "protoflow.metered.skip-confirmation.";
 const TELEMETRY_ENABLED_KEY = "protoflow.metered.telemetry.enabled";
@@ -267,6 +268,7 @@ export function MeteredActionProvider({ children }: MeteredActionProviderProps) 
   }, []);
 
   const recordUsage = useCallback((actionType: MeteredActionType) => {
+    trackEvent("metered_action_used", { actionType });
     try {
       recordLocalActionUsage(actionType);
     } catch (error) {

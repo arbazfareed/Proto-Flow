@@ -2,6 +2,7 @@ import { useState } from "react";
 import { invoke, isTauri } from "@tauri-apps/api/core";
 import { Check, Download, FileArchive, X } from "lucide-react";
 import { useStore } from "../store";
+import { trackEvent } from "../diagnostics/observability";
 import { embedProjectAssets } from "../preview/exportAssets";
 import {
   generateDeviceImageArchive,
@@ -63,6 +64,13 @@ export function HtmlExportDialog({ onClose }: { onClose: () => void }) {
         downloadArchive(bytes, fileName);
         setMessage("Offline HTML bundle downloaded for free.");
       }
+      trackEvent("export_used", {
+        exportType: exportMode === "responsive"
+          ? "responsive"
+          : exportMode === "device-variants" || exportMode === "device-images"
+            ? "per_device"
+            : "html",
+      });
     } catch (error) {
       setIsError(true);
       setMessage(error instanceof Error ? error.message : "The HTML bundle could not be exported.");

@@ -13,7 +13,16 @@ pub fn run() {
         .plugin(tauri_plugin_deep_link::init())
         .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_updater::Builder::new().build())
+        .setup(|app| {
+            commands::diagnostics::initialize(app.handle())
+                .map_err(|error| std::io::Error::new(std::io::ErrorKind::Other, error))?;
+            Ok(())
+        })
         .invoke_handler(tauri::generate_handler![
+            commands::diagnostics::set_crash_reporting_consent,
+            commands::diagnostics::append_diagnostic_log,
+            commands::diagnostics::export_diagnostic_logs,
+            commands::diagnostics::get_diagnostics_platform,
             commands::file_io::save_project,
             commands::file_io::open_project,
             commands::file_io::load_project_history,
