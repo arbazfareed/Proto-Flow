@@ -42,6 +42,8 @@ async function authorizedRequest(
   mode: "challenge" | "read_only",
   turnstileToken?: string,
   cache = new Map<string, string>(),
+  failCache = false,
+  body: unknown = {},
 ) {
   const now = Math.floor(Date.now() / 1000);
   const token = await signJwt(
@@ -51,7 +53,10 @@ async function authorizedRequest(
   const environment: WorkerEnv = {
     DB: database as unknown as D1Database,
     CACHE: {
-      get: async (key: string) => cache.get(key) ?? null,
+      get: async (key: string) => {
+        if (failCache) throw new Error("Simulated KV outage.");
+        return cache.get(key) ?? null;
+      },
       put: async (key: string, value: string) => {
         cache.set(key, value);
       },
@@ -73,7 +78,7 @@ async function authorizedRequest(
         "Content-Type": "application/json",
         ...(turnstileToken ? { "X-Turnstile-Token": turnstileToken } : {}),
       },
-      body: "{}",
+      body: JSON.stringify(body),
     },
     environment,
   );
@@ -118,6 +123,24 @@ describe("abuse controls", () => {
     expect(response.status).toBe(403);
     expect(await response.json()).toMatchObject({
       error: { code: "READ_ONLY" },
+    });
+  });
+
+  it("fails closed when KV rate-limit storage is unavailable", async () => {
+    const database = new AbuseTestDatabase("challenge");
+    database.flag = null;
+    const response = await authorizedRequest(
+      database,
+      "challenge",
+      undefined,
+      new Map(),
+      true,
+      { type: "cloud_preview_publish", payload: {} },
+    );
+
+    expect(response.status).toBe(503);
+    expect(await response.json()).toMatchObject({
+      error: { code: "RATE_LIMIT_UNAVAILABLE" },
     });
   });
 });

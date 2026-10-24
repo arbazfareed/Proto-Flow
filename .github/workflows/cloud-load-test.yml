@@ -1,0 +1,74 @@
+name: Staging Worker load test
+
+on:
+  workflow_dispatch:
+    inputs:
+      scenario:
+        description: Worker endpoint scenario to exercise
+        required: true
+        type: choice
+        options:
+          - health
+          - wallet_me
+          - anonymous_auth
+          - wallet_claim_daily
+          - action_ai
+          - action_publish
+          - action_export
+          - action_collaboration
+      profile:
+        description: Smoke is 1 req/s for 30s; baseline and target run for 10 minutes
+        required: true
+        default: smoke
+        type: choice
+        options:
+          - smoke
+          - baseline
+          - target
+      authorization:
+        description: Enter I_CONFIRM_AUTHORIZED_STAGING for any run; required again for target profile
+        required: true
+        type: string
+  schedule:
+    - cron: "43 5 * * *"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: protoflow-staging-load-test
+  cancel-in-progress: false
+
+jobs:
+  load-test:
+    if: github.event_name == 'schedule' || github.event.inputs.authorization == 'I_CONFIRM_AUTHORIZED_STAGING'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    environment: staging
+    steps:
+      - uses: actions/checkout@v4
+      - uses: grafana/setup-k6-action@v1
+      - name: Check target profile authorization
+        if: github.event_name == 'workflow_dispatch' && github.event.inputs.profile == 'target'
+        env:
+          AUTHORIZATION: ${{ github.event.inputs.authorization }}
+        run: |
+          if [ "$AUTHORIZATION" != "I_CONFIRM_AUTHORIZED_STAGING" ]; then
+            echo "Target-rate runs require explicit staging authorization." >&2
+            exit 1
+          fi
+      - name: Run staging load test
+        if: vars.LOADTEST_TARGET_URL != '' && vars.LOADTEST_ALLOWED_HOST != ''
+        env:
+          TARGET_URL: ${{ vars.LOADTEST_TARGET_URL }}
+          LOADTEST_ALLOWED_HOST: ${{ vars.LOADTEST_ALLOWED_HOST }}
+          LOADTEST_TARGET_CLASS: staging
+          LOADTEST_ACK: ${{ github.event.inputs.authorization || 'I_CONFIRM_AUTHORIZED_STAGING' }}
+          LOADTEST_TOKEN: ${{ secrets.LOADTEST_TOKEN }}
+          ACTION_PAYLOAD_JSON: ${{ secrets.LOADTEST_ACTION_PAYLOAD_JSON }}
+          SCENARIO: ${{ github.event.inputs.scenario || 'health' }}
+          PROFILE: ${{ github.event.inputs.profile || 'smoke' }}
+        run: k6 run cloud/loadtests/worker.js
+      - name: Skip load run until staging is configured
+        if: vars.LOADTEST_TARGET_URL == '' || vars.LOADTEST_ALLOWED_HOST == ''
+        run: echo "Staging target is not configured; no requests were sent."

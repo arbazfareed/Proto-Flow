@@ -42,6 +42,7 @@ class CollaborationStatement {
 class CollaborationDatabase {
   balance: number;
   lifetimeSpent = 0;
+  failBatch = false;
   readonly sessions = new Map<string, Record<string, unknown>>();
   readonly ledger: Array<{ delta: number; reason: string }> = [];
   readonly usageEvents: string[] = [];
@@ -55,6 +56,9 @@ class CollaborationDatabase {
   }
 
   async batch(statements: CollaborationStatement[]): Promise<D1Result[]> {
+    if (this.failBatch) {
+      throw new Error("Simulated D1 outage.");
+    }
     let previousChanges = false;
     const results: D1Result[] = [];
     for (const statement of statements) {
@@ -99,7 +103,11 @@ class CollaborationDatabase {
   }
 }
 
-async function runSessionAction(database: CollaborationDatabase, viewOnly: boolean) {
+async function runSessionAction(
+  database: CollaborationDatabase,
+  viewOnly: boolean,
+  failPut = false,
+) {
   const now = Math.floor(Date.now() / 1000);
   const token = await signJwt(
     { accountId: "account-1", deviceId: "device-1", iat: now, exp: now + 3600 },
@@ -133,7 +141,10 @@ async function runSessionAction(database: CollaborationDatabase, viewOnly: boole
         delete: async (key: string) => { cache.delete(key); },
       } as unknown as KVNamespace,
       ASSETS: {
-        put: async (key: string, value: string) => { assets.set(key, value); },
+        put: async (key: string, value: string) => {
+          if (failPut) throw new Error("Simulated R2 outage.");
+          assets.set(key, value);
+        },
         delete: async (key: string) => { assets.delete(key); },
       } as unknown as R2Bucket,
       JWT_SECRET: secret,
@@ -219,5 +230,40 @@ describe("metered collaboration sessions", () => {
     expect(await response.json()).toMatchObject({ error: { code: "INVALID_PAYLOAD" } });
     expect(database.balance).toBe(50);
     expect(database.sessions.size).toBe(0);
+  });
+
+  it("returns a clear no-charge error when collaboration storage is unavailable", async () => {
+    const database = new CollaborationDatabase(50);
+    const { response, assets } = await runSessionAction(database, false, true);
+
+    expect(response.status).toBe(503);
+    expect(await response.json()).toMatchObject({
+      error: {
+        code: "COLLABORATION_UNAVAILABLE",
+        message: "The collaboration service is temporarily unavailable. No credits were deducted.",
+      },
+    });
+    expect(database.balance).toBe(50);
+    expect(database.ledger).toHaveLength(0);
+    expect(database.sessions.size).toBe(0);
+    expect(assets.size).toBe(0);
+  });
+
+  it("removes uploaded project data and does not charge when the D1 transaction fails", async () => {
+    const database = new CollaborationDatabase(50);
+    database.failBatch = true;
+    const { response, assets } = await runSessionAction(database, false);
+
+    expect(response.status).toBe(503);
+    expect(await response.json()).toMatchObject({
+      error: {
+        code: "COLLABORATION_UNAVAILABLE",
+        message: "The collaboration service is temporarily unavailable. No credits were deducted.",
+      },
+    });
+    expect(database.balance).toBe(50);
+    expect(database.ledger).toHaveLength(0);
+    expect(database.sessions.size).toBe(0);
+    expect(assets.size).toBe(0);
   });
 });

@@ -1699,7 +1699,20 @@ app.post("/action/run", requireJwt, async (context) => {
             });
           }
         }
-        throw error;
+        console.error("Collaboration session creation failed.", {
+          accountId,
+          sessionId,
+          charged: sessionCharged,
+          message: error instanceof Error ? error.message : "Unknown collaboration storage error.",
+        });
+        return errorResponse(
+          context,
+          503,
+          "COLLABORATION_UNAVAILABLE",
+          sessionCharged
+            ? "The session started, but its response could not be completed. Refresh your wallet and sessions."
+            : "The collaboration service is temporarily unavailable. No credits were deducted.",
+        );
       }
     }
 

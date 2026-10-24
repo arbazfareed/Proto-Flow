@@ -1,0 +1,37 @@
+name: Cloud reliability checks
+
+on:
+  pull_request:
+    paths:
+      - "cloud/**"
+      - ".github/workflows/cloud-reliability.yml"
+  push:
+    branches:
+      - main
+    paths:
+      - "cloud/**"
+      - ".github/workflows/cloud-reliability.yml"
+  schedule:
+    - cron: "23 4 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  worker-tests:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: cloud
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: cloud/package-lock.json
+      - run: npm ci
+      - run: npm test
+      - run: npm run typecheck
