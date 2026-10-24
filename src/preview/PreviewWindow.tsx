@@ -25,6 +25,7 @@ import {
   type RepeaterRecord,
 } from "../project/repeaters";
 import { getAutoLayoutPositions, type WidgetPosition } from "../project/widgetLayout";
+import { getPreviewIconComponent } from "./widgetIcons";
 import { DEVICE_PRESETS, findDevicePreset } from "../devices/catalog";
 import type { DevicePreset } from "../devices/types";
 import { getPreviewWindowSize } from "./windowSizing";
@@ -64,7 +65,7 @@ function widgetStyle(widget: Widget, position?: WidgetPosition): CSSProperties {
   const fill = widget.style.fill;
   const stroke = widget.style.stroke;
   const radius = widget.style.cornerRadius;
-  const textWidget = ["text", "label", "paragraph", "link", "code"].includes(widget.type);
+  const textWidget = ["text", "heading", "label", "paragraph", "link", "code"].includes(widget.type);
   return {
     position: "absolute",
     left: position?.x ?? widget.x,
@@ -130,6 +131,7 @@ function PreviewWidget({
   const multiTouchFired = useRef(false);
   const lastTap = useRef(0);
   const [dismissed, setDismissed] = useState(false);
+  useEffect(() => () => window.clearTimeout(longPressTimer.current), []);
   const controlKey = item ? `${widget.id}:${JSON.stringify(item)}` : widget.id;
   const storedControlValue = controlValues[controlKey];
   const inputValue = typeof storedControlValue === "string"
@@ -384,6 +386,38 @@ function PreviewWidget({
     );
   }
 
+  if (widget.type === "icon") {
+    const iconName = stringProp(widget, "iconName", "Star");
+    const Icon = getPreviewIconComponent(iconName);
+    const color = widget.style.stroke ?? "#24212b";
+    return (
+      <div
+        className="preview-widget preview-canvas-icon"
+        role="img"
+        aria-label={widget.name || `${iconName} icon`}
+        style={{
+          ...style,
+          alignItems: "center",
+          justifyContent: "center",
+          padding: 0,
+          border: "none",
+          backgroundColor: "transparent",
+          overflow: "visible",
+        }}
+        {...commonHandlers}
+      >
+        <Icon
+          width="100%"
+          height="100%"
+          color={color}
+          strokeWidth={widget.style.strokeWidth ?? 1.8}
+          aria-hidden="true"
+          focusable="false"
+        />
+      </div>
+    );
+  }
+
   if (widget.type === "mobile-app" || widget.type === "web-app") {
     return (
       <div className={`preview-widget preview-icon-mark is-${widget.type}`} role="img" aria-label={widget.type === "mobile-app" ? "Mobile app icon" : "Web app icon"} style={style} {...commonHandlers}>
@@ -416,7 +450,6 @@ function PreviewWidget({
       </section>
     );
   }
-  useEffect(() => () => window.clearTimeout(longPressTimer.current), []);
   const handleChange = (event: ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
     const value = event.currentTarget.value;
     onControlValueChange(controlKey, value);
