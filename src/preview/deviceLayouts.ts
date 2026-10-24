@@ -44,5 +44,6 @@ export function resolvePreviewWidgets(
     { ...breakpoint, width: viewport.width, height: viewport.height },
     baseWidth,
     baseHeight,
+    screen.compactLayout,
   );
 }

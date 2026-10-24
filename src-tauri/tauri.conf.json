@@ -40,7 +40,7 @@
   "bundle": {
     "active": true,
     "createUpdaterArtifacts": true,
-    "targets": ["msi", "deb", "appimage"],
+    "targets": ["msi", "nsis", "deb", "appimage"],
     "fileAssociations": [
       {
         "ext": ["pflow"],

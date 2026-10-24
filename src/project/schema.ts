@@ -279,6 +279,7 @@ export const ProtoScreenSchema = z
     }).strict().optional(),
     device: ScreenDeviceSchema.optional(),
     inputMode: z.enum(["touch", "mouse", "both"]).default("both"),
+    compactLayout: z.boolean().optional(),
     breakpoints: z.array(BreakpointSchema).optional(),
     widgets: z.array(ProtoWidgetSchema),
     interactionRules: z.array(InteractionRuleSchema),

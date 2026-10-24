@@ -223,6 +223,7 @@ function getEffectiveScreenWidgets(
     breakpoint,
     screen.device?.width ?? DEFAULT_DEVICE_PRESET.viewport.width,
     screen.device?.height ?? DEFAULT_DEVICE_PRESET.viewport.height,
+    screen.compactLayout,
   );
 }
 
@@ -830,6 +831,7 @@ export function CanvasStage({
         activeBreakpoint,
         activeScreen.device?.width ?? DEFAULT_DEVICE_PRESET.viewport.width,
         activeScreen.device?.height ?? DEFAULT_DEVICE_PRESET.viewport.height,
+        activeScreen.compactLayout,
       )
     : [...baseScreenWidgets].sort((first, second) => first.zIndex - second.zIndex);
   const autoLayoutPositions = useMemo(

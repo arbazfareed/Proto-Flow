@@ -90,11 +90,13 @@ function widgetStyle(widget: Widget, position?: WidgetPosition): CSSProperties {
     fontSize: typeof widget.props.fontSize === "number" ? widget.props.fontSize : 16,
     fontWeight: typeof widget.props.fontWeight === "string" ? widget.props.fontWeight : "normal",
     fontStyle: typeof widget.props.fontStyle === "string" ? widget.props.fontStyle : "normal",
+    lineHeight: typeof widget.props.lineHeight === "number" ? widget.props.lineHeight : undefined,
+    letterSpacing: typeof widget.props.letterSpacing === "number" ? widget.props.letterSpacing : undefined,
     textAlign: typeof widget.props.align === "string" ? widget.props.align as CSSProperties["textAlign"] : "left",
     textDecoration: widget.props.underline === true ? "underline" : undefined,
     whiteSpace: "pre-wrap",
     overflow: "hidden",
-    padding: typeof widget.props.padding === "number" ? widget.props.padding : 8,
+    padding: typeof widget.props.padding === "number" ? widget.props.padding : textWidget ? 0 : 8,
   };
 }
 
@@ -386,7 +388,7 @@ function PreviewWidget({
     );
   }
 
-  if (widget.type === "icon") {
+  if (widget.type === "icon" || widget.type === "custom-icon") {
     const iconName = stringProp(widget, "iconName", "Star");
     const Icon = getPreviewIconComponent(iconName);
     const color = widget.style.stroke ?? "#24212b";
@@ -515,7 +517,7 @@ function PreviewWidget({
     const src = runtime.interpolate(source, screenId, item, widget);
     return (
       <div className="preview-widget" style={style} {...commonHandlers}>
-        {src ? <img src={src} alt={runtime.interpolate(stringProp(widget, "alt", text), screenId, item, widget)} /> : text || "Image"}
+        {src ? <img src={src} alt={runtime.interpolate(stringProp(widget, "alt", text), screenId, item, widget)} style={{ objectFit: stringProp(widget, "fit") === "cover" ? "cover" : "contain" }} /> : text || "Image"}
       </div>
     );
   }
@@ -607,6 +609,7 @@ function PreviewWidget({
   const shapeClass = ["ellipse", "circle"].includes(widget.type)
     ? " is-ellipse"
     : widget.type === "line" ? " is-line" : "";
+  const decorativeShape = ["rectangle", "ellipse", "circle", "polygon", "star", "line", "arrow"].includes(widget.type);
   return (
     <div
       className={`preview-widget${shapeClass}`}
@@ -644,7 +647,7 @@ function PreviewWidget({
               ...(lineIndex < parts.length - 1 ? [<br key={`rich-break-${runIndex}-${lineIndex}`} />] : []),
             ];
           }))
-        : text || widget.type.replaceAll("-", " ")}
+        : text || (decorativeShape ? "" : widget.type.replaceAll("-", " "))}
       {stateLabel}{repeaterLabel}
     </div>
   );
@@ -960,7 +963,7 @@ export function PreviewWindow() {
         inputMode={activeScreen.inputMode}
       >
         {visibleWidgets
-          .filter((widget) => runtimeSnapshot.visibility[widget.id] !== false)
+          .filter((widget) => widget.visible && runtimeSnapshot.visibility[widget.id] !== false)
           .sort((first, second) => first.zIndex - second.zIndex)
           .map((widget) => {
             const parent = widget.groupId

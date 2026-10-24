@@ -116,14 +116,18 @@ export function resolveWidgetsForBreakpoint(
   breakpoint: Breakpoint,
   baseWidth: number,
   baseHeight = 900,
+  compactLayout = false,
 ): Widget[] {
   const ordered = [...widgets].sort((first, second) => first.zIndex - second.zIndex);
   let nextStackY = 24;
   return ordered.map((widget) => {
     let responsiveWidget = widget;
-    if (widget.cascadeMode === "hide") {
+    const cascadeMode = widget.cascadeMode ?? (
+      compactLayout && breakpoint.width < baseWidth ? "hide" : undefined
+    );
+    if (cascadeMode === "hide") {
       responsiveWidget = { ...responsiveWidget, visible: false };
-    } else if (breakpoint.width < baseWidth && widget.cascadeMode === "fluid") {
+    } else if (breakpoint.width < baseWidth && cascadeMode === "fluid") {
       responsiveWidget = {
         ...responsiveWidget,
         width: Math.max(1, Math.min(
@@ -131,7 +135,7 @@ export function resolveWidgetsForBreakpoint(
           widget.width * breakpoint.width / baseWidth,
         )),
       };
-    } else if (breakpoint.width < baseWidth && widget.cascadeMode === "stack") {
+    } else if (breakpoint.width < baseWidth && cascadeMode === "stack") {
       responsiveWidget = {
         ...responsiveWidget,
         x: 0,
@@ -142,7 +146,7 @@ export function resolveWidgetsForBreakpoint(
     }
     if (
       widget.constraints &&
-      (widget.cascadeMode === undefined || widget.cascadeMode === "absolute")
+      (cascadeMode === undefined || cascadeMode === "absolute")
     ) {
       responsiveWidget = applyConstraints(
         responsiveWidget,
@@ -152,10 +156,26 @@ export function resolveWidgetsForBreakpoint(
         baseHeight,
       );
     }
-    return applyOverride(
+    const resolved = applyOverride(
       responsiveWidget,
       widget.overrides?.[breakpoint.id],
     );
+    if (compactLayout && breakpoint.width < 768) {
+      const horizontalScale = breakpoint.width / 390;
+      const verticalScale = breakpoint.height < 844 ? breakpoint.height / 844 : 1;
+      const compactProps = typeof resolved.props.fontSize === "number"
+        ? { ...resolved.props, fontSize: Math.max(10, resolved.props.fontSize * verticalScale) }
+        : resolved.props;
+      return {
+        ...resolved,
+        x: resolved.x * horizontalScale,
+        width: Math.max(1, resolved.width * horizontalScale),
+        y: resolved.y * verticalScale,
+        height: Math.max(1, resolved.height * verticalScale),
+        props: compactProps,
+      };
+    }
+    return resolved;
   });
 }
 

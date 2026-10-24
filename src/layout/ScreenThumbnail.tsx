@@ -107,8 +107,9 @@ export function ScreenThumbnail({
       breakpoint,
       baseDevice.width,
       baseDevice.height,
+      screen.compactLayout,
     ),
-    [baseDevice.height, baseDevice.width, breakpoint, screen.widgets],
+    [baseDevice.height, baseDevice.width, breakpoint, screen.compactLayout, screen.widgets],
   );
   const dataUrl = rendered?.key === cacheKey ? rendered.dataUrl : null;
 

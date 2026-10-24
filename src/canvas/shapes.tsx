@@ -692,9 +692,12 @@ function ImageShape({ widget, stroke, strokeWidth, onThumbnailReady }: ShapeComp
           onThumbnailReady?.();
         }
       };
+      element.crossOrigin = "anonymous";
       element.src = sourceData.startsWith("data:")
         ? sourceData
-        : `data:${mime};base64,${sourceData}`;
+        : /^https:\/\//i.test(sourceData)
+          ? sourceData
+          : `data:${mime};base64,${sourceData}`;
     };
     void load().catch((error: unknown) => {
       console.error("Could not load the project image asset.", error);
