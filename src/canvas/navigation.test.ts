@@ -3,8 +3,10 @@ import {
   centerCanvasView,
   clampCanvasZoom,
   fitCanvasBounds,
+  getCanvasViewportBounds,
   getVisibleGridSpacing,
   getWidgetBounds,
+  intersectsCanvasViewport,
   normalizeCanvasViewport,
   worldToScreen,
   zoomAroundPointer,
@@ -81,6 +83,38 @@ describe("canvas navigation math | geometry-math", () => {
       ]),
     ).toEqual({ x: -10, y: 30, width: 110, height: 50 });
     expect(getWidgetBounds([])).toBeNull();
+  });
+
+  it("converts the viewport to stage coordinates and applies a screen-space buffer", () => {
+    expect(getCanvasViewportBounds(
+      { width: 800, height: 600 },
+      { zoom: 2, pan: { x: -100, y: 40 } },
+    )).toEqual({
+      x: -50,
+      y: -120,
+      width: 600,
+      height: 500,
+    });
+    expect(() => getCanvasViewportBounds(
+      { width: 800, height: 600 },
+      { zoom: 0, pan: { x: 0, y: 0 } },
+    )).toThrow("zoom must be positive");
+  });
+
+  it("culls offscreen widgets while retaining rotated bounds that enter the viewport", () => {
+    const viewport = { x: 0, y: 0, width: 100, height: 100 };
+    expect(intersectsCanvasViewport(
+      { x: 120, y: 20, width: 30, height: 30 },
+      viewport,
+    )).toBe(false);
+    expect(intersectsCanvasViewport(
+      { x: 104, y: 40, width: 20, height: 20, rotation: 45 },
+      viewport,
+    )).toBe(true);
+    expect(intersectsCanvasViewport(
+      { x: 100, y: 10, width: 1, height: 10 },
+      viewport,
+    )).toBe(true);
   });
 
   it("centers empty canvases on the origin and content on its bounds", () => {

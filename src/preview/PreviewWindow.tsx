@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import type { CSSProperties, ChangeEvent, MouseEvent, ReactNode, TouchEvent } from "react";
+import type { CSSProperties, ChangeEvent, HTMLAttributes, MouseEvent, ReactNode, TouchEvent } from "react";
 import { ArrowLeft, Camera, RotateCcw, RotateCw, SlidersHorizontal, X } from "lucide-react";
 import { toPng } from "html-to-image";
 import { emit, listen } from "@tauri-apps/api/event";
@@ -29,6 +29,7 @@ import { getPreviewIconComponent } from "./widgetIcons";
 import { DEVICE_PRESETS, findDevicePreset } from "../devices/catalog";
 import type { DevicePreset } from "../devices/types";
 import { getPreviewWindowSize } from "./windowSizing";
+import { getVirtualRowRange } from "./virtualization";
 import {
   DEFAULT_MULTI_DEVICE_IDS,
   getPreviewViewport,
@@ -98,6 +99,139 @@ function widgetStyle(widget: Widget, position?: WidgetPosition): CSSProperties {
     overflow: "hidden",
     padding: typeof widget.props.padding === "number" ? widget.props.padding : textWidget ? 0 : 8,
   };
+}
+
+function VirtualizedRepeater({
+  widget,
+  rows,
+  template,
+  layout,
+  gap,
+  runtime,
+  screenId,
+  snapshot,
+  runEvent,
+  onError,
+  inputMode,
+  controlValues,
+  onControlValueChange,
+  onGestureFeedback,
+  commonHandlers,
+}: {
+  widget: Widget;
+  rows: RepeaterRecord[];
+  template: Widget[];
+  layout: "vertical" | "horizontal" | "grid";
+  gap: number;
+  runtime: PreviewRuntime;
+  screenId: string;
+  snapshot: PreviewRuntimeSnapshot;
+  runEvent: (widget: Widget, event: PreviewEvent, item?: RepeaterRecord) => void;
+  onError: (error: unknown) => void;
+  inputMode: Project["screens"][number]["inputMode"];
+  controlValues: Record<string, string | boolean>;
+  onControlValueChange: (key: string, value: string | boolean) => void;
+  onGestureFeedback: (event: PreviewEvent, x: number, y: number) => void;
+  commonHandlers: HTMLAttributes<HTMLDivElement>;
+}) {
+  const viewportRef = useRef<HTMLDivElement>(null);
+  const [scrollOffset, setScrollOffset] = useState(0);
+  const horizontal = layout === "horizontal";
+  const minimumColumnWidth = Math.max(120, widget.width / 2);
+  const columns = layout === "grid"
+    ? Math.max(1, Math.floor((widget.width + gap) / (minimumColumnWidth + gap)))
+    : 1;
+  const rowCount = Math.ceil(rows.length / columns);
+  const stride = (horizontal ? widget.width : widget.height) + gap;
+  const viewportExtent = horizontal ? widget.width : widget.height;
+  const range = getVirtualRowRange(rowCount, stride, scrollOffset, viewportExtent);
+
+  return (
+    <div
+      ref={viewportRef}
+      className={`preview-widget preview-repeater is-${layout}`}
+      data-widget-type="repeater"
+      data-repeater-row-count={rows.length}
+      data-rendered-row-count={Math.min(
+        rows.length,
+        (range.endIndex - range.startIndex) * columns,
+      )}
+      style={{
+        ...widgetStyle(widget),
+        width: widget.width,
+        height: widget.height,
+        padding: 0,
+        overflowX: horizontal ? "auto" : "hidden",
+        overflowY: horizontal ? "hidden" : "auto",
+      }}
+      onScroll={(event) => {
+        const target = event.currentTarget;
+        setScrollOffset(horizontal ? target.scrollLeft : target.scrollTop);
+      }}
+      {...commonHandlers}
+    >
+      <div
+        style={{
+          position: "relative",
+          width: horizontal ? range.totalExtent : widget.width,
+          height: horizontal ? widget.height : range.totalExtent,
+        }}
+      >
+        {Array.from(
+          { length: range.endIndex - range.startIndex },
+          (_, offset) => range.startIndex + offset,
+        ).flatMap((slot) =>
+          Array.from({ length: Math.min(columns, rows.length - slot * columns) }, (_, column) => {
+            const index = slot * columns + column;
+            const record = rows[index];
+            if (!record) return null;
+            const columnWidth = columns > 1
+              ? (widget.width - gap * (columns - 1)) / columns
+              : widget.width;
+            return (
+              <div
+                className="preview-repeater-row"
+                key={`${widget.id}-${index}`}
+                style={{
+                  position: "absolute",
+                  left: horizontal ? slot * stride : column * (columnWidth + gap),
+                  top: horizontal ? 0 : slot * stride,
+                  width: columnWidth,
+                  height: widget.height,
+                  overflow: "hidden",
+                }}
+                onClick={() => {
+                  if (inputMode !== "touch") runEvent(widget, "onClick", record);
+                }}
+              >
+                {template
+                  .filter((child) =>
+                    child.visible &&
+                    snapshot.visibility[child.id] !== false &&
+                    isRepeaterItemVisible(child, record),
+                  )
+                  .map((child) => (
+                    <PreviewWidget
+                      key={`${child.id}-${index}`}
+                      widget={child}
+                      runtime={runtime}
+                      screenId={screenId}
+                      snapshot={snapshot}
+                      runEvent={runEvent}
+                      onError={onError}
+                      item={record}
+                      controlValues={controlValues}
+                      onControlValueChange={onControlValueChange}
+                      onGestureFeedback={onGestureFeedback}
+                    />
+                  ))}
+              </div>
+            );
+          }),
+        )}
+      </div>
+    </div>
+  );
 }
 
 function PreviewWidget({
@@ -545,57 +679,24 @@ function PreviewWidget({
       ? widget.props.layout
       : "vertical";
     const gap = typeof widget.props.gap === "number" ? Math.max(0, widget.props.gap) : 8;
-    const rowStyle: CSSProperties = layout === "grid"
-      ? {
-          display: "grid",
-          gridTemplateColumns: `repeat(auto-fill, minmax(${Math.max(120, widget.width / 2)}px, 1fr))`,
-          gap,
-          alignContent: "start",
-          overflow: "visible",
-        }
-      : {
-          display: "flex",
-          flexDirection: layout === "horizontal" ? "row" : "column",
-          gap,
-          overflow: "visible",
-        };
     return (
-      <div
-        className={`preview-widget preview-repeater is-${layout}`}
-        data-widget-type="repeater"
-        style={{ ...style, height: layout === "horizontal" ? widget.height : Math.max(widget.height, rows.length * (widget.height + gap)), overflow: "visible", ...rowStyle }}
-        {...commonHandlers}
-      >
-        {rows.map((record, index) => (
-          <div className="preview-repeater-row" key={`${widget.id}-${index}`} style={{
-            position: "relative",
-            flex: layout === "horizontal" ? `0 0 ${widget.width}px` : "0 0 auto",
-            width: widget.width,
-            height: widget.height,
-            overflow: "hidden",
-          }} onClick={() => {
-            if (inputMode !== "touch") runEvent(widget, "onClick", record);
-          }}>
-            {template
-              .filter((child) => child.visible && snapshot.visibility[child.id] !== false && isRepeaterItemVisible(child, record))
-              .map((child) => (
-                <PreviewWidget
-                  key={`${child.id}-${index}`}
-                  widget={child}
-                  runtime={runtime}
-                  screenId={screenId}
-                  snapshot={snapshot}
-                  runEvent={runEvent}
-                  onError={onError}
-                  item={record}
-                  controlValues={controlValues}
-                  onControlValueChange={onControlValueChange}
-                  onGestureFeedback={onGestureFeedback}
-                />
-              ))}
-          </div>
-        ))}
-      </div>
+      <VirtualizedRepeater
+        widget={widget}
+        rows={rows}
+        template={template}
+        layout={layout}
+        gap={gap}
+        runtime={runtime}
+        screenId={screenId}
+        snapshot={snapshot}
+        runEvent={runEvent}
+        onError={onError}
+        inputMode={inputMode}
+        controlValues={controlValues}
+        onControlValueChange={onControlValueChange}
+        onGestureFeedback={onGestureFeedback}
+        commonHandlers={commonHandlers}
+      />
     );
   }
 

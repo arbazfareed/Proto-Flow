@@ -1,0 +1,43 @@
+name: Canvas performance
+
+on:
+  pull_request:
+    paths:
+      - "src/canvas/**"
+      - "src/devices/**"
+      - "src/preview/**"
+      - "src/project/**"
+      - "scripts/canvas-benchmark.*"
+      - "scripts/canvas-performance-baseline.json"
+      - "scripts/run-canvas-benchmark.mjs"
+      - "package.json"
+      - "package-lock.json"
+      - ".github/workflows/canvas-performance.yml"
+  push:
+    branches:
+      - main
+    paths:
+      - "src/canvas/**"
+      - "src/devices/**"
+      - "src/preview/**"
+      - "src/project/**"
+      - "scripts/canvas-benchmark.*"
+      - "scripts/canvas-performance-baseline.json"
+      - "scripts/run-canvas-benchmark.mjs"
+      - "package.json"
+      - "package-lock.json"
+      - ".github/workflows/canvas-performance.yml"
+
+jobs:
+  benchmark:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+      - run: npm run benchmark:canvas

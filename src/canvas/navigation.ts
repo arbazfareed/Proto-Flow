@@ -42,6 +42,51 @@ export interface CanvasBounds {
   height: number;
 }
 
+export interface RotatedCanvasBounds extends CanvasBounds {
+  rotation?: number;
+}
+
+export function getCanvasViewportBounds(
+  viewport: CanvasViewport,
+  view: CanvasView,
+  buffer = 200,
+): CanvasBounds {
+  if (
+    !Number.isFinite(view.zoom) ||
+    view.zoom <= 0 ||
+    !Number.isFinite(buffer) ||
+    buffer < 0
+  ) {
+    throw new RangeError("Canvas zoom must be positive and buffer must be non-negative.");
+  }
+  const worldBuffer = buffer / view.zoom;
+  return {
+    x: -view.pan.x / view.zoom - worldBuffer,
+    y: -view.pan.y / view.zoom - worldBuffer,
+    width: viewport.width / view.zoom + worldBuffer * 2,
+    height: viewport.height / view.zoom + worldBuffer * 2,
+  };
+}
+
+export function intersectsCanvasViewport(
+  bounds: RotatedCanvasBounds,
+  viewport: CanvasBounds,
+): boolean {
+  const angle = ((bounds.rotation ?? 0) * Math.PI) / 180;
+  const cosine = Math.abs(Math.cos(angle));
+  const sine = Math.abs(Math.sin(angle));
+  const width = cosine * bounds.width + sine * bounds.height;
+  const height = sine * bounds.width + cosine * bounds.height;
+  const centerX = bounds.x + bounds.width / 2;
+  const centerY = bounds.y + bounds.height / 2;
+  const left = centerX - width / 2;
+  const top = centerY - height / 2;
+  return left <= viewport.x + viewport.width &&
+    left + width >= viewport.x &&
+    top <= viewport.y + viewport.height &&
+    top + height >= viewport.y;
+}
+
 export function worldToScreen(
   point: { x: number; y: number },
   view: CanvasView,

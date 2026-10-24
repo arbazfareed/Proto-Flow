@@ -1,6 +1,12 @@
 import { describe, expect, it } from "vitest";
 import { runInNewContext } from "node:vm";
-import { evaluateExpression, EXPRESSION_RUNTIME_SOURCE, interpolateExpressions } from "./expressions";
+import {
+  clearExpressionCache,
+  evaluateExpression,
+  EXPRESSION_RUNTIME_SOURCE,
+  getExpressionCacheSize,
+  interpolateExpressions,
+} from "./expressions";
 import type { Widget } from "./schema";
 
 function widget(name: string, x: number, width: number): Widget {
@@ -62,6 +68,47 @@ describe("safe expression engine", () => {
       widgets: [box],
       thisWidget: box,
     })).toBe(144);
+  });
+
+  it("reuses compiled expressions across changing contexts and clears its bounded cache", () => {
+    clearExpressionCache();
+    expect(evaluateExpression("count * 2", { variables: { count: 3 } })).toBe(6);
+    expect(evaluateExpression("count * 2", { variables: { count: 8 } })).toBe(16);
+    expect(getExpressionCacheSize()).toBe(1);
+    clearExpressionCache();
+    expect(getExpressionCacheSize()).toBe(0);
+  });
+
+  it("does not re-evaluate a pure expression when only unrelated variables change", () => {
+    clearExpressionCache();
+    let countReads = 0;
+    const variables = {
+      unrelated: 0,
+      get count() {
+        countReads += 1;
+        return 3;
+      },
+    };
+    expect(evaluateExpression("count * 2", { variables })).toBe(6);
+    variables.unrelated = 1;
+    expect(evaluateExpression("count * 2", { variables })).toBe(6);
+    expect(countReads).toBe(3);
+  });
+
+  it("does not cache expressions with time-dependent functions", () => {
+    let time = 0;
+    const context = { now: () => ++time };
+    expect(evaluateExpression("now()", context)).toBe(1);
+    expect(evaluateExpression("now()", context)).toBe(2);
+  });
+
+  it("bounds the compiled expression cache", () => {
+    clearExpressionCache();
+    for (let index = 0; index <= 1_000; index += 1) {
+      evaluateExpression(String(index));
+    }
+    expect(getExpressionCacheSize()).toBe(1_000);
+    clearExpressionCache();
   });
 
   it("interpolates expressions without failing on invalid tokens", () => {
