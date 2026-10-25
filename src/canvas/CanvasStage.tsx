@@ -896,6 +896,7 @@ export function CanvasStage({
   }, [activeTool]);
   useEffect(() => {
     clearExpressionCache();
+    return () => clearExpressionCache();
   }, [project.id]);
   const activeBreakpoint = activeScreen
     ? resolveActiveBreakpoint(activeScreen, activeBreakpointId)

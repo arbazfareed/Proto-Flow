@@ -17,6 +17,13 @@ export interface FlowPosition {
   y: number;
 }
 
+export interface FlowViewport {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+
 export const FLOW_NODE_WIDTH = 224;
 export const FLOW_NODE_HEIGHT = 190;
 export const FLOW_COLUMN_GAP = 112;
@@ -81,22 +88,25 @@ export function autoLayoutScreens(
   edges: FlowEdge[],
   startScreenId: string,
 ): Record<string, FlowPosition> {
-  const adjacency = new Map(screens.map((screen) => [screen.id, [] as string[]]));
+  const adjacency = new Map(screens.map((screen) => [screen.id, [] as FlowEdge[]]));
   for (const edge of edges) {
-    adjacency.get(edge.sourceScreenId)?.push(edge.targetScreenId);
+    adjacency.get(edge.sourceScreenId)?.push(edge);
   }
   const start = screens.some((screen) => screen.id === startScreenId)
     ? startScreenId
     : screens[0]?.id;
   const reachable = new Set(start ? [start] : []);
   const queue = start ? [start] : [];
+  const spanningTreeEdges: FlowEdge[] = [];
   let deepestReachable = start;
   for (let index = 0; index < queue.length; index += 1) {
     const source = queue[index];
-    for (const target of adjacency.get(source) ?? []) {
+    for (const edge of adjacency.get(source) ?? []) {
+      const target = edge.targetScreenId;
       if (reachable.has(target)) continue;
       reachable.add(target);
       queue.push(target);
+      spanningTreeEdges.push(edge);
       deepestReachable = target;
     }
   }
@@ -113,7 +123,10 @@ export function autoLayoutScreens(
   for (const screen of screens) {
     graph.setNode(screen.id, { width: FLOW_NODE_WIDTH, height: FLOW_NODE_HEIGHT });
   }
-  for (const edge of edges) {
+  const layoutEdges = screens.length > 50 || edges.length > 100
+    ? spanningTreeEdges
+    : edges;
+  for (const edge of layoutEdges) {
     graph.setEdge(edge.sourceScreenId, edge.targetScreenId);
   }
   for (const screen of screens) {
@@ -143,6 +156,71 @@ export function getInitialFlowPositions(
     if (screen.flowPosition) positions[screen.id] = screen.flowPosition;
   }
   return positions;
+}
+
+export function getFlowViewportBounds(
+  width: number,
+  height: number,
+  pan: FlowPosition,
+  zoom: number,
+  overscan = FLOW_NODE_WIDTH,
+): FlowViewport {
+  if (
+    !Number.isFinite(width) ||
+    !Number.isFinite(height) ||
+    !Number.isFinite(pan.x) ||
+    !Number.isFinite(pan.y) ||
+    !Number.isFinite(zoom) ||
+    zoom <= 0 ||
+    !Number.isFinite(overscan) ||
+    overscan < 0
+  ) {
+    throw new RangeError("Flow viewport dimensions must be finite and zoom must be positive.");
+  }
+  return {
+    x: -pan.x / zoom - overscan,
+    y: -pan.y / zoom - overscan,
+    width: width / zoom + overscan * 2,
+    height: height / zoom + overscan * 2,
+  };
+}
+
+export function getVisibleFlowScreens(
+  screens: Screen[],
+  positions: Record<string, FlowPosition>,
+  viewport: FlowViewport,
+): Screen[] {
+  const right = viewport.x + viewport.width;
+  const bottom = viewport.y + viewport.height;
+  return screens.filter((screen) => {
+    const position = positions[screen.id];
+    return position !== undefined &&
+      position.x < right &&
+      position.x + FLOW_NODE_WIDTH > viewport.x &&
+      position.y < bottom &&
+      position.y + FLOW_NODE_HEIGHT > viewport.y;
+  });
+}
+
+export function isFlowEdgeInViewport(
+  edge: FlowEdge,
+  positions: Record<string, FlowPosition>,
+  viewport: FlowViewport,
+): boolean {
+  const source = positions[edge.sourceScreenId];
+  const target = positions[edge.targetScreenId];
+  if (!source || !target) return false;
+  const startX = source.x + FLOW_NODE_WIDTH;
+  const endX = target.x;
+  const curve = Math.max(40, Math.abs(endX - startX) / 2);
+  const left = Math.min(startX, endX, startX + curve, endX - curve);
+  const top = Math.min(source.y + 74, target.y + 74);
+  const right = Math.max(startX, endX, startX + curve, endX - curve);
+  const bottom = Math.max(source.y + 74, target.y + 74);
+  return left <= viewport.x + viewport.width &&
+    right >= viewport.x &&
+    top <= viewport.y + viewport.height &&
+    bottom >= viewport.y;
 }
 
 function escapeXml(value: string): string {

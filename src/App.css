@@ -836,6 +836,9 @@
 .responsive-reset-field:hover { color:#e0d8f7; background:#393344; }
 .preview-app { display:flex; width:100vw; height:100vh; flex-direction:column; overflow:hidden; color:#e6e3ec; background:#141519; font:12px Inter,Segoe UI,sans-serif; }
 .preview-toolbar { display:flex; min-height:44px; align-items:center; gap:7px; padding:6px 10px; border-bottom:1px solid #303137; background:#1b1c20; }
+.preview-performance-warning { display:flex; flex:0 0 auto; align-items:center; justify-content:space-between; gap:10px; padding:7px 12px; border-bottom:1px solid #705b2f; color:#f1d99a; background:#392f1a; font-size:11px; }
+.preview-performance-warning button { flex:0 0 auto; padding:5px 9px; border:1px solid #b18b3e; border-radius:5px; color:#fff1c5; background:#59451e; cursor:pointer; font:inherit; }
+.preview-performance-warning button:hover { background:#6b5425; }
 .preview-toolbar button { display:grid; width:29px; height:29px; flex:0 0 auto; place-items:center; border:1px solid #393a42; border-radius:5px; color:#d9d7e0; background:#24252a; cursor:pointer; }
 .preview-toolbar button:disabled { opacity:.4; cursor:default; }
 .preview-toolbar select { min-width:0; max-width:38vw; height:29px; padding:3px 7px; border:1px solid #393a42; border-radius:5px; color:#e6e3ec; background:#24252a; font-size:10px; }

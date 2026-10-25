@@ -19,8 +19,11 @@ import {
   FLOW_NODE_HEIGHT,
   FLOW_NODE_WIDTH,
   FLOW_ROW_GAP,
+  getFlowViewportBounds,
   getInitialFlowPositions,
   getNavigationEdges,
+  getVisibleFlowScreens,
+  isFlowEdgeInViewport,
 } from "../project/flow";
 import type { FlowEdge, FlowPosition } from "../project/flow";
 
@@ -68,10 +71,26 @@ export function FlowDiagram({ onNotify, onOpenScreen }: FlowDiagramProps) {
   const positionsRef = useRef(positions);
   const [zoom, setZoom] = useState(1);
   const [pan, setPan] = useState({ x: 24, y: 24 });
+  const [viewportSize, setViewportSize] = useState({ width: 0, height: 0 });
   const [selectedEdgeId, setSelectedEdgeId] = useState<string | null>(null);
   const [connectingFrom, setConnectingFrom] = useState<string | null>(null);
   const dragRef = useRef<DragState | null>(null);
   const panRef = useRef<PanState | null>(null);
+  const viewportRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const viewport = viewportRef.current;
+    if (!viewport) return;
+    const observer = new ResizeObserver(([entry]) => {
+      if (!entry) return;
+      setViewportSize({
+        width: entry.contentRect.width,
+        height: entry.contentRect.height,
+      });
+    });
+    observer.observe(viewport);
+    return () => observer.disconnect();
+  }, []);
 
   useEffect(() => {
     setPositions((current) => {
@@ -267,6 +286,13 @@ export function FlowDiagram({ onNotify, onOpenScreen }: FlowDiagramProps) {
     ),
   );
   const selectedEdge = edges.find((edge) => edge.id === selectedEdgeId);
+  const flowViewport = getFlowViewportBounds(viewportSize.width, viewportSize.height, pan, zoom);
+  const visibleScreens = viewportSize.width === 0 || viewportSize.height === 0
+    ? project.screens
+    : getVisibleFlowScreens(project.screens, positions, flowViewport);
+  const visibleEdges = viewportSize.width === 0 || viewportSize.height === 0
+    ? edges
+    : edges.filter((edge) => isFlowEdgeInViewport(edge, positions, flowViewport));
 
   return (
     <section className="flow-diagram" aria-label="Screen flow diagram">
@@ -288,6 +314,7 @@ export function FlowDiagram({ onNotify, onOpenScreen }: FlowDiagramProps) {
         </div>
       </div>
       <div
+        ref={viewportRef}
         className="flow-viewport"
         onWheel={(event) => {
           event.preventDefault();
@@ -337,7 +364,7 @@ export function FlowDiagram({ onNotify, onOpenScreen }: FlowDiagramProps) {
                 <path d="M0,0 L10,4 L0,8 z" fill="#9275e7" />
               </marker>
             </defs>
-            {edges.map((edge) => {
+            {visibleEdges.map((edge) => {
               const source = positions[edge.sourceScreenId];
               const target = positions[edge.targetScreenId];
               if (!source || !target) return null;
@@ -376,7 +403,7 @@ export function FlowDiagram({ onNotify, onOpenScreen }: FlowDiagramProps) {
               );
             })}
           </svg>
-          {project.screens.map((screen) => {
+          {visibleScreens.map((screen) => {
             const position = positions[screen.id] ?? { x: 48, y: 48 };
             const deviceWidth = screen.device?.width ?? 1280;
             const deviceHeight = screen.device?.height ?? 800;
