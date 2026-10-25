@@ -116,7 +116,7 @@ export function HtmlExportDialog({ onClose }: { onClose: () => void }) {
           >
             <option value="responsive">Single responsive HTML</option>
             <option value="device-variants">Per-device HTML variants (ZIP)</option>
-            <option value="device-images">Per-device PNG screenshots (2×)</option>
+            <option value="device-images">Per-device PNG screenshots (1×, 2×, 3×)</option>
           </select>
         <fieldset className="react-export-toggles">
           <legend>Include in bundle</legend>
@@ -164,7 +164,7 @@ export function HtmlExportDialog({ onClose }: { onClose: () => void }) {
         )}
         <p className="react-export-help">
           {exportMode === "device-images"
-            ? <>The ZIP contains Desktop, Tablet, and Mobile PNG screenshots rendered at 2× DPR.</>
+            ? <>The ZIP contains Desktop, Tablet, and Mobile PNG screenshots rendered at 1×, 2×, and 3× DPR.</>
             : exportMode === "device-variants"
               ? <>The ZIP includes <code>index.html</code>, <code>index-desktop.html</code>, <code>index-tablet.html</code>, <code>index-mobile.html</code>, the shared runtime and style, and an <code>assets/</code> folder.</>
               : <>The ZIP includes <code>index.html</code>, the shared runtime and responsive breakpoint styles, and an <code>assets/</code> folder with 1×/2×/3× image variants where supported.</>}

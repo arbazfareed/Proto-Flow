@@ -322,12 +322,14 @@ export async function generateDeviceImageArchive(
       await new Promise<void>((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve())));
       const stage = frameDocument.querySelector<HTMLElement>("#stage");
       if (!stage) throw new Error(`The ${preset.name} image renderer did not create a preview stage.`);
-      const dataUrl = await toPng(stage, { pixelRatio: 2, cacheBust: true });
-      const binary = atob(dataUrl.slice(dataUrl.indexOf(",") + 1));
-      zip.file(
-        `images/${preset.category === "phone" ? "mobile" : preset.category}-2x.png`,
-        Uint8Array.from(binary, (character) => character.charCodeAt(0)),
-      );
+      for (const pixelRatio of [1, 2, 3]) {
+        const dataUrl = await toPng(stage, { pixelRatio, cacheBust: true });
+        const binary = atob(dataUrl.slice(dataUrl.indexOf(",") + 1));
+        zip.file(
+          `images/${preset.category === "phone" ? "mobile" : preset.category}-${pixelRatio}x.png`,
+          Uint8Array.from(binary, (character) => character.charCodeAt(0)),
+        );
+      }
     } finally {
       iframe.remove();
     }

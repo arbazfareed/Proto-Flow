@@ -10,6 +10,7 @@
     "tauri": "tauri",
     "benchmark:canvas": "node scripts/run-canvas-benchmark.mjs",
     "benchmark:axure-parity": "node scripts/run-axure-parity-benchmark.mjs",
+    "verify:devices": "node scripts/run-device-verification.mjs",
     "test": "vitest run"
   },
   "dependencies": {

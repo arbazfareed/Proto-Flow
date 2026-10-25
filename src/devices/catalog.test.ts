@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { readFileSync } from "node:fs";
 import {
   DEVICE_CATALOG_VERSION,
   DEVICE_CATEGORIES,
@@ -7,6 +8,7 @@ import {
   toScreenDevice,
 } from "./catalog";
 import { ScreenDeviceSchema } from "./schema";
+import { getSafeAreaBounds, rotateDevice } from "./frame";
 import { createEmptyProject, parseProject, serializeProject } from "../project/schema";
 
 describe("device preset catalog", () => {
@@ -67,9 +69,38 @@ describe("device preset catalog", () => {
       orientation: "portrait",
     });
   });
+
+  it("keeps every preset valid at all documented display scales and orientations", () => {
+    for (const preset of DEVICE_PRESETS) {
+      for (const displayScale of [1, 1.25, 1.5, 2]) {
+        const device = ScreenDeviceSchema.parse({
+          ...toScreenDevice(preset),
+          dpr: displayScale,
+        });
+        const safeArea = getSafeAreaBounds(device);
+        expect(safeArea.x + safeArea.width).toBe(device.width - device.insets.right);
+        expect(safeArea.y + safeArea.height).toBe(device.height - device.insets.bottom);
+        expect(rotateDevice(rotateDevice(device))).toEqual(device);
+      }
+    }
+  });
 });
 
 describe("screen device project schema", () => {
+  it("ships an example project with a responsive screen for every device preset", () => {
+    const example = parseProject(
+      JSON.parse(readFileSync(new URL("../../examples/device-presets.pflow", import.meta.url), "utf8")),
+    );
+
+    expect(example.screens).toHaveLength(DEVICE_PRESETS.length);
+    for (const preset of DEVICE_PRESETS) {
+      const screen = example.screens.find((item) => item.device?.presetId === preset.id);
+      expect(screen, `missing example screen for ${preset.name}`).toBeDefined();
+      expect(screen?.breakpoints?.length).toBeGreaterThanOrEqual(3);
+      expect(screen?.widgets).toHaveLength(1);
+    }
+  });
+
   it("accepts projects with no device metadata for backward compatibility", () => {
     const project = createEmptyProject();
     const legacy = parseProject({

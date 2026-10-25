@@ -1,0 +1,1377 @@
+{
+  "schemaVersion": "1.9.0",
+  "id": "4307b8e5-bdab-430f-87c8-bc3b7d3d1554",
+  "name": "Device preset examples",
+  "createdAt": "2026-10-25T10:04:35.027Z",
+  "updatedAt": "2026-10-25T10:04:35.027Z",
+  "variables": [],
+  "screens": [
+    {
+      "id": "a31b512a-e375-4901-8afa-5818dc15be59",
+      "name": "iPhone 15 Pro",
+      "device": {
+        "presetId": "iphone-15-pro",
+        "width": 393,
+        "height": 852,
+        "dpr": 3,
+        "insets": {
+          "top": 59,
+          "bottom": 34,
+          "left": 0,
+          "right": 0
+        },
+        "orientation": "portrait"
+      },
+      "inputMode": "mouse",
+      "breakpoints": [
+        {
+          "id": "mobile",
+          "name": "Mobile",
+          "minWidth": 0,
+          "maxWidth": 767,
+          "width": 390,
+          "height": 844
+        },
+        {
+          "id": "tablet",
+          "name": "Tablet",
+          "minWidth": 768,
+          "maxWidth": 1023,
+          "width": 768,
+          "height": 1024
+        },
+        {
+          "id": "desktop",
+          "name": "Desktop",
+          "minWidth": 1024,
+          "width": 1024,
+          "height": 852
+        }
+      ],
+      "widgets": [
+        {
+          "id": "2ba5de22-4933-427d-add8-5b7656aa1259",
+          "type": "text",
+          "name": "Safe-area title",
+          "x": 12,
+          "y": 71,
+          "width": 220,
+          "height": 64,
+          "rotation": 0,
+          "opacity": 1,
+          "visible": true,
+          "locked": false,
+          "zIndex": 1,
+          "style": {},
+          "props": {
+            "text": "iPhone 15 Pro ? 393 ? 852",
+            "fontSize": 18
+          }
+        }
+      ],
+      "interactionRules": []
+    },
+    {
+      "id": "a20024ae-50ea-4c28-8e9d-a213b4026ab1",
+      "name": "iPhone 15",
+      "device": {
+        "presetId": "iphone-15",
+        "width": 393,
+        "height": 852,
+        "dpr": 3,
+        "insets": {
+          "top": 59,
+          "bottom": 34,
+          "left": 0,
+          "right": 0
+        },
+        "orientation": "portrait"
+      },
+      "inputMode": "mouse",
+      "breakpoints": [
+        {
+          "id": "mobile",
+          "name": "Mobile",
+          "minWidth": 0,
+          "maxWidth": 767,
+          "width": 390,
+          "height": 844
+        },
+        {
+          "id": "tablet",
+          "name": "Tablet",
+          "minWidth": 768,
+          "maxWidth": 1023,
+          "width": 768,
+          "height": 1024
+        },
+        {
+          "id": "desktop",
+          "name": "Desktop",
+          "minWidth": 1024,
+          "width": 1024,
+          "height": 852
+        }
+      ],
+      "widgets": [
+        {
+          "id": "9085e79f-c36f-4f13-b8f7-b4225df02c56",
+          "type": "text",
+          "name": "Safe-area title",
+          "x": 12,
+          "y": 71,
+          "width": 220,
+          "height": 64,
+          "rotation": 0,
+          "opacity": 1,
+          "visible": true,
+          "locked": false,
+          "zIndex": 1,
+          "style": {},
+          "props": {
+            "text": "iPhone 15 ? 393 ? 852",
+            "fontSize": 18
+          }
+        }
+      ],
+      "interactionRules": []
+    },
+    {
+      "id": "a8ba3d20-6435-477f-875f-9f37af66d271",
+      "name": "iPhone SE",
+      "device": {
+        "presetId": "iphone-se",
+        "width": 375,
+        "height": 667,
+        "dpr": 2,
+        "insets": {
+          "top": 20,
+          "bottom": 0,
+          "left": 0,
+          "right": 0
+        },
+        "orientation": "portrait"
+      },
+      "inputMode": "mouse",
+      "breakpoints": [
+        {
+          "id": "mobile",
+          "name": "Mobile",
+          "minWidth": 0,
+          "maxWidth": 767,
+          "width": 390,
+          "height": 844
+        },
+        {
+          "id": "tablet",
+          "name": "Tablet",
+          "minWidth": 768,
+          "maxWidth": 1023,
+          "width": 768,
+          "height": 1024
+        },
+        {
+          "id": "desktop",
+          "name": "Desktop",
+          "minWidth": 1024,
+          "width": 1024,
+          "height": 667
+        }
+      ],
+      "widgets": [
+        {
+          "id": "f78ba076-0355-4960-920f-407f0c3e3e6c",
+          "type": "text",
+          "name": "Safe-area title",
+          "x": 12,
+          "y": 32,
+          "width": 220,
+          "height": 64,
+          "rotation": 0,
+          "opacity": 1,
+          "visible": true,
+          "locked": false,
+          "zIndex": 1,
+          "style": {},
+          "props": {
+            "text": "iPhone SE ? 375 ? 667",
+            "fontSize": 18
+          }
+        }
+      ],
+      "interactionRules": []
+    },
+    {
+      "id": "1a43f1a8-90f9-4582-81fa-f0ec24e2ec04",
+      "name": "Pixel 8",
+      "device": {
+        "presetId": "pixel-8",
+        "width": 412,
+        "height": 915,
+        "dpr": 2.625,
+        "insets": {
+          "top": 32,
+          "bottom": 24,
+          "left": 0,
+          "right": 0
+        },
+        "orientation": "portrait"
+      },
+      "inputMode": "mouse",
+      "breakpoints": [
+        {
+          "id": "mobile",
+          "name": "Mobile",
+          "minWidth": 0,
+          "maxWidth": 767,
+          "width": 390,
+          "height": 844
+        },
+        {
+          "id": "tablet",
+          "name": "Tablet",
+          "minWidth": 768,
+          "maxWidth": 1023,
+          "width": 768,
+          "height": 1024
+        },
+        {
+          "id": "desktop",
+          "name": "Desktop",
+          "minWidth": 1024,
+          "width": 1024,
+          "height": 915
+        }
+      ],
+      "widgets": [
+        {
+          "id": "2f219be4-fb5c-4334-acc7-df3b5dbd815d",
+          "type": "text",
+          "name": "Safe-area title",
+          "x": 12,
+          "y": 44,
+          "width": 220,
+          "height": 64,
+          "rotation": 0,
+          "opacity": 1,
+          "visible": true,
+          "locked": false,
+          "zIndex": 1,
+          "style": {},
+          "props": {
+            "text": "Pixel 8 ? 412 ? 915",
+            "fontSize": 18
+          }
+        }
+      ],
+      "interactionRules": []
+    },
+    {
+      "id": "dac729f8-79d9-49c1-9a7c-3364f2f8f646",
+      "name": "Pixel 8 Pro",
+      "device": {
+        "presetId": "pixel-8-pro",
+        "width": 448,
+        "height": 998,
+        "dpr": 3,
+        "insets": {
+          "top": 32,
+          "bottom": 24,
+          "left": 0,
+          "right": 0
+        },
+        "orientation": "portrait"
+      },
+      "inputMode": "mouse",
+      "breakpoints": [
+        {
+          "id": "mobile",
+          "name": "Mobile",
+          "minWidth": 0,
+          "maxWidth": 767,
+          "width": 390,
+          "height": 844
+        },
+        {
+          "id": "tablet",
+          "name": "Tablet",
+          "minWidth": 768,
+          "maxWidth": 1023,
+          "width": 768,
+          "height": 1024
+        },
+        {
+          "id": "desktop",
+          "name": "Desktop",
+          "minWidth": 1024,
+          "width": 1024,
+          "height": 998
+        }
+      ],
+      "widgets": [
+        {
+          "id": "f5ea7d5a-3ff9-4f80-abf3-53e005f5517d",
+          "type": "text",
+          "name": "Safe-area title",
+          "x": 12,
+          "y": 44,
+          "width": 220,
+          "height": 64,
+          "rotation": 0,
+          "opacity": 1,
+          "visible": true,
+          "locked": false,
+          "zIndex": 1,
+          "style": {},
+          "props": {
+            "text": "Pixel 8 Pro ? 448 ? 998",
+            "fontSize": 18
+          }
+        }
+      ],
+      "interactionRules": []
+    },
+    {
+      "id": "230c4861-9411-40a6-be56-5813c89416a6",
+      "name": "Samsung Galaxy S24",
+      "device": {
+        "presetId": "galaxy-s24",
+        "width": 384,
+        "height": 854,
+        "dpr": 3,
+        "insets": {
+          "top": 32,
+          "bottom": 24,
+          "left": 0,
+          "right": 0
+        },
+        "orientation": "portrait"
+      },
+      "inputMode": "mouse",
+      "breakpoints": [
+        {
+          "id": "mobile",
+          "name": "Mobile",
+          "minWidth": 0,
+          "maxWidth": 767,
+          "width": 390,
+          "height": 844
+        },
+        {
+          "id": "tablet",
+          "name": "Tablet",
+          "minWidth": 768,
+          "maxWidth": 1023,
+          "width": 768,
+          "height": 1024
+        },
+        {
+          "id": "desktop",
+          "name": "Desktop",
+          "minWidth": 1024,
+          "width": 1024,
+          "height": 854
+        }
+      ],
+      "widgets": [
+        {
+          "id": "3dc78ed8-bc29-4798-8b19-7fc60b3ae8b5",
+          "type": "text",
+          "name": "Safe-area title",
+          "x": 12,
+          "y": 44,
+          "width": 220,
+          "height": 64,
+          "rotation": 0,
+          "opacity": 1,
+          "visible": true,
+          "locked": false,
+          "zIndex": 1,
+          "style": {},
+          "props": {
+            "text": "Samsung Galaxy S24 ? 384 ? 854",
+            "fontSize": 18
+          }
+        }
+      ],
+      "interactionRules": []
+    },
+    {
+      "id": "a4acf9ed-66e0-462c-b1c4-2499ad151628",
+      "name": "Samsung Galaxy A54",
+      "device": {
+        "presetId": "galaxy-a54",
+        "width": 412,
+        "height": 915,
+        "dpr": 2.625,
+        "insets": {
+          "top": 32,
+          "bottom": 24,
+          "left": 0,
+          "right": 0
+        },
+        "orientation": "portrait"
+      },
+      "inputMode": "mouse",
+      "breakpoints": [
+        {
+          "id": "mobile",
+          "name": "Mobile",
+          "minWidth": 0,
+          "maxWidth": 767,
+          "width": 390,
+          "height": 844
+        },
+        {
+          "id": "tablet",
+          "name": "Tablet",
+          "minWidth": 768,
+          "maxWidth": 1023,
+          "width": 768,
+          "height": 1024
+        },
+        {
+          "id": "desktop",
+          "name": "Desktop",
+          "minWidth": 1024,
+          "width": 1024,
+          "height": 915
+        }
+      ],
+      "widgets": [
+        {
+          "id": "5903aa91-10d3-4772-9111-07a4bd154019",
+          "type": "text",
+          "name": "Safe-area title",
+          "x": 12,
+          "y": 44,
+          "width": 220,
+          "height": 64,
+          "rotation": 0,
+          "opacity": 1,
+          "visible": true,
+          "locked": false,
+          "zIndex": 1,
+          "style": {},
+          "props": {
+            "text": "Samsung Galaxy A54 ? 412 ? 915",
+            "fontSize": 18
+          }
+        }
+      ],
+      "interactionRules": []
+    },
+    {
+      "id": "26934b4c-8a1d-42d5-94ca-b79d304897e8",
+      "name": "iPad Pro 12.9″",
+      "device": {
+        "presetId": "ipad-pro-12-9",
+        "width": 1024,
+        "height": 1366,
+        "dpr": 2,
+        "insets": {
+          "top": 24,
+          "bottom": 20,
+          "left": 0,
+          "right": 0
+        },
+        "orientation": "portrait"
+      },
+      "inputMode": "mouse",
+      "breakpoints": [
+        {
+          "id": "mobile",
+          "name": "Mobile",
+          "minWidth": 0,
+          "maxWidth": 767,
+          "width": 390,
+          "height": 844
+        },
+        {
+          "id": "tablet",
+          "name": "Tablet",
+          "minWidth": 768,
+          "maxWidth": 1023,
+          "width": 768,
+          "height": 1024
+        },
+        {
+          "id": "desktop",
+          "name": "Desktop",
+          "minWidth": 1024,
+          "width": 1024,
+          "height": 1366
+        }
+      ],
+      "widgets": [
+        {
+          "id": "7eadc04a-2859-49c7-8e1e-c183ee2e5c0b",
+          "type": "text",
+          "name": "Safe-area title",
+          "x": 12,
+          "y": 36,
+          "width": 220,
+          "height": 64,
+          "rotation": 0,
+          "opacity": 1,
+          "visible": true,
+          "locked": false,
+          "zIndex": 1,
+          "style": {},
+          "props": {
+            "text": "iPad Pro 12.9″ ? 1024 ? 1366",
+            "fontSize": 18
+          }
+        }
+      ],
+      "interactionRules": []
+    },
+    {
+      "id": "3941dc42-37af-44ac-a1fb-98fe56689cf9",
+      "name": "iPad Air",
+      "device": {
+        "presetId": "ipad-air",
+        "width": 820,
+        "height": 1180,
+        "dpr": 2,
+        "insets": {
+          "top": 24,
+          "bottom": 20,
+          "left": 0,
+          "right": 0
+        },
+        "orientation": "portrait"
+      },
+      "inputMode": "mouse",
+      "breakpoints": [
+        {
+          "id": "mobile",
+          "name": "Mobile",
+          "minWidth": 0,
+          "maxWidth": 767,
+          "width": 390,
+          "height": 844
+        },
+        {
+          "id": "tablet",
+          "name": "Tablet",
+          "minWidth": 768,
+          "maxWidth": 1023,
+          "width": 768,
+          "height": 1024
+        },
+        {
+          "id": "desktop",
+          "name": "Desktop",
+          "minWidth": 1024,
+          "width": 1024,
+          "height": 1180
+        }
+      ],
+      "widgets": [
+        {
+          "id": "b1f51161-9c1a-4673-ae7d-e477b19cad5a",
+          "type": "text",
+          "name": "Safe-area title",
+          "x": 12,
+          "y": 36,
+          "width": 220,
+          "height": 64,
+          "rotation": 0,
+          "opacity": 1,
+          "visible": true,
+          "locked": false,
+          "zIndex": 1,
+          "style": {},
+          "props": {
+            "text": "iPad Air ? 820 ? 1180",
+            "fontSize": 18
+          }
+        }
+      ],
+      "interactionRules": []
+    },
+    {
+      "id": "d8b99ba1-e9c0-4695-87ca-2e02318acc14",
+      "name": "iPad Mini",
+      "device": {
+        "presetId": "ipad-mini",
+        "width": 744,
+        "height": 1133,
+        "dpr": 2,
+        "insets": {
+          "top": 24,
+          "bottom": 20,
+          "left": 0,
+          "right": 0
+        },
+        "orientation": "portrait"
+      },
+      "inputMode": "mouse",
+      "breakpoints": [
+        {
+          "id": "mobile",
+          "name": "Mobile",
+          "minWidth": 0,
+          "maxWidth": 767,
+          "width": 390,
+          "height": 844
+        },
+        {
+          "id": "tablet",
+          "name": "Tablet",
+          "minWidth": 768,
+          "maxWidth": 1023,
+          "width": 768,
+          "height": 1024
+        },
+        {
+          "id": "desktop",
+          "name": "Desktop",
+          "minWidth": 1024,
+          "width": 1024,
+          "height": 1133
+        }
+      ],
+      "widgets": [
+        {
+          "id": "1ba65e5f-e243-442b-b9d1-2c7ff7c776b4",
+          "type": "text",
+          "name": "Safe-area title",
+          "x": 12,
+          "y": 36,
+          "width": 220,
+          "height": 64,
+          "rotation": 0,
+          "opacity": 1,
+          "visible": true,
+          "locked": false,
+          "zIndex": 1,
+          "style": {},
+          "props": {
+            "text": "iPad Mini ? 744 ? 1133",
+            "fontSize": 18
+          }
+        }
+      ],
+      "interactionRules": []
+    },
+    {
+      "id": "33ef999c-9266-4329-8956-bf4610713774",
+      "name": "Galaxy Tab S9",
+      "device": {
+        "presetId": "galaxy-tab-s9",
+        "width": 800,
+        "height": 1280,
+        "dpr": 2,
+        "insets": {
+          "top": 24,
+          "bottom": 20,
+          "left": 0,
+          "right": 0
+        },
+        "orientation": "portrait"
+      },
+      "inputMode": "mouse",
+      "breakpoints": [
+        {
+          "id": "mobile",
+          "name": "Mobile",
+          "minWidth": 0,
+          "maxWidth": 767,
+          "width": 390,
+          "height": 844
+        },
+        {
+          "id": "tablet",
+          "name": "Tablet",
+          "minWidth": 768,
+          "maxWidth": 1023,
+          "width": 768,
+          "height": 1024
+        },
+        {
+          "id": "desktop",
+          "name": "Desktop",
+          "minWidth": 1024,
+          "width": 1024,
+          "height": 1280
+        }
+      ],
+      "widgets": [
+        {
+          "id": "17d7e43f-543d-4d36-ae61-23153cf1180e",
+          "type": "text",
+          "name": "Safe-area title",
+          "x": 12,
+          "y": 36,
+          "width": 220,
+          "height": 64,
+          "rotation": 0,
+          "opacity": 1,
+          "visible": true,
+          "locked": false,
+          "zIndex": 1,
+          "style": {},
+          "props": {
+            "text": "Galaxy Tab S9 ? 800 ? 1280",
+            "fontSize": 18
+          }
+        }
+      ],
+      "interactionRules": []
+    },
+    {
+      "id": "5d0ade13-a268-4e58-a508-192b24d172ad",
+      "name": "MacBook Pro 14″",
+      "device": {
+        "presetId": "macbook-pro-14",
+        "width": 1512,
+        "height": 982,
+        "dpr": 2,
+        "insets": {
+          "top": 0,
+          "bottom": 0,
+          "left": 0,
+          "right": 0
+        },
+        "orientation": "landscape"
+      },
+      "inputMode": "mouse",
+      "breakpoints": [
+        {
+          "id": "mobile",
+          "name": "Mobile",
+          "minWidth": 0,
+          "maxWidth": 767,
+          "width": 390,
+          "height": 844
+        },
+        {
+          "id": "tablet",
+          "name": "Tablet",
+          "minWidth": 768,
+          "maxWidth": 1023,
+          "width": 768,
+          "height": 1024
+        },
+        {
+          "id": "desktop",
+          "name": "Desktop",
+          "minWidth": 1024,
+          "width": 1512,
+          "height": 982
+        }
+      ],
+      "widgets": [
+        {
+          "id": "cd83a624-d6e7-4d9a-bbb7-c59febb467a6",
+          "type": "text",
+          "name": "Safe-area title",
+          "x": 12,
+          "y": 12,
+          "width": 220,
+          "height": 64,
+          "rotation": 0,
+          "opacity": 1,
+          "visible": true,
+          "locked": false,
+          "zIndex": 1,
+          "style": {},
+          "props": {
+            "text": "MacBook Pro 14″ ? 1512 ? 982",
+            "fontSize": 18
+          }
+        }
+      ],
+      "interactionRules": []
+    },
+    {
+      "id": "934d8861-9dd5-4b5e-8dde-352024f8bafc",
+      "name": "MacBook Air 13″",
+      "device": {
+        "presetId": "macbook-air-13",
+        "width": 1470,
+        "height": 956,
+        "dpr": 2,
+        "insets": {
+          "top": 0,
+          "bottom": 0,
+          "left": 0,
+          "right": 0
+        },
+        "orientation": "landscape"
+      },
+      "inputMode": "mouse",
+      "breakpoints": [
+        {
+          "id": "mobile",
+          "name": "Mobile",
+          "minWidth": 0,
+          "maxWidth": 767,
+          "width": 390,
+          "height": 844
+        },
+        {
+          "id": "tablet",
+          "name": "Tablet",
+          "minWidth": 768,
+          "maxWidth": 1023,
+          "width": 768,
+          "height": 1024
+        },
+        {
+          "id": "desktop",
+          "name": "Desktop",
+          "minWidth": 1024,
+          "width": 1470,
+          "height": 956
+        }
+      ],
+      "widgets": [
+        {
+          "id": "d943ac7f-44fe-461b-a0e2-2829480dffdd",
+          "type": "text",
+          "name": "Safe-area title",
+          "x": 12,
+          "y": 12,
+          "width": 220,
+          "height": 64,
+          "rotation": 0,
+          "opacity": 1,
+          "visible": true,
+          "locked": false,
+          "zIndex": 1,
+          "style": {},
+          "props": {
+            "text": "MacBook Air 13″ ? 1470 ? 956",
+            "fontSize": 18
+          }
+        }
+      ],
+      "interactionRules": []
+    },
+    {
+      "id": "b3dce9d6-88cb-4a65-91d5-8ce0a139d10a",
+      "name": "Dell XPS 13",
+      "device": {
+        "presetId": "dell-xps-13",
+        "width": 1920,
+        "height": 1200,
+        "dpr": 1.5,
+        "insets": {
+          "top": 0,
+          "bottom": 0,
+          "left": 0,
+          "right": 0
+        },
+        "orientation": "landscape"
+      },
+      "inputMode": "mouse",
+      "breakpoints": [
+        {
+          "id": "mobile",
+          "name": "Mobile",
+          "minWidth": 0,
+          "maxWidth": 767,
+          "width": 390,
+          "height": 844
+        },
+        {
+          "id": "tablet",
+          "name": "Tablet",
+          "minWidth": 768,
+          "maxWidth": 1023,
+          "width": 768,
+          "height": 1024
+        },
+        {
+          "id": "desktop",
+          "name": "Desktop",
+          "minWidth": 1024,
+          "width": 1920,
+          "height": 1200
+        }
+      ],
+      "widgets": [
+        {
+          "id": "40544a69-66d6-4674-8e7f-863f1e69cdfd",
+          "type": "text",
+          "name": "Safe-area title",
+          "x": 12,
+          "y": 12,
+          "width": 220,
+          "height": 64,
+          "rotation": 0,
+          "opacity": 1,
+          "visible": true,
+          "locked": false,
+          "zIndex": 1,
+          "style": {},
+          "props": {
+            "text": "Dell XPS 13 ? 1920 ? 1200",
+            "fontSize": 18
+          }
+        }
+      ],
+      "interactionRules": []
+    },
+    {
+      "id": "312c8440-a416-4aaf-99c5-1a94f945b38d",
+      "name": "Desktop 1440 × 900",
+      "device": {
+        "presetId": "desktop-1440-900",
+        "width": 1440,
+        "height": 900,
+        "dpr": 1,
+        "insets": {
+          "top": 0,
+          "bottom": 0,
+          "left": 0,
+          "right": 0
+        },
+        "orientation": "landscape"
+      },
+      "inputMode": "mouse",
+      "breakpoints": [
+        {
+          "id": "mobile",
+          "name": "Mobile",
+          "minWidth": 0,
+          "maxWidth": 767,
+          "width": 390,
+          "height": 844
+        },
+        {
+          "id": "tablet",
+          "name": "Tablet",
+          "minWidth": 768,
+          "maxWidth": 1023,
+          "width": 768,
+          "height": 1024
+        },
+        {
+          "id": "desktop",
+          "name": "Desktop",
+          "minWidth": 1024,
+          "width": 1440,
+          "height": 900
+        }
+      ],
+      "widgets": [
+        {
+          "id": "df78c4cb-2bd1-4fed-abe3-33c03d0053b2",
+          "type": "text",
+          "name": "Safe-area title",
+          "x": 12,
+          "y": 12,
+          "width": 220,
+          "height": 64,
+          "rotation": 0,
+          "opacity": 1,
+          "visible": true,
+          "locked": false,
+          "zIndex": 1,
+          "style": {},
+          "props": {
+            "text": "Desktop 1440 × 900 ? 1440 ? 900",
+            "fontSize": 18
+          }
+        }
+      ],
+      "interactionRules": []
+    },
+    {
+      "id": "c0982707-8002-450f-84c6-961582df2094",
+      "name": "Desktop 1920 × 1080",
+      "device": {
+        "presetId": "desktop-1920-1080",
+        "width": 1920,
+        "height": 1080,
+        "dpr": 1,
+        "insets": {
+          "top": 0,
+          "bottom": 0,
+          "left": 0,
+          "right": 0
+        },
+        "orientation": "landscape"
+      },
+      "inputMode": "mouse",
+      "breakpoints": [
+        {
+          "id": "mobile",
+          "name": "Mobile",
+          "minWidth": 0,
+          "maxWidth": 767,
+          "width": 390,
+          "height": 844
+        },
+        {
+          "id": "tablet",
+          "name": "Tablet",
+          "minWidth": 768,
+          "maxWidth": 1023,
+          "width": 768,
+          "height": 1024
+        },
+        {
+          "id": "desktop",
+          "name": "Desktop",
+          "minWidth": 1024,
+          "width": 1920,
+          "height": 1080
+        }
+      ],
+      "widgets": [
+        {
+          "id": "fb1643d3-7536-44e9-a9f4-472fa83b1546",
+          "type": "text",
+          "name": "Safe-area title",
+          "x": 12,
+          "y": 12,
+          "width": 220,
+          "height": 64,
+          "rotation": 0,
+          "opacity": 1,
+          "visible": true,
+          "locked": false,
+          "zIndex": 1,
+          "style": {},
+          "props": {
+            "text": "Desktop 1920 × 1080 ? 1920 ? 1080",
+            "fontSize": 18
+          }
+        }
+      ],
+      "interactionRules": []
+    },
+    {
+      "id": "36aef1c9-3dc8-4ab2-88e5-0292a6ad62ad",
+      "name": "Desktop 2560 × 1440",
+      "device": {
+        "presetId": "desktop-2560-1440",
+        "width": 2560,
+        "height": 1440,
+        "dpr": 1,
+        "insets": {
+          "top": 0,
+          "bottom": 0,
+          "left": 0,
+          "right": 0
+        },
+        "orientation": "landscape"
+      },
+      "inputMode": "mouse",
+      "breakpoints": [
+        {
+          "id": "mobile",
+          "name": "Mobile",
+          "minWidth": 0,
+          "maxWidth": 767,
+          "width": 390,
+          "height": 844
+        },
+        {
+          "id": "tablet",
+          "name": "Tablet",
+          "minWidth": 768,
+          "maxWidth": 1023,
+          "width": 768,
+          "height": 1024
+        },
+        {
+          "id": "desktop",
+          "name": "Desktop",
+          "minWidth": 1024,
+          "width": 2560,
+          "height": 1440
+        }
+      ],
+      "widgets": [
+        {
+          "id": "4617fc03-426e-4a5f-a362-d154bac87fd1",
+          "type": "text",
+          "name": "Safe-area title",
+          "x": 12,
+          "y": 12,
+          "width": 220,
+          "height": 64,
+          "rotation": 0,
+          "opacity": 1,
+          "visible": true,
+          "locked": false,
+          "zIndex": 1,
+          "style": {},
+          "props": {
+            "text": "Desktop 2560 × 1440 ? 2560 ? 1440",
+            "fontSize": 18
+          }
+        }
+      ],
+      "interactionRules": []
+    },
+    {
+      "id": "d92f18b0-23b5-4b09-bb04-5defc4c7b0ce",
+      "name": "Desktop 4K 3840 × 2160",
+      "device": {
+        "presetId": "desktop-4k",
+        "width": 3840,
+        "height": 2160,
+        "dpr": 1,
+        "insets": {
+          "top": 0,
+          "bottom": 0,
+          "left": 0,
+          "right": 0
+        },
+        "orientation": "landscape"
+      },
+      "inputMode": "mouse",
+      "breakpoints": [
+        {
+          "id": "mobile",
+          "name": "Mobile",
+          "minWidth": 0,
+          "maxWidth": 767,
+          "width": 390,
+          "height": 844
+        },
+        {
+          "id": "tablet",
+          "name": "Tablet",
+          "minWidth": 768,
+          "maxWidth": 1023,
+          "width": 768,
+          "height": 1024
+        },
+        {
+          "id": "desktop",
+          "name": "Desktop",
+          "minWidth": 1024,
+          "width": 3840,
+          "height": 2160
+        }
+      ],
+      "widgets": [
+        {
+          "id": "c6cecf46-25a1-462f-b785-87b744b3c704",
+          "type": "text",
+          "name": "Safe-area title",
+          "x": 12,
+          "y": 12,
+          "width": 220,
+          "height": 64,
+          "rotation": 0,
+          "opacity": 1,
+          "visible": true,
+          "locked": false,
+          "zIndex": 1,
+          "style": {},
+          "props": {
+            "text": "Desktop 4K 3840 × 2160 ? 3840 ? 2160",
+            "fontSize": 18
+          }
+        }
+      ],
+      "interactionRules": []
+    },
+    {
+      "id": "0bcb5bc2-4db6-4e9e-870f-428fbf8bb121",
+      "name": "Desktop 1366 × 768",
+      "device": {
+        "presetId": "desktop-1366-768",
+        "width": 1366,
+        "height": 768,
+        "dpr": 1,
+        "insets": {
+          "top": 0,
+          "bottom": 0,
+          "left": 0,
+          "right": 0
+        },
+        "orientation": "landscape"
+      },
+      "inputMode": "mouse",
+      "breakpoints": [
+        {
+          "id": "mobile",
+          "name": "Mobile",
+          "minWidth": 0,
+          "maxWidth": 767,
+          "width": 390,
+          "height": 844
+        },
+        {
+          "id": "tablet",
+          "name": "Tablet",
+          "minWidth": 768,
+          "maxWidth": 1023,
+          "width": 768,
+          "height": 1024
+        },
+        {
+          "id": "desktop",
+          "name": "Desktop",
+          "minWidth": 1024,
+          "width": 1366,
+          "height": 768
+        }
+      ],
+      "widgets": [
+        {
+          "id": "9841b868-b4b8-4adf-b83c-55496bbb4be3",
+          "type": "text",
+          "name": "Safe-area title",
+          "x": 12,
+          "y": 12,
+          "width": 220,
+          "height": 64,
+          "rotation": 0,
+          "opacity": 1,
+          "visible": true,
+          "locked": false,
+          "zIndex": 1,
+          "style": {},
+          "props": {
+            "text": "Desktop 1366 × 768 ? 1366 ? 768",
+            "fontSize": 18
+          }
+        }
+      ],
+      "interactionRules": []
+    },
+    {
+      "id": "2a845e88-7d95-44fe-a53d-89df83291b1f",
+      "name": "Apple Watch Series 9",
+      "device": {
+        "presetId": "apple-watch-series-9",
+        "width": 396,
+        "height": 484,
+        "dpr": 2,
+        "insets": {
+          "top": 48,
+          "bottom": 42,
+          "left": 24,
+          "right": 24
+        },
+        "orientation": "portrait"
+      },
+      "inputMode": "mouse",
+      "breakpoints": [
+        {
+          "id": "mobile",
+          "name": "Mobile",
+          "minWidth": 0,
+          "maxWidth": 767,
+          "width": 390,
+          "height": 844
+        },
+        {
+          "id": "tablet",
+          "name": "Tablet",
+          "minWidth": 768,
+          "maxWidth": 1023,
+          "width": 768,
+          "height": 1024
+        },
+        {
+          "id": "desktop",
+          "name": "Desktop",
+          "minWidth": 1024,
+          "width": 1024,
+          "height": 484
+        }
+      ],
+      "widgets": [
+        {
+          "id": "53bd0420-e2b0-49c3-b8cf-64d35e0f5d81",
+          "type": "text",
+          "name": "Safe-area title",
+          "x": 36,
+          "y": 60,
+          "width": 220,
+          "height": 64,
+          "rotation": 0,
+          "opacity": 1,
+          "visible": true,
+          "locked": false,
+          "zIndex": 1,
+          "style": {},
+          "props": {
+            "text": "Apple Watch Series 9 ? 396 ? 484",
+            "fontSize": 18
+          }
+        }
+      ],
+      "interactionRules": []
+    },
+    {
+      "id": "655a46e6-d683-425f-b5b1-15e5402c2dbd",
+      "name": "Wear OS Round",
+      "device": {
+        "presetId": "wear-os-round",
+        "width": 384,
+        "height": 384,
+        "dpr": 2,
+        "insets": {
+          "top": 38,
+          "bottom": 38,
+          "left": 38,
+          "right": 38
+        },
+        "orientation": "portrait"
+      },
+      "inputMode": "mouse",
+      "breakpoints": [
+        {
+          "id": "mobile",
+          "name": "Mobile",
+          "minWidth": 0,
+          "maxWidth": 767,
+          "width": 390,
+          "height": 844
+        },
+        {
+          "id": "tablet",
+          "name": "Tablet",
+          "minWidth": 768,
+          "maxWidth": 1023,
+          "width": 768,
+          "height": 1024
+        },
+        {
+          "id": "desktop",
+          "name": "Desktop",
+          "minWidth": 1024,
+          "width": 1024,
+          "height": 384
+        }
+      ],
+      "widgets": [
+        {
+          "id": "b26acf94-c5f7-4595-92f0-0788c9640308",
+          "type": "text",
+          "name": "Safe-area title",
+          "x": 50,
+          "y": 50,
+          "width": 220,
+          "height": 64,
+          "rotation": 0,
+          "opacity": 1,
+          "visible": true,
+          "locked": false,
+          "zIndex": 1,
+          "style": {},
+          "props": {
+            "text": "Wear OS Round ? 384 ? 384",
+            "fontSize": 18
+          }
+        }
+      ],
+      "interactionRules": []
+    }
+  ],
+  "symbols": [],
+  "startScreenId": "a31b512a-e375-4901-8afa-5818dc15be59"
+}

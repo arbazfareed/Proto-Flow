@@ -1,0 +1,47 @@
+name: Device and responsive verification
+
+on:
+  pull_request:
+    branches:
+      - main
+  push:
+    branches:
+      - main
+    paths:
+      - "src/devices/**"
+      - "src/preview/**"
+      - "src/project/**"
+      - "src/layout/HtmlExportDialog.tsx"
+      - "examples/**"
+      - "scripts/run-device-verification.mjs"
+      - "scripts/device-frame-fixture.*"
+      - "reports/device-verification/**"
+      - "package.json"
+      - "package-lock.json"
+      - ".github/workflows/device-verification.yml"
+
+jobs:
+  browser-verification:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    env:
+      PF_DEVICE_FULL: ${{ github.event_name == 'push' && '1' || '0' }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - if: github.event_name == 'push'
+        run: npx playwright install --with-deps chromium firefox webkit
+      - if: github.event_name == 'pull_request'
+        run: npx playwright install --with-deps chromium
+      - run: npm test -- --run src/devices/catalog.test.ts src/devices/frame.test.ts src/preview/deviceLayouts.test.ts src/preview/htmlExport.test.ts src/preview/codeExport.test.ts src/project/responsive.test.ts
+      - run: npm run verify:devices
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: device-verification-${{ github.run_id }}
+          path: reports/device-verification/screenshots/
+          if-no-files-found: ignore

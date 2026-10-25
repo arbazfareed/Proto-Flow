@@ -1,0 +1,24 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Device frame verification</title>
+    <style>
+      body { margin: 0; color: #f3f3f6; background: #17181c; font: 14px system-ui, sans-serif; }
+      header { display: flex; align-items: center; gap: 12px; height: 52px; padding: 0 16px; }
+      select, button { padding: 7px 10px; color: inherit; background: #282930; border: 1px solid #555; border-radius: 5px; }
+      #frame-stage { width: 100vw; height: calc(100vh - 52px); }
+    </style>
+  </head>
+  <body>
+    <header>
+      <label for="frame-preset">Device preset</label>
+      <select id="frame-preset" aria-label="Device preset"></select>
+      <button id="rotate-frame" type="button">Rotate</button>
+      <span id="frame-status" role="status"></span>
+    </header>
+    <div id="frame-stage"></div>
+    <script type="module" src="/scripts/device-frame-fixture.tsx"></script>
+  </body>
+</html>

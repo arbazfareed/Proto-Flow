@@ -8,6 +8,7 @@ interface DeviceFrameProps {
   device: ScreenDevice;
   preset?: DevicePreset;
   widgets: readonly Widget[];
+  transform?: { x?: number; y?: number; scale?: number };
   visible?: boolean;
   showFrame: boolean;
   showSafeArea: boolean;
@@ -28,10 +29,11 @@ function clockLabel(): string {
 function DeviceViewportLayer({
   device,
   preset,
+  transform,
   visible,
   showFrame,
   showSafeArea,
-}: Pick<DeviceFrameProps, "device" | "preset" | "visible" | "showFrame" | "showSafeArea">) {
+}: Pick<DeviceFrameProps, "device" | "preset" | "transform" | "visible" | "showFrame" | "showSafeArea">) {
   const chrome = preset?.frameChrome;
   const bezel = showFrame ? chrome?.bezel ?? 0 : 0;
   const radius = showFrame ? chrome?.cornerRadius ?? 0 : 0;
@@ -41,7 +43,15 @@ function DeviceViewportLayer({
   const safeArea = getSafeAreaBounds(device);
 
   return (
-    <Layer visible={visible} listening={false} perfectDrawEnabled={false}>
+    <Layer
+      x={transform?.x ?? 0}
+      y={transform?.y ?? 0}
+      scaleX={transform?.scale ?? 1}
+      scaleY={transform?.scale ?? 1}
+      visible={visible}
+      listening={false}
+      perfectDrawEnabled={false}
+    >
       {showFrame && bezel > 0 && (
         <Rect
           x={-bezel}
@@ -107,6 +117,7 @@ function DeviceChromeLayer({
   device,
   preset,
   widgets,
+  transform,
   visible,
   showFrame,
   statusBarTheme,
@@ -136,7 +147,15 @@ function DeviceChromeLayer({
   }, [statusBarTimeMode]);
 
   return (
-    <Layer visible={visible} listening={false} perfectDrawEnabled={false}>
+    <Layer
+      x={transform?.x ?? 0}
+      y={transform?.y ?? 0}
+      scaleX={transform?.scale ?? 1}
+      scaleY={transform?.scale ?? 1}
+      visible={visible}
+      listening={false}
+      perfectDrawEnabled={false}
+    >
       {showFrame && isBrowserFrame && (
         <Group>
           <Rect
@@ -325,6 +344,7 @@ export function DeviceFrame({
   device,
   preset,
   widgets,
+  transform,
   visible,
   showFrame,
   showSafeArea,
@@ -338,6 +358,7 @@ export function DeviceFrame({
       <DeviceViewportLayer
         device={device}
         preset={preset}
+        transform={transform}
         visible={visible}
         showFrame={showFrame}
         showSafeArea={showSafeArea}
@@ -346,6 +367,7 @@ export function DeviceFrame({
         device={device}
         preset={preset}
         widgets={widgets}
+        transform={transform}
         visible={visible}
         showFrame={showFrame}
         statusBarTheme={statusBarTheme}
