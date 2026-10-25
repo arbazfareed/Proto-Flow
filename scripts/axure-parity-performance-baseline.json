@@ -1,0 +1,12 @@
+{
+  "modeDurationMs": 1000,
+  "soakDurationMs": 300000,
+  "minimumFps": 55,
+  "referenceFps": 60,
+  "panelSwitchMaxMs": 50,
+  "repeaterRenderMaxMs": 200,
+  "expressionMaxMs": 1,
+  "flowLayoutMaxMs": 500,
+  "maximumHeapGrowthMiB": 30,
+  "regressionThresholdPercent": 10
+}

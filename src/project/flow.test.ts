@@ -3,8 +3,11 @@ import { createEmptyProject } from "./schema";
 import {
   autoLayoutScreens,
   buildFlowSvg,
+  getFlowViewportBounds,
   getInitialFlowPositions,
   getNavigationEdges,
+  getVisibleFlowScreens,
+  isFlowEdgeInViewport,
 } from "./flow";
 
 function projectWithScreens(count: number) {
@@ -96,6 +99,33 @@ describe("flow diagram model", () => {
     );
 
     expect(positions[start.id].x).toBeLessThan(positions[backNavigation.id].x);
+  });
+
+  it("culls flow nodes and edges outside the panned and zoomed viewport", () => {
+    const project = projectWithScreens(3);
+    const [source, target, offscreen] = project.screens;
+    source.flowPosition = { x: 100, y: 100 };
+    target.flowPosition = { x: 500, y: 100 };
+    offscreen.flowPosition = { x: 2_000, y: 2_000 };
+    source.interactionRules = [{
+      id: crypto.randomUUID(),
+      event: "onClick",
+      conditions: [],
+      actions: [{ type: "navigate", target: target.id }],
+    }];
+    const edges = getNavigationEdges(project);
+    const positions = Object.fromEntries(project.screens.map((screen) => [
+      screen.id,
+      screen.flowPosition!,
+    ]));
+    const viewport = getFlowViewportBounds(800, 600, { x: -80, y: -60 }, 1);
+
+    expect(getVisibleFlowScreens(project.screens, positions, viewport).map((screen) => screen.id))
+      .toEqual([source.id, target.id]);
+    expect(isFlowEdgeInViewport(edges[0], positions, viewport)).toBe(true);
+    expect(getFlowViewportBounds(800, 600, { x: 0, y: 0 }, 2).width)
+      .toBeLessThan(getFlowViewportBounds(800, 600, { x: 0, y: 0 }, 1).width);
+    expect(() => getFlowViewportBounds(800, 600, { x: 0, y: 0 }, 0)).toThrow(RangeError);
   });
 
   it("preserves saved positions and exports an SVG with nodes and navigation labels", () => {

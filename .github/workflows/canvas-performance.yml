@@ -1,29 +1,25 @@
-name: Canvas performance
+name: Axure-parity performance
 
 on:
   pull_request:
-    paths:
-      - "src/canvas/**"
-      - "src/devices/**"
-      - "src/preview/**"
-      - "src/project/**"
-      - "scripts/canvas-benchmark.*"
-      - "scripts/canvas-performance-baseline.json"
-      - "scripts/run-canvas-benchmark.mjs"
-      - "package.json"
-      - "package-lock.json"
-      - ".github/workflows/canvas-performance.yml"
+    branches:
+      - main
   push:
     branches:
       - main
     paths:
       - "src/canvas/**"
+      - "src/flow/**"
       - "src/devices/**"
       - "src/preview/**"
       - "src/project/**"
+      - "scripts/axure-parity-benchmark.*"
+      - "scripts/axure-parity-performance-baseline.json"
+      - "scripts/run-axure-parity-benchmark.mjs"
       - "scripts/canvas-benchmark.*"
       - "scripts/canvas-performance-baseline.json"
       - "scripts/run-canvas-benchmark.mjs"
+      - "reports/PERF-AXURE-PARITY.md"
       - "package.json"
       - "package-lock.json"
       - ".github/workflows/canvas-performance.yml"
@@ -40,4 +36,12 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npx playwright install --with-deps chromium
-      - run: npm run benchmark:canvas
+      - run: npm run benchmark:axure-parity
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: axure-parity-performance-${{ github.run_id }}
+          path: |
+            reports/PERF-AXURE-PARITY.md
+            reports/axure-parity-latest.json
+          if-no-files-found: ignore

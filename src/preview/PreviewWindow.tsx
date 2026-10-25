@@ -30,6 +30,7 @@ import { DEVICE_PRESETS, findDevicePreset } from "../devices/catalog";
 import type { DevicePreset } from "../devices/types";
 import { getPreviewWindowSize } from "./windowSizing";
 import { getVirtualRowRange } from "./virtualization";
+import { estimateWidgetCount, LITE_MODE_WIDGET_THRESHOLD } from "./performance";
 import { trackEvent } from "../diagnostics/observability";
 import {
   DEFAULT_MULTI_DEVICE_IDS,
@@ -54,13 +55,14 @@ function getWidgetText(
   runtime: PreviewRuntime,
   screenId: string,
   item?: RepeaterRecord,
+  liteMode = false,
 ): string {
   const text = stringProp(
     widget,
     "text",
     stringProp(widget, "label", stringProp(widget, "title", "")),
   );
-  return runtime.interpolate(text, screenId, item, widget);
+  return liteMode ? text : runtime.interpolate(text, screenId, item, widget);
 }
 
 function widgetStyle(widget: Widget, position?: WidgetPosition): CSSProperties {
@@ -118,6 +120,7 @@ function VirtualizedRepeater({
   onControlValueChange,
   onGestureFeedback,
   commonHandlers,
+  liteMode,
 }: {
   widget: Widget;
   rows: RepeaterRecord[];
@@ -134,6 +137,7 @@ function VirtualizedRepeater({
   onControlValueChange: (key: string, value: string | boolean) => void;
   onGestureFeedback: (event: PreviewEvent, x: number, y: number) => void;
   commonHandlers: HTMLAttributes<HTMLDivElement>;
+  liteMode: boolean;
 }) {
   const viewportRef = useRef<HTMLDivElement>(null);
   const [scrollOffset, setScrollOffset] = useState(0);
@@ -145,7 +149,13 @@ function VirtualizedRepeater({
   const rowCount = Math.ceil(rows.length / columns);
   const stride = (horizontal ? widget.width : widget.height) + gap;
   const viewportExtent = horizontal ? widget.width : widget.height;
-  const range = getVirtualRowRange(rowCount, stride, scrollOffset, viewportExtent);
+  const range = getVirtualRowRange(rowCount, stride, scrollOffset, viewportExtent, liteMode ? 0 : 2);
+  const visibleTemplate = useMemo(
+    () => template.filter((child) =>
+      child.visible && snapshot.visibility[child.id] !== false,
+    ),
+    [snapshot.visibility, template],
+  );
 
   return (
     <div
@@ -205,12 +215,8 @@ function VirtualizedRepeater({
                   if (inputMode !== "touch") runEvent(widget, "onClick", record);
                 }}
               >
-                {template
-                  .filter((child) =>
-                    child.visible &&
-                    snapshot.visibility[child.id] !== false &&
-                    isRepeaterItemVisible(child, record),
-                  )
+                {visibleTemplate
+                  .filter((child) => isRepeaterItemVisible(child, record))
                   .map((child) => (
                     <PreviewWidget
                       key={`${child.id}-${index}`}
@@ -224,6 +230,7 @@ function VirtualizedRepeater({
                       controlValues={controlValues}
                       onControlValueChange={onControlValueChange}
                       onGestureFeedback={onGestureFeedback}
+                      liteMode={liteMode}
                     />
                   ))}
               </div>
@@ -248,6 +255,7 @@ function PreviewWidget({
   controlValues,
   onControlValueChange,
   onGestureFeedback,
+  liteMode,
 }: {
   widget: Widget;
   runtime: PreviewRuntime;
@@ -261,6 +269,7 @@ function PreviewWidget({
   controlValues: Record<string, string | boolean>;
   onControlValueChange: (key: string, value: string | boolean) => void;
   onGestureFeedback: (event: PreviewEvent, x: number, y: number) => void;
+  liteMode: boolean;
 }) {
   const touchStart = useRef<{ x: number; y: number; distance?: number; centerX?: number; centerY?: number } | null>(null);
   const longPressTimer = useRef<number | undefined>(undefined);
@@ -280,7 +289,15 @@ function PreviewWidget({
       ? widget.props.checked === true
       : widget.type === "radio" ? widget.props.selected === true : widget.props.on === true;
   const style = { ...widgetStyle(widget, layoutPosition), ...transitionStyle };
-  const text = getWidgetText(widget, runtime, screenId, item);
+  const interpolate = (
+    value: string,
+    targetScreenId = screenId,
+    targetItem = item,
+    targetWidget = widget,
+  ) => liteMode
+    ? value
+    : runtime.interpolate(value, targetScreenId, targetItem, targetWidget);
+  const text = getWidgetText(widget, runtime, screenId, item, liteMode);
   const richRuns = widget.type === "text" && widget.props.richText === true
     ? Array.isArray(widget.props.richTextRuns)
       ? normalizeRichTextRuns(widget.props.richTextRuns)
@@ -404,14 +421,14 @@ function PreviewWidget({
 
   if (widget.type === "card") {
     const imageSource = stringProp(widget, "imageSrc", stringProp(widget, "src"));
-    const title = runtime.interpolate(stringProp(widget, "title", text || "Product card"), screenId, item, widget);
-    const subtitle = runtime.interpolate(stringProp(widget, "subtitle", "A short description goes here."), screenId, item, widget);
-    const actionLabel = runtime.interpolate(stringProp(widget, "actionLabel", "Learn more"), screenId, item, widget);
+    const title = interpolate(stringProp(widget, "title", text || "Product card"));
+    const subtitle = interpolate(stringProp(widget, "subtitle", "A short description goes here."));
+    const actionLabel = interpolate(stringProp(widget, "actionLabel", "Learn more"));
     return (
       <article className="preview-widget preview-card" style={style} {...commonHandlers}>
         <div className="preview-card-media">
           {imageSource
-            ? <img src={runtime.interpolate(imageSource, screenId, item, widget)} alt={stringProp(widget, "imageAlt", title)} />
+            ? <img src={interpolate(imageSource)} alt={stringProp(widget, "imageAlt", title)} />
             : <span aria-hidden="true">Image</span>}
         </div>
         <div className="preview-card-copy">
@@ -486,8 +503,8 @@ function PreviewWidget({
       <aside className={`preview-widget preview-alert is-${variant}`} role={variant === "error" ? "alert" : "status"} style={style} {...commonHandlers}>
         <span className="preview-alert-icon" aria-hidden="true">!</span>
         <span className="preview-alert-copy">
-          <strong>{runtime.interpolate(stringProp(widget, "label", "Changes saved"), screenId, item, widget)}</strong>
-          <span>{runtime.interpolate(stringProp(widget, "subtitle", ""), screenId, item, widget)}</span>
+          <strong>{interpolate(stringProp(widget, "label", "Changes saved"))}</strong>
+          <span>{interpolate(stringProp(widget, "subtitle", ""))}</span>
         </span>
         {widget.props.dismissible === true && (
           <button type="button" aria-label="Dismiss alert" onClick={(event) => {
@@ -608,10 +625,10 @@ function PreviewWidget({
   if (widget.type === "input" || widget.type === "search" || widget.type === "textarea") {
     const tag = widget.type;
     const placeholderValue = stringProp(widget, "placeholder", "Enter text...");
-    const placeholder = runtime.interpolate(placeholderValue, screenId, item, widget);
+    const placeholder = interpolate(placeholderValue);
     return (
       <label className="preview-widget-label" style={{ ...style, overflow: "visible" }} {...commonHandlers}>
-        {stringProp(widget, "label") && <span>{runtime.interpolate(stringProp(widget, "label"), screenId, item, widget)}</span>}
+        {stringProp(widget, "label") && <span>{interpolate(stringProp(widget, "label"))}</span>}
         {tag === "textarea"
           ? <textarea aria-label={stringProp(widget, "label", "Preview text")} value={inputValue} placeholder={placeholder} onChange={handleChange} />
           : <input aria-label={stringProp(widget, "label", "Preview input")} type={tag === "search" ? "search" : stringProp(widget, "type", "text")} value={inputValue} placeholder={placeholder} onChange={handleChange} />}
@@ -621,7 +638,7 @@ function PreviewWidget({
 
   if (["checkbox", "toggle", "radio"].includes(widget.type)) {
     const rawLabel = stringProp(widget, "label", widget.type);
-    const label = runtime.interpolate(rawLabel, screenId, item, widget);
+    const label = interpolate(rawLabel);
     return (
       <label className={`preview-widget-choice is-${widget.type}`} style={style} {...commonHandlers}>
         <input
@@ -649,10 +666,10 @@ function PreviewWidget({
 
   if (widget.type === "image") {
     const source = stringProp(widget, "src", stringProp(widget, "url"));
-    const src = runtime.interpolate(source, screenId, item, widget);
+    const src = interpolate(source);
     return (
       <div className="preview-widget" style={style} {...commonHandlers}>
-        {src ? <img src={src} alt={runtime.interpolate(stringProp(widget, "alt", text), screenId, item, widget)} style={{ objectFit: stringProp(widget, "fit") === "cover" ? "cover" : "contain" }} /> : text || "Image"}
+        {src ? <img src={src} alt={interpolate(stringProp(widget, "alt", text))} style={{ objectFit: stringProp(widget, "fit") === "cover" ? "cover" : "contain" }} /> : text || "Image"}
       </div>
     );
   }
@@ -667,7 +684,7 @@ function PreviewWidget({
       : [];
     return (
       <ul className="preview-widget preview-list" style={style} {...commonHandlers}>
-        {items.map((item, index) => <li key={`${index}-${item}`}>{runtime.interpolate(item, screenId, undefined, widget)}</li>)}
+        {items.map((item, index) => <li key={`${index}-${item}`}>{interpolate(item, screenId, undefined, widget)}</li>)}
       </ul>
     );
   }
@@ -697,6 +714,7 @@ function PreviewWidget({
         onControlValueChange={onControlValueChange}
         onGestureFeedback={onGestureFeedback}
         commonHandlers={commonHandlers}
+        liteMode={liteMode}
       />
     );
   }
@@ -728,7 +746,7 @@ function PreviewWidget({
               ? [<br key={`rich-break-${runIndex}-${lineIndex}`} />]
               : [];
             const marks = run.marks;
-            let content: ReactNode = runtime.interpolate(part, screenId, item, widget);
+            let content: ReactNode = interpolate(part);
             const richStyle: CSSProperties = {
               ...(marks.color ? { color: marks.color } : {}),
               ...(marks.fontSize ? { fontSize: marks.fontSize } : {}),
@@ -843,6 +861,7 @@ export function PreviewWindow() {
   const [toast, setToast] = useState("");
   const [touchFeedback, setTouchFeedback] = useState<{ x: number; y: number; event: PreviewEvent } | null>(null);
   const [runtimeRevision, setRuntimeRevision] = useState(0);
+  const [liteMode, setLiteMode] = useState(false);
   useEffect(() => {
     trackEvent("preview_opened");
   }, []);
@@ -856,6 +875,16 @@ export function PreviewWindow() {
     () => project?.screens.find((screen) => screen.id === runtimeSnapshot?.screenId),
     [project, runtimeSnapshot?.screenId],
   );
+  const estimatedWidgetCount = useMemo(
+    () => activeScreen
+      ? estimateWidgetCount(activeScreen.widgets, runtimeSnapshot?.repeaterData)
+      : 0,
+    [activeScreen, runtimeSnapshot?.repeaterData],
+  );
+  const liteModeAvailable = estimatedWidgetCount > LITE_MODE_WIDGET_THRESHOLD;
+  useEffect(() => {
+    if (!liteModeAvailable) setLiteMode(false);
+  }, [liteModeAvailable]);
   const device = useMemo(
     () => DEVICE_PRESETS.find((item) =>
       item.id === (selectedDeviceId || activeScreen?.device?.presetId),
@@ -1110,6 +1139,7 @@ export function PreviewWindow() {
                   window.clearTimeout(touchFeedbackTimer.current);
                   touchFeedbackTimer.current = window.setTimeout(() => setTouchFeedback(null), 700);
                 }}
+                liteMode={liteMode}
               />
             );
           })}
@@ -1173,6 +1203,23 @@ export function PreviewWindow() {
           setToast(error instanceof Error ? error.message : "Could not focus the preview window.");
         })}><X size={15} /></button>}
       </header>
+      {liteModeAvailable && (
+        <div className="preview-performance-warning" role="status">
+          <span>
+            This screen contains more than {LITE_MODE_WIDGET_THRESHOLD.toLocaleString()} widgets.
+            {liteMode
+              ? " Live expressions are paused and repeater overscan is disabled."
+              : " Enable Lite Mode to pause live expressions and reduce repeater rendering."}
+          </span>
+          <button
+            type="button"
+            aria-pressed={liteMode}
+            onClick={() => setLiteMode((enabled) => !enabled)}
+          >
+            {liteMode ? "Disable Lite Mode" : "Enable Lite Mode"}
+          </button>
+        </div>
+      )}
       <div
         className={`preview-content${previewMode === "single" ? "" : " is-multi"}`}
         ref={previewContentRef}

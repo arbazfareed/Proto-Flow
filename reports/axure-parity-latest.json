@@ -1,0 +1,214 @@
+{
+  "generatedAt": "2026-10-25T08:30:19.660Z",
+  "results": {
+    "scenes": [
+      {
+        "name": "A - Dynamic panels",
+        "panelCount": 20,
+        "totalFeatureWidgets": 1020,
+        "panelSwitchMs": 0.5449999988079071,
+        "widgetCount": 220,
+        "modes": {
+          "idle": {
+            "fps": 59,
+            "p95Ms": 16.800000000000182,
+            "p99Ms": 49.94399999999996
+          },
+          "pan": {
+            "fps": 61,
+            "p95Ms": 16.700000000000273,
+            "p99Ms": 16.800000000000182
+          },
+          "zoom": {
+            "fps": 61,
+            "p95Ms": 16.800000000000182,
+            "p99Ms": 16.800000000000182
+          },
+          "drag": {
+            "fps": 60,
+            "p95Ms": 16.799999999999272,
+            "p99Ms": 16.800000000000182
+          }
+        },
+        "fps": 59,
+        "frameTimeP95Ms": 16.800000000000182,
+        "frameTimeP99Ms": 16.800000000000182
+      },
+      {
+        "name": "B - Repeater virtualization",
+        "repeaterRowCount": 500,
+        "renderedRepeaterRows": 14,
+        "repeaterRenderMs": 0.09999990463256836,
+        "totalFeatureWidgets": 2500,
+        "widgetCount": 70,
+        "modes": {
+          "idle": {
+            "fps": 60,
+            "p95Ms": 16.700000000000728,
+            "p99Ms": 16.800000000000182
+          },
+          "pan": {
+            "fps": 60,
+            "p95Ms": 16.800000000000182,
+            "p99Ms": 16.800000000000182
+          },
+          "zoom": {
+            "fps": 60,
+            "p95Ms": 16.700000000000728,
+            "p99Ms": 16.80000000000109
+          },
+          "drag": {
+            "fps": 60,
+            "p95Ms": 16.700000000000728,
+            "p99Ms": 16.799999999999272
+          }
+        },
+        "fps": 60,
+        "frameTimeP95Ms": 16.700000000000728,
+        "frameTimeP99Ms": 16.800000000000182
+      },
+      {
+        "name": "C - Nested panels",
+        "panelCount": 30,
+        "totalFeatureWidgets": 310,
+        "widgetCount": 310,
+        "modes": {
+          "idle": {
+            "fps": 60,
+            "p95Ms": 16.700000000000728,
+            "p99Ms": 16.799999999999272
+          },
+          "pan": {
+            "fps": 60,
+            "p95Ms": 16.799999999999272,
+            "p99Ms": 16.80000000000109
+          },
+          "zoom": {
+            "fps": 61,
+            "p95Ms": 16.700000000000728,
+            "p99Ms": 16.80000000000109
+          },
+          "drag": {
+            "fps": 61,
+            "p95Ms": 16.700000000000728,
+            "p99Ms": 16.80000000000109
+          }
+        },
+        "fps": 60,
+        "frameTimeP95Ms": 16.700000000000728,
+        "frameTimeP99Ms": 16.80000000000109
+      },
+      {
+        "name": "D - Expressions",
+        "expressionCount": 200,
+        "expressionEvaluationMs": 0.6120000004768371,
+        "maxExpressionMs": 0.020999999046325685,
+        "totalFeatureWidgets": 200,
+        "widgetCount": 200,
+        "modes": {
+          "idle": {
+            "fps": 60,
+            "p95Ms": 16.700000000000728,
+            "p99Ms": 16.80000000000109
+          },
+          "pan": {
+            "fps": 61,
+            "p95Ms": 16.799999999999272,
+            "p99Ms": 16.80000000000109
+          },
+          "zoom": {
+            "fps": 61,
+            "p95Ms": 16.700000000000728,
+            "p99Ms": 16.700000000000728
+          },
+          "drag": {
+            "fps": 60,
+            "p95Ms": 16.799999999999272,
+            "p99Ms": 16.80000000000291
+          }
+        },
+        "fps": 60,
+        "frameTimeP95Ms": 16.799999999999272,
+        "frameTimeP99Ms": 16.80000000000291
+      },
+      {
+        "name": "E - Full Axure-parity mix",
+        "panelCount": 10,
+        "repeaterRowCount": 2500,
+        "renderedRepeaterRows": 70,
+        "repeaterRenderMs": 0.10000002384185791,
+        "expressionCount": 100,
+        "expressionEvaluationMs": 0.6120000004768371,
+        "maxExpressionMs": 0.020999999046325685,
+        "totalFeatureWidgets": 12710,
+        "annotationCount": 100,
+        "widgetCount": 510,
+        "modes": {
+          "idle": {
+            "fps": 61,
+            "p95Ms": 16.799999999999272,
+            "p99Ms": 16.80000000000291
+          },
+          "pan": {
+            "fps": 61,
+            "p95Ms": 16.700000000000728,
+            "p99Ms": 16.799999999999272
+          },
+          "zoom": {
+            "fps": 61,
+            "p95Ms": 16.700000000000728,
+            "p99Ms": 16.799999999999272
+          },
+          "drag": {
+            "fps": 60,
+            "p95Ms": 16.700000000000728,
+            "p99Ms": 16.799999999999272
+          }
+        },
+        "fps": 60,
+        "frameTimeP95Ms": 16.700000000000728,
+        "frameTimeP99Ms": 16.799999999999272
+      },
+      {
+        "name": "F - Flow diagram",
+        "screenCount": 100,
+        "transitionCount": 300,
+        "flowLayoutMs": 148,
+        "totalFeatureWidgets": 100,
+        "widgetCount": 100,
+        "modes": {
+          "idle": {
+            "fps": 58,
+            "p95Ms": 16.799999999999272,
+            "p99Ms": 50
+          },
+          "pan": {
+            "fps": 60,
+            "p95Ms": 16.700000000000728,
+            "p99Ms": 16.799999999999272
+          },
+          "zoom": {
+            "fps": 61,
+            "p95Ms": 16.799999999999272,
+            "p99Ms": 16.799999999999272
+          },
+          "drag": {
+            "fps": 60,
+            "p95Ms": 16.80000000000291,
+            "p99Ms": 16.80000000000291
+          }
+        },
+        "fps": 58,
+        "frameTimeP95Ms": 16.799999999999272,
+        "frameTimeP99Ms": 16.80000000000291
+      }
+    ],
+    "soak": {
+      "durationMs": 300000,
+      "startBytes": 7977036,
+      "midpointBytes": 8042368,
+      "endBytes": 8012560,
+      "growthBytes": 35524
+    }
+  }
+}
