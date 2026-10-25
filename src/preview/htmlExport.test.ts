@@ -266,7 +266,7 @@ describe("local HTML bundle export", () => {
     expect(archive.file("runtime.js")).not.toBeNull();
   });
 
-  it("renders 2× desktop, tablet, and mobile image screenshots in a ZIP", async () => {
+  it("renders 1×, 2×, and 3× desktop, tablet, and mobile image screenshots in a ZIP", async () => {
     const project = createEmptyProject("Device images");
     const htmlToImage = await import("html-to-image");
     vi.spyOn(htmlToImage, "toPng").mockResolvedValue("data:image/png;base64,aGVsbG8=");
@@ -308,12 +308,22 @@ describe("local HTML bundle export", () => {
       });
       const archive = await JSZip.loadAsync(output);
       expect(Object.keys(archive.files).filter((path) => path.endsWith(".png")).sort()).toEqual([
+        "images/desktop-1x.png",
         "images/desktop-2x.png",
+        "images/desktop-3x.png",
+        "images/mobile-1x.png",
         "images/mobile-2x.png",
+        "images/mobile-3x.png",
+        "images/tablet-1x.png",
         "images/tablet-2x.png",
+        "images/tablet-3x.png",
       ]);
       expect(appended).toHaveLength(3);
       expect(fakeFrame.remove).toHaveBeenCalledTimes(3);
+      expect(htmlToImage.toPng).toHaveBeenCalledTimes(9);
+      expect(htmlToImage.toPng).toHaveBeenNthCalledWith(1, fakeStage, { pixelRatio: 1, cacheBust: true });
+      expect(htmlToImage.toPng).toHaveBeenNthCalledWith(2, fakeStage, { pixelRatio: 2, cacheBust: true });
+      expect(htmlToImage.toPng).toHaveBeenNthCalledWith(3, fakeStage, { pixelRatio: 3, cacheBust: true });
     } finally {
       vi.restoreAllMocks();
       vi.stubGlobal("requestAnimationFrame", originalRequestAnimationFrame);

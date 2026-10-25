@@ -16,7 +16,7 @@ Use variants when the device-specific experience needs a separate review entry p
 
 ## Per-device screenshots
 
-Choose this for static review artifacts. The local ZIP contains Desktop, Tablet, and Mobile PNGs rendered at 2× DPR. Screenshots capture the selected prototype's corresponding screen layout; they do not contain interactions.
+Choose this for static review artifacts. The local ZIP contains Desktop, Tablet, and Mobile PNGs rendered at 1×, 2×, and 3× DPR. Screenshots capture the selected prototype's corresponding screen layout; they do not contain interactions.
 
 ## Responsive React/Tailwind ZIP
 
