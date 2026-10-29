@@ -322,7 +322,7 @@
       <article class="stat"><div class="stat-label">Checklist items</div><div class="stat-value"><span id="total-count">0</span><small>across all areas</small></div><div class="stat-detail">Feature and platform checks</div></article>
       <article class="stat"><div class="stat-label">Completed</div><div class="stat-value"><span id="done-count">0</span><small id="done-percent">0%</small></div><div class="stat-detail">Saved automatically in this browser</div></article>
       <article class="stat"><div class="stat-label">Areas covered</div><div class="stat-value"><span id="area-count">0</span><small>workstreams</small></div><div class="stat-detail">Phase 4 + cross-platform</div></article>
-      <article class="stat"><div class="stat-label">Automated suite</div><div class="stat-value">368<small> / 368 passed</small></div><div class="stat-detail">Vitest run · 55 test files</div></article>
+      <article class="stat"><div class="stat-label">Automated suite</div><div class="stat-value">401<small> / 401 passed</small></div><div class="stat-detail">Vitest run · 62 test files · 2026-10-29</div></article>
     </section>
 
     <section class="progress-card" aria-label="Overall verification progress">
@@ -333,7 +333,7 @@
     <aside class="notice" role="note">
       <span class="notice-icon" aria-hidden="true">ⓘ</span>
       <div><strong>Test status is not the same as feature status.</strong>
-        The latest available run passed all 368 automated tests. Those are mostly unit and component tests—not evidence that every workflow below passed end-to-end. Start items unchecked, record only checks you actually run, and use the area notes to see representative test files. Cloud, fresh desktop, Ubuntu, and Kali checks still need their own environments.
+        The latest recorded local run passed 401 automated tests across 62 test files on 2026-10-29. Those are mostly unit and component tests—not evidence that every workflow below passed end-to-end. Start items unchecked, record only checks you actually run, and use the area notes to see representative test files. Cloud, fresh desktop, Ubuntu, and Kali checks still need their own environments.
       </div>
     </aside>
 
@@ -681,7 +681,7 @@
       const report = {
         title: "ProtoFlow Phase 4 E2E Checklist",
         exportedAt: new Date().toISOString(),
-        automatedSuite: { status: "passed", tests: 368, files: 55, scope: "Automated unit/component suite; not full end-to-end verification." },
+        automatedSuite: { status: "passed", tests: 401, files: 62, verifiedAt: "2026-10-29", scope: "Automated unit/component suite; not full end-to-end verification." },
         summary: { completed: allItems.filter((item) => saved[item.id] === true).length, total: allItems.length },
         sections: sections.map((section, sectionIndex) => ({
           title: section.title,
