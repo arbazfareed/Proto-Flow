@@ -469,6 +469,7 @@ interface LeftSidebarProps {
   onToggle: () => void;
   onOpenPalette: () => void;
   onUpdates: () => void;
+  onOpenParityDocumentation: () => void;
   activeTool: ShapeTool | null;
   onSelectTool: (tool: ShapeTool) => void;
   onAddScreen: (category: DeviceCategory) => void;
@@ -480,6 +481,7 @@ export function LeftSidebar({
   onToggle,
   onOpenPalette,
   onUpdates,
+  onOpenParityDocumentation,
   activeTool,
   onSelectTool,
   onAddScreen,
@@ -543,6 +545,7 @@ export function LeftSidebar({
       <div className="sidebar-footer">
         <button className="nav-item" onClick={onOpenPalette}><Keyboard size={16} /><span>Keyboard shortcuts</span></button>
         <button className="nav-item" onClick={onUpdates}><CircleHelp size={16} /><span>Help & updates</span></button>
+        <button className="nav-item" onClick={onOpenParityDocumentation}><FileText size={16} /><span>Parity & compatibility</span></button>
         <div className="sidebar-version"><span className="version-pulse" /> Phase 1 · Local workspace</div>
       </div>
     </aside>

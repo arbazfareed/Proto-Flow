@@ -110,6 +110,19 @@ function AppShell() {
     }
   }, [notify]);
 
+  const openParityDocumentation = useCallback(async () => {
+    const url = "https://github.com/arbazfareed/Proto-Flow/blob/main/AXURE-PARITY.md";
+    try {
+      if (isTauri()) {
+        await openExternal(url);
+      } else {
+        window.open(url, "_blank", "noopener,noreferrer");
+      }
+    } catch (error) {
+      notify(error instanceof Error ? error.message : "Could not open the compatibility documentation.", true);
+    }
+  }, [notify]);
+
   useEffect(() => {
     let active = true;
     void startObservability().then(() => {
@@ -641,6 +654,7 @@ function AppShell() {
           onToggle={toggleLeftPanel}
           onOpenPalette={() => setPaletteOpen(true)}
           onUpdates={requestUpdateCheck}
+          onOpenParityDocumentation={() => void openParityDocumentation()}
           activeTool={activeTool}
           onSelectTool={setActiveTool}
           onAddScreen={addLibraryScreen}
