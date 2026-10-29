@@ -17,7 +17,7 @@ The move preserved all 40,941 files in the active Rust target. No tracked source
 
 Before relocation/cleanup, the main target was about 40.57 GiB and the obsolete legacy target about 7.47 GiB. Together they accounted for about 48 GiB of generated data in the checkout. After moving the active cache and removing the obsolete cache, the checkout was about 0.60 GiB (including dependencies and other ignored build output); the active cache remains at about 40.57 GiB beside it.
 
-**Important:** moving the active cache to a sibling folder on C: reduces the checkout size but does not free drive space. The obsolete cache contained 7.47 GiB of logical file data and was deleted; the exact free-space delta can differ due to filesystem allocation and other disk activity. A post-cleanup snapshot showed 28.81 GiB free on C: (the earlier snapshot before cleanup showed 24.76 GiB). The active cache still occupies about 40.57 GiB on C: and is intentionally kept so rebuilds remain fast. It can be regenerated if later removed after closing ProtoFlow.
+**Important:** moving the active cache to a sibling folder on C: reduces the checkout size but does not free drive space. The obsolete cache contained 7.47 GiB of logical file data and was deleted; allocated disk space can differ from logical size. C: free space was 24.76 GiB before cleanup and 28.77 GiB after the rebuild (a 4.01 GiB net difference across those snapshots; other disk activity may affect it). The active cache is intentionally kept so rebuilds remain fast. It can be regenerated if later removed after closing ProtoFlow.
 
 ## Verification
 
@@ -27,7 +27,8 @@ Before relocation/cleanup, the main target was about 40.57 GiB and the obsolete 
 - After legacy cleanup, `PF_DEVICE_FULL=1 npm run verify:devices`: passed with all 21 device frames at four emulated DPRs and responsive/per-device exports in Chromium, Firefox, and WebKit.
 - After legacy cleanup, `cargo test --manifest-path src-tauri/Cargo.toml --target x86_64-pc-windows-msvc`: 22 Rust tests passed using the relocated target.
 - After cleanup, `../ProtoFlow-build/legacy-target-pf-t309` is absent and `../ProtoFlow-build/target` remains the active Cargo target.
-- The Tauri release executable rebuild after legacy cleanup is still running; native launch verification will be recorded after it finishes.
+- After legacy cleanup, `npm run tauri -- build --target x86_64-pc-windows-msvc --no-bundle` completed successfully in 15m 42s. Cargo resolved its target under `../ProtoFlow-build/target`.
+- The newly rebuilt executable launched; Windows reported main window title `ProtoFlow` and `Responding = True`.
 
 ## Reverting the path choice
 
