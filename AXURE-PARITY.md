@@ -25,7 +25,7 @@ This document reports what the repository tests and current host can establish. 
 
 | Target | Browser/runtime evidence | Native desktop evidence | Status |
 |---|---|---|---|
-| Windows 10 Pro Education, build 26300 (current host) | **Passed 2026-10-29:** Chromium rendered all 21 device frames at emulated 100%, 125%, 150%, and 200% DPR; responsive and per-device exports passed in Chromium, Firefox, and WebKit. | Rust/Tauri tests passed; the Tauri Windows build has been invoked. A native build/test is not a full manual UI certification. | Host available; not Windows 11. |
+| Windows 10 Pro Education, build 26300 (current host) | **Passed 2026-10-29:** Chromium rendered all 21 device frames at emulated 100%, 125%, 150%, and 200% DPR; responsive and per-device exports passed in Chromium, Firefox, and WebKit. | **Passed 2026-10-29:** 22 Rust tests passed and the Tauri release executable built. The native app UI/workflows were not manually exercised. | Host available; not Windows 11. |
 | Windows 11 | No Windows 11 host available in this task. | Not verified on Windows 11. | **Not verified.** |
 | Ubuntu 24.04 | Existing GitHub Actions workflows run headless browser checks on Ubuntu. This is not a local Linux desktop session. | Native Ubuntu desktop/Tauri UI is not established by headless browser CI. | **CI/headless only; native desktop not verified.** |
 | Kali Linux | No local distro/session was available. | Not verified. | **Deferred.** |
@@ -70,7 +70,7 @@ A feature-by-feature competitive conclusion requires the same named task, compar
 - `$env:PF_DEVICE_FULL='1'; npm run verify:devices`: passed on this Windows 10 host. Chromium rendered all 21 device frames at the four emulated DPRs; responsive/per-device exports passed in Chromium, Firefox, and WebKit.
 - The run refreshed `reports/device-verification/screenshots/multi-device-preview-100dpi.png`; CI uploads verification screenshots as run artifacts.
 - `cargo test --manifest-path src-tauri/Cargo.toml --target x86_64-pc-windows-msvc`: **22 Rust tests passed**.
-- `npm run tauri -- build --target x86_64-pc-windows-msvc --no-bundle`: invoked; final executable compilation is still in progress at the time of this report update. No native desktop UI session has been manually exercised.
+- `npm run tauri -- build --target x86_64-pc-windows-msvc --no-bundle`: passed; produced `src-tauri/target/x86_64-pc-windows-msvc/release/proto-flow.exe`. No native desktop UI session has been manually exercised.
 - Linux distribution tests and Windows 11 certification were not run; no WSL distro or Linux desktop environment was installed for this task.
 
 ## Acceptance status
