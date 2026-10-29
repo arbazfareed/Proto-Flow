@@ -18,6 +18,7 @@ jobs:
     timeout-minutes: 45
     env:
       PF_DEVICE_FULL: ${{ github.event_name == 'push' && '1' || '0' }}
+      CARGO_TARGET_DIR: ${{ github.workspace }}/src-tauri/target
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4

@@ -5,6 +5,7 @@ on:
     paths:
       - ".github/workflows/signed-windows-release.yml"
       - ".github/workflows/axure-parity-compatibility.yml"
+      - ".cargo/**"
       - "src-tauri/**"
       - "src/**"
       - "reports/DEVICE-VERIFICATION.md"
@@ -27,6 +28,8 @@ jobs:
   verify:
     runs-on: windows-2022
     timeout-minutes: 35
+    env:
+      CARGO_TARGET_DIR: ${{ github.workspace }}/src-tauri/target
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -55,6 +58,7 @@ jobs:
     permissions:
       contents: write
     env:
+      CARGO_TARGET_DIR: ${{ github.workspace }}/src-tauri/target
       WINDOWS_SIGNING_CERTIFICATE_PFX: ${{ secrets.WINDOWS_SIGNING_CERTIFICATE_PFX }}
       WINDOWS_SIGNING_CERTIFICATE_PASSWORD: ${{ secrets.WINDOWS_SIGNING_CERTIFICATE_PASSWORD }}
       TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}

@@ -1,0 +1,3 @@
+[build]
+# Keep large Rust compiler artifacts outside the source checkout.
+target-dir = "../ProtoFlow-build/target"
