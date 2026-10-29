@@ -23,6 +23,8 @@ npm run build
 npm test
 ```
 
+PF-T513 Axure-style compatibility evidence and the three reproducible workflow protocols are documented in [AXURE-PARITY.md](./AXURE-PARITY.md) and [docs/axure-parity-workflows.md](./docs/axure-parity-workflows.md). Run the focused regression suite with `npm run test:axure-parity`.
+
 ## Privacy and diagnostics
 
 Crash reports and anonymous feature telemetry are independent, off-by-default choices in the app's Privacy & diagnostics settings. Local logs are sanitized and can be exported from the same dialog. Crash reports use the GlitchTip-compatible Sentry SDK; feature events are sent to Umami only when both telemetry consent and the provider configuration are present.

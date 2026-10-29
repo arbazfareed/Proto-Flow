@@ -4,8 +4,13 @@ on:
   pull_request:
     paths:
       - ".github/workflows/signed-windows-release.yml"
+      - ".github/workflows/axure-parity-compatibility.yml"
       - "src-tauri/**"
       - "src/**"
+      - "reports/DEVICE-VERIFICATION.md"
+      - "AXURE-PARITY.md"
+      - "docs/axure-parity-workflows.md"
+      - "scripts/run-device-verification.mjs"
       - "package.json"
       - "package-lock.json"
       - "tsconfig*.json"
@@ -35,7 +40,10 @@ jobs:
         with:
           workspaces: src-tauri -> target
       - run: npm ci
+      - run: npx playwright install chromium
+      - run: npm run test:axure-parity
       - run: npm test -- --testTimeout 20000
+      - run: npm run verify:devices
       - run: npm run build
       - run: cargo check --manifest-path src-tauri/Cargo.toml --target x86_64-pc-windows-msvc
 
