@@ -11,6 +11,7 @@
     "benchmark:canvas": "node scripts/run-canvas-benchmark.mjs",
     "benchmark:axure-parity": "node scripts/run-axure-parity-benchmark.mjs",
     "test:axure-parity": "vitest run src/project/axureParityWorkflows.test.ts src/project/dynamicPanels.test.ts src/project/repeaters.test.ts src/project/expressions.test.ts src/project/variables.test.ts src/project/interactions.test.ts src/project/flow.test.ts src/project/widgetNotes.test.ts src/project/richText.test.ts src/project/versionHistory.test.ts src/preview/runtime.test.ts src/preview/publishBundle.test.ts src/preview/codeExport.test.ts src/preview/htmlExport.test.ts",
+    "verify:phase5": "node scripts/run-phase5-interactive-e2e.mjs",
     "verify:devices": "node scripts/run-device-verification.mjs",
     "test": "vitest run"
   },

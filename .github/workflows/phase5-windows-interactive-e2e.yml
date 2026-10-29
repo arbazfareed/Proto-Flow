@@ -1,0 +1,36 @@
+name: Phase 5.1 Windows interactive editor smoke
+
+on:
+  pull_request:
+    branches:
+      - main
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  editor-browser-e2e:
+    runs-on: windows-2022
+    timeout-minutes: 20
+    env:
+      PF_E2E_HEADLESS: "1"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npx playwright install chromium
+      - name: Run interactive editor smoke against the actual app
+        run: npm run verify:phase5
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: phase5-1-editor-smoke-${{ github.run_id }}
+          path: reports/phase5.1/screenshots/editor-flow-smoke.png
+          if-no-files-found: ignore

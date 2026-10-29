@@ -5,12 +5,15 @@ on:
     paths:
       - ".github/workflows/signed-windows-release.yml"
       - ".github/workflows/axure-parity-compatibility.yml"
+      - ".github/workflows/phase5-windows-interactive-e2e.yml"
       - "src-tauri/**"
       - "src/**"
       - "reports/DEVICE-VERIFICATION.md"
       - "AXURE-PARITY.md"
       - "docs/axure-parity-workflows.md"
       - "scripts/run-device-verification.mjs"
+      - "scripts/run-phase5-interactive-e2e.mjs"
+      - "reports/PHASE5-1-WINDOWS-VERIFICATION.md"
       - "package.json"
       - "package-lock.json"
       - "tsconfig*.json"
@@ -27,6 +30,8 @@ jobs:
   verify:
     runs-on: windows-2022
     timeout-minutes: 35
+    env:
+      PF_E2E_HEADLESS: "1"
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -42,6 +47,7 @@ jobs:
       - run: npm ci
       - run: npx playwright install chromium
       - run: npm run test:axure-parity
+      - run: npm run verify:phase5
       - run: npm test -- --testTimeout 20000
       - run: npm run verify:devices
       - run: npm run build
