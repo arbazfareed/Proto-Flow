@@ -2,34 +2,34 @@
 
 **Branch:** `feature/build-cache-outside-workspace`  
 **Date:** 2026-10-29  
-**Purpose:** Keep large generated Rust outputs out of the ProtoFlow source checkout without changing application code or deleting build artifacts.
+**Purpose:** Keep large generated Rust outputs out of the ProtoFlow source checkout without changing application code or deleting source/project files.
 
 ## What changed
 
 - Added `.cargo/config.toml` with `build.target-dir = "../ProtoFlow-build/target"`.
 - GitHub Actions that use `rust-cache` or package Windows releases explicitly set `CARGO_TARGET_DIR` to the existing runner-local `src-tauri/target` path. This preserves current CI cache and bundle assumptions.
-- Moved, without deleting, the existing ignored cache directories to sibling folders:
-  - `src-tauri/target` → `../ProtoFlow-build/target`
-  - `src-tauri/target-pf-t309` → `../ProtoFlow-build/legacy-target-pf-t309`
+- Moved the active ignored cache intact: `src-tauri/target` → `../ProtoFlow-build/target`.
+- After confirming `target-pf-t309` had no source/build references (only its `.gitignore` entry and this report) and no Rust build process was active, removed that obsolete generated cache. It contained 7,552 files and was about 7.47 GiB; its contents are reproducible build artifacts, not source or user projects.
 
-The move preserved the measured file counts: 40,941 files in the main Rust target and 7,552 files in the legacy target. Both destination directories exist. No tracked source files or app functionality were removed or modified for this optimization.
+The move preserved all 40,941 files in the active Rust target. No tracked source files, saved prototypes, or app functionality were removed or modified for this optimization.
 
 ## Measured footprint
 
-Before relocating the caches, the main target was about 40.57 GiB and the legacy target about 7.47 GiB. Together they accounted for about 48 GiB of generated data inside the checkout. After relocation, a recursive scan of the workspace was about 0.60 GiB (including dependencies and other ignored build output).
+Before relocation/cleanup, the main target was about 40.57 GiB and the obsolete legacy target about 7.47 GiB. Together they accounted for about 48 GiB of generated data in the checkout. After moving the active cache and removing the obsolete cache, the checkout was about 0.60 GiB (including dependencies and other ignored build output); the active cache remains at about 40.57 GiB beside it.
 
-**Important:** both locations are on the same C: volume. Moving caches out of the checkout reduces the project folder's size but does not, by itself, reclaim C: drive capacity. No cache was deleted. To actually reclaim drive space, an operator would need to archive/move these preserved folders to a different volume and explicitly approve any later deletion; that was not done here.
+**Important:** moving the active cache to a sibling folder on C: reduces the checkout size but does not free drive space. The obsolete cache contained 7.47 GiB of logical file data and was deleted; allocated disk space can differ from logical size. C: free space was 24.76 GiB before cleanup and 28.77 GiB after the rebuild (a 4.01 GiB net difference across those snapshots; other disk activity may affect it). The active cache is intentionally kept so rebuilds remain fast. It can be regenerated if later removed after closing ProtoFlow.
 
 ## Verification
 
 - `cargo metadata --manifest-path src-tauri/Cargo.toml --format-version 1 --no-deps` resolved the local target directory to the sibling `ProtoFlow-build/target`.
-- `npm test -- --reporter=dot`: 401 tests passed across 62 files.
-- `npm run build`: passed (Vite emitted its existing large-chunk advisory).
-- `PF_DEVICE_FULL=1 npm run verify:devices`: passed with all 21 device frames at four emulated DPRs and responsive/per-device exports in Chromium, Firefox, and WebKit.
-- `cargo test --manifest-path src-tauri/Cargo.toml --target x86_64-pc-windows-msvc`: 22 Rust tests passed using the relocated target.
-- `npm run tauri -- build --target x86_64-pc-windows-msvc --no-bundle`: passed; executable was produced under `../ProtoFlow-build/target/x86_64-pc-windows-msvc/release/`.
-- The rebuilt native app launched; Windows reported its main window title as `ProtoFlow` and `Responding = True`.
+- After legacy cleanup, `npm test -- --reporter=dot`: 401 tests passed across 62 files.
+- After legacy cleanup, `npm run build`: passed (Vite emitted its existing large-chunk advisory).
+- After legacy cleanup, `PF_DEVICE_FULL=1 npm run verify:devices`: passed with all 21 device frames at four emulated DPRs and responsive/per-device exports in Chromium, Firefox, and WebKit.
+- After legacy cleanup, `cargo test --manifest-path src-tauri/Cargo.toml --target x86_64-pc-windows-msvc`: 22 Rust tests passed using the relocated target.
+- After cleanup, `../ProtoFlow-build/legacy-target-pf-t309` is absent and `../ProtoFlow-build/target` remains the active Cargo target.
+- After legacy cleanup, `npm run tauri -- build --target x86_64-pc-windows-msvc --no-bundle` completed successfully in 15m 42s. Cargo resolved its target under `../ProtoFlow-build/target`.
+- The newly rebuilt executable launched; Windows reported main window title `ProtoFlow` and `Responding = True`.
 
 ## Reverting the path choice
 
-To return future Cargo builds to the default location, remove the local `.cargo/config.toml` setting. The relocated cache folders are preserved as ordinary sibling directories; moving them back is a separate manual operation. CI continues to use its explicit runner-local target path and is not affected by local machine cache location.
+To return future Cargo builds to the default location, remove the local `.cargo/config.toml` setting. The active cache remains in the sibling `ProtoFlow-build/target` folder; moving it back is a separate manual operation. CI continues to use its explicit runner-local target path and is not affected by local machine cache location.
