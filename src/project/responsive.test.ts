@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { getWidgetViewportOverflow } from "../devices/frame";
 import { createEmptyProject, parseProject, serializeProject } from "./schema";
 import {
   createDefaultBreakpoints,
@@ -42,6 +43,9 @@ describe("responsive breakpoints", () => {
         mobile: {
           x: 12,
           width: 180,
+          opacity: 0.7,
+          cascadeMode: "absolute",
+          constraints: { horizontal: "left", vertical: "top" },
           visible: false,
           style: { fill: "#123456" },
           props: { label: "Compact" },
@@ -54,11 +58,56 @@ describe("responsive breakpoints", () => {
     expect(resolved).toMatchObject({
       x: 12,
       width: 180,
+      opacity: 0.7,
+      cascadeMode: "absolute",
+      constraints: { horizontal: "left", vertical: "top" },
       visible: false,
       style: { fill: "#123456" },
       props: { label: "Compact" },
     });
     expect(widget).toMatchObject({ x: 100, width: 240, visible: true, style: {}, props: {} });
+  });
+
+  it("fits widgets inside each viewport without changing their saved base geometry", () => {
+    const widget = makeWidget({
+      x: 360,
+      y: 820,
+      width: 400,
+      height: 900,
+      rotation: 20,
+    });
+    const mobile = createDefaultBreakpoints()[0];
+    const [resolved] = resolveWidgetsForBreakpoint([widget], mobile, 1440, 900);
+
+    expect(getWidgetViewportOverflow(resolved, mobile)).toBe(0);
+    expect(resolved.width).toBeLessThan(widget.width);
+    expect(resolved.height).toBeLessThan(widget.height);
+    expect(widget).toMatchObject({ x: 360, y: 820, width: 400, height: 900 });
+  });
+
+  it("auto-fits an oversized widget while preserving its desktop and tablet overrides", () => {
+    const widget = makeWidget({
+      x: 800,
+      y: 600,
+      width: 300,
+      height: 240,
+      overrides: {
+        mobile: { x: 360, width: 200 },
+        tablet: { x: 500, width: 240 },
+      },
+    });
+    const [mobile] = resolveWidgetsForBreakpoint([widget], createDefaultBreakpoints()[0], 1440);
+    const [tablet] = resolveWidgetsForBreakpoint([widget], createDefaultBreakpoints()[1], 1440);
+    const [desktop] = resolveWidgetsForBreakpoint([widget], createDefaultBreakpoints()[2], 1440);
+
+    expect(mobile.x + mobile.width).toBeLessThanOrEqual(390);
+    expect(tablet.x + tablet.width).toBeLessThanOrEqual(768);
+    expect(desktop).toMatchObject({ x: 800, y: 600, width: 300, height: 240 });
+    expect(mobile.x).not.toBe(widget.x);
+    expect(widget.overrides).toEqual({
+      mobile: { x: 360, width: 200 },
+      tablet: { x: 500, width: 240 },
+    });
   });
 
   it("supports hide, stack, fluid cascade modes without mutating source widgets", () => {
@@ -77,6 +126,37 @@ describe("responsive breakpoints", () => {
     expect(byId.get(widgets[2].id)?.width).toBeCloseTo(400 * 390 / 1440);
     expect(byId.get(widgets[3].id)?.visible).toBe(false);
     expect(widgets[0]).toMatchObject({ x: 20, y: 20, width: 500 });
+  });
+
+  it("uses breakpoint-specific cascade modes and constraints", () => {
+    const widget = makeWidget({
+      x: 1200,
+      width: 200,
+      cascadeMode: "hide",
+      constraints: { horizontal: "right", vertical: "top" },
+      overrides: {
+        mobile: {
+          cascadeMode: "absolute",
+          constraints: { horizontal: "left", vertical: "top" },
+        },
+      },
+    });
+    const [mobile] = resolveWidgetsForBreakpoint(
+      [widget],
+      createDefaultBreakpoints()[0],
+      1440,
+    );
+    const [tablet] = resolveWidgetsForBreakpoint(
+      [widget],
+      createDefaultBreakpoints()[1],
+      1440,
+    );
+
+    expect(mobile.visible).toBe(true);
+    expect(mobile.x).toBe(190);
+    expect(tablet.visible).toBe(false);
+    expect(widget.cascadeMode).toBe("hide");
+    expect(widget.constraints).toEqual({ horizontal: "right", vertical: "top" });
   });
 
   it("hides desktop-only widgets in opt-in compact layouts while retaining explicit compact overrides", () => {
@@ -173,7 +253,7 @@ describe("responsive breakpoints", () => {
     );
 
     expect(byId.get(constrained.id)).toMatchObject({ x: 100, width: 150, y: 50, height: 644 });
-    expect(byId.get(rightBottom.id)).toMatchObject({ x: -750, y: 144 });
+    expect(byId.get(rightBottom.id)).toMatchObject({ x: 0, y: 144 });
     expect(byId.get(center.id)).toMatchObject({ x: 95, y: 372 });
     expect(byId.get(scaled.id)?.width).toBeCloseTo(scaled.width * 390 / 1440);
     expect(byId.get(scaled.id)?.height).toBeCloseTo(scaled.height * 844 / 900);
@@ -201,6 +281,9 @@ describe("responsive breakpoints", () => {
     }), "mobile", {
       x: 24,
       rotation: 15,
+      opacity: 0.6,
+      cascadeMode: "fluid",
+      constraints: { horizontal: "left", vertical: "top" },
     });
     const responsiveProject = {
       ...project,

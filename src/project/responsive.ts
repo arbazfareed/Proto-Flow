@@ -111,6 +111,44 @@ function applyConstraints(
   return next;
 }
 
+function fitWidgetToBreakpoint(widget: Widget, breakpoint: Breakpoint): Widget {
+  const radians = (widget.rotation * Math.PI) / 180;
+  const getRotatedSize = (width: number, height: number) => ({
+    width: Math.abs(Math.cos(radians)) * width + Math.abs(Math.sin(radians)) * height,
+    height: Math.abs(Math.sin(radians)) * width + Math.abs(Math.cos(radians)) * height,
+  });
+  const rotatedSize = getRotatedSize(widget.width, widget.height);
+  const scale = Math.min(
+    1,
+    breakpoint.width / rotatedSize.width,
+    breakpoint.height / rotatedSize.height,
+  );
+  const width = widget.width * scale;
+  const height = widget.height * scale;
+  const fittedRotatedSize = getRotatedSize(width, height);
+  const left = Math.max(
+    0,
+    Math.min(
+      breakpoint.width - fittedRotatedSize.width,
+      widget.x + width / 2 - fittedRotatedSize.width / 2,
+    ),
+  );
+  const top = Math.max(
+    0,
+    Math.min(
+      breakpoint.height - fittedRotatedSize.height,
+      widget.y + height / 2 - fittedRotatedSize.height / 2,
+    ),
+  );
+  const x = left + fittedRotatedSize.width / 2 - width / 2;
+  const y = top + fittedRotatedSize.height / 2 - height / 2;
+
+  if (x === widget.x && y === widget.y && width === widget.width && height === widget.height) {
+    return widget;
+  }
+  return { ...widget, x, y, width, height };
+}
+
 export function resolveWidgetsForBreakpoint(
   widgets: readonly Widget[],
   breakpoint: Breakpoint,
@@ -122,9 +160,11 @@ export function resolveWidgetsForBreakpoint(
   let nextStackY = 24;
   return ordered.map((widget) => {
     let responsiveWidget = widget;
-    const cascadeMode = widget.cascadeMode ?? (
+    const breakpointOverride = widget.overrides?.[breakpoint.id];
+    const cascadeMode = breakpointOverride?.cascadeMode ?? widget.cascadeMode ?? (
       compactLayout && breakpoint.width < baseWidth ? "hide" : undefined
     );
+    const constraints = breakpointOverride?.constraints ?? widget.constraints;
     if (cascadeMode === "hide") {
       responsiveWidget = { ...responsiveWidget, visible: false };
     } else if (breakpoint.width < baseWidth && cascadeMode === "fluid") {
@@ -145,12 +185,12 @@ export function resolveWidgetsForBreakpoint(
       nextStackY += responsiveWidget.height + 16;
     }
     if (
-      widget.constraints &&
+      constraints &&
       (cascadeMode === undefined || cascadeMode === "absolute")
     ) {
       responsiveWidget = applyConstraints(
         responsiveWidget,
-        widget.constraints,
+        constraints,
         breakpoint,
         baseWidth,
         baseHeight,
@@ -158,15 +198,16 @@ export function resolveWidgetsForBreakpoint(
     }
     const resolved = applyOverride(
       responsiveWidget,
-      widget.overrides?.[breakpoint.id],
+      breakpointOverride,
     );
+    let fitted = resolved;
     if (compactLayout && breakpoint.width < 768) {
       const horizontalScale = breakpoint.width / 390;
       const verticalScale = breakpoint.height < 844 ? breakpoint.height / 844 : 1;
       const compactProps = typeof resolved.props.fontSize === "number"
         ? { ...resolved.props, fontSize: Math.max(10, resolved.props.fontSize * verticalScale) }
         : resolved.props;
-      return {
+      fitted = {
         ...resolved,
         x: resolved.x * horizontalScale,
         width: Math.max(1, resolved.width * horizontalScale),
@@ -175,7 +216,7 @@ export function resolveWidgetsForBreakpoint(
         props: compactProps,
       };
     }
-    return resolved;
+    return fitWidgetToBreakpoint(fitted, breakpoint);
   });
 }
 

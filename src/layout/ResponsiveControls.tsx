@@ -404,6 +404,8 @@ export function ResponsivePanel({
     [widget],
     breakpoint.id,
   ).length > 0;
+  const cascadeMode = override?.cascadeMode ?? widget.cascadeMode ?? "absolute";
+  const constraints = override?.constraints ?? widget.constraints;
   useEffect(() => {
     setFieldErrors({});
     setFillError("");
@@ -466,24 +468,32 @@ export function ResponsivePanel({
     if (axis === "horizontal") {
       if (!["left", "right", "center", "scale", "stretch"].includes(value)) return;
       const horizontal = value as ResponsiveConstraints["horizontal"];
-      updateSelectedWidget(screen.id, widget.id, (current) => ({
-        ...current,
-        constraints: {
-          horizontal,
-          vertical: current.constraints?.vertical ?? "top",
+      updateSelectedWidget(screen.id, widget.id, (current) => updateWidgetOverride(
+        current,
+        breakpoint.id,
+        {
+          constraints: {
+            horizontal,
+            vertical: current.overrides?.[breakpoint.id]?.constraints?.vertical ??
+              current.constraints?.vertical ?? "top",
+          },
         },
-      }));
+      ));
       return;
     }
     if (!["top", "bottom", "center", "scale", "stretch"].includes(value)) return;
     const vertical = value as ResponsiveConstraints["vertical"];
-    updateSelectedWidget(screen.id, widget.id, (current) => ({
-      ...current,
-      constraints: {
-        horizontal: current.constraints?.horizontal ?? "left",
-        vertical,
+    updateSelectedWidget(screen.id, widget.id, (current) => updateWidgetOverride(
+      current,
+      breakpoint.id,
+      {
+        constraints: {
+          horizontal: current.overrides?.[breakpoint.id]?.constraints?.horizontal ??
+            current.constraints?.horizontal ?? "left",
+          vertical,
+        },
       },
-    }));
+    ));
   };
 
   const textKey = typeof effectiveWidget.props.label === "string" ? "label" : "text";
@@ -507,14 +517,13 @@ export function ResponsivePanel({
       <select
         id="widget-cascade-mode"
         className="text-field"
-        value={widget.cascadeMode ?? "absolute"}
+        value={cascadeMode}
         onChange={(event) => {
           const value = event.currentTarget.value;
           if (value !== "absolute" && value !== "stack" && value !== "fluid" && value !== "hide") return;
-          updateSelectedWidget(screen.id, widget.id, (current) => ({
-            ...current,
-            cascadeMode: value,
-          }));
+          updateSelectedWidget(screen.id, widget.id, (current) =>
+            updateWidgetOverride(current, breakpoint.id, { cascadeMode: value }),
+          );
         }}
       >
         <option value="absolute">Absolute</option>
@@ -522,12 +531,21 @@ export function ResponsivePanel({
         <option value="fluid">Fluid width</option>
         <option value="hide">Hide</option>
       </select>
+      {override?.cascadeMode !== undefined && (
+        <button
+          className="responsive-reset-field"
+          aria-label="Reset cascade behavior override"
+          onClick={() => resetBreakpointOverrideField(screen, widget, breakpoint.id, "cascadeMode")}
+        >
+          Reset behavior
+        </button>
+      )}
       <p className="field-hint">
-        {widget.cascadeMode === "stack"
+        {cascadeMode === "stack"
           ? "At narrower widths, widgets stack vertically in layer order."
-          : widget.cascadeMode === "fluid"
+          : cascadeMode === "fluid"
             ? "At narrower widths, this widget scales proportionally."
-            : widget.cascadeMode === "hide"
+            : cascadeMode === "hide"
               ? "This widget is hidden at every breakpoint."
               : "Base layout stays fixed unless this breakpoint has overrides."}
       </p>
@@ -549,7 +567,7 @@ export function ResponsivePanel({
       <select
         id="responsive-horizontal-constraint"
         className="text-field"
-        value={widget.constraints?.horizontal ?? "left"}
+        value={constraints?.horizontal ?? "left"}
         onChange={(event) => setConstraint("horizontal", event.currentTarget.value)}
       >
         <option value="left">Pin left</option>
@@ -562,7 +580,7 @@ export function ResponsivePanel({
       <select
         id="responsive-vertical-constraint"
         className="text-field"
-        value={widget.constraints?.vertical ?? "top"}
+        value={constraints?.vertical ?? "top"}
         onChange={(event) => setConstraint("vertical", event.currentTarget.value)}
       >
         <option value="top">Pin top</option>
@@ -571,6 +589,15 @@ export function ResponsivePanel({
         <option value="scale">Scale with height</option>
         <option value="stretch">Pin top and bottom</option>
       </select>
+      {override?.constraints !== undefined && (
+        <button
+          className="responsive-reset-field"
+          aria-label="Reset position constraint overrides"
+          onClick={() => resetBreakpointOverrideField(screen, widget, breakpoint.id, "constraints")}
+        >
+          Reset constraints
+        </button>
+      )}
       {!override ? (
         <button className="button button-secondary responsive-add-override" onClick={addOverride}>
           <Plus size={13} /> Add override for this breakpoint
