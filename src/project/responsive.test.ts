@@ -243,6 +243,13 @@ describe("responsive breakpoints", () => {
     const scaled = makeWidget({
       constraints: { horizontal: "scale", vertical: "scale" },
     });
+    const tabletAnchored = makeWidget({
+      x: 1100,
+      y: 700,
+      width: 200,
+      height: 100,
+      constraints: { horizontal: "right", vertical: "bottom" },
+    });
     const byId = new Map(
       resolveWidgetsForBreakpoint(
         [constrained, rightBottom, center, scaled],
@@ -253,10 +260,18 @@ describe("responsive breakpoints", () => {
     );
 
     expect(byId.get(constrained.id)).toMatchObject({ x: 100, width: 150, y: 50, height: 644 });
-    expect(byId.get(rightBottom.id)).toMatchObject({ x: 0, y: 144 });
+    expect(byId.get(rightBottom.id)).toMatchObject({ x: 0, y: 44 });
     expect(byId.get(center.id)).toMatchObject({ x: 95, y: 372 });
     expect(byId.get(scaled.id)?.width).toBeCloseTo(scaled.width * 390 / 1440);
     expect(byId.get(scaled.id)?.height).toBeCloseTo(scaled.height * 844 / 900);
+
+    const [tabletWidget] = resolveWidgetsForBreakpoint(
+      [tabletAnchored],
+      createDefaultBreakpoints()[1],
+      1440,
+      900,
+    );
+    expect(tabletWidget).toMatchObject({ x: 428, y: 824, width: 200, height: 100 });
   });
 
   it("warns only for important, visible widgets without an override at the breakpoint", () => {
