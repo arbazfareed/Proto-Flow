@@ -8,6 +8,8 @@ Choose this when one web page should adapt to its current viewport. The ZIP cont
 
 Use this format for a conventional website or prototype that should respond to a browser resize without switching between separate prototype files.
 
+In the editor, choose Mobile, Tablet, or Desktop in the viewport selector to edit that breakpoint independently. Canvas transforms and the Design inspector save geometry, opacity, styles, text, and widget properties as breakpoint overrides; the Responsive tab also supports breakpoint-specific visibility, cascade behavior, and position constraints. Widgets that would extend beyond the active viewport are fitted into it for display and export. This can cause overlaps when several widgets are crowded near an edge; the fitted geometry is not written back to the shared layout, so you can adjust it with that breakpoint's manual override fields.
+
 ## Per-device HTML variants
 
 Choose this when reviewers need a distinct starting screen for Desktop, Tablet, or Mobile. The ZIP contains `index-desktop.html`, `index-tablet.html`, and `index-mobile.html`, plus the shared runtime and assets. Each page starts on the closest matching device screen when one exists; the screen picker still allows navigation to other screens.

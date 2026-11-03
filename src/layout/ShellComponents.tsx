@@ -42,7 +42,7 @@ import {
 } from "lucide-react";
 import { isTauri } from "@tauri-apps/api/core";
 import { useStore } from "../store";
-import type { Project, Widget, WidgetStyle } from "../project/schema";
+import type { Project, Screen, Widget, WidgetStyle } from "../project/schema";
 import {
   getActivePanelState,
   getPanelStates,
@@ -78,6 +78,12 @@ import { SymbolLibrary } from "./SymbolLibrary";
 import { WidgetIcon } from "./widgetIcons";
 import { getWidgetLearningGuide } from "../project/learningWidgets";
 import { BreakpointToolbar, ResponsivePanel } from "./ResponsiveControls";
+import {
+  getScreenBreakpoints,
+  resolveActiveBreakpoint,
+  resolveWidgetsForBreakpoint,
+  updateWidgetOverride,
+} from "../project/responsive";
 import {
   evaluateGeometryExpression,
   getGeometryUpdates,
@@ -118,6 +124,61 @@ const FlowDiagram = lazy(() =>
     default: module.FlowDiagram,
   })),
 );
+
+function getEditorBreakpointId(screen: Screen, breakpointId: string | null): string | null {
+  return breakpointId &&
+      getScreenBreakpoints(screen).some((breakpoint) => breakpoint.id === breakpointId)
+    ? breakpointId
+    : null;
+}
+
+function getInspectorWidgets(screen: Screen, breakpointId: string | null): Widget[] {
+  const widgets = collectWidgetsDeep(screen.widgets);
+  const breakpoint = resolveActiveBreakpoint(screen, breakpointId);
+  return resolveWidgetsForBreakpoint(
+    widgets,
+    breakpoint,
+    screen.device?.width ?? DEFAULT_DEVICE_PRESET.viewport.width,
+    screen.device?.height ?? DEFAULT_DEVICE_PRESET.viewport.height,
+    screen.compactLayout,
+  );
+}
+
+function updateWidgetAtBreakpoint(
+  widget: Widget,
+  breakpointId: string | null,
+  update: Partial<
+    Pick<Widget, "x" | "y" | "width" | "height" | "rotation" | "opacity" | "visible">
+  > & {
+    style?: Partial<WidgetStyle>;
+    props?: Record<string, unknown>;
+  },
+): Widget {
+  if (breakpointId) return updateWidgetOverride(widget, breakpointId, update);
+  return {
+    ...widget,
+    ...update,
+    style: update.style ? { ...widget.style, ...update.style } : widget.style,
+    props: update.props ? { ...widget.props, ...update.props } : widget.props,
+  };
+}
+
+function updateScreenWidgetsAtBreakpoint(
+  screen: Screen,
+  breakpointId: string | null,
+  updates: ReadonlyMap<string, Parameters<typeof updateWidgetAtBreakpoint>[2]>,
+): Screen {
+  return {
+    ...screen,
+    breakpoints: breakpointId
+      ? screen.breakpoints ?? [...getScreenBreakpoints(screen)]
+      : screen.breakpoints,
+    widgets: mapWidgetsDeep(screen.widgets, (widget) => {
+      const update = updates.get(widget.id);
+      return update ? updateWidgetAtBreakpoint(widget, breakpointId, update) : widget;
+    }),
+  };
+}
 
 interface TopBarProps {
   onNew: () => void;
@@ -957,6 +1018,7 @@ type StyleColorField = "fill" | "stroke";
 type StyleColorValue = { color: string; opacity: number } | null;
 
 function StyleSection({ widgets }: { widgets: Widget[] }) {
+  const activeBreakpointId = useStore((state) => state.activeBreakpointId);
   const editSessionRef = useRef<StyleEditSession | null>(null);
   const [colorDraft, setColorDraft] = useState<Record<StyleColorField, string>>({
     fill: "",
@@ -979,7 +1041,7 @@ function StyleSection({ widgets }: { widgets: Widget[] }) {
     return values.length > 0 && !mixed(values) ? values[0] : fallback;
   };
 
-  const selectionKey = widgets.map((widget) => widget.id).join("\u0000");
+  const selectionKey = `${activeBreakpointId ?? "base"}:${widgets.map((widget) => widget.id).join("\u0000")}`;
 
   const finishEditSession = useCallback(() => {
     const session = editSessionRef.current;
@@ -987,18 +1049,19 @@ function StyleSection({ widgets }: { widgets: Widget[] }) {
     if (session.timer !== null) window.clearTimeout(session.timer);
     editSessionRef.current = null;
     const current = useStore.getState();
-    const currentWidgets =
-      current.project.screens.find((screen) => screen.id === session.screenId)?.widgets ?? [];
-    const beforeWidgets =
-      session.snapshot.screens.find((screen) => screen.id === session.screenId)?.widgets ?? [];
+    const currentWidgets = collectWidgetsDeep(
+      current.project.screens.find((screen) => screen.id === session.screenId)?.widgets ?? [],
+    );
+    const beforeWidgets = collectWidgetsDeep(
+      session.snapshot.screens.find((screen) => screen.id === session.screenId)?.widgets ?? [],
+    );
     const changed = session.widgetIds.some((id) => {
       const before = beforeWidgets.find((widget) => widget.id === id);
       const after = currentWidgets.find((widget) => widget.id === id);
       return Boolean(
         before &&
           after &&
-          (JSON.stringify(before.style) !== JSON.stringify(after.style) ||
-            JSON.stringify(before.props) !== JSON.stringify(after.props)),
+          JSON.stringify(before) !== JSON.stringify(after),
       );
     });
     if (changed) current.pushHistory(session.snapshot);
@@ -1029,10 +1092,15 @@ function StyleSection({ widgets }: { widgets: Widget[] }) {
       const current = useStore.getState();
       const screenId = current.getActiveScreenId();
       const screen = current.project.screens.find((item) => item.id === screenId);
-      const targetWidgets =
-        screen ? collectWidgetsDeep(screen.widgets).filter((widget) => session.widgetIds.includes(widget.id)) : [];
+      if (!screen) return;
+      const breakpointId = getEditorBreakpointId(screen, current.activeBreakpointId);
+      const targetWidgets = getInspectorWidgets(screen, breakpointId)
+        .filter((widget) => session.widgetIds.includes(widget.id));
       const updates = new Map(
-        getStyleUpdates(targetWidgets, patch).map((update) => [update.id, update.style]),
+        getStyleUpdates(targetWidgets, patch).map((update) => [
+          update.id,
+          { style: update.style },
+        ]),
       );
       const project: Project = {
         ...current.project,
@@ -1040,14 +1108,7 @@ function StyleSection({ widgets }: { widgets: Widget[] }) {
         screens: current.project.screens.map((item) =>
           item.id !== screenId
             ? item
-            : {
-                ...item,
-                widgets: mapWidgetsDeep(item.widgets, (widget) =>
-                  updates.has(widget.id)
-                    ? { ...widget, style: updates.get(widget.id)! }
-                    : widget,
-                ),
-              },
+            : updateScreenWidgetsAtBreakpoint(item, breakpointId, updates),
         ),
       };
       useStore.setState({ project, isDirty: true });
@@ -1066,38 +1127,37 @@ function StyleSection({ widgets }: { widgets: Widget[] }) {
       const current = useStore.getState();
       const screenId = session.screenId;
       const screen = current.project.screens.find((item) => item.id === screenId);
-      const targetWidgets =
-        screen ? collectWidgetsDeep(screen.widgets).filter((widget) => session.widgetIds.includes(widget.id)) : [];
+      if (!screen) return;
+      const breakpointId = getEditorBreakpointId(screen, current.activeBreakpointId);
+      const targetWidgets = getInspectorWidgets(screen, breakpointId)
+        .filter((widget) => session.widgetIds.includes(widget.id));
       const updates = new Map(
         getTextPropertyUpdates(targetWidgets, patch).map((update) => [update.id, update.props]),
       );
+      const widgetUpdates = new Map<string, Parameters<typeof updateWidgetAtBreakpoint>[2]>();
+      for (const [id, props] of updates) {
+        const effectiveWidget = targetWidgets.find((widget) => widget.id === id);
+        const measured = effectiveWidget && props.autoSize === true
+          ? measureTextBounds(
+              typeof props.text === "string" ? props.text : "",
+              typeof props.fontFamily === "string" ? props.fontFamily : "Arial",
+              typeof props.fontSize === "number" ? props.fontSize : 24,
+              typeof props.fontWeight === "string" ? props.fontWeight : "normal",
+              typeof props.lineHeight === "number" ? props.lineHeight : 1.2,
+            )
+          : null;
+        widgetUpdates.set(id, {
+          props,
+          ...(measured ? { width: measured.width, height: measured.height } : {}),
+        });
+      }
       const project: Project = {
         ...current.project,
         updatedAt: new Date().toISOString(),
         screens: current.project.screens.map((item) =>
           item.id !== screenId
             ? item
-            : {
-                ...item,
-                widgets: mapWidgetsDeep(item.widgets, (widget) => {
-                  const props = updates.get(widget.id);
-                  if (!props) return widget;
-                  const measured = props.autoSize === true
-                    ? measureTextBounds(
-                        typeof props.text === "string" ? props.text : "",
-                        typeof props.fontFamily === "string" ? props.fontFamily : "Arial",
-                        typeof props.fontSize === "number" ? props.fontSize : 24,
-                        typeof props.fontWeight === "string" ? props.fontWeight : "normal",
-                        typeof props.lineHeight === "number" ? props.lineHeight : 1.2,
-                      )
-                    : null;
-                  return {
-                    ...widget,
-                    props,
-                    ...(measured ? { width: measured.width, height: measured.height } : {}),
-                  };
-                }),
-              },
+            : updateScreenWidgetsAtBreakpoint(item, breakpointId, widgetUpdates),
         ),
       };
       useStore.setState({ project, isDirty: true });
@@ -1115,10 +1175,15 @@ function StyleSection({ widgets }: { widgets: Widget[] }) {
       if (!session) return;
       const current = useStore.getState();
       const screen = current.project.screens.find((item) => item.id === session.screenId);
-      const targetWidgets =
-        screen ? collectWidgetsDeep(screen.widgets).filter((widget) => session.widgetIds.includes(widget.id)) : [];
+      if (!screen) return;
+      const breakpointId = getEditorBreakpointId(screen, current.activeBreakpointId);
+      const targetWidgets = getInspectorWidgets(screen, breakpointId)
+        .filter((widget) => session.widgetIds.includes(widget.id));
       const updates = new Map(
         getWidgetPropertyUpdates(targetWidgets, patch).map((update) => [update.id, update.props]),
+      );
+      const widgetUpdates = new Map(
+        [...updates].map(([id, props]) => [id, { props }]),
       );
       const project: Project = {
         ...current.project,
@@ -1126,13 +1191,7 @@ function StyleSection({ widgets }: { widgets: Widget[] }) {
         screens: current.project.screens.map((item) =>
           item.id !== session.screenId
             ? item
-            : {
-                ...item,
-                widgets: mapWidgetsDeep(item.widgets, (widget) => {
-                  const props = updates.get(widget.id);
-                  return props ? { ...widget, props } : widget;
-                }),
-              },
+            : updateScreenWidgetsAtBreakpoint(item, breakpointId, widgetUpdates),
         ),
       };
       useStore.setState({ project, isDirty: true });
@@ -1431,6 +1490,7 @@ function StyleSection({ widgets }: { widgets: Widget[] }) {
 
 function GeometrySection({ widgets }: { widgets: Widget[] }) {
   const selectedIds = useStore((state) => state.selectedIds);
+  const activeBreakpointId = useStore((state) => state.activeBreakpointId);
   const zoom = useStore((state) => state.zoom);
   const pan = useStore((state) => state.pan);
   const geometryPreview = useStore((state) => state.geometryPreview);
@@ -1510,26 +1570,29 @@ function GeometrySection({ widgets }: { widgets: Widget[] }) {
     editSessionRef.current = null;
 
     const current = useStore.getState();
-    const currentWidgets =
-      current.project.screens.find((screen) => screen.id === session.screenId)?.widgets ?? [];
-    const snapshotWidgets =
-      session.snapshot.screens.find((screen) => screen.id === session.screenId)?.widgets ?? [];
+    const currentWidgets = collectWidgetsDeep(
+      current.project.screens.find((screen) => screen.id === session.screenId)?.widgets ?? [],
+    );
+    const snapshotWidgets = collectWidgetsDeep(
+      session.snapshot.screens.find((screen) => screen.id === session.screenId)?.widgets ?? [],
+    );
     const changed = session.widgets.some((widget) => {
       const before = snapshotWidgets.find((item) => item.id === widget.id);
       const after = currentWidgets.find((item) => item.id === widget.id);
       return Boolean(
         before &&
           after &&
-          (before.x !== after.x ||
-            before.y !== after.y ||
-            before.width !== after.width ||
-            before.height !== after.height ||
-            before.rotation !== after.rotation ||
-            before.opacity !== after.opacity),
+          JSON.stringify(before) !== JSON.stringify(after),
       );
     });
     if (changed) current.pushHistory(session.snapshot);
   }, []);
+
+  useEffect(() => {
+    commitEditSession();
+    setActiveField(null);
+    setDraft("");
+  }, [activeBreakpointId, commitEditSession]);
 
   const beginEdit = useCallback(
     (field: GeometryField) => {
@@ -1539,11 +1602,14 @@ function GeometrySection({ widgets }: { widgets: Widget[] }) {
         commitEditSession();
       }
       const current = useStore.getState();
-      const selected = current.project.screens
-        .find((screen) => screen.id === current.getActiveScreenId())
-        ?.widgets.filter(
-          (widget) => selectedIds.includes(widget.id) && !widget.locked,
-        ) ?? [];
+      const screen = current.project.screens.find(
+        (item) => item.id === current.getActiveScreenId(),
+      );
+      if (!screen) return;
+      const selected = getInspectorWidgets(
+        screen,
+        getEditorBreakpointId(screen, current.activeBreakpointId),
+      ).filter((widget) => selectedIds.includes(widget.id) && !widget.locked);
       if (selected.length === 0) return;
       editSessionRef.current = {
         snapshot: current.project,
@@ -1581,29 +1647,34 @@ function GeometrySection({ widgets }: { widgets: Widget[] }) {
       if (field === "opacity") value = Math.min(1, Math.max(0, value));
 
       const updates = getGeometryUpdates(session.widgets, field, value);
-      const updateById = new Map(updates.map((update) => [update.id, update]));
       const current = useStore.getState();
+      const screenId = current.getActiveScreenId();
+      const screen = current.project.screens.find((item) => item.id === screenId);
+      if (!screen) return;
+      const breakpointId = getEditorBreakpointId(screen, current.activeBreakpointId);
+      const updateById = new Map<string, Parameters<typeof updateWidgetAtBreakpoint>[2]>(
+        updates.map(({ id, ...update }) => {
+          const currentWidget = session.widgets.find((widget) => widget.id === id);
+          return [
+            id,
+            {
+              ...update,
+              ...(currentWidget &&
+                isTextStyleWidget(currentWidget) &&
+                (field === "width" || field === "height")
+                ? { props: { autoSize: false } }
+                : {}),
+            },
+          ];
+        }),
+      );
       const project: Project = {
         ...current.project,
         updatedAt: new Date().toISOString(),
         screens: current.project.screens.map((screen) =>
-          screen.id !== current.getActiveScreenId()
+          screen.id !== screenId
             ? screen
-            : {
-                ...screen,
-                widgets: mapWidgetsDeep(screen.widgets, (widget) => {
-                  const update = updateById.get(widget.id);
-                  return update
-                    ? {
-                        ...widget,
-                        ...update,
-                        ...(isTextStyleWidget(widget) && (field === "width" || field === "height")
-                          ? { props: { ...widget.props, autoSize: false } }
-                          : {}),
-                      }
-                    : widget;
-                }),
-              },
+            : updateScreenWidgetsAtBreakpoint(screen, breakpointId, updateById),
         ),
       };
       useStore.setState({ project, isDirty: true });
@@ -1919,6 +1990,7 @@ function GeometrySection({ widgets }: { widgets: Widget[] }) {
 }
 
 function TextSizeControl({ widgets }: { widgets: Widget[] }) {
+  const activeBreakpointId = useStore((state) => state.activeBreakpointId);
   const eligibleWidgets = widgets.filter(
     (widget) => !widget.locked && isTextStyleWidget(widget),
   );
@@ -1929,7 +2001,7 @@ function TextSizeControl({ widgets }: { widgets: Widget[] }) {
     timer: number | null;
   } | null>(null);
   const [draft, setDraft] = useState("");
-  const selectionKey = eligibleWidgets.map((widget) => widget.id).join("\u0000");
+  const selectionKey = `${activeBreakpointId ?? "base"}:${eligibleWidgets.map((widget) => widget.id).join("\u0000")}`;
   const readFontSize = (widget: Widget): number =>
     typeof widget.props.fontSize === "number"
       ? widget.props.fontSize
@@ -1944,19 +2016,19 @@ function TextSizeControl({ widgets }: { widgets: Widget[] }) {
     if (session.timer !== null) window.clearTimeout(session.timer);
     sessionRef.current = null;
     const current = useStore.getState();
-    const beforeWidgets =
-      session.snapshot.screens.find((screen) => screen.id === session.screenId)?.widgets ?? [];
-    const afterWidgets =
-      current.project.screens.find((screen) => screen.id === session.screenId)?.widgets ?? [];
+    const beforeWidgets = collectWidgetsDeep(
+      session.snapshot.screens.find((screen) => screen.id === session.screenId)?.widgets ?? [],
+    );
+    const afterWidgets = collectWidgetsDeep(
+      current.project.screens.find((screen) => screen.id === session.screenId)?.widgets ?? [],
+    );
     const changed = session.widgetIds.some((id) => {
       const before = beforeWidgets.find((widget) => widget.id === id);
       const after = afterWidgets.find((widget) => widget.id === id);
       return Boolean(
         before &&
         after &&
-        (before.props.fontSize !== after.props.fontSize ||
-          before.width !== after.width ||
-          before.height !== after.height),
+        JSON.stringify(before) !== JSON.stringify(after),
       );
     });
     if (changed) current.pushHistory(session.snapshot);
@@ -1994,34 +2066,38 @@ function TextSizeControl({ widgets }: { widgets: Widget[] }) {
       sessionRef.current = session;
     }
     const current = useStore.getState();
+    const screen = current.project.screens.find(
+      (item) => item.id === session!.screenId,
+    );
+    if (!screen) return;
+    const breakpointId = getEditorBreakpointId(screen, current.activeBreakpointId);
+    const updates = new Map<string, Parameters<typeof updateWidgetAtBreakpoint>[2]>();
+    for (const widget of eligibleWidgets) {
+      if (!session!.widgetIds.includes(widget.id)) continue;
+      const props: Record<string, unknown> = { ...widget.props, fontSize };
+      const measured = props.autoSize === true
+        ? measureTextBounds(
+            widget.type === "list"
+              ? normalizeListItems(props.items).join("\n")
+              : typeof props.text === "string" ? props.text : "",
+            typeof props.fontFamily === "string" ? props.fontFamily : "Arial",
+            fontSize,
+            typeof props.fontWeight === "string" ? props.fontWeight : "normal",
+            typeof props.lineHeight === "number" ? props.lineHeight : 1.2,
+          )
+        : null;
+      updates.set(widget.id, {
+        props,
+        ...(measured ? { width: measured.width, height: measured.height } : {}),
+      });
+    }
     const project: Project = {
       ...current.project,
       updatedAt: new Date().toISOString(),
       screens: current.project.screens.map((screen) =>
         screen.id !== session!.screenId
           ? screen
-          : {
-              ...screen,
-              widgets: mapWidgetsDeep(screen.widgets, (widget) => {
-                if (!session!.widgetIds.includes(widget.id)) return widget;
-                const props: Record<string, unknown> = {
-                  ...widget.props,
-                  fontSize,
-                };
-                if (props.autoSize !== true) return { ...widget, props };
-                const text = widget.type === "list"
-                  ? normalizeListItems(props.items).join("\n")
-                  : typeof props.text === "string" ? props.text : "";
-                const measured = measureTextBounds(
-                  text,
-                  typeof props.fontFamily === "string" ? props.fontFamily : "Arial",
-                  fontSize,
-                  typeof props.fontWeight === "string" ? props.fontWeight : "normal",
-                  typeof props.lineHeight === "number" ? props.lineHeight : 1.2,
-                );
-                return { ...widget, props, width: measured.width, height: measured.height };
-              }),
-            },
+          : updateScreenWidgetsAtBreakpoint(screen, breakpointId, updates),
       ),
     };
     useStore.setState({ project, isDirty: true });
@@ -2564,20 +2640,17 @@ function WidgetPropertiesSection({
   const updateProp = (key: string, value: unknown) => {
     const current = useStore.getState();
     if (!editSnapshotRef.current) editSnapshotRef.current = current.project;
+    const screen = current.project.screens.find((item) => item.id === screenId);
+    if (!screen) return;
+    const breakpointId = getEditorBreakpointId(screen, current.activeBreakpointId);
+    const updates = new Map([[widget.id, { props: { [key]: value } }]]);
     const project: Project = {
       ...current.project,
       updatedAt: new Date().toISOString(),
       screens: current.project.screens.map((screen) =>
         screen.id !== screenId
           ? screen
-          : {
-              ...screen,
-              widgets: mapWidgetsDeep(screen.widgets, (candidate) =>
-                candidate.id === widget.id
-                  ? { ...candidate, props: { ...candidate.props, [key]: value } }
-                  : candidate,
-              ),
-            },
+          : updateScreenWidgetsAtBreakpoint(screen, breakpointId, updates),
       ),
     };
     useStore.setState({ project, isDirty: true });
@@ -2720,6 +2793,7 @@ export function RightInspector({ onToggle, onUpdates, onRename }: RightInspector
   const setInspectorTab = useStore((state) => state.setInspectorTab);
   const project = useStore((state) => state.project);
   const activeScreenId = useStore((state) => state.getActiveScreenId());
+  const activeBreakpointId = useStore((state) => state.activeBreakpointId);
   const selectedIds = useStore((state) => state.selectedIds);
   const activeRepeaterEdit = useStore((state) => state.activeRepeaterEdit);
   const filePath = useStore((state) => state.filePath);
@@ -2731,6 +2805,13 @@ export function RightInspector({ onToggle, onUpdates, onRename }: RightInspector
       (widget) => selectedIds.includes(widget.id),
     ) : [];
   const selectedWidget = selectedWidgets.length === 1 ? selectedWidgets[0] : undefined;
+  const designWidgets = selectedScreen
+    ? getInspectorWidgets(
+        selectedScreen,
+        getEditorBreakpointId(selectedScreen, activeBreakpointId),
+      ).filter((widget) => selectedIds.includes(widget.id))
+    : [];
+  const designWidget = designWidgets.length === 1 ? designWidgets[0] : undefined;
   useEffect(() => {
     if (selectedWidget?.type !== "dynamic-panel") return;
     const state = getActivePanelState(selectedWidget);
@@ -2770,7 +2851,7 @@ export function RightInspector({ onToggle, onUpdates, onRename }: RightInspector
         <span className="right-dock-title">LAYERS &amp; INSPECTOR</span>
         <button className="icon-button small-icon" aria-label="Close right sidebar" onClick={onToggle}><PanelRightClose size={15} /></button>
       </div>
-      <TextSizeControl widgets={selectedWidgets} />
+      <TextSizeControl widgets={designWidgets} />
       <section className="right-inspector-panel" aria-label="Inspector">
       <div className="inspector-top">
         <div><span className="inspector-overline">INSPECTOR</span><h2>{selectedWidget ? selectedLabel : selectedWidgets.length > 1 ? `${selectedWidgets.length} items selected` : "Select an element"}</h2></div>
@@ -2842,10 +2923,10 @@ export function RightInspector({ onToggle, onUpdates, onRename }: RightInspector
         </div>
         {inspectorTab === "design" ? (
           <div id="inspector-design-panel" role="tabpanel" aria-labelledby="inspector-design-tab">
-            <GeometrySection widgets={selectedWidgets} />
-            <StyleSection widgets={selectedWidgets} />
-            {selectedWidget && selectedScreen && (
-              <WidgetPropertiesSection widget={selectedWidget} screenId={selectedScreen.id} />
+            <GeometrySection widgets={designWidgets} />
+            <StyleSection widgets={designWidgets} />
+            {designWidget && selectedScreen && (
+              <WidgetPropertiesSection widget={designWidget} screenId={selectedScreen.id} />
             )}
             {selectedWidget?.type === "dynamic-panel" && selectedScreen && (
               <DynamicPanelSection screen={selectedScreen} widget={selectedWidget} />

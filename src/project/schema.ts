@@ -145,21 +145,24 @@ export const BreakpointSchema = z.object({
   }
 });
 
+export const WidgetCascadeModeSchema = z.enum(["absolute", "stack", "fluid", "hide"]);
+export const ResponsiveConstraintsSchema = z.object({
+  horizontal: z.enum(["left", "right", "center", "scale", "stretch"]),
+  vertical: z.enum(["top", "bottom", "center", "scale", "stretch"]),
+}).strict();
+
 export const WidgetOverrideSchema = z.object({
   x: z.number().finite().min(-COORDINATE_LIMIT).max(COORDINATE_LIMIT).optional(),
   y: z.number().finite().min(-COORDINATE_LIMIT).max(COORDINATE_LIMIT).optional(),
   width: z.number().finite().min(1).optional(),
   height: z.number().finite().min(1).optional(),
   rotation: z.number().finite().optional(),
+  opacity: z.number().finite().min(0).max(1).optional(),
   visible: z.boolean().optional(),
+  cascadeMode: WidgetCascadeModeSchema.optional(),
+  constraints: ResponsiveConstraintsSchema.optional(),
   style: WidgetStyleSchema.partial().optional(),
   props: z.record(z.string(), z.unknown()).optional(),
-}).strict();
-
-export const WidgetCascadeModeSchema = z.enum(["absolute", "stack", "fluid", "hide"]);
-export const ResponsiveConstraintsSchema = z.object({
-  horizontal: z.enum(["left", "right", "center", "scale", "stretch"]),
-  vertical: z.enum(["top", "bottom", "center", "scale", "stretch"]),
 }).strict();
 
 export const WidgetNotesSchema = z.object({
