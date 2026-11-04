@@ -10,6 +10,17 @@ import { Check, CircleAlert } from "lucide-react";
 import { BETA_FEEDBACK_URL } from "./beta/feedback";
 import { PrivacySettingsDialog } from "./diagnostics/PrivacySettingsDialog";
 import { readPrivacySettings } from "./diagnostics/privacy";
+import { OnboardingWizard } from "./onboarding/OnboardingWizard";
+import {
+  applyThemePreference,
+  DEFAULT_ONBOARDING_STATE,
+  readOnboardingState,
+  readThemePreference,
+  writeOnboardingState,
+  writeThemePreference,
+} from "./onboarding/storage";
+import type { OnboardingState, ThemePreference } from "./onboarding/storage";
+import { createStarterProject, type StarterTemplateId } from "./onboarding/templates";
 import {
   categorizeTelemetryError,
   recordDiagnostic,
@@ -81,6 +92,10 @@ function AppShell() {
   const [versionHistoryOpen, setVersionHistoryOpen] = useState(false);
   const [privacyDialogOpen, setPrivacyDialogOpen] = useState(false);
   const [privacyFirstLaunch, setPrivacyFirstLaunch] = useState(false);
+  const [onboardingOpen, setOnboardingOpen] = useState(false);
+  const [onboardingState, setOnboardingState] = useState<OnboardingState>(DEFAULT_ONBOARDING_STATE);
+  const [onboardingTheme, setOnboardingTheme] = useState<ThemePreference>("system");
+  const [onboardingTipVisible, setOnboardingTipVisible] = useState(false);
   const walletInitializationStarted = useRef(false);
   const previewConnected = useRef(false);
   const syncWallet = useWalletStore((state) => state.sync);
@@ -111,7 +126,7 @@ function AppShell() {
   }, [notify]);
 
   const openParityDocumentation = useCallback(async () => {
-    const url = "https://github.com/arbazfareed/Proto-Flow/blob/main/AXURE-PARITY.md";
+    const url = "https://github.com/arbazfareed/Proto-Flow/tree/main/docs";
     try {
       if (isTauri()) {
         await openExternal(url);
@@ -127,21 +142,36 @@ function AppShell() {
     let active = true;
     void startObservability().then(() => {
       if (!active) return;
+      const savedOnboarding = readOnboardingState();
+      const theme = readThemePreference();
+      applyThemePreference(theme);
       const settings = readPrivacySettings();
+      setOnboardingState(savedOnboarding);
+      setOnboardingTheme(theme);
+      setOnboardingOpen(!savedOnboarding.hasCompletedOnboarding && settings !== null);
       setPrivacyFirstLaunch(settings === null);
       setPrivacyDialogOpen(settings === null);
     }).catch((error: unknown) => {
-      recordDiagnostic("error", "Privacy settings initialization failed.");
-      notify(error instanceof Error ? error.message : "Privacy settings could not be loaded.", true);
+      recordDiagnostic("error", "First-run preferences initialization failed.");
+      notify(error instanceof Error ? error.message : "First-run preferences could not be loaded.", true);
       if (active) {
         setPrivacyFirstLaunch(true);
-        setPrivacyDialogOpen(true);
+        setOnboardingOpen(true);
       }
     });
     return () => {
       active = false;
     };
   }, [notify]);
+
+  useEffect(() => {
+    const preference = onboardingTheme;
+    if (preference !== "system") return;
+    const media = window.matchMedia("(prefers-color-scheme: dark)");
+    const updateSystemTheme = () => applyThemePreference("system");
+    media.addEventListener("change", updateSystemTheme);
+    return () => media.removeEventListener("change", updateSystemTheme);
+  }, [onboardingTheme]);
 
   useEffect(() => {
     if (!isTauri()) return;
@@ -430,11 +460,11 @@ function AppShell() {
     return !current.isDirty || window.confirm("You have unsaved changes. Continue without saving them?");
   }, []);
 
-  const openFile = useCallback(async () => {
-    if (!confirmDiscard()) return;
+  const openFile = useCallback(async (): Promise<boolean> => {
+    if (!confirmDiscard()) return false;
     try {
       const result = await openProjectFile();
-      if (!result) return;
+      if (!result) return false;
       loadProject(result.project, result.path);
       trackEvent("project_opened");
       try {
@@ -443,6 +473,7 @@ function AppShell() {
         console.error("Could not clear the previous autosave snapshot.", error);
       }
       notify("Project opened");
+      return true;
     } catch (error) {
       notify(
         error instanceof SchemaValidationError
@@ -452,6 +483,7 @@ function AppShell() {
             : "Could not open project.",
         true,
       );
+      return false;
     }
   }, [confirmDiscard, loadProject, notify]);
 
@@ -470,7 +502,7 @@ function AppShell() {
   const coreCommands = useMemo(
     () => createCoreCommands({
       newProject: createNewProject,
-      openProject: openFile,
+      openProject: () => { void openFile(); },
       saveProject: (saveAs) => void save(saveAs),
       undo,
       redo,
@@ -622,6 +654,82 @@ function AppShell() {
     current.setActiveScreen(screen.id);
   }, [notify]);
 
+  const updateOnboardingState = useCallback((update: Partial<OnboardingState>) => {
+    const next = { ...onboardingState, ...update };
+    try {
+      writeOnboardingState(next);
+      setOnboardingState(next);
+    } catch (error) {
+      notify(error instanceof Error ? error.message : "Onboarding preferences could not be saved.", true);
+    }
+  }, [notify, onboardingState]);
+
+  const chooseOnboardingTheme = useCallback((theme: ThemePreference) => {
+    try {
+      writeThemePreference(theme);
+      const next = { ...onboardingState, theme };
+      writeOnboardingState(next);
+      setOnboardingState(next);
+      setOnboardingTheme(theme);
+    } catch (error) {
+      notify(error instanceof Error ? error.message : "Theme preference could not be saved.", true);
+    }
+  }, [notify, onboardingState]);
+
+  const completeOnboarding = useCallback((template: StarterTemplateId | "existing") => {
+    try {
+      if (template !== "existing") {
+        useStore.getState().loadProject(createStarterProject(template), null);
+        trackEvent("project_created");
+      }
+      const next = {
+        ...onboardingState,
+        hasCompletedOnboarding: true,
+        selectedTemplate: template,
+        deviceTourCompleted: onboardingState.deviceTourCompleted,
+      };
+      writeOnboardingState(next);
+      setOnboardingState(next);
+      setOnboardingOpen(false);
+      trackEvent("onboarding_completed");
+      if (privacyFirstLaunch) setPrivacyDialogOpen(true);
+    } catch (error) {
+      notify(error instanceof Error ? error.message : "Onboarding could not be completed.", true);
+    }
+  }, [notify, onboardingState, privacyFirstLaunch]);
+
+  const skipOnboarding = useCallback(() => {
+    try {
+      const showTip = !onboardingState.skipTipShown;
+      const next = {
+        ...onboardingState,
+        hasCompletedOnboarding: true,
+        skipTipShown: true,
+      };
+      writeOnboardingState(next);
+      setOnboardingState(next);
+      setOnboardingOpen(false);
+      setOnboardingTipVisible(showTip);
+      trackEvent("onboarding_skipped");
+      if (privacyFirstLaunch) setPrivacyDialogOpen(true);
+    } catch (error) {
+      notify(error instanceof Error ? error.message : "Onboarding could not be skipped.", true);
+    }
+  }, [notify, onboardingState, privacyFirstLaunch]);
+
+  const showOnboardingAgain = useCallback(() => {
+    try {
+      const next = { ...onboardingState, hasCompletedOnboarding: false };
+      writeOnboardingState(next);
+      setOnboardingState(next);
+      setPrivacyDialogOpen(false);
+      setOnboardingTipVisible(false);
+      setOnboardingOpen(true);
+    } catch (error) {
+      notify(error instanceof Error ? error.message : "Onboarding could not be restarted.", true);
+    }
+  }, [notify, onboardingState]);
+
   return (
     <div className="app-shell">
       <TopBar
@@ -683,10 +791,25 @@ function AppShell() {
         <PrivacySettingsDialog
           firstLaunch={privacyFirstLaunch}
           onClose={() => setPrivacyDialogOpen(false)}
+          onShowOnboarding={showOnboardingAgain}
           onSaved={() => {
             setPrivacyFirstLaunch(false);
             setPrivacyDialogOpen(false);
+            setOnboardingOpen(!onboardingState.hasCompletedOnboarding);
           }}
+        />
+      )}
+      {onboardingOpen && (
+        <OnboardingWizard
+          initialTheme={onboardingTheme}
+          selectedTemplate={onboardingState.selectedTemplate}
+          initialDeviceTourCompleted={onboardingState.deviceTourCompleted}
+          onThemeChange={chooseOnboardingTheme}
+          onSelectTemplate={(template) => updateOnboardingState({ selectedTemplate: template })}
+          onDeviceTourCompleted={() => updateOnboardingState({ deviceTourCompleted: true })}
+          onOpenExisting={openFile}
+          onComplete={completeOnboarding}
+          onSkip={skipOnboarding}
         />
       )}
       {versionHistoryOpen && (
@@ -723,6 +846,13 @@ function AppShell() {
         <div className={`toast${noticeIsError ? " toast-error" : ""}`} role={noticeIsError ? "alert" : "status"}>
           {noticeIsError ? <CircleAlert size={15} /> : <Check size={15} />}
           <span>{notice}</span>
+        </div>
+      )}
+      {onboardingTipVisible && (
+        <div className="onboarding-tip" role="status">
+          <span>Tip: Need a hand? Browse Help and Docs whenever you’re ready.</span>
+          <button type="button" onClick={() => void openParityDocumentation()}>Open docs</button>
+          <button type="button" aria-label="Dismiss onboarding tip" onClick={() => setOnboardingTipVisible(false)}>Dismiss</button>
         </div>
       )}
 

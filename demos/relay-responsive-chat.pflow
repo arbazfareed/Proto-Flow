@@ -1,0 +1,3837 @@
+{
+  "schemaVersion": "1.9.0",
+  "id": "0f00ec2b-6f78-456c-bce7-48e4121a08a1",
+  "name": "Relay — conversations, in rhythm",
+  "createdAt": "2026-11-03T19:03:47.957Z",
+  "updatedAt": "2026-11-03T19:03:47.957Z",
+  "variables": [
+    {
+      "id": "0c62ffad-6334-4345-870a-90c9284251d0",
+      "name": "sendState",
+      "scope": "project",
+      "type": "string",
+      "initial": "Messages stay between you."
+    }
+  ],
+  "symbols": [],
+  "startScreenId": "4198975a-c563-476d-b704-a69868064fbb",
+  "screens": [
+    {
+      "id": "4198975a-c563-476d-b704-a69868064fbb",
+      "name": "Eva · Conversation",
+      "device": {
+        "presetId": "desktop-1440-900",
+        "width": 1440,
+        "height": 900,
+        "dpr": 1,
+        "insets": {
+          "top": 0,
+          "right": 0,
+          "bottom": 0,
+          "left": 0
+        },
+        "orientation": "landscape"
+      },
+      "inputMode": "both",
+      "compactLayout": false,
+      "breakpoints": [
+        {
+          "id": "mobile",
+          "name": "Mobile",
+          "minWidth": 0,
+          "maxWidth": 767,
+          "width": 390,
+          "height": 844
+        },
+        {
+          "id": "tablet",
+          "name": "Tablet",
+          "minWidth": 768,
+          "maxWidth": 1023,
+          "width": 768,
+          "height": 1024
+        },
+        {
+          "id": "desktop",
+          "name": "Desktop",
+          "minWidth": 1024,
+          "width": 1440,
+          "height": 900
+        }
+      ],
+      "widgets": [
+        {
+          "id": "11801d49-21aa-40b4-870f-59b460c0c411",
+          "type": "rectangle",
+          "name": "App background",
+          "x": 0,
+          "y": 0,
+          "width": 1440,
+          "height": 900,
+          "visible": true,
+          "rotation": 0,
+          "opacity": 1,
+          "locked": false,
+          "zIndex": 0,
+          "style": {
+            "fill": "#f4f7f5",
+            "stroke": null,
+            "strokeWidth": 0
+          },
+          "props": {
+            "text": "",
+            "fontFamily": "Arial",
+            "fontSize": 14,
+            "fontWeight": "normal",
+            "align": "left",
+            "verticalAlign": "middle",
+            "lineHeight": 1.25
+          },
+          "overrides": {
+            "mobile": {
+              "x": 0,
+              "y": 0,
+              "width": 390,
+              "height": 844,
+              "visible": true
+            },
+            "tablet": {
+              "x": 0,
+              "y": 0,
+              "width": 768,
+              "height": 1024,
+              "visible": true
+            }
+          }
+        },
+        {
+          "id": "dca58546-5ab4-4292-9332-4ca264426b0a",
+          "type": "rectangle",
+          "name": "Navigation rail",
+          "x": 0,
+          "y": 0,
+          "width": 72,
+          "height": 900,
+          "visible": true,
+          "rotation": 0,
+          "opacity": 1,
+          "locked": false,
+          "zIndex": 1,
+          "style": {
+            "fill": "#18372e",
+            "stroke": null,
+            "strokeWidth": 0
+          },
+          "props": {
+            "text": "",
+            "fontFamily": "Arial",
+            "fontSize": 14,
+            "fontWeight": "normal",
+            "align": "left",
+            "verticalAlign": "middle",
+            "lineHeight": 1.25
+          },
+          "overrides": {
+            "mobile": {
+              "x": 0,
+              "y": 0,
+              "width": 1,
+              "height": 1,
+              "visible": false
+            },
+            "tablet": {
+              "x": 0,
+              "y": 0,
+              "width": 60,
+              "height": 1024,
+              "visible": true
+            }
+          }
+        },
+        {
+          "id": "238dd3ff-bfbb-4407-b14d-78ffbdd19281",
+          "type": "rectangle",
+          "name": "Navigation logo tile",
+          "x": 14,
+          "y": 18,
+          "width": 44,
+          "height": 44,
+          "visible": true,
+          "rotation": 0,
+          "opacity": 1,
+          "locked": false,
+          "zIndex": 2,
+          "style": {
+            "fill": "#b3e2ca",
+            "stroke": null,
+            "strokeWidth": 0,
+            "cornerRadius": 14
+          },
+          "props": {
+            "text": "",
+            "fontFamily": "Arial",
+            "fontSize": 14,
+            "fontWeight": "normal",
+            "align": "left",
+            "verticalAlign": "middle",
+            "lineHeight": 1.25
+          },
+          "overrides": {
+            "mobile": {
+              "x": 0,
+              "y": 0,
+              "width": 1,
+              "height": 1,
+              "visible": false
+            },
+            "tablet": {
+              "x": 14,
+              "y": 18,
+              "width": 32,
+              "height": 44,
+              "visible": true
+            }
+          }
+        },
+        {
+          "id": "d3c8929b-292b-4a29-8663-712403f4185e",
+          "type": "text",
+          "name": "Relay monogram",
+          "x": 14,
+          "y": 18,
+          "width": 44,
+          "height": 44,
+          "visible": true,
+          "rotation": 0,
+          "opacity": 1,
+          "locked": false,
+          "zIndex": 3,
+          "style": {
+            "fill": "#18372e",
+            "stroke": null,
+            "strokeWidth": 0
+          },
+          "props": {
+            "text": "r.",
+            "fontFamily": "Arial",
+            "fontSize": 21,
+            "fontWeight": "bold",
+            "align": "center",
+            "verticalAlign": "middle",
+            "lineHeight": 1.25
+          },
+          "overrides": {
+            "mobile": {
+              "x": 0,
+              "y": 0,
+              "width": 1,
+              "height": 1,
+              "visible": false
+            },
+            "tablet": {
+              "x": 14,
+              "y": 18,
+              "width": 32,
+              "height": 44,
+              "visible": true
+            }
+          }
+        },
+        {
+          "id": "52c54bd1-864b-4d28-abc4-b756faf2d470",
+          "type": "rectangle",
+          "name": "Selected navigation indicator",
+          "x": 13,
+          "y": 94,
+          "width": 45,
+          "height": 46,
+          "visible": true,
+          "rotation": 0,
+          "opacity": 1,
+          "locked": false,
+          "zIndex": 4,
+          "style": {
+            "fill": "#315a4b",
+            "stroke": null,
+            "strokeWidth": 0,
+            "cornerRadius": 15
+          },
+          "props": {
+            "text": "",
+            "fontFamily": "Arial",
+            "fontSize": 14,
+            "fontWeight": "normal",
+            "align": "left",
+            "verticalAlign": "middle",
+            "lineHeight": 1.25
+          },
+          "overrides": {
+            "mobile": {
+              "x": 0,
+              "y": 0,
+              "width": 1,
+              "height": 1,
+              "visible": false
+            },
+            "tablet": {
+              "x": 13,
+              "y": 94,
+              "width": 33,
+              "height": 46,
+              "visible": true
+            }
+          }
+        },
+        {
+          "id": "65d53f1a-e3a3-41c4-9207-a2adc2a73f71",
+          "type": "icon",
+          "name": "Inbox navigation",
+          "x": 25,
+          "y": 106,
+          "width": 22,
+          "height": 22,
+          "visible": true,
+          "rotation": 0,
+          "opacity": 1,
+          "locked": false,
+          "zIndex": 5,
+          "style": {
+            "fill": null,
+            "stroke": "#c5f0d8",
+            "strokeWidth": 2
+          },
+          "props": {
+            "iconName": "MessageCircle"
+          },
+          "overrides": {
+            "mobile": {
+              "x": 0,
+              "y": 0,
+              "width": 1,
+              "height": 1,
+              "visible": false
+            },
+            "tablet": {
+              "x": 25,
+              "y": 106,
+              "width": 21,
+              "height": 22,
+              "visible": true
+            }
+          }
+        },
+        {
+          "id": "38244e81-d11e-43c6-b0db-d4705af6a551",
+          "type": "icon",
+          "name": "People navigation",
+          "x": 25,
+          "y": 169,
+          "width": 22,
+          "height": 22,
+          "visible": true,
+          "rotation": 0,
+          "opacity": 1,
+          "locked": false,
+          "zIndex": 6,
+          "style": {
+            "fill": null,
+            "stroke": "#9bb6a9",
+            "strokeWidth": 2
+          },
+          "props": {
+            "iconName": "Users"
+          },
+          "overrides": {
+            "mobile": {
+              "x": 0,
+              "y": 0,
+              "width": 1,
+              "height": 1,
+              "visible": false
+            },
+            "tablet": {
+              "x": 25,
+              "y": 169,
+              "width": 21,
+              "height": 22,
+              "visible": true
+            }
+          }
+        },
+        {
+          "id": "89e786c1-d6f4-404c-8aff-2b8c29518be9",
+          "type": "icon",
+          "name": "Saved navigation",
+          "x": 25,
+          "y": 229,
+          "width": 22,
+          "height": 22,
+          "visible": true,
+          "rotation": 0,
+          "opacity": 1,
+          "locked": false,
+          "zIndex": 7,
+          "style": {
+            "fill": null,
+            "stroke": "#9bb6a9",
+            "strokeWidth": 2
+          },
+          "props": {
+            "iconName": "Bookmark"
+          },
+          "overrides": {
+            "mobile": {
+              "x": 0,
+              "y": 0,
+              "width": 1,
+              "height": 1,
+              "visible": false
+            },
+            "tablet": {
+              "x": 25,
+              "y": 229,
+              "width": 21,
+              "height": 22,
+              "visible": true
+            }
+          }
+        },
+        {
+          "id": "d46ea41f-e4b0-42d2-9859-9501430e6cf2",
+          "type": "icon",
+          "name": "Settings navigation",
+          "x": 25,
+          "y": 817,
+          "width": 22,
+          "height": 22,
+          "visible": true,
+          "constraints": {
+            "horizontal": "left",
+            "vertical": "bottom"
+          },
+          "rotation": 0,
+          "opacity": 1,
+          "locked": false,
+          "zIndex": 8,
+          "style": {
+            "fill": null,
+            "stroke": "#9bb6a9",
+            "strokeWidth": 2
+          },
+          "props": {
+            "iconName": "Settings"
+          },
+          "overrides": {
+            "mobile": {
+              "x": 0,
+              "y": 0,
+              "width": 1,
+              "height": 1,
+              "visible": false
+            },
+            "tablet": {
+              "x": 25,
+              "width": 21,
+              "height": 22,
+              "visible": true
+            }
+          }
+        },
+        {
+          "id": "8fb9392b-48f3-4a42-a967-f5be7966acd5",
+          "type": "ellipse",
+          "name": "Your profile avatar",
+          "x": 17,
+          "y": 854,
+          "width": 38,
+          "height": 38,
+          "visible": true,
+          "constraints": {
+            "horizontal": "left",
+            "vertical": "bottom"
+          },
+          "rotation": 0,
+          "opacity": 1,
+          "locked": false,
+          "zIndex": 9,
+          "style": {
+            "fill": "#e5b68f",
+            "stroke": null,
+            "strokeWidth": 0
+          },
+          "props": {
+            "text": "",
+            "fontFamily": "Arial",
+            "fontSize": 14,
+            "fontWeight": "normal",
+            "align": "left",
+            "verticalAlign": "middle",
+            "lineHeight": 1.25
+          },
+          "overrides": {
+            "mobile": {
+              "x": 0,
+              "y": 0,
+              "width": 1,
+              "height": 1,
+              "visible": false
+            },
+            "tablet": {
+              "x": 17,
+              "width": 29,
+              "height": 38,
+              "visible": true
+            }
+          }
+        },
+        {
+          "id": "c4384880-885a-459f-88fc-f105d44b7487",
+          "type": "text",
+          "name": "Your profile initials",
+          "x": 17,
+          "y": 854,
+          "width": 38,
+          "height": 38,
+          "visible": true,
+          "constraints": {
+            "horizontal": "left",
+            "vertical": "bottom"
+          },
+          "rotation": 0,
+          "opacity": 1,
+          "locked": false,
+          "zIndex": 10,
+          "style": {
+            "fill": "#493122",
+            "stroke": null,
+            "strokeWidth": 0
+          },
+          "props": {
+            "text": "A",
+            "fontFamily": "Arial",
+            "fontSize": 13,
+            "fontWeight": "bold",
+            "align": "center",
+            "verticalAlign": "middle",
+            "lineHeight": 1.25
+          },
+          "overrides": {
+            "mobile": {
+              "x": 0,
+              "y": 0,
+              "width": 1,
+              "height": 1,
+              "visible": false
+            },
+            "tablet": {
+              "x": 17,
+              "width": 29,
+              "height": 38,
+              "visible": true
+            }
+          }
+        },
+        {
+          "id": "0838e3db-f65b-410e-b8fb-e9d4f3d5c483",
+          "type": "rectangle",
+          "name": "Conversation list background",
+          "x": 72,
+          "y": 0,
+          "width": 352,
+          "height": 900,
+          "visible": true,
+          "rotation": 0,
+          "opacity": 1,
+          "locked": false,
+          "zIndex": 11,
+          "style": {
+            "fill": "#fbfcfa",
+            "stroke": null,
+            "strokeWidth": 0
+          },
+          "props": {
+            "text": "",
+            "fontFamily": "Arial",
+            "fontSize": 14,
+            "fontWeight": "normal",
+            "align": "left",
+            "verticalAlign": "middle",
+            "lineHeight": 1.25
+          },
+          "overrides": {
+            "mobile": {
+              "x": 0,
+              "y": 0,
+              "width": 1,
+              "height": 1,
+              "visible": false
+            },
+            "tablet": {
+              "x": 60,
+              "y": 0,
+              "width": 260,
+              "height": 1024,
+              "visible": true
+            }
+          }
+        },
+        {
+          "id": "8989d731-0451-4b30-8875-ac45842efbbb",
+          "type": "rectangle",
+          "name": "Conversation list divider",
+          "x": 423,
+          "y": 0,
+          "width": 1,
+          "height": 900,
+          "visible": true,
+          "rotation": 0,
+          "opacity": 1,
+          "locked": false,
+          "zIndex": 12,
+          "style": {
+            "fill": "#e8eeea",
+            "stroke": null,
+            "strokeWidth": 0
+          },
+          "props": {
+            "text": "",
+            "fontFamily": "Arial",
+            "fontSize": 14,
+            "fontWeight": "normal",
+            "align": "left",
+            "verticalAlign": "middle",
+            "lineHeight": 1.25
+          },
+          "overrides": {
+            "mobile": {
+              "x": 0,
+              "y": 0,
+              "width": 1,
+              "height": 1,
+              "visible": false
+            },
+            "tablet": {
+              "x": 319.2613636363636,
+              "y": 0,
+              "width": 1,
+              "height": 900,
+              "visible": true
+            }
+          }
+        },
+        {
+          "id": "21314668-07e7-4968-9ba1-ed6664da1f16",
+          "type": "text",
+          "name": "Inbox heading",
+          "x": 92,
+          "y": 25,
+          "width": 190,
+          "height": 34,
+          "visible": true,
+          "rotation": 0,
+          "opacity": 1,
+          "locked": false,
+          "zIndex": 13,
+          "style": {
+            "fill": "#243b34",
+            "stroke": null,
+            "strokeWidth": 0
+          },
+          "props": {
+            "text": "Messages",
+            "fontFamily": "Arial",
+            "fontSize": 24,
+            "fontWeight": "bold",
+            "align": "left",
+            "verticalAlign": "middle",
+            "lineHeight": 1.25
+          },
+          "overrides": {
+            "mobile": {
+              "x": 0,
+              "y": 0,
+              "width": 1,
+              "height": 1,
+              "visible": false
+            },
+            "tablet": {
+              "x": 74.77272727272728,
+              "y": 25,
+              "width": 190,
+              "height": 34,
+              "visible": true
+            }
+          }
+        },
+        {
+          "id": "ed5a467b-0098-494c-831c-ea36b3ca125b",
+          "type": "text",
+          "name": "Inbox subtitle",
+          "x": 93,
+          "y": 61,
+          "width": 270,
+          "height": 20,
+          "visible": true,
+          "rotation": 0,
+          "opacity": 1,
+          "locked": false,
+          "zIndex": 14,
+          "style": {
+            "fill": "#85928b",
+            "stroke": null,
+            "strokeWidth": 0
+          },
+          "props": {
+            "text": "Your people, all in one place.",
+            "fontFamily": "Arial",
+            "fontSize": 11,
+            "fontWeight": "normal",
+            "align": "left",
+            "verticalAlign": "middle",
+            "lineHeight": 1.25
+          },
+          "overrides": {
+            "mobile": {
+              "x": 0,
+              "y": 0,
+              "width": 1,
+              "height": 1,
+              "visible": false
+            },
+            "tablet": {
+              "x": 75.51136363636364,
+              "y": 61,
+              "width": 225,
+              "height": 20,
+              "visible": true
+            }
+          }
+        },
+        {
+          "id": "fe9455c9-dd67-4299-b064-5e2d2ae100bc",
+          "type": "rectangle",
+          "name": "Search field",
+          "x": 88,
+          "y": 100,
+          "width": 320,
+          "height": 42,
+          "visible": true,
+          "rotation": 0,
+          "opacity": 1,
+          "locked": false,
+          "zIndex": 15,
+          "style": {
+            "fill": "#f0f4f1",
+            "stroke": null,
+            "strokeWidth": 0,
+            "cornerRadius": 12
+          },
+          "props": {
+            "text": "",
+            "fontFamily": "Arial",
+            "fontSize": 14,
+            "fontWeight": "normal",
+            "align": "left",
+            "verticalAlign": "middle",
+            "lineHeight": 1.25
+          },
+          "overrides": {
+            "mobile": {
+              "x": 0,
+              "y": 0,
+              "width": 1,
+              "height": 1,
+              "visible": false
+            },
+            "tablet": {
+              "x": 71.81818181818181,
+              "y": 100,
+              "width": 230,
+              "height": 42,
+              "visible": true
+            }
+          }
+        },
+        {
+          "id": "d4119958-27f3-48d6-b3e9-7b4cc98906b8",
+          "type": "icon",
+          "name": "Search conversations",
+          "x": 101,
+          "y": 113,
+          "width": 16,
+          "height": 16,
+          "visible": true,
+          "rotation": 0,
+          "opacity": 1,
+          "locked": false,
+          "zIndex": 16,
+          "style": {
+            "fill": null,
+            "stroke": "#52655e",
+            "strokeWidth": 2
+          },
+          "props": {
+            "iconName": "Search"
+          },
+          "overrides": {
+            "mobile": {
+              "x": 0,
+              "y": 0,
+              "width": 1,
+              "height": 1,
+              "visible": false
+            },
+            "tablet": {
+              "x": 81.42045454545455,
+              "y": 113,
+              "width": 16,
+              "height": 16,
+              "visible": true
+            }
+          }
+        },
+        {
+          "id": "d17fc1c5-3dc0-431d-918c-947deb2a8625",
+          "type": "text",
+          "name": "Search placeholder",
+          "x": 126,
+          "y": 110,
+          "width": 255,
+          "height": 22,
+          "visible": true,
+          "rotation": 0,
+          "opacity": 1,
+          "locked": false,
+          "zIndex": 17,
+          "style": {
+            "fill": "#94a099",
+            "stroke": null,
+            "strokeWidth": 0
+          },
+          "props": {
+            "text": "Search conversations",
+            "fontFamily": "Arial",
+            "fontSize": 11,
+            "fontWeight": "normal",
+            "align": "left",
+            "verticalAlign": "middle",
+            "lineHeight": 1.25
+          },
+          "overrides": {
+            "mobile": {
+              "x": 0,
+              "y": 0,
+              "width": 1,
+              "height": 1,
+              "visible": false
+            },
+            "tablet": {
+              "x": 99.88636363636364,
+              "y": 110,
+              "width": 192,
+              "height": 22,
+              "visible": true
+            }
+          }
+        },
+        {
+          "id": "225dfbb2-5efe-48b1-ad12-92cc2b17a583",
+          "type": "text",
+          "name": "Pinned heading",
+          "x": 91,
+          "y": 158,
+          "width": 108,
+          "height": 16,
+          "visible": true,
+          "rotation": 0,
+          "opacity": 1,
+          "locked": false,
+          "zIndex": 18,
+          "style": {
+            "fill": "#899890",
+            "stroke": null,
+            "strokeWidth": 0
+          },
+          "props": {
+            "text": "PINNED",
+            "fontFamily": "Arial",
+            "fontSize": 9,
+            "fontWeight": "bold",
+            "align": "left",
+            "verticalAlign": "middle",
+            "lineHeight": 1.25
+          },
+          "overrides": {
+            "mobile": {
+              "x": 0,
+              "y": 0,
+              "width": 1,
+              "height": 1,
+              "visible": false
+            },
+            "tablet": {
+              "x": 74.0340909090909,
+              "y": 158,
+              "width": 108,
+              "height": 16,
+              "visible": true
+            }
+          }
+        },
+        {
+          "id": "08fc0327-9d70-4e63-9267-57a22170575a",
+          "type": "rectangle",
+          "name": "Eva Chen selected row",
+          "x": 79,
+          "y": 183,
+          "width": 331,
+          "height": 72,
+          "visible": true,
+          "rotation": 0,
+          "opacity": 1,
+          "locked": false,
+          "zIndex": 19,
+          "style": {
+            "fill": "#e5f1eb",
+            "stroke": null,
+            "strokeWidth": 0,
+            "cornerRadius": 14
+          },
+          "props": {
+            "text": "",
+            "fontFamily": "Arial",
+            "fontSize": 14,
+            "fontWeight": "normal",
+            "align": "left",
+            "verticalAlign": "middle",
+            "lineHeight": 1.25
+          },
+          "overrides": {
+            "mobile": {
+              "x": 0,
+              "y": 0,
+              "width": 1,
+              "height": 1,
+              "visible": false
+            },
+            "tablet": {
+              "x": 65.17045454545455,
+              "y": 183,
+              "width": 239,
+              "height": 72,
+              "visible": true
+            }
+          }
+        },
+        {
+          "id": "37e5abf1-f02a-4d98-92b5-0b2ecb4ec574",
+          "type": "ellipse",
+          "name": "Eva Chen avatar",
+          "x": 88,
+          "y": 188,
+          "width": 44,
+          "height": 44,
+          "visible": true,
+          "rotation": 0,
+          "opacity": 1,
+          "locked": false,
+          "zIndex": 20,
+          "style": {
+            "fill": "#d7ebe3",
+            "stroke": null,
+            "strokeWidth": 0
+          },
+          "props": {
+            "text": "",
+            "fontFamily": "Arial",
+            "fontSize": 14,
+            "fontWeight": "normal",
+            "align": "left",
+            "verticalAlign": "middle",
+            "lineHeight": 1.25
+          },
+          "overrides": {
+            "mobile": {
+              "x": 0,
+              "y": 0,
+              "width": 1,
+              "height": 1,
+              "visible": false
+            },
+            "tablet": {
+              "x": 71.81818181818181,
+              "y": 188,
+              "width": 44,
+              "height": 44,
+              "visible": true
+            }
+          }
+        },
+        {
+          "id": "6fec2bdc-9954-4299-8912-b89ce61616c7",
+          "type": "text",
+          "name": "Eva Chen initials",
+          "x": 88,
+          "y": 189,
+          "width": 44,
+          "height": 42,
+          "visible": true,
+          "rotation": 0,
+          "opacity": 1,
+          "locked": false,
+          "zIndex": 21,
+          "style": {
+            "fill": "#234c3f",
+            "stroke": null,
+            "strokeWidth": 0
+          },
+          "props": {
+            "text": "EC",
+            "fontFamily": "Arial",
+            "fontSize": 13,
+            "fontWeight": "bold",
+            "align": "center",
+            "verticalAlign": "middle",
+            "lineHeight": 1.25
+          },
+          "overrides": {
+            "mobile": {
+              "x": 0,
+              "y": 0,
+              "width": 1,
+              "height": 1,
+              "visible": false
+            },
+            "tablet": {
+              "x": 71.81818181818181,
+              "y": 189,
+              "width": 44,
+              "height": 42,
+              "visible": true
+            }
+          }
+        },
+        {
+          "id": "4a07bac0-e4a3-42f8-be4c-b4f60294cf77",
+          "type": "text",
+          "name": "Eva Chen name",
+          "x": 144,
+          "y": 186,
+          "width": 188,
+          "height": 22,
+          "visible": true,
+          "rotation": 0,
+          "opacity": 1,
+          "locked": false,
+          "zIndex": 22,
+          "style": {
+            "fill": "#243b34",
+            "stroke": null,
+            "strokeWidth": 0
+          },
+          "props": {
+            "text": "Eva Chen",
+            "fontFamily": "Arial",
+            "fontSize": 13,
+            "fontWeight": "bold",
+            "align": "left",
+            "verticalAlign": "middle",
+            "lineHeight": 1.25
+          },
+          "overrides": {
+            "mobile": {
+              "x": 0,
+              "y": 0,
+              "width": 1,
+              "height": 1,
+              "visible": false
+            },
+            "tablet": {
+              "x": 113.18181818181819,
+              "y": 186,
+              "width": 174,
+              "height": 22,
+              "visible": true
+            }
+          }
+        },
+        {
+          "id": "690a427c-0f52-4522-b046-a519323aaab6",
+          "type": "text",
+          "name": "Eva Chen preview",
+          "x": 144,
+          "y": 210,
+          "width": 233,
+          "height": 18,
+          "visible": true,
+          "rotation": 0,
+          "opacity": 1,
+          "locked": false,
+          "zIndex": 23,
+          "style": {
+            "fill": "#3d6656",
+            "stroke": null,
+            "strokeWidth": 0
+          },
+          "props": {
+            "text": "Perfect, see you there 🌿",
+            "fontFamily": "Arial",
+            "fontSize": 11,
+            "fontWeight": "normal",
+            "align": "left",
+            "verticalAlign": "middle",
+            "lineHeight": 1.25
+          },
+          "overrides": {
+            "mobile": {
+              "x": 0,
+              "y": 0,
+              "width": 1,
+              "height": 1,
+              "visible": false
+            },
+            "tablet": {
+              "x": 113.18181818181819,
+              "y": 210,
+              "width": 174,
+              "height": 18,
+              "visible": true
+            }
+          }
+        },
+        {
+          "id": "c1e8c5fa-1361-4c5a-b53f-d67c6c425a04",
+          "type": "text",
+          "name": "Eva Chen time",
+          "x": 350,
+          "y": 186,
+          "width": 49,
+          "height": 18,
+          "visible": true,
+          "rotation": 0,
+          "opacity": 1,
+          "locked": false,
+          "zIndex": 24,
+          "style": {
+            "fill": "#2a7055",
+            "stroke": null,
+            "strokeWidth": 0
+          },
+          "props": {
+            "text": "now",
+            "fontFamily": "Arial",
+            "fontSize": 9,
+            "fontWeight": "normal",
+            "align": "right",
+            "verticalAlign": "middle",
+            "lineHeight": 1.25
+          },
+          "overrides": {
+            "mobile": {
+              "x": 0,
+              "y": 0,
+              "width": 1,
+              "height": 1,
+              "visible": false
+            },
+            "tablet": {
+              "x": 265.3409090909091,
+              "y": 186,
+              "width": 1,
+              "height": 18,
+              "visible": true
+            }
+          }
+        },
+        {
+          "id": "f94c7af4-49b2-402e-9b5b-b78279980578",
+          "type": "ellipse",
+          "name": "Eva Chen unread badge",
+          "x": 386,
+          "y": 212,
+          "width": 18,
+          "height": 18,
+          "visible": true,
+          "rotation": 0,
+          "opacity": 1,
+          "locked": false,
+          "zIndex": 25,
+          "style": {
+            "fill": "#2c8a67",
+            "stroke": null,
+            "strokeWidth": 0
+          },
+          "props": {
+            "text": "",
+            "fontFamily": "Arial",
+            "fontSize": 14,
+            "fontWeight": "normal",
+            "align": "left",
+            "verticalAlign": "middle",
+            "lineHeight": 1.25
+          },
+          "overrides": {
+            "mobile": {
+              "x": 0,
+              "y": 0,
+              "width": 1,
+              "height": 1,
+              "visible": false
+            },
+            "tablet": {
+              "x": 291.9318181818182,
+              "y": 212,
+              "width": 1,
+              "height": 18,
+              "visible": true
+            }
+          }
+        },
+        {
+          "id": "8ef7e1f4-7a13-4833-a267-74ef484a9e2b",
+          "type": "text",
+          "name": "Eva Chen unread count",
+          "x": 386,
+          "y": 212,
+          "width": 18,
+          "height": 18,
+          "visible": true,
+          "rotation": 0,
+          "opacity": 1,
+          "locked": false,
+          "zIndex": 26,
+          "style": {
+            "fill": "#ffffff",
+            "stroke": null,
+            "strokeWidth": 0
+          },
+          "props": {
+            "text": "2",
+            "fontFamily": "Arial",
+            "fontSize": 9,
+            "fontWeight": "bold",
+            "align": "center",
+            "verticalAlign": "middle",
+            "lineHeight": 1.25
+          },
+          "overrides": {
+            "mobile": {
+              "x": 0,
+              "y": 0,
+              "width": 1,
+              "height": 1,
+              "visible": false
+            },
+            "tablet": {
+              "x": 291.9318181818182,
+              "y": 212,
+              "width": 1,
+              "height": 18,
+              "visible": true
+            }
+          }
+        },
+        {
+          "id": "5f08ff78-8c85-44d5-acb1-aa234f75ce2c",
+          "type": "ellipse",
+          "name": "Weekend people avatar",
+          "x": 88,
+          "y": 269,
+          "width": 44,
+          "height": 44,
+          "visible": true,
+          "rotation": 0,
+          "opacity": 1,
+          "locked": false,
+          "zIndex": 27,
+          "style": {
+            "fill": "#7a9c8b",
+            "stroke": null,
+            "strokeWidth": 0
+          },
+          "props": {
+            "text": "",
+            "fontFamily": "Arial",
+            "fontSize": 14,
+            "fontWeight": "normal",
+            "align": "left",
+            "verticalAlign": "middle",
+            "lineHeight": 1.25
+          },
+          "overrides": {
+            "mobile": {
+              "x": 0,
+              "y": 0,
+              "width": 1,
+              "height": 1,
+              "visible": false
+            },
+            "tablet": {
+              "x": 71.81818181818181,
+              "y": 269,
+              "width": 44,
+              "height": 44,
+              "visible": true
+            }
+          }
+        },
+        {
+          "id": "ef38264c-5aae-4651-845e-90a8f0ca956a",
+          "type": "text",
+          "name": "Weekend people initials",
+          "x": 88,
+          "y": 270,
+          "width": 44,
+          "height": 42,
+          "visible": true,
+          "rotation": 0,
+          "opacity": 1,
+          "locked": false,
+          "zIndex": 28,
+          "style": {
+            "fill": "#ffffff",
+            "stroke": null,
+            "strokeWidth": 0
+          },
+          "props": {
+            "text": "WP",
+            "fontFamily": "Arial",
+            "fontSize": 13,
+            "fontWeight": "bold",
+            "align": "center",
+            "verticalAlign": "middle",
+            "lineHeight": 1.25
+          },
+          "overrides": {
+            "mobile": {
+              "x": 0,
+              "y": 0,
+              "width": 1,
+              "height": 1,
+              "visible": false
+            },
+            "tablet": {
+              "x": 71.81818181818181,
+              "y": 270,
+              "width": 44,
+              "height": 42,
+              "visible": true
+            }
+          }
+        },
+        {
+          "id": "6e08a259-f71b-46a4-af2e-3dcbacc14319",
+          "type": "text",
+          "name": "Weekend people name",
+          "x": 144,
+          "y": 267,
+          "width": 188,
+          "height": 22,
+          "visible": true,
+          "rotation": 0,
+          "opacity": 1,
+          "locked": false,
+          "zIndex": 29,
+          "style": {
+            "fill": "#243b34",
+            "stroke": null,
+            "strokeWidth": 0
+          },
+          "props": {
+            "text": "Weekend people",
+            "fontFamily": "Arial",
+            "fontSize": 13,
+            "fontWeight": "bold",
+            "align": "left",
+            "verticalAlign": "middle",
+            "lineHeight": 1.25
+          },
+          "overrides": {
+            "mobile": {
+              "x": 0,
+              "y": 0,
+              "width": 1,
+              "height": 1,
+              "visible": false
+            },
+            "tablet": {
+              "x": 113.18181818181819,
+              "y": 267,
+              "width": 174,
+              "height": 22,
+              "visible": true
+            }
+          }
+        },
+        {
+          "id": "aa09d1c0-0d66-44de-a24d-934aea6b8469",
+          "type": "text",
+          "name": "Weekend people preview",
+          "x": 144,
+          "y": 291,
+          "width": 233,
+          "height": 18,
+          "visible": true,
+          "rotation": 0,
+          "opacity": 1,
+          "locked": false,
+          "zIndex": 30,
+          "style": {
+            "fill": "#87948e",
+            "stroke": null,
+            "strokeWidth": 0
+          },
+          "props": {
+            "text": "Maya: Sunday sounds lovely",
+            "fontFamily": "Arial",
+            "fontSize": 11,
+            "fontWeight": "normal",
+            "align": "left",
+            "verticalAlign": "middle",
+            "lineHeight": 1.25
+          },
+          "overrides": {
+            "mobile": {
+              "x": 0,
+              "y": 0,
+              "width": 1,
+              "height": 1,
+              "visible": false
+            },
+            "tablet": {
+              "x": 113.18181818181819,
+              "y": 291,
+              "width": 174,
+              "height": 18,
+              "visible": true
+            }
+          }
+        },
+        {
+          "id": "14f197f3-af72-420d-9df6-e91a588b87ab",
+          "type": "text",
+          "name": "Weekend people time",
+          "x": 350,
+          "y": 267,
+          "width": 49,
+          "height": 18,
+          "visible": true,
+          "rotation": 0,
+          "opacity": 1,
+          "locked": false,
+          "zIndex": 31,
+          "style": {
+            "fill": "#9ba6a1",
+            "stroke": null,
+            "strokeWidth": 0
+          },
+          "props": {
+            "text": "9:41",
+            "fontFamily": "Arial",
+            "fontSize": 9,
+            "fontWeight": "normal",
+            "align": "right",
+            "verticalAlign": "middle",
+            "lineHeight": 1.25
+          },
+          "overrides": {
+            "mobile": {
+              "x": 0,
+              "y": 0,
+              "width": 1,
+              "height": 1,
+              "visible": false
+            },
+            "tablet": {
+              "x": 265.3409090909091,
+              "y": 267,
+              "width": 1,
+              "height": 18,
+              "visible": true
+            }
+          }
+        },
+        {
+          "id": "8296c7db-de22-4aff-9037-87c476ad72e5",
+          "type": "ellipse",
+          "name": "Weekend people unread badge",
+          "x": 386,
+          "y": 293,
+          "width": 18,
+          "height": 18,
+          "visible": true,
+          "rotation": 0,
+          "opacity": 1,
+          "locked": false,
+          "zIndex": 32,
+          "style": {
+            "fill": "#2c8a67",
+            "stroke": null,
+            "strokeWidth": 0
+          },
+          "props": {
+            "text": "",
+            "fontFamily": "Arial",
+            "fontSize": 14,
+            "fontWeight": "normal",
+            "align": "left",
+            "verticalAlign": "middle",
+            "lineHeight": 1.25
+          },
+          "overrides": {
+            "mobile": {
+              "x": 0,
+              "y": 0,
+              "width": 1,
+              "height": 1,
+              "visible": false
+            },
+            "tablet": {
+              "x": 291.9318181818182,
+              "y": 293,
+              "width": 1,
+              "height": 18,
+              "visible": true
+            }
+          }
+        },
+        {
+          "id": "f5d3c715-bac6-41ab-aa57-4cd67efdb87e",
+          "type": "text",
+          "name": "Weekend people unread count",
+          "x": 386,
+          "y": 293,
+          "width": 18,
+          "height": 18,
+          "visible": true,
+          "rotation": 0,
+          "opacity": 1,
+          "locked": false,
+          "zIndex": 33,
+          "style": {
+            "fill": "#ffffff",
+            "stroke": null,
+            "strokeWidth": 0
+          },
+          "props": {
+            "text": "3",
+            "fontFamily": "Arial",
+            "fontSize": 9,
+            "fontWeight": "bold",
+            "align": "center",
+            "verticalAlign": "middle",
+            "lineHeight": 1.25
+          },
+          "overrides": {
+            "mobile": {
+              "x": 0,
+              "y": 0,
+              "width": 1,
+              "height": 1,
+              "visible": false
+            },
+            "tablet": {
+              "x": 291.9318181818182,
+              "y": 293,
+              "width": 1,
+              "height": 18,
+              "visible": true
+            }
+          }
+        },
+        {
+          "id": "f9e6df21-69d6-4a5a-85cd-7c627d48a04a",
+          "type": "text",
+          "name": "All chats heading",
+          "x": 91,
+          "y": 341,
+          "width": 108,
+          "height": 16,
+          "visible": true,
+          "rotation": 0,
+          "opacity": 1,
+          "locked": false,
+          "zIndex": 34,
+          "style": {
+            "fill": "#899890",
+            "stroke": null,
+            "strokeWidth": 0
+          },
+          "props": {
+            "text": "ALL CHATS",
+            "fontFamily": "Arial",
+            "fontSize": 9,
+            "fontWeight": "bold",
+            "align": "left",
+            "verticalAlign": "middle",
+            "lineHeight": 1.25
+          },
+          "overrides": {
+            "mobile": {
+              "x": 0,
+              "y": 0,
+              "width": 1,
+              "height": 1,
+              "visible": false
+            },
+            "tablet": {
+              "x": 74.0340909090909,
+              "y": 341,
+              "width": 108,
+              "height": 16,
+              "visible": true
+            }
+          }
+        },
+        {
+          "id": "f3fa5e5f-ce37-4557-b178-194df11c49e1",
+          "type": "ellipse",
+          "name": "Noah Williams avatar",
+          "x": 88,
+          "y": 370,
+          "width": 44,
+          "height": 44,
+          "visible": true,
+          "rotation": 0,
+          "opacity": 1,
+          "locked": false,
+          "zIndex": 35,
+          "style": {
+            "fill": "#7891b3",
+            "stroke": null,
+            "strokeWidth": 0
+          },
+          "props": {
+            "text": "",
+            "fontFamily": "Arial",
+            "fontSize": 14,
+            "fontWeight": "normal",
+            "align": "left",
+            "verticalAlign": "middle",
+            "lineHeight": 1.25
+          },
+          "overrides": {
+            "mobile": {
+              "x": 0,
+              "y": 0,
+              "width": 1,
+              "height": 1,
+              "visible": false
+            },
+            "tablet": {
+              "x": 71.81818181818181,
+              "y": 370,
+              "width": 44,
+              "height": 44,
+              "visible": true
+            }
+          }
+        },
+        {
+          "id": "0aaa97e5-eeec-46a6-b74f-568db4ac405b",
+          "type": "text",
+          "name": "Noah Williams initials",
+          "x": 88,
+          "y": 371,
+          "width": 44,
+          "height": 42,
+          "visible": true,
+          "rotation": 0,
+          "opacity": 1,
+          "locked": false,
+          "zIndex": 36,
+          "style": {
+            "fill": "#ffffff",
+            "stroke": null,
+            "strokeWidth": 0
+          },
+          "props": {
+            "text": "NW",
+            "fontFamily": "Arial",
+            "fontSize": 13,
+            "fontWeight": "bold",
+            "align": "center",
+            "verticalAlign": "middle",
+            "lineHeight": 1.25
+          },
+          "overrides": {
+            "mobile": {
+              "x": 0,
+              "y": 0,
+              "width": 1,
+              "height": 1,
+              "visible": false
+            },
+            "tablet": {
+              "x": 71.81818181818181,
+              "y": 371,
+              "width": 44,
+              "height": 42,
+              "visible": true
+            }
+          }
+        },
+        {
+          "id": "6f898b11-e974-4b94-b700-f658d384b4fc",
+          "type": "text",
+          "name": "Noah Williams name",
+          "x": 144,
+          "y": 368,
+          "width": 188,
+          "height": 22,
+          "visible": true,
+          "rotation": 0,
+          "opacity": 1,
+          "locked": false,
+          "zIndex": 37,
+          "style": {
+            "fill": "#243b34",
+            "stroke": null,
+            "strokeWidth": 0
+          },
+          "props": {
+            "text": "Noah Williams",
+            "fontFamily": "Arial",
+            "fontSize": 13,
+            "fontWeight": "bold",
+            "align": "left",
+            "verticalAlign": "middle",
+            "lineHeight": 1.25
+          },
+          "overrides": {
+            "mobile": {
+              "x": 0,
+              "y": 0,
+              "width": 1,
+              "height": 1,
+              "visible": false
+            },
+            "tablet": {
+              "x": 113.18181818181819,
+              "y": 368,
+              "width": 174,
+              "height": 22,
+              "visible": true
+            }
+          }
+        },
+        {
+          "id": "37d4a884-517b-43ac-9033-5128635d7921",
+          "type": "text",
+          "name": "Noah Williams preview",
+          "x": 144,
+          "y": 392,
+          "width": 233,
+          "height": 18,
+          "visible": true,
+          "rotation": 0,
+          "opacity": 1,
+          "locked": false,
+          "zIndex": 38,
+          "style": {
+            "fill": "#87948e",
+            "stroke": null,
+            "strokeWidth": 0
+          },
+          "props": {
+            "text": "Sent you a voice note",
+            "fontFamily": "Arial",
+            "fontSize": 11,
+            "fontWeight": "normal",
+            "align": "left",
+            "verticalAlign": "middle",
+            "lineHeight": 1.25
+          },
+          "overrides": {
+            "mobile": {
+              "x": 0,
+              "y": 0,
+              "width": 1,
+              "height": 1,
+              "visible": false
+            },
+            "tablet": {
+              "x": 113.18181818181819,
+              "y": 392,
+              "width": 174,
+              "height": 18,
+              "visible": true
+            }
+          }
+        },
+        {
+          "id": "7883bcdf-ca0a-4bdd-91db-55a4cfdd9f0b",
+          "type": "text",
+          "name": "Noah Williams time",
+          "x": 350,
+          "y": 368,
+          "width": 49,
+          "height": 18,
+          "visible": true,
+          "rotation": 0,
+          "opacity": 1,
+          "locked": false,
+          "zIndex": 39,
+          "style": {
+            "fill": "#9ba6a1",
+            "stroke": null,
+            "strokeWidth": 0
+          },
+          "props": {
+            "text": "8:52",
+            "fontFamily": "Arial",
+            "fontSize": 9,
+            "fontWeight": "normal",
+            "align": "right",
+            "verticalAlign": "middle",
+            "lineHeight": 1.25
+          },
+          "overrides": {
+            "mobile": {
+              "x": 0,
+              "y": 0,
+              "width": 1,
+              "height": 1,
+              "visible": false
+            },
+            "tablet": {
+              "x": 265.3409090909091,
+              "y": 368,
+              "width": 1,
+              "height": 18,
+              "visible": true
+            }
+          }
+        },
+        {
+          "id": "e04c230f-e627-405c-90b8-cbf38d31cb82",
+          "type": "ellipse",
+          "name": "Amara Okafor avatar",
+          "x": 88,
+          "y": 451,
+          "width": 44,
+          "height": 44,
+          "visible": true,
+          "rotation": 0,
+          "opacity": 1,
+          "locked": false,
+          "zIndex": 40,
+          "style": {
+            "fill": "#bd8db2",
+            "stroke": null,
+            "strokeWidth": 0
+          },
+          "props": {
+            "text": "",
+            "fontFamily": "Arial",
+            "fontSize": 14,
+            "fontWeight": "normal",
+            "align": "left",
+            "verticalAlign": "middle",
+            "lineHeight": 1.25
+          },
+          "overrides": {
+            "mobile": {
+              "x": 0,
+              "y": 0,
+              "width": 1,
+              "height": 1,
+              "visible": false
+            },
+            "tablet": {
+              "x": 71.81818181818181,
+              "y": 451,
+              "width": 44,
+              "height": 44,
+              "visible": true
+            }
+          }
+        },
+        {
+          "id": "6024222e-0921-4fb0-87eb-746d19586be1",
+          "type": "text",
+          "name": "Amara Okafor initials",
+          "x": 88,
+          "y": 452,
+          "width": 44,
+          "height": 42,
+          "visible": true,
+          "rotation": 0,
+          "opacity": 1,
+          "locked": false,
+          "zIndex": 41,
+          "style": {
+            "fill": "#ffffff",
+            "stroke": null,
+            "strokeWidth": 0
+          },
+          "props": {
+            "text": "AO",
+            "fontFamily": "Arial",
+            "fontSize": 13,
+            "fontWeight": "bold",
+            "align": "center",
+            "verticalAlign": "middle",
+            "lineHeight": 1.25
+          },
+          "overrides": {
+            "mobile": {
+              "x": 0,
+              "y": 0,
+              "width": 1,
+              "height": 1,
+              "visible": false
+            },
+            "tablet": {
+              "x": 71.81818181818181,
+              "y": 452,
+              "width": 44,
+              "height": 42,
+              "visible": true
+            }
+          }
+        },
+        {
+          "id": "6fff0eb3-820d-44f5-87a2-43f07d3c8700",
+          "type": "text",
+          "name": "Amara Okafor name",
+          "x": 144,
+          "y": 449,
+          "width": 188,
+          "height": 22,
+          "visible": true,
+          "rotation": 0,
+          "opacity": 1,
+          "locked": false,
+          "zIndex": 42,
+          "style": {
+            "fill": "#243b34",
+            "stroke": null,
+            "strokeWidth": 0
+          },
+          "props": {
+            "text": "Amara Okafor",
+            "fontFamily": "Arial",
+            "fontSize": 13,
+            "fontWeight": "bold",
+            "align": "left",
+            "verticalAlign": "middle",
+            "lineHeight": 1.25
+          },
+          "overrides": {
+            "mobile": {
+              "x": 0,
+              "y": 0,
+              "width": 1,
+              "height": 1,
+              "visible": false
+            },
+            "tablet": {
+              "x": 113.18181818181819,
+              "y": 449,
+              "width": 174,
+              "height": 22,
+              "visible": true
+            }
+          }
+        },
+        {
+          "id": "b8539f8d-7693-491b-8a13-5f22fb46b684",
+          "type": "text",
+          "name": "Amara Okafor preview",
+          "x": 144,
+          "y": 473,
+          "width": 233,
+          "height": 18,
+          "visible": true,
+          "rotation": 0,
+          "opacity": 1,
+          "locked": false,
+          "zIndex": 43,
+          "style": {
+            "fill": "#87948e",
+            "stroke": null,
+            "strokeWidth": 0
+          },
+          "props": {
+            "text": "Thank you for today 💛",
+            "fontFamily": "Arial",
+            "fontSize": 11,
+            "fontWeight": "normal",
+            "align": "left",
+            "verticalAlign": "middle",
+            "lineHeight": 1.25
+          },
+          "overrides": {
+            "mobile": {
+              "x": 0,
+              "y": 0,
+              "width": 1,
+              "height": 1,
+              "visible": false
+            },
+            "tablet": {
+              "x": 113.18181818181819,
+              "y": 473,
+              "width": 174,
+              "height": 18,
+              "visible": true
+            }
+          }
+        },
+        {
+          "id": "88f0e131-1987-4d62-951c-749336a2dedd",
+          "type": "text",
+          "name": "Amara Okafor time",
+          "x": 350,
+          "y": 449,
+          "width": 49,
+          "height": 18,
+          "visible": true,
+          "rotation": 0,
+          "opacity": 1,
+          "locked": false,
+          "zIndex": 44,
+          "style": {
+            "fill": "#9ba6a1",
+            "stroke": null,
+            "strokeWidth": 0
+          },
+          "props": {
+            "text": "Yesterday",
+            "fontFamily": "Arial",
+            "fontSize": 9,
+            "fontWeight": "normal",
+            "align": "right",
+            "verticalAlign": "middle",
+            "lineHeight": 1.25
+          },
+          "overrides": {
+            "mobile": {
+              "x": 0,
+              "y": 0,
+              "width": 1,
+              "height": 1,
+              "visible": false
+            },
+            "tablet": {
+              "x": 265.3409090909091,
+              "y": 449,
+              "width": 1,
+              "height": 18,
+              "visible": true
+            }
+          }
+        },
+        {
+          "id": "b8a7a0d3-fa08-4a7d-a970-147dfe544a9d",
+          "type": "ellipse",
+          "name": "Leo Martin avatar",
+          "x": 88,
+          "y": 532,
+          "width": 44,
+          "height": 44,
+          "visible": true,
+          "rotation": 0,
+          "opacity": 1,
+          "locked": false,
+          "zIndex": 45,
+          "style": {
+            "fill": "#d0a962",
+            "stroke": null,
+            "strokeWidth": 0
+          },
+          "props": {
+            "text": "",
+            "fontFamily": "Arial",
+            "fontSize": 14,
+            "fontWeight": "normal",
+            "align": "left",
+            "verticalAlign": "middle",
+            "lineHeight": 1.25
+          },
+          "overrides": {
+            "mobile": {
+              "x": 0,
+              "y": 0,
+              "width": 1,
+              "height": 1,
+              "visible": false
+            },
+            "tablet": {
+              "x": 71.81818181818181,
+              "y": 532,
+              "width": 44,
+              "height": 44,
+              "visible": true
+            }
+          }
+        },
+        {
+          "id": "9262b5e3-021d-4bdd-ba19-7f534d7fdaf2",
+          "type": "text",
+          "name": "Leo Martin initials",
+          "x": 88,
+          "y": 533,
+          "width": 44,
+          "height": 42,
+          "visible": true,
+          "rotation": 0,
+          "opacity": 1,
+          "locked": false,
+          "zIndex": 46,
+          "style": {
+            "fill": "#ffffff",
+            "stroke": null,
+            "strokeWidth": 0
+          },
+          "props": {
+            "text": "LM",
+            "fontFamily": "Arial",
+            "fontSize": 13,
+            "fontWeight": "bold",
+            "align": "center",
+            "verticalAlign": "middle",
+            "lineHeight": 1.25
+          },
+          "overrides": {
+            "mobile": {
+              "x": 0,
+              "y": 0,
+              "width": 1,
+              "height": 1,
+              "visible": false
+            },
+            "tablet": {
+              "x": 71.81818181818181,
+              "y": 533,
+              "width": 44,
+              "height": 42,
+              "visible": true
+            }
+          }
+        },
+        {
+          "id": "1953e45d-e738-475e-9151-9c4922c927d5",
+          "type": "text",
+          "name": "Leo Martin name",
+          "x": 144,
+          "y": 530,
+          "width": 188,
+          "height": 22,
+          "visible": true,
+          "rotation": 0,
+          "opacity": 1,
+          "locked": false,
+          "zIndex": 47,
+          "style": {
+            "fill": "#243b34",
+            "stroke": null,
+            "strokeWidth": 0
+          },
+          "props": {
+            "text": "Leo Martin",
+            "fontFamily": "Arial",
+            "fontSize": 13,
+            "fontWeight": "bold",
+            "align": "left",
+            "verticalAlign": "middle",
+            "lineHeight": 1.25
+          },
+          "overrides": {
+            "mobile": {
+              "x": 0,
+              "y": 0,
+              "width": 1,
+              "height": 1,
+              "visible": false
+            },
+            "tablet": {
+              "x": 113.18181818181819,
+              "y": 530,
+              "width": 174,
+              "height": 22,
+              "visible": true
+            }
+          }
+        },
+        {
+          "id": "ef5b102d-a913-436e-b68e-ec308742f1b1",
+          "type": "text",
+          "name": "Leo Martin preview",
+          "x": 144,
+          "y": 554,
+          "width": 233,
+          "height": 18,
+          "visible": true,
+          "rotation": 0,
+          "opacity": 1,
+          "locked": false,
+          "zIndex": 48,
+          "style": {
+            "fill": "#87948e",
+            "stroke": null,
+            "strokeWidth": 0
+          },
+          "props": {
+            "text": "The photos are so good!",
+            "fontFamily": "Arial",
+            "fontSize": 11,
+            "fontWeight": "normal",
+            "align": "left",
+            "verticalAlign": "middle",
+            "lineHeight": 1.25
+          },
+          "overrides": {
+            "mobile": {
+              "x": 0,
+              "y": 0,
+              "width": 1,
+              "height": 1,
+              "visible": false
+            },
+            "tablet": {
+              "x": 113.18181818181819,
+              "y": 554,
+              "width": 174,
+              "height": 18,
+              "visible": true
+            }
+          }
+        },
+        {
+          "id": "fc062ac1-d218-4063-bf0c-060e08298fbe",
+          "type": "text",
+          "name": "Leo Martin time",
+          "x": 350,
+          "y": 530,
+          "width": 49,
+          "height": 18,
+          "visible": true,
+          "rotation": 0,
+          "opacity": 1,
+          "locked": false,
+          "zIndex": 49,
+          "style": {
+            "fill": "#9ba6a1",
+            "stroke": null,
+            "strokeWidth": 0
+          },
+          "props": {
+            "text": "Yesterday",
+            "fontFamily": "Arial",
+            "fontSize": 9,
+            "fontWeight": "normal",
+            "align": "right",
+            "verticalAlign": "middle",
+            "lineHeight": 1.25
+          },
+          "overrides": {
+            "mobile": {
+              "x": 0,
+              "y": 0,
+              "width": 1,
+              "height": 1,
+              "visible": false
+            },
+            "tablet": {
+              "x": 265.3409090909091,
+              "y": 530,
+              "width": 1,
+              "height": 18,
+              "visible": true
+            }
+          }
+        },
+        {
+          "id": "c4eb59c5-d9a1-4777-8dce-f2a34cf0bda6",
+          "type": "rectangle",
+          "name": "New conversation button",
+          "x": 92,
+          "y": 837,
+          "width": 312,
+          "height": 44,
+          "visible": true,
+          "constraints": {
+            "horizontal": "left",
+            "vertical": "bottom"
+          },
+          "rotation": 0,
+          "opacity": 1,
+          "locked": false,
+          "zIndex": 50,
+          "style": {
+            "fill": "#193d32",
+            "stroke": null,
+            "strokeWidth": 0,
+            "cornerRadius": 14
+          },
+          "props": {
+            "text": "",
+            "fontFamily": "Arial",
+            "fontSize": 14,
+            "fontWeight": "normal",
+            "align": "left",
+            "verticalAlign": "middle",
+            "lineHeight": 1.25
+          },
+          "overrides": {
+            "mobile": {
+              "x": 0,
+              "y": 0,
+              "width": 1,
+              "height": 1,
+              "visible": false
+            },
+            "tablet": {
+              "x": 78,
+              "width": 224,
+              "height": 44,
+              "visible": true
+            }
+          }
+        },
+        {
+          "id": "e1128f12-cae5-47ca-90b1-67886014d414",
+          "type": "icon",
+          "name": "New conversation plus",
+          "x": 160,
+          "y": 851,
+          "width": 16,
+          "height": 16,
+          "visible": true,
+          "constraints": {
+            "horizontal": "left",
+            "vertical": "bottom"
+          },
+          "rotation": 0,
+          "opacity": 1,
+          "locked": false,
+          "zIndex": 51,
+          "style": {
+            "fill": null,
+            "stroke": "#c5f0d8",
+            "strokeWidth": 2
+          },
+          "props": {
+            "iconName": "Plus"
+          },
+          "overrides": {
+            "mobile": {
+              "x": 0,
+              "y": 0,
+              "width": 1,
+              "height": 1,
+              "visible": false
+            },
+            "tablet": {
+              "x": 125,
+              "width": 16,
+              "height": 16,
+              "visible": true
+            }
+          }
+        },
+        {
+          "id": "96a41b37-3186-42da-a5d3-21aa4212bebf",
+          "type": "text",
+          "name": "New conversation action",
+          "x": 183,
+          "y": 847,
+          "width": 150,
+          "height": 25,
+          "visible": true,
+          "constraints": {
+            "horizontal": "left",
+            "vertical": "bottom"
+          },
+          "rotation": 0,
+          "opacity": 1,
+          "locked": false,
+          "zIndex": 52,
+          "style": {
+            "fill": "#f7fff9",
+            "stroke": null,
+            "strokeWidth": 0
+          },
+          "props": {
+            "text": "New message",
+            "fontFamily": "Arial",
+            "fontSize": 12,
+            "fontWeight": "bold",
+            "align": "left",
+            "verticalAlign": "middle",
+            "lineHeight": 1.25
+          },
+          "overrides": {
+            "mobile": {
+              "x": 0,
+              "y": 0,
+              "width": 1,
+              "height": 1,
+              "visible": false
+            },
+            "tablet": {
+              "x": 141.98863636363637,
+              "width": 135,
+              "height": 25,
+              "visible": true
+            }
+          }
+        },
+        {
+          "id": "6a77db37-c82c-4f96-9e0b-266f79526831",
+          "type": "rectangle",
+          "name": "Conversation canvas",
+          "x": 424,
+          "y": 0,
+          "width": 1016,
+          "height": 900,
+          "visible": true,
+          "rotation": 0,
+          "opacity": 1,
+          "locked": false,
+          "zIndex": 53,
+          "style": {
+            "fill": "#f5f8f6",
+            "stroke": null,
+            "strokeWidth": 0
+          },
+          "props": {
+            "text": "",
+            "fontFamily": "Arial",
+            "fontSize": 14,
+            "fontWeight": "normal",
+            "align": "left",
+            "verticalAlign": "middle",
+            "lineHeight": 1.25
+          },
+          "overrides": {
+            "mobile": {
+              "x": 0,
+              "y": 0,
+              "width": 390,
+              "height": 844,
+              "visible": true
+            },
+            "tablet": {
+              "x": 320,
+              "y": 0,
+              "width": 448,
+              "height": 1024,
+              "visible": true
+            }
+          }
+        },
+        {
+          "id": "fdfb7568-f4a3-46b8-86ff-05022bd5f8a8",
+          "type": "rectangle",
+          "name": "Conversation header surface",
+          "x": 424,
+          "y": 0,
+          "width": 1016,
+          "height": 82,
+          "visible": true,
+          "rotation": 0,
+          "opacity": 1,
+          "locked": false,
+          "zIndex": 54,
+          "style": {
+            "fill": "#ffffff",
+            "stroke": null,
+            "strokeWidth": 0
+          },
+          "props": {
+            "text": "",
+            "fontFamily": "Arial",
+            "fontSize": 14,
+            "fontWeight": "normal",
+            "align": "left",
+            "verticalAlign": "middle",
+            "lineHeight": 1.25
+          },
+          "overrides": {
+            "mobile": {
+              "x": 0,
+              "y": 0,
+              "width": 390,
+              "height": 82,
+              "visible": true
+            },
+            "tablet": {
+              "x": 320,
+              "y": 0,
+              "width": 448,
+              "height": 82,
+              "visible": true
+            }
+          }
+        },
+        {
+          "id": "f2672a9b-45b5-45db-b325-e19c3ab5febb",
+          "type": "rectangle",
+          "name": "Conversation header divider",
+          "x": 424,
+          "y": 81,
+          "width": 1016,
+          "height": 1,
+          "visible": true,
+          "rotation": 0,
+          "opacity": 1,
+          "locked": false,
+          "zIndex": 55,
+          "style": {
+            "fill": "#e8efeb",
+            "stroke": null,
+            "strokeWidth": 0
+          },
+          "props": {
+            "text": "",
+            "fontFamily": "Arial",
+            "fontSize": 14,
+            "fontWeight": "normal",
+            "align": "left",
+            "verticalAlign": "middle",
+            "lineHeight": 1.25
+          },
+          "overrides": {
+            "mobile": {
+              "x": 0,
+              "y": 81,
+              "width": 390,
+              "height": 1,
+              "visible": true
+            },
+            "tablet": {
+              "x": 320,
+              "y": 81,
+              "width": 448,
+              "height": 1,
+              "visible": true
+            }
+          }
+        },
+        {
+          "id": "b23d8ab9-3b9c-4ac7-8ef2-f0846588f5b3",
+          "type": "icon",
+          "name": "Mobile back button",
+          "x": 432,
+          "y": 26,
+          "width": 22,
+          "height": 22,
+          "visible": false,
+          "rotation": 0,
+          "opacity": 1,
+          "locked": false,
+          "zIndex": 56,
+          "style": {
+            "fill": null,
+            "stroke": "#38584c",
+            "strokeWidth": 2
+          },
+          "props": {
+            "iconName": "ArrowLeft"
+          },
+          "overrides": {
+            "mobile": {
+              "x": 13,
+              "y": 26,
+              "width": 22,
+              "height": 22,
+              "visible": true
+            },
+            "tablet": {
+              "x": 328,
+              "y": 26,
+              "width": 22,
+              "height": 22,
+              "visible": false
+            }
+          }
+        },
+        {
+          "id": "42f3f24c-f2e5-4392-aa24-0f1ca1f5be68",
+          "type": "ellipse",
+          "name": "Eva conversation avatar",
+          "x": 444,
+          "y": 18,
+          "width": 46,
+          "height": 46,
+          "visible": true,
+          "rotation": 0,
+          "opacity": 1,
+          "locked": false,
+          "zIndex": 57,
+          "style": {
+            "fill": "#df9a7f",
+            "stroke": null,
+            "strokeWidth": 0
+          },
+          "props": {
+            "text": "",
+            "fontFamily": "Arial",
+            "fontSize": 14,
+            "fontWeight": "normal",
+            "align": "left",
+            "verticalAlign": "middle",
+            "lineHeight": 1.25
+          },
+          "overrides": {
+            "mobile": {
+              "x": 43,
+              "y": 16,
+              "width": 44,
+              "height": 44,
+              "visible": true
+            },
+            "tablet": {
+              "x": 340,
+              "y": 18,
+              "width": 46,
+              "height": 46,
+              "visible": true
+            }
+          }
+        },
+        {
+          "id": "f6f91c55-a726-4e68-b06f-905c08bea7a1",
+          "type": "text",
+          "name": "Eva avatar initials",
+          "x": 444,
+          "y": 18,
+          "width": 46,
+          "height": 46,
+          "visible": true,
+          "rotation": 0,
+          "opacity": 1,
+          "locked": false,
+          "zIndex": 58,
+          "style": {
+            "fill": "#ffffff",
+            "stroke": null,
+            "strokeWidth": 0
+          },
+          "props": {
+            "text": "EC",
+            "fontFamily": "Arial",
+            "fontSize": 13,
+            "fontWeight": "bold",
+            "align": "center",
+            "verticalAlign": "middle",
+            "lineHeight": 1.25
+          },
+          "overrides": {
+            "mobile": {
+              "x": 43,
+              "y": 16,
+              "width": 44,
+              "height": 44,
+              "visible": true
+            },
+            "tablet": {
+              "x": 340,
+              "y": 18,
+              "width": 46,
+              "height": 46,
+              "visible": true
+            }
+          }
+        },
+        {
+          "id": "fb6dc526-30ac-4b82-b6ea-62cfee76edc5",
+          "type": "text",
+          "name": "Conversation contact name",
+          "x": 502,
+          "y": 17,
+          "width": 260,
+          "height": 24,
+          "visible": true,
+          "rotation": 0,
+          "opacity": 1,
+          "locked": false,
+          "zIndex": 59,
+          "style": {
+            "fill": "#243b34",
+            "stroke": null,
+            "strokeWidth": 0
+          },
+          "props": {
+            "text": "Eva Chen",
+            "fontFamily": "Arial",
+            "fontSize": 14,
+            "fontWeight": "bold",
+            "align": "left",
+            "verticalAlign": "middle",
+            "lineHeight": 1.25
+          },
+          "overrides": {
+            "mobile": {
+              "x": 96,
+              "y": 14,
+              "width": 154,
+              "height": 23,
+              "visible": true
+            },
+            "tablet": {
+              "x": 398,
+              "y": 17,
+              "width": 260,
+              "height": 24,
+              "visible": true
+            }
+          }
+        },
+        {
+          "id": "2f5574b7-0dd7-4721-ad53-ce1953c39985",
+          "type": "text",
+          "name": "Conversation presence",
+          "x": 503,
+          "y": 43,
+          "width": 180,
+          "height": 18,
+          "visible": true,
+          "rotation": 0,
+          "opacity": 1,
+          "locked": false,
+          "zIndex": 60,
+          "style": {
+            "fill": "#438469",
+            "stroke": null,
+            "strokeWidth": 0
+          },
+          "props": {
+            "text": "●  Online now",
+            "fontFamily": "Arial",
+            "fontSize": 10,
+            "fontWeight": "normal",
+            "align": "left",
+            "verticalAlign": "middle",
+            "lineHeight": 1.25
+          },
+          "overrides": {
+            "mobile": {
+              "x": 97,
+              "y": 38,
+              "width": 170,
+              "height": 16,
+              "visible": true
+            },
+            "tablet": {
+              "x": 399,
+              "y": 43,
+              "width": 180,
+              "height": 18,
+              "visible": true
+            }
+          }
+        },
+        {
+          "id": "2aae3b2b-ac41-44e0-a48a-f901f913c9e7",
+          "type": "icon",
+          "name": "Voice call",
+          "x": 1303,
+          "y": 29,
+          "width": 21,
+          "height": 21,
+          "visible": true,
+          "rotation": 0,
+          "opacity": 1,
+          "locked": false,
+          "zIndex": 61,
+          "style": {
+            "fill": null,
+            "stroke": "#537267",
+            "strokeWidth": 2
+          },
+          "props": {
+            "iconName": "Phone"
+          },
+          "overrides": {
+            "mobile": {
+              "x": 296,
+              "y": 27,
+              "width": 19,
+              "height": 19,
+              "visible": true
+            },
+            "tablet": {
+              "x": 631,
+              "y": 29,
+              "width": 21,
+              "height": 21,
+              "visible": true
+            }
+          }
+        },
+        {
+          "id": "aa64ad64-3f4f-45a4-9823-6b89bcfd40d4",
+          "type": "icon",
+          "name": "Video call",
+          "x": 1347,
+          "y": 29,
+          "width": 22,
+          "height": 22,
+          "visible": true,
+          "rotation": 0,
+          "opacity": 1,
+          "locked": false,
+          "zIndex": 62,
+          "style": {
+            "fill": null,
+            "stroke": "#537267",
+            "strokeWidth": 2
+          },
+          "props": {
+            "iconName": "Video"
+          },
+          "overrides": {
+            "mobile": {
+              "x": 329,
+              "y": 27,
+              "width": 20,
+              "height": 20,
+              "visible": true
+            },
+            "tablet": {
+              "x": 675,
+              "y": 29,
+              "width": 22,
+              "height": 22,
+              "visible": true
+            }
+          }
+        },
+        {
+          "id": "7fa6c9e3-7756-4492-86a4-6da9957b6a64",
+          "type": "icon",
+          "name": "Conversation menu",
+          "x": 1388,
+          "y": 29,
+          "width": 22,
+          "height": 22,
+          "visible": true,
+          "rotation": 0,
+          "opacity": 1,
+          "locked": false,
+          "zIndex": 63,
+          "style": {
+            "fill": null,
+            "stroke": "#537267",
+            "strokeWidth": 2
+          },
+          "props": {
+            "iconName": "MoreHorizontal"
+          },
+          "overrides": {
+            "mobile": {
+              "x": 359,
+              "y": 27,
+              "width": 20,
+              "height": 20,
+              "visible": true
+            },
+            "tablet": {
+              "x": 716,
+              "y": 29,
+              "width": 22,
+              "height": 22,
+              "visible": true
+            }
+          }
+        },
+        {
+          "id": "eaba31f3-030d-4a22-a074-80bb026afe48",
+          "type": "text",
+          "name": "Conversation date",
+          "x": 752,
+          "y": 98,
+          "width": 360,
+          "height": 20,
+          "visible": true,
+          "rotation": 0,
+          "opacity": 1,
+          "locked": false,
+          "zIndex": 64,
+          "style": {
+            "fill": "#9aa7a0",
+            "stroke": null,
+            "strokeWidth": 0
+          },
+          "props": {
+            "text": "TODAY  ·  10:42 AM",
+            "fontFamily": "Arial",
+            "fontSize": 9,
+            "fontWeight": "bold",
+            "align": "center",
+            "verticalAlign": "middle",
+            "lineHeight": 1.25
+          },
+          "overrides": {
+            "mobile": {
+              "x": 70,
+              "y": 91,
+              "width": 250,
+              "height": 18,
+              "visible": true
+            },
+            "tablet": {
+              "x": 364,
+              "y": 98,
+              "width": 360,
+              "height": 20,
+              "visible": true
+            }
+          }
+        },
+        {
+          "id": "540a0ff6-219e-4d53-9345-3880e99fac72",
+          "type": "rectangle",
+          "name": "First outgoing bubble",
+          "x": 1022,
+          "y": 139,
+          "width": 394,
+          "height": 64,
+          "rotation": 0,
+          "opacity": 1,
+          "visible": true,
+          "locked": false,
+          "zIndex": 65,
+          "style": {
+            "fill": "#d9eee2",
+            "stroke": null,
+            "strokeWidth": 0,
+            "cornerRadius": [
+              18,
+              18,
+              4,
+              18
+            ]
+          },
+          "props": {},
+          "overrides": {
+            "tablet": {
+              "x": 354,
+              "y": 139,
+              "width": 394,
+              "height": 64,
+              "visible": true
+            },
+            "mobile": {
+              "x": 79,
+              "y": 124,
+              "width": 292,
+              "height": 64,
+              "visible": true
+            }
+          }
+        },
+        {
+          "id": "9246b335-102d-4388-9edd-2b7ed6753645",
+          "type": "text",
+          "name": "First outgoing bubble message",
+          "x": 1038,
+          "y": 148,
+          "width": 362,
+          "height": 46,
+          "visible": true,
+          "rotation": 0,
+          "opacity": 1,
+          "locked": false,
+          "zIndex": 66,
+          "style": {
+            "fill": "#2d463b",
+            "stroke": null,
+            "strokeWidth": 0
+          },
+          "props": {
+            "text": "I found a tiny place by the water that I think you'll love.",
+            "fontFamily": "Arial",
+            "fontSize": 12,
+            "fontWeight": "normal",
+            "align": "left",
+            "verticalAlign": "middle",
+            "lineHeight": 1.25
+          },
+          "overrides": {
+            "mobile": {
+              "x": 93,
+              "y": 132,
+              "width": 264,
+              "height": 48,
+              "visible": true
+            },
+            "tablet": {
+              "x": 370,
+              "y": 148,
+              "width": 362,
+              "height": 46,
+              "visible": true
+            }
+          }
+        },
+        {
+          "id": "208e8fb8-6b38-4dfe-a9b4-e0549057856c",
+          "type": "text",
+          "name": "First outgoing time",
+          "x": 1303,
+          "y": 208,
+          "width": 98,
+          "height": 15,
+          "visible": true,
+          "rotation": 0,
+          "opacity": 1,
+          "locked": false,
+          "zIndex": 67,
+          "style": {
+            "fill": "#7e9b8b",
+            "stroke": null,
+            "strokeWidth": 0
+          },
+          "props": {
+            "text": "10:42   ✓✓",
+            "fontFamily": "Arial",
+            "fontSize": 9,
+            "fontWeight": "normal",
+            "align": "right",
+            "verticalAlign": "middle",
+            "lineHeight": 1.25
+          },
+          "overrides": {
+            "mobile": {
+              "x": 270,
+              "y": 190,
+              "width": 86,
+              "height": 14,
+              "visible": true
+            },
+            "tablet": {
+              "x": 631,
+              "y": 208,
+              "width": 98,
+              "height": 15,
+              "visible": true
+            }
+          }
+        },
+        {
+          "id": "6a34e78d-0de0-4649-af9f-639fe1a0766b",
+          "type": "rectangle",
+          "name": "First incoming bubble",
+          "x": 446,
+          "y": 238,
+          "width": 405,
+          "height": 74,
+          "rotation": 0,
+          "opacity": 1,
+          "visible": true,
+          "locked": false,
+          "zIndex": 68,
+          "style": {
+            "fill": "#ffffff",
+            "stroke": null,
+            "strokeWidth": 0,
+            "cornerRadius": [
+              18,
+              18,
+              18,
+              4
+            ]
+          },
+          "props": {},
+          "overrides": {
+            "tablet": {
+              "x": 336,
+              "y": 238,
+              "width": 405,
+              "height": 74,
+              "visible": true
+            },
+            "mobile": {
+              "x": 15,
+              "y": 211,
+              "width": 304,
+              "height": 74,
+              "visible": true
+            }
+          }
+        },
+        {
+          "id": "82730a76-6b49-42d0-9573-2472d5cc1cdf",
+          "type": "text",
+          "name": "First incoming bubble message",
+          "x": 462,
+          "y": 247,
+          "width": 373,
+          "height": 56,
+          "visible": true,
+          "rotation": 0,
+          "opacity": 1,
+          "locked": false,
+          "zIndex": 69,
+          "style": {
+            "fill": "#40534a",
+            "stroke": null,
+            "strokeWidth": 0
+          },
+          "props": {
+            "text": "That sounds exactly like the kind of place I need today 🌿",
+            "fontFamily": "Arial",
+            "fontSize": 12,
+            "fontWeight": "normal",
+            "align": "left",
+            "verticalAlign": "middle",
+            "lineHeight": 1.25
+          },
+          "overrides": {
+            "mobile": {
+              "x": 29,
+              "y": 219,
+              "width": 276,
+              "height": 58,
+              "visible": true
+            },
+            "tablet": {
+              "x": 352,
+              "y": 247,
+              "width": 373,
+              "height": 56,
+              "visible": true
+            }
+          }
+        },
+        {
+          "id": "c53dddfa-1f89-4db6-beb1-95ce5de9f1ab",
+          "type": "text",
+          "name": "First incoming time",
+          "x": 464,
+          "y": 316,
+          "width": 82,
+          "height": 15,
+          "visible": true,
+          "rotation": 0,
+          "opacity": 1,
+          "locked": false,
+          "zIndex": 70,
+          "style": {
+            "fill": "#9aa7a0",
+            "stroke": null,
+            "strokeWidth": 0
+          },
+          "props": {
+            "text": "10:44",
+            "fontFamily": "Arial",
+            "fontSize": 9,
+            "fontWeight": "normal",
+            "align": "left",
+            "verticalAlign": "middle",
+            "lineHeight": 1.25
+          },
+          "overrides": {
+            "mobile": {
+              "x": 31,
+              "y": 288,
+              "width": 68,
+              "height": 13,
+              "visible": true
+            },
+            "tablet": {
+              "x": 360,
+              "y": 316,
+              "width": 82,
+              "height": 15,
+              "visible": true
+            }
+          }
+        },
+        {
+          "id": "e1bc1aa5-e6c0-436b-a194-a5cb2e8bc923",
+          "type": "rectangle",
+          "name": "Second outgoing bubble",
+          "x": 1101,
+          "y": 345,
+          "width": 315,
+          "height": 58,
+          "rotation": 0,
+          "opacity": 1,
+          "visible": true,
+          "locked": false,
+          "zIndex": 71,
+          "style": {
+            "fill": "#d9eee2",
+            "stroke": null,
+            "strokeWidth": 0,
+            "cornerRadius": [
+              18,
+              18,
+              4,
+              18
+            ]
+          },
+          "props": {},
+          "overrides": {
+            "tablet": {
+              "x": 433,
+              "y": 345,
+              "width": 315,
+              "height": 58,
+              "visible": true
+            },
+            "mobile": {
+              "x": 94,
+              "y": 312,
+              "width": 276,
+              "height": 58,
+              "visible": true
+            }
+          }
+        },
+        {
+          "id": "622b4e8a-7bdd-40ad-9df8-26793a29127b",
+          "type": "text",
+          "name": "Second outgoing bubble message",
+          "x": 1117,
+          "y": 354,
+          "width": 283,
+          "height": 40,
+          "visible": true,
+          "rotation": 0,
+          "opacity": 1,
+          "locked": false,
+          "zIndex": 72,
+          "style": {
+            "fill": "#2d463b",
+            "stroke": null,
+            "strokeWidth": 0
+          },
+          "props": {
+            "text": "Window seat is reserved ☀️",
+            "fontFamily": "Arial",
+            "fontSize": 12,
+            "fontWeight": "normal",
+            "align": "left",
+            "verticalAlign": "middle",
+            "lineHeight": 1.25
+          },
+          "overrides": {
+            "mobile": {
+              "x": 108,
+              "y": 320,
+              "width": 248,
+              "height": 42,
+              "visible": true
+            },
+            "tablet": {
+              "x": 449,
+              "y": 354,
+              "width": 283,
+              "height": 40,
+              "visible": true
+            }
+          }
+        },
+        {
+          "id": "e83fd806-3f6a-4bc4-b693-0cf3c3a48662",
+          "type": "rectangle",
+          "name": "Second incoming bubble",
+          "x": 446,
+          "y": 422,
+          "width": 405,
+          "height": 68,
+          "rotation": 0,
+          "opacity": 1,
+          "visible": true,
+          "locked": false,
+          "zIndex": 73,
+          "style": {
+            "fill": "#ffffff",
+            "stroke": null,
+            "strokeWidth": 0,
+            "cornerRadius": [
+              18,
+              18,
+              18,
+              4
+            ]
+          },
+          "props": {},
+          "overrides": {
+            "tablet": {
+              "x": 336,
+              "y": 422,
+              "width": 405,
+              "height": 68,
+              "visible": true
+            },
+            "mobile": {
+              "x": 15,
+              "y": 390,
+              "width": 319,
+              "height": 68,
+              "visible": true
+            }
+          }
+        },
+        {
+          "id": "13a89d73-63c3-40f5-aa5d-92aeefe3748d",
+          "type": "text",
+          "name": "Second incoming bubble message",
+          "x": 462,
+          "y": 431,
+          "width": 373,
+          "height": 50,
+          "visible": true,
+          "rotation": 0,
+          "opacity": 1,
+          "locked": false,
+          "zIndex": 74,
+          "style": {
+            "fill": "#40534a",
+            "stroke": null,
+            "strokeWidth": 0
+          },
+          "props": {
+            "text": "You know me too well! What time were you thinking?",
+            "fontFamily": "Arial",
+            "fontSize": 12,
+            "fontWeight": "normal",
+            "align": "left",
+            "verticalAlign": "middle",
+            "lineHeight": 1.25
+          },
+          "overrides": {
+            "mobile": {
+              "x": 29,
+              "y": 398,
+              "width": 291,
+              "height": 52,
+              "visible": true
+            },
+            "tablet": {
+              "x": 352,
+              "y": 431,
+              "width": 373,
+              "height": 50,
+              "visible": true
+            }
+          }
+        },
+        {
+          "id": "7c574aae-df13-4f18-a25e-d590038ccc23",
+          "type": "rectangle",
+          "name": "Third outgoing bubble",
+          "x": 1051,
+          "y": 515,
+          "width": 365,
+          "height": 65,
+          "rotation": 0,
+          "opacity": 1,
+          "visible": true,
+          "locked": false,
+          "zIndex": 75,
+          "style": {
+            "fill": "#d9eee2",
+            "stroke": null,
+            "strokeWidth": 0,
+            "cornerRadius": [
+              18,
+              18,
+              4,
+              18
+            ]
+          },
+          "props": {},
+          "overrides": {
+            "tablet": {
+              "x": 383,
+              "y": 515,
+              "width": 365,
+              "height": 65,
+              "visible": true
+            },
+            "mobile": {
+              "x": 37,
+              "y": 476,
+              "width": 333,
+              "height": 65,
+              "visible": true
+            }
+          }
+        },
+        {
+          "id": "400451a0-6fe1-48dd-b23c-f3b28af53b2c",
+          "type": "text",
+          "name": "Third outgoing bubble message",
+          "x": 1067,
+          "y": 524,
+          "width": 333,
+          "height": 47,
+          "visible": true,
+          "rotation": 0,
+          "opacity": 1,
+          "locked": false,
+          "zIndex": 76,
+          "style": {
+            "fill": "#2d463b",
+            "stroke": null,
+            "strokeWidth": 0
+          },
+          "props": {
+            "text": "How about 12:30? I'll bring the playlist.",
+            "fontFamily": "Arial",
+            "fontSize": 12,
+            "fontWeight": "normal",
+            "align": "left",
+            "verticalAlign": "middle",
+            "lineHeight": 1.25
+          },
+          "overrides": {
+            "mobile": {
+              "x": 51,
+              "y": 484,
+              "width": 305,
+              "height": 49,
+              "visible": true
+            },
+            "tablet": {
+              "x": 399,
+              "y": 524,
+              "width": 333,
+              "height": 47,
+              "visible": true
+            }
+          }
+        },
+        {
+          "id": "ea0e8b50-ea1c-4bd2-864d-d845932b4188",
+          "type": "rectangle",
+          "name": "Third incoming bubble",
+          "x": 446,
+          "y": 610,
+          "width": 238,
+          "height": 50,
+          "rotation": 0,
+          "opacity": 1,
+          "visible": true,
+          "locked": false,
+          "zIndex": 77,
+          "style": {
+            "fill": "#ffffff",
+            "stroke": null,
+            "strokeWidth": 0,
+            "cornerRadius": [
+              18,
+              18,
+              18,
+              4
+            ]
+          },
+          "props": {},
+          "overrides": {
+            "tablet": {
+              "x": 336,
+              "y": 610,
+              "width": 238,
+              "height": 50,
+              "visible": true
+            },
+            "mobile": {
+              "x": 15,
+              "y": 559,
+              "width": 226,
+              "height": 50,
+              "visible": true
+            }
+          }
+        },
+        {
+          "id": "6a8d0df2-07b4-4e56-8551-7b5df44bbb56",
+          "type": "text",
+          "name": "Third incoming bubble message",
+          "x": 462,
+          "y": 619,
+          "width": 206,
+          "height": 32,
+          "visible": true,
+          "rotation": 0,
+          "opacity": 1,
+          "locked": false,
+          "zIndex": 78,
+          "style": {
+            "fill": "#40534a",
+            "stroke": null,
+            "strokeWidth": 0
+          },
+          "props": {
+            "text": "12:30 is perfect ✨",
+            "fontFamily": "Arial",
+            "fontSize": 12,
+            "fontWeight": "normal",
+            "align": "left",
+            "verticalAlign": "middle",
+            "lineHeight": 1.25
+          },
+          "overrides": {
+            "mobile": {
+              "x": 29,
+              "y": 567,
+              "width": 198,
+              "height": 34,
+              "visible": true
+            },
+            "tablet": {
+              "x": 352,
+              "y": 619,
+              "width": 206,
+              "height": 32,
+              "visible": true
+            }
+          }
+        },
+        {
+          "id": "6ca8368c-4f02-4b7a-8d77-0502779e40b2",
+          "type": "text",
+          "name": "Typing status",
+          "x": 463,
+          "y": 673,
+          "width": 168,
+          "height": 20,
+          "visible": true,
+          "rotation": 0,
+          "opacity": 1,
+          "locked": false,
+          "zIndex": 79,
+          "style": {
+            "fill": "#91a099",
+            "stroke": null,
+            "strokeWidth": 0
+          },
+          "props": {
+            "text": "Eva is typing…",
+            "fontFamily": "Arial",
+            "fontSize": 10,
+            "fontWeight": "normal",
+            "align": "left",
+            "verticalAlign": "middle",
+            "lineHeight": 1.25
+          },
+          "overrides": {
+            "mobile": {
+              "x": 31,
+              "y": 613,
+              "width": 158,
+              "height": 18,
+              "visible": true
+            },
+            "tablet": {
+              "x": 359,
+              "y": 673,
+              "width": 168,
+              "height": 20,
+              "visible": true
+            }
+          }
+        },
+        {
+          "id": "6f42d6b8-bdc7-442c-b9d8-aa2a2878ecde",
+          "type": "rectangle",
+          "name": "Composer surface",
+          "x": 442,
+          "y": 796,
+          "width": 980,
+          "height": 62,
+          "visible": true,
+          "constraints": {
+            "horizontal": "left",
+            "vertical": "bottom"
+          },
+          "rotation": 0,
+          "opacity": 1,
+          "locked": false,
+          "zIndex": 80,
+          "style": {
+            "fill": "#ffffff",
+            "stroke": "#e5ece8",
+            "strokeWidth": 1,
+            "cornerRadius": 19
+          },
+          "props": {
+            "text": "",
+            "fontFamily": "Arial",
+            "fontSize": 14,
+            "fontWeight": "normal",
+            "align": "left",
+            "verticalAlign": "middle",
+            "lineHeight": 1.25
+          },
+          "overrides": {
+            "mobile": {
+              "x": 12,
+              "y": 749,
+              "width": 366,
+              "height": 58,
+              "visible": true
+            },
+            "tablet": {
+              "x": 338,
+              "width": 416,
+              "height": 62,
+              "visible": true
+            }
+          }
+        },
+        {
+          "id": "82a816b9-e2f4-4a07-99cb-7822e2606f2f",
+          "type": "icon",
+          "name": "Attach file",
+          "x": 459,
+          "y": 817,
+          "width": 19,
+          "height": 19,
+          "visible": true,
+          "constraints": {
+            "horizontal": "left",
+            "vertical": "bottom"
+          },
+          "rotation": 0,
+          "opacity": 1,
+          "locked": false,
+          "zIndex": 81,
+          "style": {
+            "fill": null,
+            "stroke": "#668278",
+            "strokeWidth": 2
+          },
+          "props": {
+            "iconName": "Plus"
+          },
+          "overrides": {
+            "mobile": {
+              "x": 26,
+              "y": 768,
+              "width": 19,
+              "height": 19,
+              "visible": true
+            },
+            "tablet": {
+              "x": 355,
+              "width": 19,
+              "height": 19,
+              "visible": true
+            }
+          }
+        },
+        {
+          "id": "6f2f33f4-2491-4ece-b908-3461839a43b7",
+          "type": "text",
+          "name": "Message composer placeholder",
+          "x": 493,
+          "y": 814,
+          "width": 450,
+          "height": 24,
+          "visible": true,
+          "constraints": {
+            "horizontal": "left",
+            "vertical": "bottom"
+          },
+          "rotation": 0,
+          "opacity": 1,
+          "locked": false,
+          "zIndex": 82,
+          "style": {
+            "fill": "#96a39d",
+            "stroke": null,
+            "strokeWidth": 0
+          },
+          "props": {
+            "text": "Write something kind…",
+            "fontFamily": "Arial",
+            "fontSize": 12,
+            "fontWeight": "normal",
+            "align": "left",
+            "verticalAlign": "middle",
+            "lineHeight": 1.25
+          },
+          "overrides": {
+            "mobile": {
+              "x": 57,
+              "y": 766,
+              "width": 223,
+              "height": 24,
+              "visible": true
+            },
+            "tablet": {
+              "x": 389,
+              "width": 365,
+              "height": 24,
+              "visible": true
+            }
+          }
+        },
+        {
+          "id": "2f9816ad-3dcd-4967-9b09-da270d708d21",
+          "type": "rectangle",
+          "name": "Send message button",
+          "x": 1377,
+          "y": 806,
+          "width": 44,
+          "height": 42,
+          "visible": true,
+          "constraints": {
+            "horizontal": "right",
+            "vertical": "bottom"
+          },
+          "rotation": 0,
+          "opacity": 1,
+          "locked": false,
+          "zIndex": 83,
+          "style": {
+            "fill": "#244c3c",
+            "stroke": null,
+            "strokeWidth": 0,
+            "cornerRadius": 14
+          },
+          "props": {
+            "text": "",
+            "fontFamily": "Arial",
+            "fontSize": 14,
+            "fontWeight": "normal",
+            "align": "left",
+            "verticalAlign": "middle",
+            "lineHeight": 1.25
+          },
+          "overrides": {
+            "mobile": {
+              "x": 326,
+              "y": 757,
+              "width": 40,
+              "height": 40,
+              "visible": true
+            },
+            "tablet": {
+              "x": 705,
+              "width": 44,
+              "height": 42,
+              "visible": true
+            }
+          }
+        },
+        {
+          "id": "970da2d1-bace-41b3-a7f0-72b7fafb164e",
+          "type": "icon",
+          "name": "Send message arrow",
+          "x": 1389,
+          "y": 818,
+          "width": 20,
+          "height": 20,
+          "visible": true,
+          "constraints": {
+            "horizontal": "right",
+            "vertical": "bottom"
+          },
+          "rotation": 0,
+          "opacity": 1,
+          "locked": false,
+          "zIndex": 84,
+          "style": {
+            "fill": null,
+            "stroke": "#e4f4e9",
+            "strokeWidth": 2
+          },
+          "props": {
+            "iconName": "ArrowRight"
+          },
+          "overrides": {
+            "mobile": {
+              "x": 336,
+              "y": 767,
+              "width": 20,
+              "height": 20,
+              "visible": true
+            },
+            "tablet": {
+              "x": 717,
+              "width": 20,
+              "height": 20,
+              "visible": true
+            }
+          }
+        },
+        {
+          "id": "24965761-e17d-4246-8458-3f9e0f6a4c9e",
+          "type": "text",
+          "name": "Send message confirmation",
+          "x": 444,
+          "y": 867,
+          "width": 450,
+          "height": 20,
+          "visible": true,
+          "constraints": {
+            "horizontal": "left",
+            "vertical": "bottom"
+          },
+          "rotation": 0,
+          "opacity": 1,
+          "locked": false,
+          "zIndex": 85,
+          "style": {
+            "fill": "#6d8479",
+            "stroke": null,
+            "strokeWidth": 0
+          },
+          "props": {
+            "text": "{{sendState}}",
+            "fontFamily": "Arial",
+            "fontSize": 9,
+            "fontWeight": "normal",
+            "align": "left",
+            "verticalAlign": "middle",
+            "lineHeight": 1.25
+          },
+          "overrides": {
+            "mobile": {
+              "x": 18,
+              "y": 816,
+              "width": 340,
+              "height": 18,
+              "visible": true
+            },
+            "tablet": {
+              "x": 340,
+              "width": 414,
+              "height": 20,
+              "visible": true
+            }
+          }
+        }
+      ],
+      "interactionRules": [
+        {
+          "id": "7f00d98a-e163-4423-af6a-de1a5bae5e38",
+          "widgetId": "2f9816ad-3dcd-4967-9b09-da270d708d21",
+          "event": "onClick",
+          "conditions": [],
+          "actions": [
+            {
+              "type": "setVariable",
+              "target": "sendState",
+              "value": "Message sent · just now"
+            }
+          ]
+        },
+        {
+          "id": "a981d3c9-ab02-470d-988f-a43122c0a95d",
+          "widgetId": "970da2d1-bace-41b3-a7f0-72b7fafb164e",
+          "event": "onClick",
+          "conditions": [],
+          "actions": [
+            {
+              "type": "setVariable",
+              "target": "sendState",
+              "value": "Message sent · just now"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

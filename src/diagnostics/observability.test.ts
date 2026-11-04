@@ -56,12 +56,56 @@ describe("anonymous telemetry consent and delivery", () => {
       "export_used",
       "signin_completed",
       "error_shown",
+      "onboarding_started",
+      "onboarding_step_1",
+      "onboarding_step_2",
+      "onboarding_step_3",
+      "onboarding_step_4",
+      "onboarding_step_5",
+      "onboarding_completed",
+      "onboarding_skipped",
+      "device_tour_viewed",
     ]);
   });
 
   it("does not send events before explicit consent", () => {
     observability.trackEvent("project_created");
     expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("sends onboarding events as names only after consent", async () => {
+    await observability.configureObservability({
+      crashReports: false,
+      anonymousTelemetry: true,
+    });
+    const onboardingEvents = [
+      "onboarding_started",
+      "onboarding_step_1",
+      "onboarding_step_2",
+      "onboarding_step_3",
+      "onboarding_step_4",
+      "onboarding_step_5",
+      "onboarding_completed",
+      "onboarding_skipped",
+      "device_tour_viewed",
+    ] as const;
+    onboardingEvents.forEach((event) => observability.trackEvent(event));
+    for (let index = onboardingEvents.length; index < observability.TELEMETRY_BATCH_SIZE; index += 1) {
+      observability.trackEvent("project_created");
+    }
+
+    await vi.waitFor(() => {
+      expect(fetchMock).toHaveBeenCalledTimes(observability.TELEMETRY_BATCH_SIZE);
+    });
+    const sentNames = fetchMock.mock.calls.map((call) => {
+      const request = call[1] as RequestInit;
+      return JSON.parse(String(request.body)).payload;
+    });
+    onboardingEvents.forEach((event) => {
+      const payload = sentNames.find((item) => item.name === event);
+      expect(payload).toBeDefined();
+      expect(payload).not.toHaveProperty("data");
+    });
   });
 
   it("batches telemetry and sends only static allow-listed values", async () => {

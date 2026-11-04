@@ -17,6 +17,7 @@ interface PrivacySettingsDialogProps {
   firstLaunch?: boolean;
   onClose: () => void;
   onSaved?: () => void;
+  onShowOnboarding?: () => void;
 }
 
 const DENIED_BY_DEFAULT: PrivacySettings = {
@@ -28,6 +29,7 @@ export function PrivacySettingsDialog({
   firstLaunch = false,
   onClose,
   onSaved,
+  onShowOnboarding,
 }: PrivacySettingsDialogProps) {
   const [settings, setSettings] = useState<PrivacySettings>(DENIED_BY_DEFAULT);
   const [saving, setSaving] = useState(false);
@@ -175,6 +177,15 @@ export function PrivacySettingsDialog({
         <a className="wallet-privacy-policy-link" href="/privacy.html">
           Read the privacy policy
         </a>
+        {!firstLaunch && onShowOnboarding && (
+          <button
+            type="button"
+            className="privacy-onboarding-button"
+            onClick={onShowOnboarding}
+          >
+            Show onboarding again
+          </button>
+        )}
 
         {message && <p className={isError ? "privacy-message is-error" : "privacy-message"} role={isError ? "alert" : "status"}>{message}</p>}
         <div className="dialog-actions">

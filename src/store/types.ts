@@ -13,7 +13,7 @@ export interface DocumentSlice {
   setProject: (project: Project) => void;
   newProject: (name?: string) => void;
   renameProject: (name: string) => void;
-  loadProject: (project: Project, filePath: string) => void;
+  loadProject: (project: Project, filePath: string | null) => void;
   restoreProject: (project: Project, filePath: string | null) => void;
   markClean: () => void;
   markSaved: (filePath: string) => void;

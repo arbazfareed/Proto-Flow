@@ -203,7 +203,7 @@ function ElementLibraryContents({
         )}
       </label>
 
-      <section className="element-library-section" aria-label="Screens">
+      <section className="element-library-section" aria-label="Screens" data-onboarding-target="device">
         <h3>Screens</h3>
         <div className="element-library-grid">
           {SCREEN_TOOLS.map(({ category, label }) => {

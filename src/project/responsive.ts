@@ -67,7 +67,7 @@ function applyConstraints(
 
   switch (constraints.horizontal) {
     case "right":
-      next.x = breakpoint.width - (baseWidth - widget.x - widget.width);
+      next.x = breakpoint.width - (baseWidth - widget.x - widget.width) - widget.width;
       break;
     case "center":
       next.x =
@@ -89,7 +89,7 @@ function applyConstraints(
 
   switch (constraints.vertical) {
     case "bottom":
-      next.y = breakpoint.height - (baseHeight - widget.y - widget.height);
+      next.y = breakpoint.height - (baseHeight - widget.y - widget.height) - widget.height;
       break;
     case "center":
       next.y =
