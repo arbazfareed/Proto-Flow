@@ -12,9 +12,12 @@ import {
   getProviderStatus,
   recordDiagnostic,
 } from "./observability";
+import type { ThemePreference } from "../onboarding/storage";
 
 interface PrivacySettingsDialogProps {
   firstLaunch?: boolean;
+  theme: ThemePreference;
+  onThemeChange: (theme: ThemePreference) => void;
   onClose: () => void;
   onSaved?: () => void;
   onShowOnboarding?: () => void;
@@ -27,6 +30,8 @@ const DENIED_BY_DEFAULT: PrivacySettings = {
 
 export function PrivacySettingsDialog({
   firstLaunch = false,
+  theme,
+  onThemeChange,
   onClose,
   onSaved,
   onShowOnboarding,
@@ -124,6 +129,27 @@ export function PrivacySettingsDialog({
           for those features to ProtoFlow’s Cloudflare services. AI actions disclose and send the
           selected prompt and context to the configured AI provider when used.
         </p>
+
+        {!firstLaunch && (
+          <label className="privacy-appearance-setting">
+            Workspace appearance
+            <select
+              aria-label="Workspace appearance"
+              value={theme}
+              onChange={(event) => {
+                const value = event.target.value;
+                if (value === "light" || value === "dark" || value === "system") {
+                  onThemeChange(value);
+                }
+              }}
+            >
+              <option value="light">Light</option>
+              <option value="dark">Dark</option>
+              <option value="system">System</option>
+            </select>
+            <small>Saved on this device and applied immediately.</small>
+          </label>
+        )}
 
         <label className="privacy-setting-option">
           <input

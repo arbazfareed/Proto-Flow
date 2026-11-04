@@ -790,6 +790,8 @@ function AppShell() {
       {privacyDialogOpen && (
         <PrivacySettingsDialog
           firstLaunch={privacyFirstLaunch}
+          theme={onboardingTheme}
+          onThemeChange={chooseOnboardingTheme}
           onClose={() => setPrivacyDialogOpen(false)}
           onShowOnboarding={showOnboardingAgain}
           onSaved={() => {
