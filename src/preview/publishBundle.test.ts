@@ -8,6 +8,23 @@ import {
 } from "./publishBundle";
 
 describe("standalone published preview bundle", () => {
+  it("keeps text fills as foreground colors and renders shape and icon widgets cleanly", () => {
+    const project = createEmptyProject("Messaging visual runtime");
+    const html = generatePublishedPreviewHtml(project);
+
+    expect(html).toContain('const textWidget = ["text", "heading", "label", "paragraph", "link", "code"].includes(widget.type)');
+    expect(html).toContain('element.style.backgroundColor = textWidget || widget.style.fill === null');
+    expect(html).toContain('input.className = "preview-control"');
+    expect(html).toContain("const shapeOrText = [");
+    expect(html).toContain('element.textContent = shownText || (shapeOrText ? "" : widget.type.replaceAll("-", " "))');
+    expect(html).toContain('const glyphs = {');
+    expect(html).toContain('element.textContent = glyphs[iconName] || "•"');
+    expect(html).toContain("function widgetVisible(widget, activeScreen)");
+    expect(html).toContain("if (!widgetVisible(widget, activeScreen)) continue;");
+    expect(html).toContain("if (matchedRule && renderAfter) render();");
+    expect(() => new Function(PREVIEW_RUNTIME_SCRIPT)).not.toThrow();
+  });
+
   it("renders semantic cards, charts, and flex-layout elements", () => {
     const project = createEmptyProject("Learning widget runtime");
     project.screens[0].widgets.push(

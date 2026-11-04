@@ -1,23 +1,37 @@
 {
   "schemaVersion": "1.9.0",
-  "id": "0f00ec2b-6f78-456c-bce7-48e4121a08a1",
+  "id": "7ded0fcf-3805-429f-817c-0903016f09fd",
   "name": "Relay — conversations, in rhythm",
-  "createdAt": "2026-11-03T19:03:47.957Z",
-  "updatedAt": "2026-11-03T19:03:47.957Z",
+  "createdAt": "2026-11-04T17:55:44.516Z",
+  "updatedAt": "2026-11-04T17:55:44.516Z",
   "variables": [
     {
-      "id": "0c62ffad-6334-4345-870a-90c9284251d0",
+      "id": "a266a16e-abb7-4803-8d3e-8f4d39d24766",
       "name": "sendState",
       "scope": "project",
       "type": "string",
       "initial": "Messages stay between you."
+    },
+    {
+      "id": "ac4f8c11-649f-4109-9205-4fa39a7ebca3",
+      "name": "draftMessage",
+      "scope": "project",
+      "type": "string",
+      "initial": ""
+    },
+    {
+      "id": "e2f71219-94b8-44a9-96d5-39d4046a67a9",
+      "name": "sentMessage",
+      "scope": "project",
+      "type": "string",
+      "initial": ""
     }
   ],
   "symbols": [],
-  "startScreenId": "4198975a-c563-476d-b704-a69868064fbb",
+  "startScreenId": "a624f470-993c-4b0d-b543-8148a0f0cb14",
   "screens": [
     {
-      "id": "4198975a-c563-476d-b704-a69868064fbb",
+      "id": "a624f470-993c-4b0d-b543-8148a0f0cb14",
       "name": "Eva · Conversation",
       "device": {
         "presetId": "desktop-1440-900",
@@ -61,7 +75,7 @@
       ],
       "widgets": [
         {
-          "id": "11801d49-21aa-40b4-870f-59b460c0c411",
+          "id": "73eefc75-5e23-49ec-9f76-322995bc42f4",
           "type": "rectangle",
           "name": "App background",
           "x": 0,
@@ -105,7 +119,7 @@
           }
         },
         {
-          "id": "dca58546-5ab4-4292-9332-4ca264426b0a",
+          "id": "07c814e8-c914-4d76-8b8a-ec3d6f939f49",
           "type": "rectangle",
           "name": "Navigation rail",
           "x": 0,
@@ -149,7 +163,7 @@
           }
         },
         {
-          "id": "238dd3ff-bfbb-4407-b14d-78ffbdd19281",
+          "id": "8dc01bb0-c22c-4c86-956a-138a1be0dfe3",
           "type": "rectangle",
           "name": "Navigation logo tile",
           "x": 14,
@@ -194,7 +208,7 @@
           }
         },
         {
-          "id": "d3c8929b-292b-4a29-8663-712403f4185e",
+          "id": "01fefd81-a525-4547-a542-9668c2066a3f",
           "type": "text",
           "name": "Relay monogram",
           "x": 14,
@@ -238,7 +252,7 @@
           }
         },
         {
-          "id": "52c54bd1-864b-4d28-abc4-b756faf2d470",
+          "id": "2a97e7bd-8c99-483e-9f39-1d5c9f8c689e",
           "type": "rectangle",
           "name": "Selected navigation indicator",
           "x": 13,
@@ -283,7 +297,7 @@
           }
         },
         {
-          "id": "65d53f1a-e3a3-41c4-9207-a2adc2a73f71",
+          "id": "ec9fb843-59d9-42a5-84fa-24d2a46d12ea",
           "type": "icon",
           "name": "Inbox navigation",
           "x": 25,
@@ -321,7 +335,7 @@
           }
         },
         {
-          "id": "38244e81-d11e-43c6-b0db-d4705af6a551",
+          "id": "fa91b24f-db0c-4e32-8065-f4f3f3604866",
           "type": "icon",
           "name": "People navigation",
           "x": 25,
@@ -359,7 +373,7 @@
           }
         },
         {
-          "id": "89e786c1-d6f4-404c-8aff-2b8c29518be9",
+          "id": "fa8060e7-2850-4571-8567-9e9c553f181b",
           "type": "icon",
           "name": "Saved navigation",
           "x": 25,
@@ -397,7 +411,7 @@
           }
         },
         {
-          "id": "d46ea41f-e4b0-42d2-9859-9501430e6cf2",
+          "id": "66d0bce6-8f29-4b63-84f0-b71fa5077240",
           "type": "icon",
           "name": "Settings navigation",
           "x": 25,
@@ -438,7 +452,7 @@
           }
         },
         {
-          "id": "8fb9392b-48f3-4a42-a967-f5be7966acd5",
+          "id": "52962ae5-f539-4260-8a9b-08dc64058d20",
           "type": "ellipse",
           "name": "Your profile avatar",
           "x": 17,
@@ -485,7 +499,7 @@
           }
         },
         {
-          "id": "c4384880-885a-459f-88fc-f105d44b7487",
+          "id": "5b7d34d4-bcef-4fd0-b6ee-2310caf384c2",
           "type": "text",
           "name": "Your profile initials",
           "x": 17,
@@ -532,7 +546,7 @@
           }
         },
         {
-          "id": "0838e3db-f65b-410e-b8fb-e9d4f3d5c483",
+          "id": "b9de46bb-530e-47f8-8868-f202f1420499",
           "type": "rectangle",
           "name": "Conversation list background",
           "x": 72,
@@ -576,7 +590,7 @@
           }
         },
         {
-          "id": "8989d731-0451-4b30-8875-ac45842efbbb",
+          "id": "78a73589-d0c4-4cab-a37a-ca5e1377be61",
           "type": "rectangle",
           "name": "Conversation list divider",
           "x": 423,
@@ -620,7 +634,7 @@
           }
         },
         {
-          "id": "21314668-07e7-4968-9ba1-ed6664da1f16",
+          "id": "a81496a7-e26e-47e8-8c3f-b8b943aff8da",
           "type": "text",
           "name": "Inbox heading",
           "x": 92,
@@ -664,7 +678,7 @@
           }
         },
         {
-          "id": "ed5a467b-0098-494c-831c-ea36b3ca125b",
+          "id": "75231290-4bb5-4b92-9d4a-a59848a2ef11",
           "type": "text",
           "name": "Inbox subtitle",
           "x": 93,
@@ -708,7 +722,7 @@
           }
         },
         {
-          "id": "fe9455c9-dd67-4299-b064-5e2d2ae100bc",
+          "id": "2d23fac2-b7d8-46a9-a53a-80248e404c42",
           "type": "rectangle",
           "name": "Search field",
           "x": 88,
@@ -753,7 +767,7 @@
           }
         },
         {
-          "id": "d4119958-27f3-48d6-b3e9-7b4cc98906b8",
+          "id": "2af33656-2d5c-42c5-a03d-f8bbe546c4e3",
           "type": "icon",
           "name": "Search conversations",
           "x": 101,
@@ -791,7 +805,7 @@
           }
         },
         {
-          "id": "d17fc1c5-3dc0-431d-918c-947deb2a8625",
+          "id": "605c54c9-7441-40e2-b12f-62fbc0643d4f",
           "type": "text",
           "name": "Search placeholder",
           "x": 126,
@@ -835,7 +849,7 @@
           }
         },
         {
-          "id": "225dfbb2-5efe-48b1-ad12-92cc2b17a583",
+          "id": "432f801f-d83f-4480-941c-b1821091daaf",
           "type": "text",
           "name": "Pinned heading",
           "x": 91,
@@ -879,7 +893,7 @@
           }
         },
         {
-          "id": "08fc0327-9d70-4e63-9267-57a22170575a",
+          "id": "ab10a1b9-478f-4f0c-bbf8-b618621a4ee9",
           "type": "rectangle",
           "name": "Eva Chen selected row",
           "x": 79,
@@ -924,7 +938,7 @@
           }
         },
         {
-          "id": "37e5abf1-f02a-4d98-92b5-0b2ecb4ec574",
+          "id": "7e81c2e6-7721-4004-a3ff-66a5a4293dd7",
           "type": "ellipse",
           "name": "Eva Chen avatar",
           "x": 88,
@@ -968,7 +982,7 @@
           }
         },
         {
-          "id": "6fec2bdc-9954-4299-8912-b89ce61616c7",
+          "id": "75a63b55-b82d-4c00-88d3-67fda97d258f",
           "type": "text",
           "name": "Eva Chen initials",
           "x": 88,
@@ -1012,7 +1026,7 @@
           }
         },
         {
-          "id": "4a07bac0-e4a3-42f8-be4c-b4f60294cf77",
+          "id": "36f21aa7-f08b-4029-8fa5-562e26e60838",
           "type": "text",
           "name": "Eva Chen name",
           "x": 144,
@@ -1056,7 +1070,7 @@
           }
         },
         {
-          "id": "690a427c-0f52-4522-b046-a519323aaab6",
+          "id": "37188a56-45fc-4470-bd0b-7bf718114c24",
           "type": "text",
           "name": "Eva Chen preview",
           "x": 144,
@@ -1100,7 +1114,7 @@
           }
         },
         {
-          "id": "c1e8c5fa-1361-4c5a-b53f-d67c6c425a04",
+          "id": "f5a484b6-0ad0-4d23-a2a1-9737544a0ea7",
           "type": "text",
           "name": "Eva Chen time",
           "x": 350,
@@ -1144,7 +1158,7 @@
           }
         },
         {
-          "id": "f94c7af4-49b2-402e-9b5b-b78279980578",
+          "id": "9ab4d51c-b3ae-4d2c-9f20-2a1297e2fa89",
           "type": "ellipse",
           "name": "Eva Chen unread badge",
           "x": 386,
@@ -1188,7 +1202,7 @@
           }
         },
         {
-          "id": "8ef7e1f4-7a13-4833-a267-74ef484a9e2b",
+          "id": "4d23ac30-8e73-4cfe-ba31-ba4372e03f4d",
           "type": "text",
           "name": "Eva Chen unread count",
           "x": 386,
@@ -1232,7 +1246,7 @@
           }
         },
         {
-          "id": "5f08ff78-8c85-44d5-acb1-aa234f75ce2c",
+          "id": "52984363-4753-4db1-bbc7-2dcb44f2f7af",
           "type": "ellipse",
           "name": "Weekend people avatar",
           "x": 88,
@@ -1276,7 +1290,7 @@
           }
         },
         {
-          "id": "ef38264c-5aae-4651-845e-90a8f0ca956a",
+          "id": "2334d144-84be-4c58-954e-1cd72f0f65af",
           "type": "text",
           "name": "Weekend people initials",
           "x": 88,
@@ -1320,7 +1334,7 @@
           }
         },
         {
-          "id": "6e08a259-f71b-46a4-af2e-3dcbacc14319",
+          "id": "ad394166-3d51-4075-b629-20532f7e92fb",
           "type": "text",
           "name": "Weekend people name",
           "x": 144,
@@ -1364,7 +1378,7 @@
           }
         },
         {
-          "id": "aa09d1c0-0d66-44de-a24d-934aea6b8469",
+          "id": "451b69ee-fdeb-4e59-9e95-3c213bec01db",
           "type": "text",
           "name": "Weekend people preview",
           "x": 144,
@@ -1408,7 +1422,7 @@
           }
         },
         {
-          "id": "14f197f3-af72-420d-9df6-e91a588b87ab",
+          "id": "0dea58ae-5830-47b6-8cdb-6595883d58bc",
           "type": "text",
           "name": "Weekend people time",
           "x": 350,
@@ -1452,7 +1466,7 @@
           }
         },
         {
-          "id": "8296c7db-de22-4aff-9037-87c476ad72e5",
+          "id": "53a4a2a4-2ec1-4f7b-bd1a-75a25cae2505",
           "type": "ellipse",
           "name": "Weekend people unread badge",
           "x": 386,
@@ -1496,7 +1510,7 @@
           }
         },
         {
-          "id": "f5d3c715-bac6-41ab-aa57-4cd67efdb87e",
+          "id": "0a2c68ea-f594-477b-a6c3-954fa5644505",
           "type": "text",
           "name": "Weekend people unread count",
           "x": 386,
@@ -1540,7 +1554,7 @@
           }
         },
         {
-          "id": "f9e6df21-69d6-4a5a-85cd-7c627d48a04a",
+          "id": "9b8c1d4c-1b68-4a7b-a73f-f79727e96c8f",
           "type": "text",
           "name": "All chats heading",
           "x": 91,
@@ -1584,7 +1598,7 @@
           }
         },
         {
-          "id": "f3fa5e5f-ce37-4557-b178-194df11c49e1",
+          "id": "81687812-b24d-4394-87d5-3af2a5978159",
           "type": "ellipse",
           "name": "Noah Williams avatar",
           "x": 88,
@@ -1628,7 +1642,7 @@
           }
         },
         {
-          "id": "0aaa97e5-eeec-46a6-b74f-568db4ac405b",
+          "id": "78d53dd8-be1d-4d64-948c-8459190c2aa2",
           "type": "text",
           "name": "Noah Williams initials",
           "x": 88,
@@ -1672,7 +1686,7 @@
           }
         },
         {
-          "id": "6f898b11-e974-4b94-b700-f658d384b4fc",
+          "id": "95b9479b-ded6-4356-8b89-491d7973cff1",
           "type": "text",
           "name": "Noah Williams name",
           "x": 144,
@@ -1716,7 +1730,7 @@
           }
         },
         {
-          "id": "37d4a884-517b-43ac-9033-5128635d7921",
+          "id": "1e4b2239-be3a-441d-b0df-0cd35707844a",
           "type": "text",
           "name": "Noah Williams preview",
           "x": 144,
@@ -1760,7 +1774,7 @@
           }
         },
         {
-          "id": "7883bcdf-ca0a-4bdd-91db-55a4cfdd9f0b",
+          "id": "09314ddf-068a-427d-85d9-dd36a4bccf89",
           "type": "text",
           "name": "Noah Williams time",
           "x": 350,
@@ -1804,7 +1818,7 @@
           }
         },
         {
-          "id": "e04c230f-e627-405c-90b8-cbf38d31cb82",
+          "id": "fb4601e3-79a1-4728-bebe-f1c4daf13452",
           "type": "ellipse",
           "name": "Amara Okafor avatar",
           "x": 88,
@@ -1848,7 +1862,7 @@
           }
         },
         {
-          "id": "6024222e-0921-4fb0-87eb-746d19586be1",
+          "id": "1409c5d6-3df8-4c4d-b87f-14d8ef758675",
           "type": "text",
           "name": "Amara Okafor initials",
           "x": 88,
@@ -1892,7 +1906,7 @@
           }
         },
         {
-          "id": "6fff0eb3-820d-44f5-87a2-43f07d3c8700",
+          "id": "bb42117a-ef1f-4eb3-9230-f2967e435a02",
           "type": "text",
           "name": "Amara Okafor name",
           "x": 144,
@@ -1936,7 +1950,7 @@
           }
         },
         {
-          "id": "b8539f8d-7693-491b-8a13-5f22fb46b684",
+          "id": "ecfc9b67-95d5-4a34-8a27-37d58f3df53c",
           "type": "text",
           "name": "Amara Okafor preview",
           "x": 144,
@@ -1980,7 +1994,7 @@
           }
         },
         {
-          "id": "88f0e131-1987-4d62-951c-749336a2dedd",
+          "id": "28a3a348-b82a-4e09-bead-c0c7550f73aa",
           "type": "text",
           "name": "Amara Okafor time",
           "x": 350,
@@ -2024,7 +2038,7 @@
           }
         },
         {
-          "id": "b8a7a0d3-fa08-4a7d-a970-147dfe544a9d",
+          "id": "a997768e-d486-4f84-8e77-ce63827554a7",
           "type": "ellipse",
           "name": "Leo Martin avatar",
           "x": 88,
@@ -2068,7 +2082,7 @@
           }
         },
         {
-          "id": "9262b5e3-021d-4bdd-ba19-7f534d7fdaf2",
+          "id": "558a8257-c538-4d70-a969-32751f51e5a0",
           "type": "text",
           "name": "Leo Martin initials",
           "x": 88,
@@ -2112,7 +2126,7 @@
           }
         },
         {
-          "id": "1953e45d-e738-475e-9151-9c4922c927d5",
+          "id": "ec78f188-25a4-4013-a0c5-7576cd99d2e0",
           "type": "text",
           "name": "Leo Martin name",
           "x": 144,
@@ -2156,7 +2170,7 @@
           }
         },
         {
-          "id": "ef5b102d-a913-436e-b68e-ec308742f1b1",
+          "id": "5e298873-0eb5-4760-ae03-f162bc5235cd",
           "type": "text",
           "name": "Leo Martin preview",
           "x": 144,
@@ -2200,7 +2214,7 @@
           }
         },
         {
-          "id": "fc062ac1-d218-4063-bf0c-060e08298fbe",
+          "id": "79460d5b-c8ec-4be0-be01-3b73e7d9ea60",
           "type": "text",
           "name": "Leo Martin time",
           "x": 350,
@@ -2244,7 +2258,7 @@
           }
         },
         {
-          "id": "c4eb59c5-d9a1-4777-8dce-f2a34cf0bda6",
+          "id": "cc9aa22a-cb3f-458f-b289-39468a45dcca",
           "type": "rectangle",
           "name": "New conversation button",
           "x": 92,
@@ -2292,7 +2306,7 @@
           }
         },
         {
-          "id": "e1128f12-cae5-47ca-90b1-67886014d414",
+          "id": "90c6a321-8ead-402c-bfaf-1aca30a392f9",
           "type": "icon",
           "name": "New conversation plus",
           "x": 160,
@@ -2333,7 +2347,7 @@
           }
         },
         {
-          "id": "96a41b37-3186-42da-a5d3-21aa4212bebf",
+          "id": "0e0df839-2b43-4797-a1f2-e2289e148224",
           "type": "text",
           "name": "New conversation action",
           "x": 183,
@@ -2380,7 +2394,7 @@
           }
         },
         {
-          "id": "6a77db37-c82c-4f96-9e0b-266f79526831",
+          "id": "3a197b7e-7cbd-4ddd-a85e-ab949cdce9b9",
           "type": "rectangle",
           "name": "Conversation canvas",
           "x": 424,
@@ -2424,7 +2438,7 @@
           }
         },
         {
-          "id": "fdfb7568-f4a3-46b8-86ff-05022bd5f8a8",
+          "id": "2bad708c-bd3f-4501-90e1-0dbadd503331",
           "type": "rectangle",
           "name": "Conversation header surface",
           "x": 424,
@@ -2468,7 +2482,7 @@
           }
         },
         {
-          "id": "f2672a9b-45b5-45db-b325-e19c3ab5febb",
+          "id": "03c2fbb3-f7ee-4422-b34c-f45948706401",
           "type": "rectangle",
           "name": "Conversation header divider",
           "x": 424,
@@ -2512,7 +2526,7 @@
           }
         },
         {
-          "id": "b23d8ab9-3b9c-4ac7-8ef2-f0846588f5b3",
+          "id": "82437a90-8da7-44c1-b506-ef4f6c7fc693",
           "type": "icon",
           "name": "Mobile back button",
           "x": 432,
@@ -2550,7 +2564,7 @@
           }
         },
         {
-          "id": "42f3f24c-f2e5-4392-aa24-0f1ca1f5be68",
+          "id": "afee2fa0-c13b-430b-afe8-f31769f81577",
           "type": "ellipse",
           "name": "Eva conversation avatar",
           "x": 444,
@@ -2594,7 +2608,7 @@
           }
         },
         {
-          "id": "f6f91c55-a726-4e68-b06f-905c08bea7a1",
+          "id": "17b8565a-4244-4748-9de9-7f87c58308e0",
           "type": "text",
           "name": "Eva avatar initials",
           "x": 444,
@@ -2638,7 +2652,7 @@
           }
         },
         {
-          "id": "fb6dc526-30ac-4b82-b6ea-62cfee76edc5",
+          "id": "e185bf62-abd2-43e0-88cc-0ece9dbb3d5d",
           "type": "text",
           "name": "Conversation contact name",
           "x": 502,
@@ -2682,7 +2696,7 @@
           }
         },
         {
-          "id": "2f5574b7-0dd7-4721-ad53-ce1953c39985",
+          "id": "98611a27-6eed-4d19-b79e-817a001153d4",
           "type": "text",
           "name": "Conversation presence",
           "x": 503,
@@ -2726,7 +2740,7 @@
           }
         },
         {
-          "id": "2aae3b2b-ac41-44e0-a48a-f901f913c9e7",
+          "id": "4555e6c5-5763-48eb-9251-cf70768948d0",
           "type": "icon",
           "name": "Voice call",
           "x": 1303,
@@ -2764,7 +2778,7 @@
           }
         },
         {
-          "id": "aa64ad64-3f4f-45a4-9823-6b89bcfd40d4",
+          "id": "74abb5bc-be8c-4fa5-a703-d839a0630ef8",
           "type": "icon",
           "name": "Video call",
           "x": 1347,
@@ -2802,7 +2816,7 @@
           }
         },
         {
-          "id": "7fa6c9e3-7756-4492-86a4-6da9957b6a64",
+          "id": "241dcda3-9da0-4417-a3c3-002f2bce50ff",
           "type": "icon",
           "name": "Conversation menu",
           "x": 1388,
@@ -2840,7 +2854,7 @@
           }
         },
         {
-          "id": "eaba31f3-030d-4a22-a074-80bb026afe48",
+          "id": "8205a25d-0b12-4b71-ae72-5865d9078deb",
           "type": "text",
           "name": "Conversation date",
           "x": 752,
@@ -2884,7 +2898,7 @@
           }
         },
         {
-          "id": "540a0ff6-219e-4d53-9345-3880e99fac72",
+          "id": "604541e0-b2bc-4f23-bfec-481a355f9a56",
           "type": "rectangle",
           "name": "First outgoing bubble",
           "x": 1022,
@@ -2926,7 +2940,7 @@
           }
         },
         {
-          "id": "9246b335-102d-4388-9edd-2b7ed6753645",
+          "id": "282356be-881d-423e-bd8c-f2d8bbe2e60f",
           "type": "text",
           "name": "First outgoing bubble message",
           "x": 1038,
@@ -2970,7 +2984,7 @@
           }
         },
         {
-          "id": "208e8fb8-6b38-4dfe-a9b4-e0549057856c",
+          "id": "0bacfa68-8a9b-41df-a738-38591e4344e8",
           "type": "text",
           "name": "First outgoing time",
           "x": 1303,
@@ -3014,7 +3028,7 @@
           }
         },
         {
-          "id": "6a34e78d-0de0-4649-af9f-639fe1a0766b",
+          "id": "e4ed6549-c9ee-496e-9c55-65838d24c1a0",
           "type": "rectangle",
           "name": "First incoming bubble",
           "x": 446,
@@ -3056,7 +3070,7 @@
           }
         },
         {
-          "id": "82730a76-6b49-42d0-9573-2472d5cc1cdf",
+          "id": "72e9766f-30bf-4ca8-85cf-43592dcbf557",
           "type": "text",
           "name": "First incoming bubble message",
           "x": 462,
@@ -3100,7 +3114,7 @@
           }
         },
         {
-          "id": "c53dddfa-1f89-4db6-beb1-95ce5de9f1ab",
+          "id": "83d25c73-466b-480f-8491-886cc23c6d34",
           "type": "text",
           "name": "First incoming time",
           "x": 464,
@@ -3144,7 +3158,7 @@
           }
         },
         {
-          "id": "e1bc1aa5-e6c0-436b-a194-a5cb2e8bc923",
+          "id": "c9858f91-a7de-49a4-b75c-37d1b01ec0d9",
           "type": "rectangle",
           "name": "Second outgoing bubble",
           "x": 1101,
@@ -3186,7 +3200,7 @@
           }
         },
         {
-          "id": "622b4e8a-7bdd-40ad-9df8-26793a29127b",
+          "id": "55009c81-576d-4101-b306-521439ea5277",
           "type": "text",
           "name": "Second outgoing bubble message",
           "x": 1117,
@@ -3230,7 +3244,7 @@
           }
         },
         {
-          "id": "e83fd806-3f6a-4bc4-b693-0cf3c3a48662",
+          "id": "ae97e64e-6496-4665-b447-68cf2feb34bb",
           "type": "rectangle",
           "name": "Second incoming bubble",
           "x": 446,
@@ -3272,7 +3286,7 @@
           }
         },
         {
-          "id": "13a89d73-63c3-40f5-aa5d-92aeefe3748d",
+          "id": "a10db98a-35f7-467d-9ddc-4a9e626e01c1",
           "type": "text",
           "name": "Second incoming bubble message",
           "x": 462,
@@ -3316,7 +3330,7 @@
           }
         },
         {
-          "id": "7c574aae-df13-4f18-a25e-d590038ccc23",
+          "id": "369d2759-31fd-426f-bc75-ad43b25f1508",
           "type": "rectangle",
           "name": "Third outgoing bubble",
           "x": 1051,
@@ -3358,7 +3372,7 @@
           }
         },
         {
-          "id": "400451a0-6fe1-48dd-b23c-f3b28af53b2c",
+          "id": "e9c99b5a-ef30-4d16-8d1e-27095a21e80e",
           "type": "text",
           "name": "Third outgoing bubble message",
           "x": 1067,
@@ -3402,7 +3416,7 @@
           }
         },
         {
-          "id": "ea0e8b50-ea1c-4bd2-864d-d845932b4188",
+          "id": "37012292-a06d-4d93-b2ba-b3601427c2e4",
           "type": "rectangle",
           "name": "Third incoming bubble",
           "x": 446,
@@ -3444,7 +3458,7 @@
           }
         },
         {
-          "id": "6a8d0df2-07b4-4e56-8551-7b5df44bbb56",
+          "id": "22673772-bc25-4996-8fb5-d41e303f5d1c",
           "type": "text",
           "name": "Third incoming bubble message",
           "x": 462,
@@ -3488,7 +3502,7 @@
           }
         },
         {
-          "id": "6ca8368c-4f02-4b7a-8d77-0502779e40b2",
+          "id": "ef9f99f5-0b04-493c-bc65-fc4b7fc8315e",
           "type": "text",
           "name": "Typing status",
           "x": 463,
@@ -3532,7 +3546,7 @@
           }
         },
         {
-          "id": "6f42d6b8-bdc7-442c-b9d8-aa2a2878ecde",
+          "id": "8006a427-1a02-41f7-92a8-467730a0dec0",
           "type": "rectangle",
           "name": "Composer surface",
           "x": 442,
@@ -3580,7 +3594,7 @@
           }
         },
         {
-          "id": "82a816b9-e2f4-4a07-99cb-7822e2606f2f",
+          "id": "f63f3507-21c9-4266-a130-b9fceed597f1",
           "type": "icon",
           "name": "Attach file",
           "x": 459,
@@ -3621,54 +3635,54 @@
           }
         },
         {
-          "id": "6f2f33f4-2491-4ece-b908-3461839a43b7",
-          "type": "text",
-          "name": "Message composer placeholder",
+          "id": "b064ed9d-0d7c-4dbc-8096-4aea721a05e1",
+          "type": "input",
+          "name": "Message composer",
           "x": 493,
-          "y": 814,
-          "width": 450,
-          "height": 24,
+          "y": 807,
+          "width": 860,
+          "height": 40,
           "visible": true,
-          "constraints": {
-            "horizontal": "left",
-            "vertical": "bottom"
-          },
           "rotation": 0,
           "opacity": 1,
           "locked": false,
           "zIndex": 82,
           "style": {
-            "fill": "#96a39d",
+            "fill": null,
             "stroke": null,
             "strokeWidth": 0
           },
           "props": {
-            "text": "Write something kind…",
+            "text": "",
             "fontFamily": "Arial",
-            "fontSize": 12,
+            "fontSize": 14,
             "fontWeight": "normal",
             "align": "left",
             "verticalAlign": "middle",
-            "lineHeight": 1.25
+            "lineHeight": 1.25,
+            "label": "Message to Eva",
+            "placeholder": "Type a message",
+            "variableName": "draftMessage"
           },
           "overrides": {
             "mobile": {
               "x": 57,
-              "y": 766,
-              "width": 223,
-              "height": 24,
+              "y": 757,
+              "width": 255,
+              "height": 40,
               "visible": true
             },
             "tablet": {
-              "x": 389,
-              "width": 365,
-              "height": 24,
+              "x": 69,
+              "y": 807,
+              "width": 300,
+              "height": 40,
               "visible": true
             }
           }
         },
         {
-          "id": "2f9816ad-3dcd-4967-9b09-da270d708d21",
+          "id": "d40d6b7a-80df-45c9-ad77-9f6fa8cff062",
           "type": "rectangle",
           "name": "Send message button",
           "x": 1377,
@@ -3716,7 +3730,7 @@
           }
         },
         {
-          "id": "970da2d1-bace-41b3-a7f0-72b7fafb164e",
+          "id": "53f5d7b9-0947-4223-9b55-f27a37ec73d2",
           "type": "icon",
           "name": "Send message arrow",
           "x": 1389,
@@ -3757,7 +3771,7 @@
           }
         },
         {
-          "id": "24965761-e17d-4246-8458-3f9e0f6a4c9e",
+          "id": "7141b82f-1a61-4fe8-a2d7-e478a554ef10",
           "type": "text",
           "name": "Send message confirmation",
           "x": 444,
@@ -3802,32 +3816,177 @@
               "visible": true
             }
           }
+        },
+        {
+          "id": "e3b0e850-6329-41f6-9776-3d3435acf68c",
+          "type": "rectangle",
+          "name": "Latest outgoing bubble",
+          "x": 1082,
+          "y": 700,
+          "width": 344,
+          "height": 58,
+          "visible": false,
+          "rotation": 0,
+          "opacity": 1,
+          "locked": false,
+          "zIndex": 86,
+          "style": {
+            "fill": "#d9eee2",
+            "stroke": null,
+            "strokeWidth": 0,
+            "cornerRadius": 16
+          },
+          "props": {
+            "text": "",
+            "fontFamily": "Arial",
+            "fontSize": 14,
+            "fontWeight": "normal",
+            "align": "left",
+            "verticalAlign": "middle",
+            "lineHeight": 1.25
+          },
+          "overrides": {
+            "mobile": {
+              "x": 37,
+              "y": 625,
+              "width": 333,
+              "height": 55,
+              "visible": false
+            },
+            "tablet": {
+              "x": 104,
+              "y": 700,
+              "width": 328,
+              "height": 58,
+              "visible": false
+            }
+          }
+        },
+        {
+          "id": "8ebd6333-7588-434a-8b33-3604da39942b",
+          "type": "text",
+          "name": "Latest outgoing bubble message",
+          "x": 1098,
+          "y": 709,
+          "width": 312,
+          "height": 40,
+          "visible": false,
+          "rotation": 0,
+          "opacity": 1,
+          "locked": false,
+          "zIndex": 87,
+          "style": {
+            "fill": "#2d463b",
+            "stroke": null,
+            "strokeWidth": 0
+          },
+          "props": {
+            "text": "{{sentMessage}}",
+            "fontFamily": "Arial",
+            "fontSize": 12,
+            "fontWeight": "normal",
+            "align": "left",
+            "verticalAlign": "middle",
+            "lineHeight": 1.25
+          },
+          "overrides": {
+            "mobile": {
+              "x": 53,
+              "y": 634,
+              "width": 301,
+              "height": 37,
+              "visible": false
+            },
+            "tablet": {
+              "x": 120,
+              "y": 709,
+              "width": 296,
+              "height": 40,
+              "visible": false
+            }
+          }
         }
       ],
       "interactionRules": [
         {
-          "id": "7f00d98a-e163-4423-af6a-de1a5bae5e38",
-          "widgetId": "2f9816ad-3dcd-4967-9b09-da270d708d21",
+          "id": "b3fd5964-e104-4352-963a-99dcd06922e4",
+          "widgetId": "d40d6b7a-80df-45c9-ad77-9f6fa8cff062",
           "event": "onClick",
-          "conditions": [],
+          "conditions": [
+            {
+              "variable": "draftMessage",
+              "operator": "notEquals",
+              "value": ""
+            }
+          ],
           "actions": [
             {
               "type": "setVariable",
               "target": "sendState",
               "value": "Message sent · just now"
+            },
+            {
+              "type": "setVariable",
+              "target": "sentMessage",
+              "value": "[[draftMessage]]"
+            },
+            {
+              "type": "show",
+              "target": "e3b0e850-6329-41f6-9776-3d3435acf68c"
+            },
+            {
+              "type": "show",
+              "target": "8ebd6333-7588-434a-8b33-3604da39942b"
+            },
+            {
+              "type": "hide",
+              "target": "ef9f99f5-0b04-493c-bc65-fc4b7fc8315e"
+            },
+            {
+              "type": "setVariable",
+              "target": "draftMessage",
+              "value": ""
             }
           ]
         },
         {
-          "id": "a981d3c9-ab02-470d-988f-a43122c0a95d",
-          "widgetId": "970da2d1-bace-41b3-a7f0-72b7fafb164e",
+          "id": "dba46bad-b3ba-4afe-9062-3e64bc853e48",
+          "widgetId": "53f5d7b9-0947-4223-9b55-f27a37ec73d2",
           "event": "onClick",
-          "conditions": [],
+          "conditions": [
+            {
+              "variable": "draftMessage",
+              "operator": "notEquals",
+              "value": ""
+            }
+          ],
           "actions": [
             {
               "type": "setVariable",
               "target": "sendState",
               "value": "Message sent · just now"
+            },
+            {
+              "type": "setVariable",
+              "target": "sentMessage",
+              "value": "[[draftMessage]]"
+            },
+            {
+              "type": "show",
+              "target": "e3b0e850-6329-41f6-9776-3d3435acf68c"
+            },
+            {
+              "type": "show",
+              "target": "8ebd6333-7588-434a-8b33-3604da39942b"
+            },
+            {
+              "type": "hide",
+              "target": "ef9f99f5-0b04-493c-bc65-fc4b7fc8315e"
+            },
+            {
+              "type": "setVariable",
+              "target": "draftMessage",
+              "value": ""
             }
           ]
         }
