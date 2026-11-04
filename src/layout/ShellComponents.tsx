@@ -352,8 +352,13 @@ export function TopBar({
         <button className="button button-quiet command-trigger" onClick={onOpenPalette}>
           <span>Quick actions</span><kbd>Ctrl K</kbd>
         </button>
-        <button className="button button-secondary" title="Save as" aria-label="Save as" onClick={onSaveAs}>
-          <ArrowDownToLine size={14} /> Save as
+        <button
+          className="button button-secondary"
+          title="Download a local .pflow project copy — no cloud required"
+          aria-label="Download project (.pflow)"
+          onClick={onSaveAs}
+        >
+          <ArrowDownToLine size={14} /> Download .pflow
         </button>
         <button className="button button-primary" title="Save project" aria-label="Save project" onClick={onSave}>
           Save <kbd>Ctrl S</kbd>

@@ -455,7 +455,7 @@ function AppShell() {
       } catch (error) {
         console.error("Could not clear the saved autosave snapshot.", error);
       }
-      notify("Project saved");
+      notify(isTauri() ? "Project saved" : `Project downloaded as ${result.path}`);
     } catch (error) {
       notify(
         error instanceof Error ? error.message : "Could not save project.",

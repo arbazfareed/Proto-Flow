@@ -98,8 +98,8 @@ export function createCoreCommands(actions: CoreCommandActions): AppCommand[] {
     },
     {
       id: "project.save-as",
-      label: "Save Project As",
-      keywords: ["duplicate", "file"],
+      label: "Download Project (.pflow)",
+      keywords: ["save as", "duplicate", "file", "local", "offline"],
       icon: <FileText />,
       run: () => actions.saveProject(true),
     },
