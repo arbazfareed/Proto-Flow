@@ -50,6 +50,7 @@ describe("command registry", () => {
     const commands = new Map(
       createCoreCommands(actions).map((command) => [command.id, command]),
     );
+    expect(commands.get("project.save-as")?.label).toBe("Download Project (.pflow)");
 
     for (const id of [
       "project.new",

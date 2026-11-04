@@ -1272,7 +1272,7 @@
   .topbar-actions>button[aria-label="Open privacy and diagnostics settings"],
   .topbar-actions>button[aria-label="Share beta feedback"] { display:inline-flex; }
   .topbar-actions>.command-trigger,
-  .topbar-actions>button[aria-label="Save as"],
+  .topbar-actions>button[aria-label="Download project (.pflow)"],
   .topbar-actions>button[aria-label="Open preview"] { width:30px; min-width:30px; padding:0; gap:0; font-size:0; }
   .topbar-actions>.command-trigger>span { display:none; }
   .topbar-actions>.command-trigger kbd,
@@ -1286,7 +1286,8 @@
   .inspector { display:none; }
   .topbar { gap:6px; padding:0 8px; }
   .brand-lockup { flex:0 0 auto; }
-  .brand-name,.topbar-divider,.document-heading,.topbar-actions>.icon-button,.command-trigger,.topbar-actions>.button-secondary { display:none; }
+  .brand-name,.topbar-divider,.document-heading,.topbar-actions>.icon-button,.topbar-actions>.button-secondary { display:none; }
+  .topbar-actions>.command-trigger { display:inline-flex; width:30px; min-width:30px; padding:0; }
   .topbar-actions>button[aria-label="Open privacy and diagnostics settings"],
   .topbar-actions>button[aria-label="Share beta feedback"] { display:inline-flex; }
   .topbar-actions { gap:0; margin-left:auto; }
