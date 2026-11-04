@@ -68,6 +68,7 @@
 .onboarding-primary { display: inline-flex; min-height: 37px; align-items: center; justify-content: center; gap: 8px; padding: 0 15px; border: 1px solid #a68def; border-radius: 8px; color: #fff; background: #8265d9; box-shadow: 0 4px 14px #0003; cursor: pointer; font-size: 11px; font-weight: 650; }
 .onboarding-primary:hover:not(:disabled) { background: #9277e6; }
 .onboarding-primary:disabled { opacity: .46; cursor: not-allowed; }
+.onboarding-finish-actions { display: flex; align-items: center; gap: 14px; }
 .onboarding-start-content { padding-top: 26px; }
 .onboarding-start-grid { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: 10px; margin-top: 19px; }
 .onboarding-template-card { position: relative; min-width: 0; padding: 8px; border: 1px solid #36373f; border-radius: 10px; color: inherit; background: #1d1e23; text-align: left; cursor: pointer; }

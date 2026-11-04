@@ -51,6 +51,23 @@ export const TELEMETRY_EVENTS = [
   "onboarding_completed",
   "onboarding_skipped",
   "device_tour_viewed",
+  "tutorial_started",
+  "tutorial_completed",
+  "tutorial_step_1_completed",
+  "tutorial_step_2_completed",
+  "tutorial_step_3_completed",
+  "tutorial_step_4_completed",
+  "tutorial_step_5_completed",
+  "tutorial_step_6_completed",
+  "tutorial_step_7_completed",
+  "tutorial_step_8_completed",
+  "tutorial_step_9_completed",
+  "tutorial_step_10_completed",
+  "tutorial_step_11_completed",
+  "tutorial_step_12_completed",
+  "tutorial_step_13_completed",
+  "tutorial_step_14_completed",
+  "tutorial_step_15_completed",
 ] as const;
 
 export type TelemetryEventProperties = {
@@ -91,6 +108,23 @@ export type TelemetryEventProperties = {
   onboarding_completed: undefined;
   onboarding_skipped: undefined;
   device_tour_viewed: undefined;
+  tutorial_started: undefined;
+  tutorial_completed: undefined;
+  tutorial_step_1_completed: undefined;
+  tutorial_step_2_completed: undefined;
+  tutorial_step_3_completed: undefined;
+  tutorial_step_4_completed: undefined;
+  tutorial_step_5_completed: undefined;
+  tutorial_step_6_completed: undefined;
+  tutorial_step_7_completed: undefined;
+  tutorial_step_8_completed: undefined;
+  tutorial_step_9_completed: undefined;
+  tutorial_step_10_completed: undefined;
+  tutorial_step_11_completed: undefined;
+  tutorial_step_12_completed: undefined;
+  tutorial_step_13_completed: undefined;
+  tutorial_step_14_completed: undefined;
+  tutorial_step_15_completed: undefined;
 };
 
 export type TelemetryEvent = keyof TelemetryEventProperties;

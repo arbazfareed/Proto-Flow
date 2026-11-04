@@ -128,6 +128,22 @@ function evaluateExpression(source, context = {}) {
   function call(name, args, ctx) {
     const value = args[0];
     const numeric = (item) => finite(item);
+    if (name.includes(".")) {
+      const [receiverName, methodName, ...extraParts] = name.split(".");
+      if (extraParts.length > 0 ||
+          !["toUpperCase", "toLowerCase", "trim"].includes(methodName)) {
+        throw new Error("Unsupported expression method.");
+      }
+      const receiver = receiverName === "item"
+        ? ctx.item
+        : receiverName === "this"
+          ? ctx.thisWidget
+          : ctx.variables?.[receiverName];
+      const text = String(receiver ?? "");
+      if (methodName === "toUpperCase") return text.toUpperCase();
+      if (methodName === "toLowerCase") return text.toLowerCase();
+      return text.trim();
+    }
     switch (name) {
       case "abs": return Math.abs(numeric(value)); case "ceil": return Math.ceil(numeric(value));
       case "floor": return Math.floor(numeric(value)); case "round": return Math.round(numeric(value));
@@ -412,6 +428,18 @@ function formatDate(value: unknown, format = "yyyy-MM-dd"): string {
 
 function callFunction(name: string, args: unknown[], context: ExpressionContext): unknown {
   const first = args[0];
+  if (name.includes(".")) {
+    const [receiverName, methodName, ...extraParts] = name.split(".");
+    if (extraParts.length > 0 ||
+        !["toUpperCase", "toLowerCase", "trim"].includes(methodName)) {
+      throw new Error(`Unknown expression function "${name}".`);
+    }
+    const value = resolveReference([receiverName], context);
+    const text = String(value ?? "");
+    if (methodName === "toUpperCase") return text.toUpperCase();
+    if (methodName === "toLowerCase") return text.toLowerCase();
+    return text.trim();
+  }
   switch (name) {
     case "abs": return Math.abs(requireNumber(first, name));
     case "ceil": return Math.ceil(requireNumber(first, name));

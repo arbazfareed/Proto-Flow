@@ -48,6 +48,8 @@ The in-app **Share beta feedback** button opens a public GitHub issue form. Do n
 
 New installs open a five-step onboarding wizard with theme selection, starter projects, responsive device and canvas tours, and a wallet/cloud overview. Onboarding choices are stored locally in the app's webview storage; anonymous onboarding analytics use the existing opt-in telemetry setting and contain event names only. Change the workspace theme later from **Privacy & diagnostics → Workspace appearance**, or reopen the wizard from **Privacy & diagnostics → Show onboarding again**. The Terms link opens the draft at [public/terms.html](./public/terms.html); review it before release.
 
+Open **Help & updates → Open tutorial project** for the 15-step interactive tutorial, or choose **Take the tour** at the end of onboarding. It opens an editable copy and restores your current project when you finish. See the [interactive tutorial guide](./docs/interactive-tutorial.md).
+
 ## Desktop bundles
 
 `src-tauri/tauri.conf.json` targets Windows MSI and Linux DEB/AppImage packages. The `.pflow` file association is declared as `application/x-protoflow+json`.

@@ -113,6 +113,7 @@ import { VariablesPanel } from "./VariablesPanel";
 import { InteractionBuilder } from "./InteractionBuilder";
 import { WidgetNotesManager, WidgetNotesPanel } from "./WidgetNotes";
 import { trackEvent } from "../diagnostics/observability";
+import { emitTutorialAction } from "../tutorial/events";
 
 const CanvasStage = lazy(() =>
   import("../canvas/CanvasStage").then((module) => ({
@@ -532,6 +533,7 @@ interface LeftSidebarProps {
   onOpenPalette: () => void;
   onUpdates: () => void;
   onOpenParityDocumentation: () => void;
+  onOpenTutorial: () => void;
   activeTool: ShapeTool | null;
   onSelectTool: (tool: ShapeTool) => void;
   onAddScreen: (category: DeviceCategory) => void;
@@ -544,6 +546,7 @@ export function LeftSidebar({
   onOpenPalette,
   onUpdates,
   onOpenParityDocumentation,
+  onOpenTutorial,
   activeTool,
   onSelectTool,
   onAddScreen,
@@ -607,6 +610,7 @@ export function LeftSidebar({
       <div className="sidebar-footer">
         <button className="nav-item" onClick={onOpenPalette}><Keyboard size={16} /><span>Keyboard shortcuts</span></button>
         <button className="nav-item" onClick={onUpdates}><CircleHelp size={16} /><span>Help & updates</span></button>
+        <button className="nav-item" onClick={onOpenTutorial}><CircleHelp size={16} /><span>Open tutorial project</span></button>
         <button className="nav-item" onClick={onOpenParityDocumentation}><FileText size={16} /><span>Parity & compatibility</span></button>
         <div className="sidebar-version"><span className="version-pulse" /> Phase 1 · Local workspace</div>
       </div>
@@ -785,6 +789,7 @@ export function CanvasArea({
               aria-pressed={viewMode === "flow"}
               onClick={() => {
                 if (viewMode !== "flow") trackEvent("flow_diagram_opened");
+                if (viewMode !== "flow") emitTutorialAction("flow-opened");
                 setViewMode("flow");
               }}
             >
@@ -998,6 +1003,7 @@ interface RightInspectorProps {
   onToggle: () => void;
   onUpdates: () => void;
   onRename: (name: string) => void;
+  tutorialProjectId: string | null;
 }
 
 type GeometryUnit = "px" | "%";
@@ -2791,7 +2797,7 @@ function WidgetPropertiesSection({
   );
 }
 
-export function RightInspector({ onToggle, onUpdates, onRename }: RightInspectorProps) {
+export function RightInspector({ onToggle, onUpdates, onRename, tutorialProjectId }: RightInspectorProps) {
   const inspectorTab = useStore((state) => state.inspectorTab);
   const setInspectorTab = useStore((state) => state.setInspectorTab);
   const project = useStore((state) => state.project);
@@ -2977,7 +2983,7 @@ export function RightInspector({ onToggle, onUpdates, onRename }: RightInspector
       <div className="inspector-footer"><span>Project schema</span><span className="schema-version">{project.schemaVersion}</span></div>
       </section>
       <div className="layers-dock-body" aria-label="Screens and layers">
-        <ScreenLayerSidebar />
+        <ScreenLayerSidebar tutorialProjectId={tutorialProjectId} />
       </div>
     </aside>
   );

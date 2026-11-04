@@ -3,6 +3,7 @@ import { invoke, isTauri } from "@tauri-apps/api/core";
 import { Check, Download, FileArchive, X } from "lucide-react";
 import { useStore } from "../store";
 import { trackEvent } from "../diagnostics/observability";
+import { emitTutorialAction } from "../tutorial/events";
 import { embedProjectAssets } from "../preview/exportAssets";
 import {
   generateDeviceImageArchive,
@@ -73,6 +74,7 @@ export function HtmlExportDialog({ onClose }: { onClose: () => void }) {
               ? "per_device"
               : "html",
       });
+      if (exportMode === "responsive") emitTutorialAction("html-exported");
     } catch (error) {
       setIsError(true);
       setMessage(error instanceof Error ? error.message : "The HTML bundle could not be exported.");

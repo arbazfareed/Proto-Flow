@@ -374,7 +374,7 @@ function duplicateScreen(screen: Screen): Screen {
   };
 }
 
-export function ScreenLayerSidebar() {
+export function ScreenLayerSidebar({ tutorialProjectId }: { tutorialProjectId: string | null }) {
   const project = useStore((state) => state.project);
   const activeScreenId = useStore((state) => state.getActiveScreenId());
   const activeBreakpointId = useStore((state) => state.activeBreakpointId);
@@ -418,6 +418,7 @@ export function ScreenLayerSidebar() {
   const [deviceTargetScreenId, setDeviceTargetScreenId] = useState<string | null>(null);
   const [draggedScreenId, setDraggedScreenId] = useState<string | null>(null);
   const [showAllScreens, setShowAllScreens] = useState(false);
+  const previousScreenListMode = useRef<boolean | null>(null);
   const [draggedLayerIds, setDraggedLayerIds] = useState<string[]>([]);
   const [dropIndicator, setDropIndicator] = useState<LayerDropIndicator>(null);
   const [draggingOutsideTree, setDraggingOutsideTree] = useState(false);
@@ -433,6 +434,18 @@ export function ScreenLayerSidebar() {
   const [categoryMenu, setCategoryMenu] = useState<{ id: string; x: number; y: number } | null>(null);
   const [draggedCategoryId, setDraggedCategoryId] = useState<string | null>(null);
   const [categoryDropIndicator, setCategoryDropIndicator] = useState<DropIndicator>(null);
+
+  useEffect(() => {
+    if (tutorialProjectId) {
+      if (previousScreenListMode.current === null) {
+        previousScreenListMode.current = showAllScreens;
+      }
+      setShowAllScreens(true);
+    } else if (previousScreenListMode.current !== null) {
+      setShowAllScreens(previousScreenListMode.current);
+      previousScreenListMode.current = null;
+    }
+  }, [showAllScreens, tutorialProjectId]);
   const [renamingGroupId, setRenamingGroupId] = useState<string | null>(null);
   const [renameGroupDraft, setRenameGroupDraft] = useState("");
   const [movePickerOpen, setMovePickerOpen] = useState(false);
@@ -2108,6 +2121,7 @@ export function ScreenLayerSidebar() {
           className="screen-list"
           role="listbox"
           aria-label="Screens"
+          data-onboarding-target="screens"
           ref={screenListRef}
           onScroll={(event) => setScreenScrollTop(event.currentTarget.scrollTop)}
         >

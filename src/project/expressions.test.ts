@@ -46,6 +46,9 @@ describe("safe expression engine", () => {
     expect(evaluateExpression('substring("abcdef", 1, 4)')).toBe("bcd");
     expect(evaluateExpression('replace("one one", "one", "two")')).toBe("two one");
     expect(evaluateExpression('toUpperCase(trim("  hi "))')).toBe("HI");
+    expect(evaluateExpression("userName.toUpperCase()", {
+      variables: { userName: "Avery" },
+    })).toBe("AVERY");
     expect(evaluateExpression('toLowerCase("HI")')).toBe("hi");
     expect(evaluateExpression('length("hello")')).toBe(5);
     expect(evaluateExpression('toString(12)')).toBe("12");
@@ -128,6 +131,8 @@ describe("safe expression engine", () => {
   it("keeps the browser/export parser in sync without dynamic code evaluation", () => {
     expect(runInNewContext(`${EXPRESSION_RUNTIME_SOURCE}\nevaluateExpression('max(2, 4) + item.score', { item: { score: 3 } })`))
       .toBe(7);
+    expect(runInNewContext(`${EXPRESSION_RUNTIME_SOURCE}\nevaluateExpression('userName.toUpperCase()', { variables: { userName: 'Avery' } })`))
+      .toBe("AVERY");
     expect(EXPRESSION_RUNTIME_SOURCE).not.toMatch(/\beval\s*\(/);
   });
 });

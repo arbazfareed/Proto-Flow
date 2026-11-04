@@ -65,6 +65,23 @@ describe("anonymous telemetry consent and delivery", () => {
       "onboarding_completed",
       "onboarding_skipped",
       "device_tour_viewed",
+      "tutorial_started",
+      "tutorial_completed",
+      "tutorial_step_1_completed",
+      "tutorial_step_2_completed",
+      "tutorial_step_3_completed",
+      "tutorial_step_4_completed",
+      "tutorial_step_5_completed",
+      "tutorial_step_6_completed",
+      "tutorial_step_7_completed",
+      "tutorial_step_8_completed",
+      "tutorial_step_9_completed",
+      "tutorial_step_10_completed",
+      "tutorial_step_11_completed",
+      "tutorial_step_12_completed",
+      "tutorial_step_13_completed",
+      "tutorial_step_14_completed",
+      "tutorial_step_15_completed",
     ]);
   });
 
@@ -97,12 +114,42 @@ describe("anonymous telemetry consent and delivery", () => {
     await vi.waitFor(() => {
       expect(fetchMock).toHaveBeenCalledTimes(observability.TELEMETRY_BATCH_SIZE);
     });
+
     const sentNames = fetchMock.mock.calls.map((call) => {
       const request = call[1] as RequestInit;
       return JSON.parse(String(request.body)).payload;
     });
     onboardingEvents.forEach((event) => {
       const payload = sentNames.find((item) => item.name === event);
+      expect(payload).toBeDefined();
+      expect(payload).not.toHaveProperty("data");
+    });
+  });
+
+  it("sends tutorial progress events without user-supplied data", async () => {
+    await observability.configureObservability({
+      crashReports: false,
+      anonymousTelemetry: true,
+    });
+    const tutorialEvents = [
+      "tutorial_started",
+      "tutorial_step_1_completed",
+      "tutorial_step_15_completed",
+      "tutorial_completed",
+    ] as const;
+    tutorialEvents.forEach((event) => observability.trackEvent(event));
+    for (let index = tutorialEvents.length; index < observability.TELEMETRY_BATCH_SIZE; index += 1) {
+      observability.trackEvent("project_created");
+    }
+
+    await vi.waitFor(() => {
+      expect(fetchMock).toHaveBeenCalledTimes(observability.TELEMETRY_BATCH_SIZE);
+    });
+    const payloads = fetchMock.mock.calls.map((call) =>
+      JSON.parse(String((call[1] as RequestInit).body)).payload,
+    );
+    tutorialEvents.forEach((event) => {
+      const payload = payloads.find((item) => item.name === event);
       expect(payload).toBeDefined();
       expect(payload).not.toHaveProperty("data");
     });
