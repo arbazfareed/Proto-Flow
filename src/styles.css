@@ -59,3 +59,81 @@ input:focus-visible {
   color: #fff;
   background: #755ac7;
 }
+
+html[data-theme="light"] {
+  color: #24232b;
+  background: #f3f3f6;
+  --surface-app: #f3f3f6;
+  --surface-panel: #fff;
+  --surface-raised: #f8f8fb;
+  --surface-hover: #ececf2;
+  --surface-canvas: #f3f3f7;
+  --accent: #795ed0;
+  --accent-strong: #694ac3;
+  --border: #d7d7e0;
+  --border-subtle: #e4e4ea;
+  --text-primary: #24232b;
+  --text-secondary: #55545f;
+  --text-muted: #777680;
+  color-scheme: light;
+}
+html[data-theme="light"] body { color: #24232b; background: #f3f3f6; }
+html[data-theme="light"] .app-shell,
+html[data-theme="light"] .workspace { color: var(--text-primary); background: var(--surface-app); }
+html[data-theme="light"] .topbar,
+html[data-theme="light"] .app-statusbar { color: var(--text-secondary); background: #fff; border-color: var(--border); }
+html[data-theme="light"] .brand-name,
+html[data-theme="light"] .document-name,
+html[data-theme="light"] .sidebar-heading,
+html[data-theme="light"] .section-label,
+html[data-theme="light"] .workspace-card-copy strong,
+html[data-theme="light"] .page-item-name,
+html[data-theme="light"] .breadcrumb,
+html[data-theme="light"] .right-dock-header,
+html[data-theme="light"] .inspector-top { color: var(--text-primary); }
+html[data-theme="light"] .brand-name span,
+html[data-theme="light"] .save-state,
+html[data-theme="light"] .sidebar,
+html[data-theme="light"] .canvas-toolbar,
+html[data-theme="light"] .breadcrumb-muted { color: var(--text-secondary); }
+html[data-theme="light"] .sidebar,
+html[data-theme="light"] .right-dock,
+html[data-theme="light"] .left-sidebar,
+html[data-theme="light"] .right-dock-header,
+html[data-theme="light"] .canvas-area,
+html[data-theme="light"] .canvas-toolbar,
+html[data-theme="light"] .app-statusbar { background: var(--surface-panel); }
+html[data-theme="light"] .workspace-card,
+html[data-theme="light"] .page-item,
+html[data-theme="light"] .screen-list,
+html[data-theme="light"] .right-inspector-panel,
+html[data-theme="light"] .workspace-view-toggle,
+html[data-theme="light"] .view-popover-toggle,
+html[data-theme="light"] .element-library-item,
+html[data-theme="light"] .symbol-library-item { color: var(--text-secondary); background: var(--surface-raised); border-color: var(--border); }
+html[data-theme="light"] .nav-item,
+html[data-theme="light"] .button-quiet,
+html[data-theme="light"] .icon-button { color: var(--text-secondary); }
+html[data-theme="light"] .nav-item:hover,
+html[data-theme="light"] .icon-button:hover:not(:disabled),
+html[data-theme="light"] .button-secondary:hover { color: var(--text-primary); background: var(--surface-hover); }
+html[data-theme="light"] .button-secondary { color: #494852; border-color: #d7d7e0; background: #fff; }
+html[data-theme="light"] .button-primary { color: #fff; }
+html[data-theme="light"] .dialog-card,
+html[data-theme="light"] .command-palette,
+html[data-theme="light"] .wallet-balance-menu,
+html[data-theme="light"] .collaboration-panel { color: var(--text-primary); background: #fff; border-color: var(--border); }
+html[data-theme="light"] .dialog-card h2,
+html[data-theme="light"] .dialog-card>p strong,
+html[data-theme="light"] .wallet-menu-heading strong,
+html[data-theme="light"] .palette-item { color: var(--text-primary); }
+html[data-theme="light"] .dialog-card>p,
+html[data-theme="light"] .wallet-menu-totals,
+html[data-theme="light"] .palette-footer { color: var(--text-secondary); }
+html[data-theme="light"] input,
+html[data-theme="light"] select,
+html[data-theme="light"] textarea { color: var(--text-primary); background: #fff; border-color: var(--border); }
+html[data-theme="light"] .onboarding-tip { color: #292832; background: #fff; border-color: #d8d5e4; }
+.onboarding-tip { position: fixed; z-index: 180; right: 18px; bottom: 38px; display: flex; max-width: min(600px,calc(100vw - 36px)); align-items: center; gap: 12px; padding: 11px 14px; border: 1px solid #494451; border-radius: 9px; color: #e9e5f2; background: #211f27; box-shadow: 0 8px 26px #0006; font-size: 11px; }
+.onboarding-tip button { padding: 2px 3px; border: 0; color: #c3b0ff; background: transparent; cursor: pointer; font-size: 10px; white-space: nowrap; }
+.privacy-onboarding-button { display: block; margin-top: 12px; padding: 0; border: 0; color: #b7a3f6; background: transparent; cursor: pointer; font: inherit; font-size: 11px; text-decoration: underline; text-underline-offset: 3px; }

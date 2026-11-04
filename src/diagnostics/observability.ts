@@ -42,6 +42,15 @@ export const TELEMETRY_EVENTS = [
   "export_used",
   "signin_completed",
   "error_shown",
+  "onboarding_started",
+  "onboarding_step_1",
+  "onboarding_step_2",
+  "onboarding_step_3",
+  "onboarding_step_4",
+  "onboarding_step_5",
+  "onboarding_completed",
+  "onboarding_skipped",
+  "device_tour_viewed",
 ] as const;
 
 export type TelemetryEventProperties = {
@@ -73,6 +82,15 @@ export type TelemetryEventProperties = {
   export_used: { exportType: ExportType };
   signin_completed: { provider: "email" | "google" };
   error_shown: { category: ErrorCategory };
+  onboarding_started: undefined;
+  onboarding_step_1: undefined;
+  onboarding_step_2: undefined;
+  onboarding_step_3: undefined;
+  onboarding_step_4: undefined;
+  onboarding_step_5: undefined;
+  onboarding_completed: undefined;
+  onboarding_skipped: undefined;
+  device_tour_viewed: undefined;
 };
 
 export type TelemetryEvent = keyof TelemetryEventProperties;

@@ -44,6 +44,10 @@ Do not put provider administration tokens or other secrets in `VITE_*` variables
 
 The in-app **Share beta feedback** button opens a public GitHub issue form. Do not include private project/customer data, credentials, or secrets. The maintainer's recruiting, onboarding, triage, and launch-readiness checklist is in [docs/beta-program.md](./docs/beta-program.md); the runbook does not mean a beta cohort or external feedback channels have been provisioned.
 
+## First-run onboarding
+
+New installs open a five-step onboarding wizard with theme selection, starter projects, responsive device and canvas tours, and a wallet/cloud overview. Onboarding choices are stored locally in the app's webview storage; anonymous onboarding analytics use the existing opt-in telemetry setting and contain event names only. Reopen the wizard from **Privacy & diagnostics → Show onboarding again**. The Terms link opens the draft at [public/terms.html](./public/terms.html); review it before release.
+
 ## Desktop bundles
 
 `src-tauri/tauri.conf.json` targets Windows MSI and Linux DEB/AppImage packages. The `.pflow` file association is declared as `application/x-protoflow+json`.

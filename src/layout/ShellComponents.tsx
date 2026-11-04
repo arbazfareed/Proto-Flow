@@ -308,6 +308,7 @@ export function TopBar({
   return (
     <header
       className="topbar"
+      data-onboarding-target="topbar"
       data-tauri-drag-region
       onMouseDown={(event) => {
         if (
@@ -555,7 +556,7 @@ export function LeftSidebar({
   if (!leftPanelOpen) return null;
 
   return (
-    <aside className="sidebar left-sidebar">
+    <aside className="sidebar left-sidebar" data-onboarding-target="sidebar">
       <div className="sidebar-heading">
         <span>WORKSPACE</span>
         <button className="icon-button small-icon" aria-label="Close workspace panel" onClick={onToggle}>
@@ -744,13 +745,15 @@ export function CanvasArea({
   };
 
   return (
-    <main className="canvas-area">
+    <main className="canvas-area" data-onboarding-target="canvas">
       <div className="canvas-toolbar">
         <div className="breadcrumb">
           {!leftPanelOpen && <button className="icon-button small-icon" aria-label="Show workspace panel" onClick={onToggleLeft}><PanelLeftClose size={15} /></button>}
           <span className="breadcrumb-muted">Workspace</span><ArrowRight size={13} /><span>{project.name}</span>
         </div>
-        <BreakpointToolbar />
+        <div data-onboarding-target="breakpoints">
+          <BreakpointToolbar />
+        </div>
         <div className="canvas-toolbar-actions">
           {activeTool && (
             <span
@@ -2846,7 +2849,7 @@ export function RightInspector({ onToggle, onUpdates, onRename }: RightInspector
   if (!rightPanelOpen) return null;
 
   return (
-    <aside className="sidebar inspector right-dock">
+    <aside className="sidebar inspector right-dock" data-onboarding-target="inspector">
       <div className="right-dock-header">
         <span className="right-dock-title">LAYERS &amp; INSPECTOR</span>
         <button className="icon-button small-icon" aria-label="Close right sidebar" onClick={onToggle}><PanelRightClose size={15} /></button>
