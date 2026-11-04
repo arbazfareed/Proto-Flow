@@ -1,0 +1,105 @@
+{
+  "schemaVersion": "1.9.0",
+  "id": "60000000-0000-4000-8000-000000000001",
+  "name": "Interactive Tutorial",
+  "createdAt": "2026-04-01T00:00:00.000Z",
+  "updatedAt": "2026-04-01T00:00:00.000Z",
+  "variables": [
+    { "id": "60000000-0000-4000-8000-000000000101", "name": "count", "scope": "project", "type": "number", "initial": 2 },
+    { "id": "60000000-0000-4000-8000-000000000102", "name": "userName", "scope": "project", "type": "string", "initial": "Avery" },
+    { "id": "60000000-0000-4000-8000-000000000103", "name": "isLoggedIn", "scope": "project", "type": "boolean", "initial": true },
+    { "id": "60000000-0000-4000-8000-000000000104", "name": "selectedTab", "scope": "project", "type": "string", "initial": "Overview" }
+  ],
+  "symbols": [],
+  "startScreenId": "60000000-0000-4000-8000-000000000201",
+  "screens": [
+    {
+      "id": "60000000-0000-4000-8000-000000000201",
+      "name": "Home",
+      "flowPosition": { "x": 0, "y": 0 },
+      "device": { "presetId": "iphone-15", "width": 393, "height": 852, "dpr": 3, "insets": { "top": 59, "bottom": 34, "left": 0, "right": 0 }, "orientation": "portrait" },
+      "inputMode": "touch",
+      "breakpoints": [{ "id": "mobile", "name": "Mobile", "minWidth": 0, "maxWidth": 767, "width": 393, "height": 852 }],
+      "widgets": [
+        { "id": "60000000-0000-4000-8000-000000000301", "type": "text", "name": "Welcome heading", "x": 22, "y": 70, "width": 310, "height": 36, "rotation": 0, "opacity": 1, "visible": true, "locked": false, "zIndex": 0, "style": { "fill": "#1d2735", "stroke": null, "strokeWidth": 0 }, "props": { "text": "Welcome to ProtoFlow", "fontSize": 24, "fontWeight": "bold" } },
+        { "id": "60000000-0000-4000-8000-000000000302", "type": "rectangle", "name": "Blue rectangle", "x": 22, "y": 125, "width": 170, "height": 74, "rotation": 0, "opacity": 1, "visible": true, "locked": false, "zIndex": 1, "style": { "fill": "#3678ee", "stroke": "#225ccc", "strokeWidth": 2, "cornerRadius": 8 }, "props": {}, "notes": { "description": "Keep the primary action easy to find on a small screen.", "requirementId": "REQ-HOME-01", "priority": "medium", "status": "draft", "tags": ["tutorial", "accessibility"], "custom": {} } },
+        { "id": "60000000-0000-4000-8000-000000000303", "type": "text", "name": "Count expression", "x": 22, "y": 220, "width": 120, "height": 24, "rotation": 0, "opacity": 1, "visible": true, "locked": false, "zIndex": 2, "style": { "fill": "#293548", "stroke": null, "strokeWidth": 0 }, "props": { "text": "Next count: [[count + 1]]", "fontSize": 14 } },
+        { "id": "60000000-0000-4000-8000-000000000304", "type": "text", "name": "Name expression", "x": 22, "y": 245, "width": 180, "height": 24, "rotation": 0, "opacity": 1, "visible": true, "locked": false, "zIndex": 3, "style": { "fill": "#293548", "stroke": null, "strokeWidth": 0 }, "props": { "text": "Hello, [[userName.toUpperCase()]]", "fontSize": 14 } },
+        { "id": "60000000-0000-4000-8000-000000000305", "type": "text", "name": "Time expression", "x": 22, "y": 270, "width": 180, "height": 24, "rotation": 0, "opacity": 1, "visible": true, "locked": false, "zIndex": 4, "style": { "fill": "#687386", "stroke": null, "strokeWidth": 0 }, "props": { "text": "Updated: [[now()]]", "fontSize": 12 } },
+        { "id": "60000000-0000-4000-8000-000000000306", "type": "button", "name": "Open details", "x": 22, "y": 305, "width": 150, "height": 40, "rotation": 0, "opacity": 1, "visible": true, "locked": false, "zIndex": 5, "style": { "fill": "#7558d8", "stroke": null, "strokeWidth": 0, "cornerRadius": 7 }, "props": { "label": "Explore details" } },
+        { "id": "60000000-0000-4000-8000-000000000307", "type": "text", "name": "Helpful tip", "x": 22, "y": 350, "width": 280, "height": 24, "rotation": 0, "opacity": 1, "visible": false, "locked": false, "zIndex": 6, "style": { "fill": "#246b49", "stroke": null, "strokeWidth": 0 }, "props": { "text": "You can show and hide widgets with a rule." } },
+        { "id": "60000000-0000-4000-8000-000000000308", "type": "dynamic-panel", "name": "Tabs panel", "x": 22, "y": 390, "width": 345, "height": 105, "rotation": 0, "opacity": 1, "visible": true, "locked": false, "zIndex": 7, "style": { "fill": "#f0f3f9", "stroke": "#cbd3df", "strokeWidth": 1, "cornerRadius": 8 }, "props": { "activeStateId": "60000000-0000-4000-8000-000000000401", "states": [
+          { "id": "60000000-0000-4000-8000-000000000401", "name": "Overview", "widgets": [{ "id": "60000000-0000-4000-8000-000000000411", "type": "text", "name": "Overview content", "x": 12, "y": 12, "width": 260, "height": 28, "rotation": 0, "opacity": 1, "visible": true, "locked": false, "zIndex": 0, "style": { "fill": "#273248", "stroke": null, "strokeWidth": 0 }, "props": { "text": "Tab 1 — Overview", "fontSize": 15 } }] },
+          { "id": "60000000-0000-4000-8000-000000000402", "name": "Activity", "widgets": [{ "id": "60000000-0000-4000-8000-000000000412", "type": "text", "name": "Activity content", "x": 12, "y": 12, "width": 260, "height": 28, "rotation": 0, "opacity": 1, "visible": true, "locked": false, "zIndex": 0, "style": { "fill": "#273248", "stroke": null, "strokeWidth": 0 }, "props": { "text": "Tab 2 — Activity", "fontSize": 15 } }] },
+          { "id": "60000000-0000-4000-8000-000000000403", "name": "Notes", "widgets": [{ "id": "60000000-0000-4000-8000-000000000413", "type": "text", "name": "Notes content", "x": 12, "y": 12, "width": 260, "height": 28, "rotation": 0, "opacity": 1, "visible": true, "locked": false, "zIndex": 0, "style": { "fill": "#273248", "stroke": null, "strokeWidth": 0 }, "props": { "text": "Tab 3 — Notes", "fontSize": 15 } }] }
+        ] } },
+        { "id": "60000000-0000-4000-8000-000000000309", "type": "repeater", "name": "Starter repeater", "x": 22, "y": 520, "width": 345, "height": 220, "rotation": 0, "opacity": 1, "visible": true, "locked": false, "zIndex": 8, "style": { "fill": "#ffffff", "stroke": "#d9e0eb", "strokeWidth": 1, "cornerRadius": 8 }, "props": { "layout": "vertical", "gap": 8, "dataset": [{ "title": "Design the home screen", "done": true }, { "title": "Add a details screen", "done": false }, { "title": "Try a panel state", "done": false }, { "title": "Add one interaction", "done": false }, { "title": "Preview the flow", "done": false }], "rowTemplate": { "widgets": [{ "id": "60000000-0000-4000-8000-000000000414", "type": "text", "name": "Repeater row title", "x": 0, "y": 0, "width": 260, "height": 24, "rotation": 0, "opacity": 1, "visible": true, "locked": false, "zIndex": 0, "style": { "fill": "#354052", "stroke": null, "strokeWidth": 0 }, "props": { "text": "{{item.title}}", "fontSize": 13 } }] } } }
+      ],
+      "interactionRules": [
+        { "id": "60000000-0000-4000-8000-000000000501", "widgetId": "60000000-0000-4000-8000-000000000306", "event": "onClick", "conditions": [], "actions": [{ "type": "navigate", "target": "60000000-0000-4000-8000-000000000202", "transition": "slide-left", "duration": 180 }] },
+        { "id": "60000000-0000-4000-8000-000000000502", "widgetId": "60000000-0000-4000-8000-000000000306", "event": "onDoubleClick", "conditions": [], "actions": [{ "type": "show", "target": "60000000-0000-4000-8000-000000000307" }] },
+        { "id": "60000000-0000-4000-8000-000000000503", "widgetId": "60000000-0000-4000-8000-000000000306", "event": "onRightClick", "conditions": [], "actions": [{ "type": "setPanelState", "target": "60000000-0000-4000-8000-000000000308", "stateId": "60000000-0000-4000-8000-000000000402", "transition": "fade", "duration": 160 }] }
+      ]
+    },
+    {
+      "id": "60000000-0000-4000-8000-000000000202",
+      "name": "Details",
+      "flowPosition": { "x": 300, "y": 0 },
+      "device": { "presetId": "iphone-15", "width": 393, "height": 852, "dpr": 3, "insets": { "top": 59, "bottom": 34, "left": 0, "right": 0 }, "orientation": "portrait" },
+      "inputMode": "touch",
+      "breakpoints": [
+        { "id": "mobile", "name": "Mobile", "minWidth": 0, "maxWidth": 767, "width": 390, "height": 844 },
+        { "id": "tablet", "name": "Tablet", "minWidth": 768, "maxWidth": 1023, "width": 768, "height": 1024 },
+        { "id": "desktop", "name": "Desktop", "minWidth": 1024, "width": 1440, "height": 900 }
+      ],
+      "widgets": [
+        { "id": "60000000-0000-4000-8000-000000000321", "type": "text", "name": "Details title", "x": 24, "y": 80, "width": 300, "height": 38, "rotation": 0, "opacity": 1, "visible": true, "locked": false, "zIndex": 0, "style": { "fill": "#1d2735", "stroke": null, "strokeWidth": 0 }, "props": { "text": "A closer look", "fontSize": 25, "fontWeight": "bold" } },
+        { "id": "60000000-0000-4000-8000-000000000322", "type": "text", "name": "Details description", "x": 24, "y": 130, "width": 330, "height": 68, "rotation": 0, "opacity": 1, "visible": true, "locked": false, "zIndex": 1, "style": { "fill": "#566274", "stroke": null, "strokeWidth": 0 }, "props": { "text": "A screen is a place for a focused part of your prototype. Connect screens with interaction rules.", "fontSize": 14 } },
+        { "id": "60000000-0000-4000-8000-000000000323", "type": "button", "name": "Open settings", "x": 24, "y": 230, "width": 160, "height": 42, "rotation": 0, "opacity": 1, "visible": true, "locked": false, "zIndex": 2, "style": { "fill": "#3678ee", "stroke": null, "strokeWidth": 0, "cornerRadius": 7 }, "props": { "label": "View settings" } }
+      ],
+      "interactionRules": [
+        { "id": "60000000-0000-4000-8000-000000000504", "widgetId": "60000000-0000-4000-8000-000000000323", "event": "onClick", "conditions": [], "actions": [{ "type": "navigate", "target": "60000000-0000-4000-8000-000000000203", "transition": "slide-left", "duration": 180 }] }
+      ]
+    },
+    {
+      "id": "60000000-0000-4000-8000-000000000203",
+      "name": "Settings",
+      "flowPosition": { "x": 600, "y": 0 },
+      "device": { "presetId": "iphone-15", "width": 393, "height": 852, "dpr": 3, "insets": { "top": 59, "bottom": 34, "left": 0, "right": 0 }, "orientation": "portrait" },
+      "inputMode": "touch",
+      "breakpoints": [
+        { "id": "mobile", "name": "Mobile", "minWidth": 0, "maxWidth": 767, "width": 390, "height": 844 },
+        { "id": "tablet", "name": "Tablet", "minWidth": 768, "maxWidth": 1023, "width": 768, "height": 1024 },
+        { "id": "desktop", "name": "Desktop", "minWidth": 1024, "width": 1440, "height": 900 }
+      ],
+      "widgets": [
+        { "id": "60000000-0000-4000-8000-000000000331", "type": "text", "name": "Settings title", "x": 24, "y": 80, "width": 300, "height": 38, "rotation": 0, "opacity": 1, "visible": true, "locked": false, "zIndex": 0, "style": { "fill": "#1d2735", "stroke": null, "strokeWidth": 0 }, "props": { "text": "Settings", "fontSize": 25, "fontWeight": "bold" } },
+        { "id": "60000000-0000-4000-8000-000000000332", "type": "text", "name": "Rich text guide", "x": 24, "y": 135, "width": 340, "height": 150, "rotation": 0, "opacity": 1, "visible": true, "locked": false, "zIndex": 1, "style": { "fill": "#566274", "stroke": null, "strokeWidth": 0 }, "props": { "text": "Use rich text to **emphasize** a setting, add *context*, or link to [help](https://example.com/help).", "richText": true, "richTextRuns": [{ "text": "Use rich text to " }, { "text": "emphasize", "marks": { "bold": true } }, { "text": " a setting, add " }, { "text": "context", "marks": { "italic": true } }, { "text": ", or link to " }, { "text": "help", "marks": { "link": "https://example.com/help" } }, { "text": "." }], "fontSize": 14 } },
+        { "id": "60000000-0000-4000-8000-000000000333", "type": "toggle", "name": "Email updates", "x": 24, "y": 315, "width": 200, "height": 42, "rotation": 0, "opacity": 1, "visible": true, "locked": false, "zIndex": 2, "style": { "fill": "#ffffff", "stroke": "#cbd3df", "strokeWidth": 1 }, "props": { "label": "Email updates", "checked": true } }
+      ],
+      "interactionRules": [
+        { "id": "60000000-0000-4000-8000-000000000505", "widgetId": "60000000-0000-4000-8000-000000000333", "event": "onClick", "conditions": [], "actions": [{ "type": "navigate", "target": "60000000-0000-4000-8000-000000000204", "transition": "fade", "duration": 160 }] }
+      ]
+    },
+    {
+      "id": "60000000-0000-4000-8000-000000000204",
+      "name": "Dashboard",
+      "flowPosition": { "x": 900, "y": 0 },
+      "device": { "presetId": "desktop-1440-900", "width": 1440, "height": 900, "dpr": 1, "insets": { "top": 0, "bottom": 0, "left": 0, "right": 0 }, "orientation": "landscape" },
+      "inputMode": "mouse",
+      "breakpoints": [
+        { "id": "mobile", "name": "Mobile", "minWidth": 0, "maxWidth": 767, "width": 390, "height": 844 },
+        { "id": "tablet", "name": "Tablet", "minWidth": 768, "maxWidth": 1023, "width": 768, "height": 1024 },
+        { "id": "desktop", "name": "Desktop", "minWidth": 1024, "width": 1440, "height": 900 }
+      ],
+      "widgets": [
+        { "id": "60000000-0000-4000-8000-000000000341", "type": "text", "name": "Dashboard title", "x": 72, "y": 60, "width": 420, "height": 44, "rotation": 0, "opacity": 1, "visible": true, "locked": false, "zIndex": 0, "style": { "fill": "#1d2735", "stroke": null, "strokeWidth": 0 }, "props": { "text": "Project dashboard", "fontSize": 30, "fontWeight": "bold" } },
+        { "id": "60000000-0000-4000-8000-000000000342", "type": "card", "name": "Prototype progress", "x": 72, "y": 135, "width": 340, "height": 170, "rotation": 0, "opacity": 1, "visible": true, "locked": false, "zIndex": 1, "style": { "fill": "#f4f6fb", "stroke": "#d9e0eb", "strokeWidth": 1, "cornerRadius": 10 }, "props": { "title": "Prototype progress", "subtitle": "4 screens connected in a flow", "actionLabel": "Review screens" } },
+        { "id": "60000000-0000-4000-8000-000000000343", "type": "chart", "name": "Weekly activity", "x": 450, "y": 135, "width": 560, "height": 300, "rotation": 0, "opacity": 1, "visible": true, "locked": false, "zIndex": 2, "style": { "fill": "#ffffff", "stroke": "#d9e0eb", "strokeWidth": 1, "cornerRadius": 10 }, "props": { "label": "Weekly activity", "chartType": "bar", "values": [38, 68, 50, 88, 62] } }
+      ],
+      "interactionRules": [
+        { "id": "60000000-0000-4000-8000-000000000506", "widgetId": "60000000-0000-4000-8000-000000000342", "event": "onClick", "conditions": [], "actions": [{ "type": "navigate", "target": "60000000-0000-4000-8000-000000000201", "transition": "slide-right", "duration": 180 }] }
+      ]
+    }
+  ]
+}

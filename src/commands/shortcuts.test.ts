@@ -18,6 +18,7 @@ function createActions(): ShortcutActions {
     openProject: vi.fn(),
     toggleGrid: vi.fn(),
     toggleSnap: vi.fn(),
+    openPreview: vi.fn(),
   };
 }
 
@@ -46,6 +47,16 @@ describe("global keyboard shortcuts", () => {
 
     expect(event.preventDefault).toHaveBeenCalledOnce();
     expect(actions.togglePalette).toHaveBeenCalledOnce();
+  });
+
+  it("opens Preview on Ctrl/Cmd+P", () => {
+    const actions = createActions();
+    const event = createEvent("p", { metaKey: true, ctrlKey: false });
+
+    handleGlobalShortcut(event, actions);
+
+    expect(event.preventDefault).toHaveBeenCalledOnce();
+    expect(actions.openPreview).toHaveBeenCalledOnce();
   });
 
   it("routes save, undo and redo shortcuts", () => {

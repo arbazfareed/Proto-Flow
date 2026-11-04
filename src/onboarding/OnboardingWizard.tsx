@@ -26,6 +26,7 @@ interface OnboardingWizardProps {
   onDeviceTourCompleted: () => void;
   onOpenExisting: () => Promise<boolean>;
   onComplete: (template: StarterTemplateId | "existing") => void;
+  onTakeTutorial: () => void;
   onSkip: () => void;
 }
 
@@ -82,6 +83,7 @@ export function OnboardingWizard({
   onDeviceTourCompleted,
   onOpenExisting,
   onComplete,
+  onTakeTutorial,
   onSkip,
 }: OnboardingWizardProps) {
   const [step, setStep] = useState(0);
@@ -399,9 +401,14 @@ export function OnboardingWizard({
               )}
             </div>
             {step === 4 ? (
-              <button type="button" className="onboarding-primary" onClick={finish}>
-                Finish <Check size={15} />
-              </button>
+              <div className="onboarding-finish-actions">
+                <button type="button" className="onboarding-skip-tour" onClick={onTakeTutorial}>
+                  Take the tour
+                </button>
+                <button type="button" className="onboarding-primary" onClick={finish}>
+                  Finish <Check size={15} />
+                </button>
+              </div>
             ) : step === 3 ? (
               <div className="onboarding-tour-actions">
                 <button type="button" className="onboarding-skip-tour" onClick={next}>Skip tour</button>

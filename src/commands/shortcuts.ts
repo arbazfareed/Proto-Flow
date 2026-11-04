@@ -10,6 +10,7 @@ export interface ShortcutActions {
   openProject: () => void;
   toggleGrid: () => void;
   toggleSnap: () => void;
+  openPreview: () => void;
 }
 
 export interface ShortcutEvent {
@@ -57,6 +58,11 @@ export function handleGlobalShortcut(
   if (!modifier) return;
 
   const editing = isEditingTarget(event.target);
+  if (!editing && key === "p") {
+    event.preventDefault();
+    actions.openPreview();
+    return;
+  }
   if (key === "s" && event.shiftKey) {
     event.preventDefault();
     if (!editing) actions.createCheckpoint();

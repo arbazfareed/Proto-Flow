@@ -27,7 +27,7 @@ import {
   startObservability,
   trackEvent,
 } from "./diagnostics/observability";
-import { clearAutosave, subscribeAutosaveErrors } from "./project/autosave";
+import { AUTOSAVE_KEY, clearAutosave, subscribeAutosaveErrors } from "./project/autosave";
 import { openProjectFile, saveProjectFile } from "./project/files";
 import { useStore } from "./store";
 import { RestoreModal } from "./layout/RestoreModal";
@@ -52,6 +52,10 @@ import { useWalletStore } from "./wallet/store";
 import { createProjectCheckpoint, startVersionHistoryAutosave } from "./project/versionHistory";
 import { checkCloudHealth } from "./wallet/api";
 import { startNetworkMonitor } from "./wallet/network";
+import { createTutorialProjectCopy } from "./tutorial/project";
+import { TutorialGuide } from "./tutorial/TutorialGuide";
+import { emitTutorialAction } from "./tutorial/events";
+import { TUTORIAL_UI_STRINGS } from "./tutorial/content";
 import type { DeviceCategory } from "./devices/types";
 import type { ShapeTool } from "./canvas/shapeTools";
 import {
@@ -96,8 +100,13 @@ function AppShell() {
   const [onboardingState, setOnboardingState] = useState<OnboardingState>(DEFAULT_ONBOARDING_STATE);
   const [onboardingTheme, setOnboardingTheme] = useState<ThemePreference>("system");
   const [onboardingTipVisible, setOnboardingTipVisible] = useState(false);
+  const [tutorialOpen, setTutorialOpen] = useState(false);
+  const [tutorialSession, setTutorialSession] = useState(0);
   const walletInitializationStarted = useRef(false);
   const previewConnected = useRef(false);
+  const openPreviewShortcut = useRef<(() => Promise<void>) | null>(null);
+  const tutorialReturnState = useRef<ReturnType<typeof useStore.getState> | null>(null);
+  const tutorialAutosave = useRef<string | null>(null);
   const syncWallet = useWalletStore((state) => state.sync);
   const initializeWallet = useWalletStore((state) => state.initialize);
 
@@ -537,6 +546,7 @@ function AppShell() {
         openProject: () => void openFile(),
         toggleGrid,
         toggleSnap,
+        openPreview: () => { void openPreviewShortcut.current?.(); },
       });
     };
     window.addEventListener("keydown", onKeyDown);
@@ -592,6 +602,7 @@ function AppShell() {
         );
         if (!preview) throw new Error("The preview window was blocked by the browser.");
         previewConnected.current = true;
+        emitTutorialAction("preview-opened");
         return;
       }
 
@@ -601,6 +612,7 @@ function AppShell() {
         await existing.setFocus();
         await emitTo("preview", "preview:project", state.project);
         previewConnected.current = true;
+        emitTutorialAction("preview-opened");
         return;
       }
 
@@ -623,11 +635,13 @@ function AppShell() {
         }).catch(reject);
       });
       previewConnected.current = true;
+      emitTutorialAction("preview-opened");
     } catch (error) {
       console.error("Could not open the preview window.", error);
       notify(error instanceof Error ? error.message : "Could not open preview.", true);
     }
   }, [notify]);
+  openPreviewShortcut.current = openPreview;
 
   const addLibraryScreen = useCallback((category: DeviceCategory) => {
     const preset = DEVICE_PRESETS.find((device) => device.category === category);
@@ -730,6 +744,70 @@ function AppShell() {
     }
   }, [notify, onboardingState]);
 
+  const openTutorialProject = useCallback(async () => {
+    if (tutorialOpen && !window.confirm(TUTORIAL_UI_STRINGS.restartConfirmation)) {
+      return;
+    }
+
+    let returnState = tutorialReturnState.current;
+    let autosaveSnapshot = tutorialAutosave.current;
+    if (!tutorialOpen) {
+      returnState = useStore.getState();
+      if (returnState.isDirty &&
+        !window.confirm(TUTORIAL_UI_STRINGS.preserveProjectConfirmation)) {
+        return;
+      }
+      try {
+        autosaveSnapshot = localStorage.getItem(AUTOSAVE_KEY);
+      } catch (error) {
+        notify(error instanceof Error ? error.message : "The current recovery snapshot could not be preserved.", true);
+        return;
+      }
+    }
+
+    try {
+      const tutorialProject = createTutorialProjectCopy();
+      await createProjectCheckpoint(tutorialProject, null, "Tutorial start", "manual", true);
+      if (!tutorialOpen) {
+        tutorialReturnState.current = returnState;
+        tutorialAutosave.current = autosaveSnapshot;
+      }
+      useStore.getState().loadProject(tutorialProject, null);
+      useStore.getState().setActiveScreen(tutorialProject.startScreenId);
+      useStore.getState().setActiveBreakpoint("mobile");
+      setTutorialOpen(true);
+      setTutorialSession((current) => current + 1);
+      trackEvent("tutorial_started");
+    } catch (error) {
+      notify(error instanceof Error ? error.message : "The tutorial project could not be opened.", true);
+    }
+  }, [notify, tutorialOpen]);
+
+  const closeTutorial = useCallback(() => {
+    const previousState = tutorialReturnState.current;
+    tutorialReturnState.current = null;
+    setTutorialOpen(false);
+    if (previousState) useStore.setState(previousState, true);
+    try {
+      const snapshot = tutorialAutosave.current;
+      if (snapshot === null) localStorage.removeItem(AUTOSAVE_KEY);
+      else localStorage.setItem(AUTOSAVE_KEY, snapshot);
+    } catch (error) {
+      notify(error instanceof Error ? error.message : "The previous recovery snapshot could not be restored.", true);
+    } finally {
+      tutorialAutosave.current = null;
+    }
+  }, [notify]);
+
+  const takeTutorialFromOnboarding = useCallback(() => {
+    const selected = onboardingState.selectedTemplate;
+    const template: StarterTemplateId = selected && selected !== "existing"
+      ? selected as StarterTemplateId
+      : "blank";
+    completeOnboarding(template);
+    void openTutorialProject();
+  }, [completeOnboarding, onboardingState.selectedTemplate, openTutorialProject]);
+
   return (
     <div className="app-shell">
       <TopBar
@@ -763,6 +841,7 @@ function AppShell() {
           onOpenPalette={() => setPaletteOpen(true)}
           onUpdates={requestUpdateCheck}
           onOpenParityDocumentation={() => void openParityDocumentation()}
+          onOpenTutorial={() => void openTutorialProject()}
           activeTool={activeTool}
           onSelectTool={setActiveTool}
           onAddScreen={addLibraryScreen}
@@ -781,6 +860,7 @@ function AppShell() {
           onToggle={toggleRightPanel}
           onUpdates={requestUpdateCheck}
           onRename={renameProject}
+          tutorialProjectId={tutorialOpen ? currentProject.id : null}
         />
       </div>
       <StatusBar />
@@ -811,9 +891,11 @@ function AppShell() {
           onDeviceTourCompleted={() => updateOnboardingState({ deviceTourCompleted: true })}
           onOpenExisting={openFile}
           onComplete={completeOnboarding}
+          onTakeTutorial={takeTutorialFromOnboarding}
           onSkip={skipOnboarding}
         />
       )}
+      {tutorialOpen && <TutorialGuide key={tutorialSession} onClose={closeTutorial} />}
       {versionHistoryOpen && (
         <VersionHistoryDialog
           project={currentProject}
