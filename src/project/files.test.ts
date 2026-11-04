@@ -15,7 +15,7 @@ vi.mock("@tauri-apps/api/core", () => ({
 const invokeMock = vi.mocked(invoke);
 const isTauriMock = vi.mocked(isTauri);
 
-describe("native project file commands", () => {
+describe("project file commands", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     isTauriMock.mockReturnValue(true);
@@ -81,6 +81,89 @@ describe("native project file commands", () => {
     expect(invokeMock).toHaveBeenCalledWith("pick_project_save_path", {
       defaultFilename: "Checkout flow",
     });
+  });
+
+  it("downloads a portable .pflow project in the browser without cloud calls", async () => {
+    const project = createEmptyProject("Offline demo");
+    const imageSource = "data:image/png;base64,iVBORw0KGgo=";
+    project.screens[0].widgets.push({
+      id: crypto.randomUUID(),
+      type: "image",
+      x: 0,
+      y: 0,
+      width: 200,
+      height: 200,
+      rotation: 0,
+      opacity: 1,
+      visible: true,
+      locked: false,
+      zIndex: 0,
+      style: {},
+      props: { src: imageSource, assetPath: "assets/logo.png", mime: "image/png" },
+    });
+    let downloadBlob: Blob | undefined;
+    const createObjectURL = vi.spyOn(URL, "createObjectURL").mockImplementation((blob) => {
+      if (!(blob instanceof Blob)) throw new Error("Expected a project Blob download.");
+      downloadBlob = blob;
+      return "blob:offline-project";
+    });
+    const revokeObjectURL = vi.spyOn(URL, "revokeObjectURL").mockImplementation(() => {});
+    const click = vi.fn();
+    const link = { href: "", download: "", style: {}, click, remove: vi.fn() };
+    vi.stubGlobal("document", {
+      createElement: vi.fn(() => link),
+      body: { append: vi.fn() },
+    });
+    vi.stubGlobal("window", {
+      setTimeout: vi.fn((callback: () => void) => {
+        callback();
+        return 1;
+      }),
+    });
+    isTauriMock.mockReturnValue(false);
+
+    const result = await saveProjectFile(project, null);
+
+    expect(result).toEqual({ path: "Offline demo.pflow", project });
+    expect(invokeMock).not.toHaveBeenCalled();
+    expect(createObjectURL).toHaveBeenCalledWith(expect.any(Blob));
+    expect(click).toHaveBeenCalledOnce();
+    expect(link.download).toBe("Offline demo.pflow");
+    expect(revokeObjectURL).toHaveBeenCalledWith("blob:offline-project");
+    const downloadedProject = JSON.parse(await downloadBlob!.text()) as {
+      screens: Array<{ widgets: Array<{ props: Record<string, unknown> }> }>;
+    };
+    expect(downloadedProject.screens[0].widgets[0].props).toMatchObject({ src: imageSource });
+    expect(downloadedProject.screens[0].widgets[0].props).not.toHaveProperty("assetPath");
+
+    vi.unstubAllGlobals();
+    createObjectURL.mockRestore();
+    revokeObjectURL.mockRestore();
+  });
+
+  it("does not download an incomplete project when image assets are not embedded", async () => {
+    const project = createEmptyProject("Images");
+    project.screens[0].widgets = [{
+      id: crypto.randomUUID(),
+      type: "image",
+      x: 0,
+      y: 0,
+      width: 200,
+      height: 200,
+      rotation: 0,
+      opacity: 1,
+      visible: true,
+      locked: false,
+      zIndex: 0,
+      style: {},
+      props: { assetPath: "assets/photo.png", mime: "image/png" },
+    }];
+    isTauriMock.mockReturnValue(false);
+
+    await expect(saveProjectFile(project, null)).rejects.toThrow(
+      "Open it in the desktop app to download a copy with those assets.",
+    );
+    expect(invokeMock).not.toHaveBeenCalled();
   });
 
   it("moves images of at least 500 KB into the project assets folder on save", async () => {
@@ -214,11 +297,10 @@ describe("native project file commands", () => {
     expect(invokeMock).toHaveBeenCalledTimes(2);
   });
 
-  it("rejects project file operations outside the desktop runtime", async () => {
+  it("rejects opening project files outside the desktop runtime", async () => {
     isTauriMock.mockReturnValue(false);
 
     await expect(openProjectFile()).rejects.toThrow("desktop app");
-    await expect(saveProjectFile(createEmptyProject(), null)).rejects.toThrow("desktop app");
     expect(invokeMock).not.toHaveBeenCalled();
   });
 });

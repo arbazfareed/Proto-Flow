@@ -8,8 +8,43 @@ import { parseProject, serializeProject, type Project, type Widget } from "./sch
 
 function requireDesktopRuntime(): void {
   if (!isTauri()) {
-    throw new Error("Project files can be opened and saved from the Proto Flow desktop app.");
+    throw new Error("Project files can be opened from the Proto Flow desktop app.");
   }
+}
+
+function downloadProjectInBrowser(project: Project): { path: string; project: Project } {
+  const portableProject = structuredClone(project);
+  for (const screen of portableProject.screens) {
+    for (const widget of screen.widgets) {
+      if (widget.type !== "image" || typeof widget.props.assetPath !== "string") continue;
+      const source = widget.props.src;
+      if (typeof source !== "string" || !source.startsWith("data:image/")) {
+        throw new Error(
+          "This project uses image files stored beside its desktop project. Open it in the desktop app to download a copy with those assets.",
+        );
+      }
+      delete widget.props.assetPath;
+    }
+  }
+
+  const safeName = project.name
+    .replace(/[<>:"/\\|?*\u0000-\u001f]/g, "_")
+    .trim()
+    .replace(/[. ]+$/g, "")
+    .slice(0, 120) || "proto-flow-project";
+  const fileName = `${safeName}.pflow`;
+  const blobUrl = URL.createObjectURL(
+    new Blob([serializeProject(portableProject)], { type: "application/json;charset=utf-8" }),
+  );
+  const link = document.createElement("a");
+  link.href = blobUrl;
+  link.download = fileName;
+  link.style.display = "none";
+  document.body.append(link);
+  link.click();
+  link.remove();
+  window.setTimeout(() => URL.revokeObjectURL(blobUrl), 1000);
+  return { path: fileName, project };
 }
 
 export async function openProjectFile(): Promise<{ project: Project; path: string } | null> {
@@ -24,7 +59,7 @@ export async function saveProjectFile(
   currentPath: string | null,
   saveAs = false,
 ): Promise<{ path: string; project: Project } | null> {
-  requireDesktopRuntime();
+  if (!isTauri()) return downloadProjectInBrowser(project);
   let path = currentPath;
   if (saveAs || !path) {
     path = await invoke<string | null>("pick_project_save_path", {
