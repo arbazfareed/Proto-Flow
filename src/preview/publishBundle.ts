@@ -14,7 +14,7 @@ function allWidgets(widgets) {
     ...(item.type === "dynamic-panel" ? (item.props.states || []).flatMap((state) => allWidgets(state.widgets || [])) : []),
     ...(item.type === "repeater" ? allWidgets(item.props.rowTemplate?.widgets || []) : [])]);
 }
-const visibility = new Map(project.screens.flatMap((screen) => allWidgets(screen.widgets).map((item) => [item.id, item.visible])));
+const visibility = new Map();
 const panelStates = new Map();
 const panelTransitions = new Map();
 const repeaterData = new Map();
@@ -23,6 +23,15 @@ let backStack = [];
 let loadedScreen = "";
 function screen() {
   return project.screens.find((item) => item.id === screenId) || project.screens[0];
+}
+function widgetVisible(widget, activeScreen) {
+  if (visibility.has(widget.id)) return visibility.get(widget.id);
+  const width = window.innerWidth;
+  const breakpoint = activeScreen.breakpoints?.find((item) =>
+    width >= item.minWidth && (item.maxWidth === undefined || width <= item.maxWidth),
+  );
+  const override = breakpoint ? widget.overrides?.[breakpoint.id] : undefined;
+  return typeof override?.visible === "boolean" ? override.visible : widget.visible !== false;
 }
 function autoLayoutPosition(widget, activeScreen) {
   const parent = activeScreen.widgets.find((item) => item.id === widget.groupId);
@@ -257,13 +266,15 @@ function actions(rule, activeScreen, item, widget, localVariables) {
 }
 function fire(widget, event, item, renderAfter = true) {
   const activeScreen = screen();
+  let matchedRule = false;
   for (const rule of activeScreen.interactionRules.filter((item) => item.event === event && (!item.widgetId || item.widgetId === widget.id))) {
     const localVariables = Object.fromEntries((rule.localVariables || []).map((entry) => [entry.name, entry.initial]));
     const checks = rule.conditions.map((condition) => matches(condition, activeScreen.id, item, widget, localVariables));
     if (rule.conditions.length && (rule.conditionMode === "any" ? !checks.some(Boolean) : !checks.every(Boolean))) continue;
+    matchedRule = true;
     actions(rule, activeScreen.id, item, widget, localVariables);
   }
-  if (renderAfter) render();
+  if (matchedRule && renderAfter) render();
 }
 function bindWidgetEvents(element, widget, item) {
   const mode = screen().inputMode || "both";
@@ -405,8 +416,17 @@ function renderWidget(widget, activeScreen, item) {
   element.style.zIndex = String(widget.zIndex);
   element.style.transform = widget.rotation ? "rotate(" + widget.rotation + "deg)" : "";
   element.style.opacity = String(widget.opacity);
-  element.style.color = typeof widget.props.color === "string" ? widget.props.color : "#24212b";
-  element.style.backgroundColor = widget.style.fill || "transparent";
+  const textWidget = ["text", "heading", "label", "paragraph", "link", "code"].includes(widget.type);
+  element.style.color = typeof widget.props.color === "string"
+    ? widget.props.color
+    : widget.type === "icon" || widget.type === "custom-icon"
+      ? widget.style.stroke || "#24212b"
+      : textWidget && widget.style.fill
+        ? widget.style.fill
+        : "#24212b";
+  element.style.backgroundColor = textWidget || widget.style.fill === null
+    ? "transparent"
+    : widget.style.fill || "transparent";
   element.style.border = widget.style.stroke ? (widget.style.strokeWidth || 1) + "px solid " + widget.style.stroke : "none";
   element.style.borderRadius = typeof widget.style.cornerRadius === "number" ? widget.style.cornerRadius + "px" : "";
   element.style.fontFamily = typeof widget.props.fontFamily === "string" ? widget.props.fontFamily : "Arial, sans-serif";
@@ -421,6 +441,7 @@ function renderWidget(widget, activeScreen, item) {
   if (widget.type === "button" || widget.type === "icon-button") element.textContent = shownText || "Button";
   else if (widget.type === "input" || widget.type === "search" || widget.type === "textarea") {
     const input = document.createElement(widget.type === "textarea" ? "textarea" : "input");
+    input.className = "preview-control";
     input.type = widget.type === "search" ? "search" : (typeof widget.props.type === "string" ? widget.props.type : "text");
     input.setAttribute("aria-label", text(widget.props.label || "Preview input", activeScreen.id, item, widget));
     input.placeholder = text(widget.props.placeholder || "", activeScreen.id, item, widget);
@@ -456,6 +477,24 @@ function renderWidget(widget, activeScreen, item) {
       image.alt = text(widget.props.alt || shownText, activeScreen.id, item, widget);
       element.append(image);
     } else element.textContent = shownText || "Image";
+  } else if (widget.type === "icon" || widget.type === "custom-icon") {
+    const glyphs = {
+      Activity: "◒", AlertCircle: "!", ArrowLeft: "←", ArrowRight: "→",
+      Bell: "♩", Bookmark: "☆", CalendarDays: "▦", CircleDot: "⊙",
+      CircleHelp: "?", Image: "▧", MessageCircle: "◌", MoreHorizontal: "•••",
+      Phone: "✆", Plus: "+", Search: "⌕", Settings: "⚙",
+      Shield: "⬡", SlidersHorizontal: "☷", Sun: "☼", UserRound: "◉",
+      Users: "♧", Video: "▣",
+    };
+    const iconName = typeof widget.props.iconName === "string" ? widget.props.iconName : "";
+    element.setAttribute("role", "img");
+    element.setAttribute("aria-label", widget.name || iconName || "Icon");
+    element.style.display = "flex";
+    element.style.alignItems = "center";
+    element.style.justifyContent = "center";
+    element.style.padding = "0";
+    element.style.backgroundColor = "transparent";
+    element.textContent = glyphs[iconName] || "•";
   } else if (widget.type === "list" && Array.isArray(widget.props.items)) {
     const list = document.createElement("ul");
     for (const listItem of widget.props.items) {
@@ -626,7 +665,12 @@ function renderWidget(widget, activeScreen, item) {
       element.append(row);
     }
   } else {
-    element.textContent = shownText || widget.type.replaceAll("-", " ");
+    const shapeOrText = [
+      "rectangle", "ellipse", "circle", "line", "arrow", "polygon", "star",
+      "divider", "vector", "path", "text", "heading", "label", "paragraph",
+      "link", "code",
+    ].includes(widget.type);
+    element.textContent = shownText || (shapeOrText ? "" : widget.type.replaceAll("-", " "));
   }
   if (widget.type !== "repeater") bindWidgetEvents(element, widget, item);
   if (element.tagName === "DIV") {
@@ -683,7 +727,7 @@ function render() {
   stage.style.height = device.height + "px";
   resizeStage();
   for (const widget of activeWidgets(activeScreen.widgets).sort((a, b) => a.zIndex - b.zIndex)) {
-    if (visibility.get(widget.id) === false || widget.visible === false) continue;
+    if (!widgetVisible(widget, activeScreen)) continue;
     stage.append(renderWidget(widget, activeScreen));
   }
   if (loadedScreen !== activeScreen.id) {
@@ -716,7 +760,6 @@ document.getElementById("restart").addEventListener("click", () => {
   variables.clear();
   for (const item of project.variables) variables.set(item.id, item.initial);
   visibility.clear();
-  for (const item of project.screens.flatMap((entry) => allWidgets(entry.widgets))) visibility.set(item.id, item.visible);
   panelStates.clear();
   panelTransitions.clear();
   repeaterData.clear();
@@ -733,7 +776,7 @@ export const PREVIEW_RUNTIME_STYLES = `*{box-sizing:border-box}html,body{margin:
 .toolbar{position:sticky;top:0;z-index:2147483647;display:flex;gap:8px;align-items:center;padding:10px;background:#211e29;border-bottom:1px solid #37323f}
 .toolbar button,.toolbar select{min-height:32px;border:1px solid #494353;border-radius:6px;padding:5px 9px;background:#302b39;color:inherit}
 .toolbar button:disabled{opacity:.45}.stage-wrap{padding:28px;overflow:auto}.stage{position:relative;margin:0 auto;background:#fff;color:#24212b;overflow:hidden;box-shadow:0 12px 42px #0007}
-.widget{position:absolute;overflow:hidden;white-space:pre-wrap}.widget img{width:100%;height:100%;object-fit:cover}.widget textarea,.widget input{max-width:100%;font:inherit}.widget:hover{filter:brightness(.96)}.widget:focus-visible{outline:2px solid #8b69ed;outline-offset:2px}.widget.touch-feedback{box-shadow:0 0 0 8px #9b7cf233;border-radius:8px}#stage[data-input-mode="touch"] .widget,#stage[data-input-mode="both"] .widget{touch-action:none}
+.widget{position:absolute;overflow:hidden;white-space:pre-wrap}.widget img{width:100%;height:100%;object-fit:cover}.widget textarea,.widget input{max-width:100%;font:inherit}.widget .preview-control{width:100%;min-height:100%;padding:6px 9px;border:1px solid #dfe7e3;border-radius:6px;color:#294238;background:#fff;font:inherit}.widget:hover{filter:brightness(.96)}.widget:focus-visible{outline:2px solid #8b69ed;outline-offset:2px}.widget.touch-feedback{box-shadow:0 0 0 8px #9b7cf233;border-radius:8px}#stage[data-input-mode="touch"] .widget,#stage[data-input-mode="both"] .widget{touch-action:none}
 .card-widget{display:flex;flex-direction:column;border:1px solid #d9d5e0;border-radius:10px;background:#fff;box-shadow:0 4px 14px #28203618}.card-widget>img,.card-image-placeholder{width:100%;height:43%;min-height:48px;object-fit:cover}.card-image-placeholder{display:grid;place-items:center;color:#767187;background:linear-gradient(135deg,#ece9f4,#d9d6e3);font-size:11px}.card-content{display:flex;min-height:0;flex:1;flex-direction:column;align-items:flex-start;gap:4px;padding:10px 12px}.card-content h3,.card-content p{max-width:100%;margin:0;overflow:hidden;text-overflow:ellipsis}.card-content h3{font-size:14px;line-height:1.3}.card-content p{color:#66616f;font-size:11px;line-height:1.35}.card-content button{margin-top:auto;padding:4px 8px;border:0;border-radius:4px;color:#fff;background:#7454cf;font:inherit;font-size:10px}.chart-widget{display:flex;flex-direction:column;gap:4px;margin:0;padding:8px 10px;border:1px solid #ddd9e5;border-radius:8px;color:#7454cf;background:#fff}.chart-widget figcaption{overflow:hidden;color:#45414c;font-size:11px;font-weight:650;text-overflow:ellipsis;white-space:nowrap}.chart-widget svg{width:100%;height:calc(100% - 20px)}.alert-widget{display:flex;align-items:flex-start;gap:8px;padding:10px 12px;border:1px solid #acd7ff;border-radius:7px;color:#16466f;background:#eff8ff}.alert-widget.is-success{border-color:#9ed9bb;color:#17653e;background:#effbf4}.alert-widget.is-warning{border-color:#f1d293;color:#74500f;background:#fff9e9}.alert-widget.is-error{border-color:#efb0b5;color:#892c35;background:#fff2f3}.alert-widget>strong{flex:1 1 auto;font-size:11px}.alert-widget>span{font-size:10px}.alert-widget>button{border:0;color:inherit;background:transparent;font-size:18px;cursor:pointer}.skeleton-widget{display:flex;flex-direction:column;justify-content:center;gap:8px;padding:12px;background:#f1f0f4}.skeleton-widget span{height:12px;border-radius:5px;background:linear-gradient(90deg,#e5e3e9 25%,#f5f4f7 50%,#e5e3e9 75%);background-size:200% 100%;animation:protoflow-shimmer 1.35s ease-in-out infinite}.skeleton-widget span:nth-child(2){width:78%}.skeleton-widget span:nth-child(3){width:56%}@keyframes protoflow-shimmer{to{background-position:-200% 0}}@media(prefers-reduced-motion:reduce){.skeleton-widget span{animation:none}}.video-widget{margin:0;border-radius:8px;background:#171923}.video-widget video{width:100%;height:100%;object-fit:cover}.video-placeholder{display:grid;width:100%;height:calc(100% - 20px);place-items:center;color:#fff;background:linear-gradient(145deg,#2b3041,#171923);font-size:30px}.video-widget figcaption{position:absolute;right:0;bottom:0;left:0;padding:5px 9px;color:#fff;background:#11131bd9;font-size:11px}.layout-widget{border:1px dashed #8d7eb7;border-radius:7px;background:#5a4a8020}.spacer-widget{border:1px dashed #b6a6df;background:repeating-linear-gradient(135deg,#8b69ed12 0 6px,transparent 6px 12px)}.icon-mark{display:grid;place-items:center;border:1px solid #8b69ed;border-radius:9px;color:#7454cf;background:#f3efff;font-size:32px}
 @keyframes protoflow-panel-fade{from{opacity:0}to{opacity:1}}
 @keyframes protoflow-panel-slide-left{from{translate:20px 0}to{translate:0 0}}

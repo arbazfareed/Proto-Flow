@@ -4,6 +4,7 @@ import { CANVAS_ICON_LIBRARY } from "../canvas/iconLibrary";
 import relaySource from "../../demos/relay-messaging-suite.pflow?raw";
 import { parseProject } from "../project/schema";
 import { generateLocalHtmlArchive, responsiveLayoutStyles } from "../preview/htmlExport";
+import { PreviewRuntime } from "../preview/runtime";
 
 const project = parseProject(relaySource);
 
@@ -100,6 +101,42 @@ describe("responsive Relay messaging suite", () => {
     expect(nav).toBeDefined();
     expect(responsiveLayoutStyles(project)).toContain(`data-widget-id="${nav?.id}"`);
     expect(responsiveLayoutStyles(project)).toContain("@media (max-width:767px)");
+    expect(responsiveLayoutStyles(project)).not.toContain("display:none!important");
+  });
+
+  it("composes and sends typed messages in the responsive conversation", () => {
+    const conversation = project.screens.find((screen) => screen.name === "Conversation")!;
+    const composer = conversation.widgets.find((widget) => widget.name === "Message composer")!;
+    const sendButton = conversation.widgets.find((widget) => widget.name === "Send message button")!;
+    const sendArrow = conversation.widgets.find((widget) => widget.name === "Send message arrow")!;
+    const sentBubble = conversation.widgets.find((widget) => widget.name === "Latest outgoing bubble")!;
+    const sentText = conversation.widgets.find((widget) => widget.name === "Latest outgoing bubble message")!;
+
+    expect(composer.type).toBe("input");
+    expect(composer.props).toMatchObject({
+      label: "Message to Eva",
+      variableName: "draftMessage",
+    });
+    expect(composer.overrides?.mobile).toMatchObject({ x: 57, width: 255, visible: true });
+    expect(sentBubble.visible).toBe(false);
+    expect(sentText.props.text).toBe("{{sentMessage}}");
+
+    const runtime = new PreviewRuntime(project);
+    runtime.navigate(conversation.id);
+    runtime.runEvent(sendButton, "onClick");
+    expect(runtime.getVariable("sendState")).toBe("Messages stay between you.");
+    expect(runtime.snapshot().visibility[sentBubble.id]).not.toBe(true);
+
+    runtime.updateBoundVariable(composer, "I will be there in five minutes.");
+    expect(runtime.runEvent(sendArrow, "onClick")).toEqual([]);
+    expect(runtime.getVariable("sentMessage")).toBe("I will be there in five minutes.");
+    expect(runtime.getVariable("draftMessage")).toBe("");
+    expect(runtime.getVariable("sendState")).toBe("Message sent · just now");
+    expect(runtime.snapshot().visibility[sentBubble.id]).toBe(true);
+    expect(runtime.snapshot().visibility[sentText.id]).toBe(true);
+    expect(runtime.snapshot().visibility[
+      conversation.widgets.find((widget) => widget.name === "Typing status")!.id
+    ]).toBe(false);
   });
 
   it("includes breakpoint-only mobile controls in the responsive HTML export", async () => {
@@ -128,5 +165,11 @@ describe("responsive Relay messaging suite", () => {
       expect(widget.overrides?.mobile?.visible).toBe(true);
       expect(widget.overrides?.desktop?.visible).toBe(false);
     }
+
+    const exportedComposer = exportedProject.screens
+      .find((screen) => screen.name === "Conversation")!
+      .widgets.find((widget) => widget.name === "Message composer");
+    expect(exportedComposer?.type).toBe("input");
+    expect(exportedComposer?.props.variableName).toBe("draftMessage");
   });
 });

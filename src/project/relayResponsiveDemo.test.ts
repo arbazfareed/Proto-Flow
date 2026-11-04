@@ -2,6 +2,7 @@ import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import { resolveWidgetsForBreakpoint } from "./responsive";
 import { parseProject } from "./schema";
+import { PreviewRuntime } from "../preview/runtime";
 
 const project = parseProject(
   readFileSync(new URL("../../demos/relay-responsive-chat.pflow", import.meta.url), "utf8"),
@@ -91,21 +92,45 @@ describe("Relay responsive demo", () => {
       .toBe(1180 - 8);
   });
 
-  it("wires the send button to its visible confirmation", () => {
+  it("sends the typed message into the conversation and clears the composer", () => {
+    const composer = screen.widgets.find((widget) => widget.name === "Message composer");
     const sendButton = screen.widgets.find((widget) => widget.name === "Send message button");
     const sendArrow = screen.widgets.find((widget) => widget.name === "Send message arrow");
+    const sentBubble = screen.widgets.find((widget) => widget.name === "Latest outgoing bubble");
+    const sentText = screen.widgets.find((widget) => widget.name === "Latest outgoing bubble message");
     const rules = screen.interactionRules.filter((item) => item.event === "onClick");
 
+    expect(composer?.type).toBe("input");
+    expect(composer?.props).toMatchObject({
+      label: "Message to Eva",
+      variableName: "draftMessage",
+    });
     expect(rules.map((rule) => rule.widgetId)).toEqual(
       expect.arrayContaining([sendButton?.id, sendArrow?.id]),
     );
     for (const rule of rules) {
-      expect(rule.actions).toContainEqual({
-        type: "setVariable",
-        target: "sendState",
-        value: "Message sent · just now",
+      expect(rule.conditions).toContainEqual({
+        variable: "draftMessage",
+        operator: "notEquals",
+        value: "",
       });
+      expect(rule.actions).toContainEqual({ type: "setVariable", target: "sentMessage", value: "[[draftMessage]]" });
     }
-    expect(screen.widgets.some((widget) => widget.name === "Send message confirmation")).toBe(true);
+    expect(sentBubble?.visible).toBe(false);
+    expect(sentText?.props.text).toBe("{{sentMessage}}");
+
+    const runtime = new PreviewRuntime(project);
+    runtime.runEvent(sendButton!, "onClick");
+    expect(runtime.getVariable("sendState")).toBe("Messages stay between you.");
+    expect(runtime.snapshot().visibility[sentBubble!.id]).not.toBe(true);
+
+    runtime.updateBoundVariable(composer!, "See you at 12:30!");
+    expect(runtime.runEvent(sendArrow!, "onClick")).toEqual([]);
+    expect(runtime.getVariable("sentMessage")).toBe("See you at 12:30!");
+    expect(runtime.getVariable("draftMessage")).toBe("");
+    expect(runtime.getVariable("sendState")).toBe("Message sent · just now");
+    expect(runtime.snapshot().visibility[sentBubble!.id]).toBe(true);
+    expect(runtime.snapshot().visibility[sentText!.id]).toBe(true);
+    expect(runtime.snapshot().visibility[screen.widgets.find((widget) => widget.name === "Typing status")!.id]).toBe(false);
   });
 });
