@@ -307,6 +307,8 @@ Element-library entries stay compact: select the small **info** button beside an
 
 Open [`demos/forma-storefront.pflow`](./demos/forma-storefront.pflow) in the ProtoFlow desktop editor for an editable two-screen storefront prototype built from native canvas elements, Lucide icons, and screen-navigation interactions.
 
+Open or [download the responsive Relay messaging suite](./demos/relay-messaging-suite.pflow) for a five-screen, WhatsApp-inspired prototype with working navigation and mobile, tablet, and desktop layouts. See the [Relay project guide](./docs/relay-messaging-suite.md) for import and testing steps.
+
 ### PF-T413 — Local variables and interaction scope
 
 The Interactions editor lets each rule declare local text, number, and boolean variables with initial values. During a rule invocation, expression and action lookup precedence is interaction-local, active screen, then project scope. Local values are isolated to that one invocation, so each rule trigger starts from its declared initial values; repeater row actions also receive the current `item.field` record. Shadowing a variable with a different type and locals that are never read are flagged in the rule editor. Preview, standalone HTML, and React exports all evaluate local variables without requiring a cloud connection. See the [local variables reference](./docs/local-variables.md).

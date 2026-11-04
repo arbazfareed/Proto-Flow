@@ -297,3 +297,26 @@ html[data-theme="light"] .onboarding-wallet-promise { color: #383644; }
 html[data-theme="light"] .onboarding-credit-pill { color: #493677; border-color: #cfc5eb; background: #f3f0fc; }
 html[data-theme="light"] .onboarding-credit-pill small,
 html[data-theme="light"] .credit-pill-caption { color: #55545f; }
+
+html[data-theme="light"] .layer-row.is-container .layer-name,
+html[data-theme="light"] .layer-row.is-selected .layer-select,
+html[data-theme="light"] .layer-row.is-selected .layer-name,
+html[data-theme="light"] .layer-select:hover,
+html[data-theme="light"] .layer-group-row.is-selected,
+html[data-theme="light"] .layer-group-row.is-selected .layer-group-name {
+  color: var(--text-primary);
+}
+html[data-theme="light"] .layer-row.is-locked { background: #f0eff4; }
+html[data-theme="light"] .sidebar-heading,
+html[data-theme="light"] .section-label,
+html[data-theme="light"] .layer-tree-title,
+html[data-theme="light"] .right-dock-title,
+html[data-theme="light"] .inspector-overline { font-size: 10px; }
+html[data-theme="light"] .nav-item { font-size: 11px; }
+html[data-theme="light"] .page-item-device,
+html[data-theme="light"] .layer-name,
+html[data-theme="light"] .layer-group-name,
+html[data-theme="light"] .screen-input-mode,
+html[data-theme="light"] .detail-row { font-size: 10px; }
+html[data-theme="light"] .layer-count { font-size: 9px; }
+html[data-theme="light"] .field-label { font-size: 11px; }
