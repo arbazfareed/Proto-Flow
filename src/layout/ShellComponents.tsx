@@ -28,6 +28,7 @@ import {
   Redo2,
   RotateCw,
   RefreshCw,
+  Search,
   Sparkles,
   Settings2,
   Square,
@@ -349,7 +350,14 @@ export function TopBar({
           <Redo2 size={16} />
         </button>
         <div className="topbar-divider compact-divider" />
-        <button className="button button-quiet command-trigger" onClick={onOpenPalette}>
+        <button
+          className="button button-quiet command-trigger"
+          aria-label="Quick actions"
+          aria-keyshortcuts="Control+K Meta+K"
+          title="Search commands (Ctrl/Cmd+K)"
+          onClick={onOpenPalette}
+        >
+          <Search size={14} aria-hidden="true" />
           <span>Quick actions</span><kbd>Ctrl K</kbd>
         </button>
         <button
