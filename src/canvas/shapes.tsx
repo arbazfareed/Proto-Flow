@@ -1012,6 +1012,161 @@ function NoticeShape({ widget, fill, stroke, strokeWidth }: ShapeComponentProps)
   );
 }
 
+function AvatarGroupShape({ widget }: ShapeComponentProps) {
+  const initials = getWidgetProp(widget, "label", "AM | JR | SK | +2")
+    .split("|")
+    .map((item) => item.trim())
+    .filter(Boolean)
+    .slice(0, 4);
+  const diameter = Math.min(42, Math.max(28, widget.height - 4));
+  const step = diameter * 0.72;
+  const colors = ["#5b55a5", "#148477", "#b65e77", "#64748b", "#9a6b2f"];
+  return (
+    <Group>
+      {initials.map((item, index) => {
+        const x = 2 + diameter / 2 + index * step;
+        const isOverflow = item.startsWith("+");
+        return (
+          <Group key={`${item}-${index}`}>
+            <Circle
+              x={x}
+              y={widget.height / 2}
+              radius={diameter / 2}
+              fill={isOverflow ? "#3f4655" : colors[index % colors.length]}
+              stroke="#f8fafc"
+              strokeWidth={2}
+              perfectDrawEnabled={false}
+            />
+            <KonvaText
+              x={x - diameter / 2}
+              y={(widget.height - 16) / 2}
+              width={diameter}
+              height={16}
+              text={item}
+              fontFamily="Arial"
+              fontSize={isOverflow ? 10 : 11}
+              fontStyle="bold"
+              fill="#ffffff"
+              align="center"
+              verticalAlign="middle"
+              perfectDrawEnabled={false}
+            />
+          </Group>
+        );
+      })}
+    </Group>
+  );
+}
+
+function TestimonialCardShape({ widget, fill, stroke, strokeWidth }: ShapeComponentProps) {
+  const rating = Math.min(5, Math.max(0, Number(widget.props.value) || 0));
+  return (
+    <Group>
+      <Rect
+        width={widget.width}
+        height={widget.height}
+        fill={fill ?? "#20232c"}
+        stroke={stroke ?? "#3a3e49"}
+        strokeWidth={strokeWidth}
+        cornerRadius={widget.style.cornerRadius ?? 9}
+        perfectDrawEnabled={false}
+      />
+      {Array.from({ length: 5 }, (_, index) => (
+        <KonvaStar
+          key={index}
+          x={18 + index * 17}
+          y={18}
+          numPoints={5}
+          innerRadius={4}
+          outerRadius={7}
+          fill={index < rating ? "#f5b942" : "#50525d"}
+          perfectDrawEnabled={false}
+        />
+      ))}
+      <KonvaText
+        x={14}
+        y={36}
+        width={widget.width - 28}
+        height={Math.max(32, widget.height - 88)}
+        text={`“${getWidgetProp(widget, "label", "A thoughtful product experience.")}”`}
+        fontFamily="Arial"
+        fontSize={12}
+        lineHeight={1.35}
+        fill="#34323d"
+        wrap="word"
+        ellipsis
+        perfectDrawEnabled={false}
+      />
+      <KonvaText
+        x={14}
+        y={widget.height - 43}
+        width={widget.width - 28}
+        height={17}
+        text={getWidgetProp(widget, "subtitle", "Alex Morgan · Product lead")}
+        fontFamily="Arial"
+        fontSize={10}
+        fontStyle="bold"
+        fill="#24232b"
+        ellipsis
+        perfectDrawEnabled={false}
+      />
+    </Group>
+  );
+}
+
+function FeatureCardShape({ widget, fill, stroke, strokeWidth }: ShapeComponentProps) {
+  const iconSize = 25;
+  return (
+    <Group>
+      <Rect
+        width={widget.width}
+        height={widget.height}
+        fill={fill ?? "#20232c"}
+        stroke={stroke ?? "#3a3e49"}
+        strokeWidth={strokeWidth}
+        cornerRadius={widget.style.cornerRadius ?? 9}
+        perfectDrawEnabled={false}
+      />
+      <CanvasIcon
+        name={getWidgetProp(widget, "iconName", "Sparkles")}
+        color={stroke ?? "#795ed0"}
+        strokeWidth={1.8}
+        x={14}
+        y={14}
+        width={iconSize}
+        height={iconSize}
+      />
+      <KonvaText
+        x={14}
+        y={49}
+        width={widget.width - 28}
+        height={21}
+        text={getWidgetProp(widget, "label", "Fast workflows")}
+        fontFamily="Arial"
+        fontSize={13}
+        fontStyle="bold"
+        fill="#24232b"
+        ellipsis
+        perfectDrawEnabled={false}
+      />
+      <KonvaText
+        x={14}
+        y={74}
+        width={widget.width - 28}
+        height={Math.max(20, widget.height - 84)}
+        text={getWidgetProp(widget, "subtitle", "Design and validate your next idea.")}
+        fontFamily="Arial"
+        fontSize={10}
+        lineHeight={1.35}
+        fill="#55545f"
+        wrap="word"
+        ellipsis
+        perfectDrawEnabled={false}
+      />
+    </Group>
+  );
+}
+
 function CardShape({ widget, fill, stroke, strokeWidth }: ShapeComponentProps) {
   const [image, setImage] = useState<HTMLImageElement | null>(null);
   const imageSource = typeof widget.props.imageSrc === "string" ? widget.props.imageSrc : "";
@@ -2369,6 +2524,9 @@ function GenericElementShape({
   if (widget.type === "profile-card") {
     return <ProfileCardShape widget={widget} fill={fill} stroke={stroke} strokeWidth={strokeWidth} />;
   }
+  if (widget.type === "avatar-group") return <AvatarGroupShape widget={widget} fill={fill} stroke={stroke} strokeWidth={strokeWidth} />;
+  if (widget.type === "testimonial-card") return <TestimonialCardShape widget={widget} fill={fill} stroke={stroke} strokeWidth={strokeWidth} />;
+  if (widget.type === "feature-card") return <FeatureCardShape widget={widget} fill={fill} stroke={stroke} strokeWidth={strokeWidth} />;
   if (widget.type === "card") {
     return <CardShape widget={widget} fill={fill} stroke={stroke} strokeWidth={strokeWidth} />;
   }

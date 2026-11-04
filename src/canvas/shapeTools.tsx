@@ -115,6 +115,9 @@ export const GENERIC_ELEMENT_TOOL_LABELS = {
   notification: "Notification",
   "metric-card": "Metric card",
   "profile-card": "Profile card",
+  "avatar-group": "Avatar group",
+  "testimonial-card": "Testimonial card",
+  "feature-card": "Feature card",
   "empty-state": "Empty state",
   "code-block": "Code block",
   "segmented-control": "Segmented control",
@@ -308,6 +311,9 @@ function genericElementDimensions(type: GenericElementTool): [number, number] {
   if (type === "chip" || type === "tag") return [96, 32];
   if (type === "spinner") return [40, 40];
   if (type === "profile-card" || type === "pricing-card") return [240, 160];
+  if (type === "avatar-group") return [148, 48];
+  if (type === "testimonial-card") return [280, 180];
+  if (type === "feature-card") return [220, 144];
   if (type === "toast" || type === "notification" || type === "empty-state") {
     return [240, 96];
   }
@@ -343,6 +349,12 @@ function genericElementDefinition(
     style.fillOpacity = 1;
     style.stroke = null;
   }
+  if (type === "testimonial-card" || type === "feature-card") {
+    style.fill = "#ffffff";
+    style.fillOpacity = 1;
+    style.stroke = "#d7d7e0";
+    style.cornerRadius = 9;
+  }
   const props = TEXT_ELEMENT_TOOLS.has(type)
     ? {
         text: label,
@@ -376,6 +388,20 @@ function genericElementDefinition(
             ? { label: "Revenue", value: "$24,800", trend: "+12.8%" }
             : type === "profile-card"
               ? { label: "Alex Morgan", subtitle: "Product designer", initials: "AM" }
+              : type === "avatar-group"
+                ? { label: "AM | JR | SK | +2" }
+                : type === "testimonial-card"
+                  ? {
+                      label: "ProtoFlow made our first prototype feel effortless.",
+                      subtitle: "Alex Morgan · Product lead",
+                      value: 5,
+                    }
+                  : type === "feature-card"
+                    ? {
+                        label: "Fast workflows",
+                        subtitle: "Design and validate your next idea.",
+                        iconName: "Sparkles",
+                      }
               : type === "empty-state"
                 ? { label: "Nothing here yet", subtitle: "New items will appear here." }
                 : type === "code-block"

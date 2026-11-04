@@ -212,6 +212,21 @@ const GUIDES: Record<string, WidgetLearningGuide> = {
     css: "display: flex; align-items: center; gap: 12px;",
     note: "Combines an avatar with a person's name and supporting detail.",
   },
+  "avatar-group": {
+    element: "<div role=\"group\" aria-label=\"Team members\">",
+    css: "display: flex; align-items: center; margin-inline-start: -8px;",
+    note: "Shows a compact, overlapping set of people with a count for additional members.",
+  },
+  "testimonial-card": {
+    element: "<figure><blockquote>…</blockquote><figcaption>…</figcaption></figure>",
+    css: "display: grid; gap: 12px; padding: 16px;",
+    note: "Pairs a customer quote and rating with its author and role.",
+  },
+  "feature-card": {
+    element: "<article><h3>…</h3><p>…</p></article>",
+    css: "display: grid; gap: 8px; padding: 16px;",
+    note: "Explains a product feature with an icon, short heading, and supporting text.",
+  },
   "empty-state": {
     element: "<section aria-labelledby=\"empty-title\">",
     css: "display: grid; justify-items: center; gap: 12px;",

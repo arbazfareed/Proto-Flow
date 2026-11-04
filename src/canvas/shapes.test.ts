@@ -152,6 +152,9 @@ describe("canvas shape registry", () => {
       "notification",
       "metric-card",
       "profile-card",
+      "avatar-group",
+      "testimonial-card",
+      "feature-card",
       "empty-state",
       "code-block",
       "segmented-control",
@@ -162,6 +165,19 @@ describe("canvas shape registry", () => {
       expect(ELEMENT_LIBRARY_TOOL_TYPES).toContain(type);
       expect(createShapeWidget(type, 10, 20).width).toBeGreaterThan(0);
     }
+    expect(createShapeWidget("avatar-group", 10, 20).props.label).toBe("AM | JR | SK | +2");
+    expect(createShapeWidget("testimonial-card", 10, 20).props.value).toBe(5);
+    expect(createShapeWidget("feature-card", 10, 20).props.iconName).toBe("Sparkles");
+    expect(getShapeDefinition("testimonial-card")?.style).toMatchObject({
+      fill: "#ffffff",
+      fillOpacity: 1,
+      stroke: "#d7d7e0",
+    });
+    expect(getShapeDefinition("feature-card")?.style).toMatchObject({
+      fill: "#ffffff",
+      fillOpacity: 1,
+      stroke: "#d7d7e0",
+    });
   });
 
   it("registers flex layout, spacer, and web/mobile learning elements", () => {
