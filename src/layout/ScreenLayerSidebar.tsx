@@ -207,9 +207,9 @@ function findLayerTreeNode(
 }
 
 function layerNodeDomId(node: LayerTreeNode): string {
-  return node.widget
-    ? `layer-row-${node.widget.id}`
-    : `layer-group-${node.groupId ?? node.id}`;
+  if (node.widget) return `layer-row-${node.widget.id}`;
+  if (node.kind === "state") return `layer-state-${node.id}`;
+  return `layer-group-${node.groupId ?? node.id}`;
 }
 
 function beginLayerDrag(
@@ -1719,7 +1719,6 @@ export function ScreenLayerSidebar({ tutorialProjectId }: { tutorialProjectId: s
         className={`layer-row${entry.depth > 0 ? " is-nested" : ""}${container ? " is-container" : ""}${selected ? " is-selected" : ""}${hoveredWidgetId === widget.id ? " is-canvas-hovered" : ""}${widget.locked ? " is-locked" : ""}${!widget.visible ? " is-hidden" : ""}${invalidDrop ? " is-invalid-drop" : ""}${overflowPixels ? " is-overflowing" : ""}${["symbol", "symbol-instance", "symbolInstance"].includes(widget.type) ? " is-symbol" : ""}${recentWidgetIds.has(widget.id) ? " is-new" : ""}${dropIndicator?.id === widget.id ? ` drop-${dropIndicator.edge}` : ""}`}
         role="treeitem"
         tabIndex={selected || hoveredWidgetId === widget.id || entry.depth === 0 ? 0 : -1}
-        aria-label={`${label}, ${container && hasChildren ? "parent container" : entry.depth === 0 ? "screen child" : "child of " + parentLabel}`}
         aria-level={entry.depth + 2}
         aria-selected={selected}
         aria-posinset={entry.position}
@@ -1858,7 +1857,6 @@ export function ScreenLayerSidebar({ tutorialProjectId }: { tutorialProjectId: s
             )}
             <button
               className="layer-select"
-              aria-label={`${overflowPixels ? `Overflows the ${overflowDeviceName} viewport by ${overflowPixels}px. ` : ""}Select ${label}`}
               aria-pressed={selected}
               onDoubleClick={() => beginWidgetRename(widget)}
               onClick={(event) => {
@@ -2391,7 +2389,6 @@ export function ScreenLayerSidebar({ tutorialProjectId }: { tutorialProjectId: s
               role="treeitem"
               tabIndex={0}
               aria-level={1}
-              aria-label={`Screen: ${activeScreen.name}, parent of ${hierarchyRoots.length} items`}
               aria-selected={true}
               aria-expanded={!screenTreeCollapsed}
               title={`Screen parent. New items are added directly to ${activeScreen.name}.`}
@@ -2464,7 +2461,6 @@ export function ScreenLayerSidebar({ tutorialProjectId }: { tutorialProjectId: s
                     tabIndex={entry.depth === 0 ? 0 : -1}
                     data-entry-index={entryIndex}
                     aria-level={entry.depth + 2}
-                    aria-label={`State ${node.label}`}
                     aria-expanded={!entry.collapsed}
                     aria-posinset={entry.position}
                     aria-setsize={entry.siblingCount}
@@ -2541,7 +2537,6 @@ export function ScreenLayerSidebar({ tutorialProjectId }: { tutorialProjectId: s
                     data-entry-index={entryIndex}
                     id={`layer-group-${groupId}`}
                     aria-level={entry.depth + 2}
-                    aria-label={`Group, ${node.descendantCount} children`}
                     aria-selected={false}
                     aria-expanded={!entry.collapsed}
                     aria-posinset={entry.position}

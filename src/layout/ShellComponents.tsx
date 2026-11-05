@@ -364,7 +364,7 @@ export function TopBar({
         <button
           className="button button-secondary"
           title="Download a local .pflow project copy — no cloud required"
-          aria-label="Download project (.pflow)"
+          aria-label="Download .pflow project"
           onClick={onSaveAs}
         >
           <ArrowDownToLine size={14} /> Download .pflow
@@ -381,7 +381,7 @@ export function TopBar({
         <button className="button button-secondary" aria-label="Open collaboration" title="Start or join a real-time collaboration session" onClick={onOpenCollaboration}>
           <UsersRound size={14} /> Collaborate
         </button>
-        <button className="button button-secondary" aria-label="Export React code" title="Export a React and Tailwind project" onClick={onExportReactCode}>
+        <button className="button button-secondary" aria-label="Export code with React" title="Export a React and Tailwind project" onClick={onExportReactCode}>
           <Code2 size={14} /> Export code
         </button>
         <button className="button button-secondary" aria-label="Export HTML bundle" title="Export a free offline HTML bundle" onClick={onExportHtml}>

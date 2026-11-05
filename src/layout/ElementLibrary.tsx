@@ -231,7 +231,7 @@ function ElementLibraryContents({
           <button
             className="element-library-item"
             type="button"
-            aria-label="Add image from URL"
+            aria-label="Image URL import"
             title="Import an image from an HTTP or HTTPS URL"
             onClick={() => window.dispatchEvent(new Event(OPEN_IMAGE_URL_EVENT))}
           >

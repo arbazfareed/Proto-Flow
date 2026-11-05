@@ -36,6 +36,8 @@ PF-T704 E2E coverage runs browser journeys with Playwright and Windows desktop s
 
 PF-T705 performance benchmarks cover canvas workloads, store operations, feature timings, bundle size, startup, and heap growth. See [benchmarks/README.md](./benchmarks/README.md) for thresholds and local commands.
 
+PF-T706 checks WCAG 2.1 AA accessibility in browser and Windows desktop E2E, with component-level axe checks. See [ACCESSIBILITY.md](./ACCESSIBILITY.md) for the manual audit checklist and [the accessibility statement](./public/accessibility.html).
+
 ## In-app help
 
 Press **F1** or choose **Help & docs** in the workspace sidebar to search the offline help library. Guides are Markdown files in `docs/help/`, bundled with the app at build time; contextual help buttons open the related article. Article feedback stays on the current device. Deep links use `protoflow://docs/{slug}`.
