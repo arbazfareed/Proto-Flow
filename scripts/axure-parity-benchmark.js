@@ -5,6 +5,8 @@ import {
   isFlowEdgeInViewport,
   getVisibleFlowScreens,
 } from "../src/project/flow.ts";
+import { createEmptyProject } from "../src/project/schema.ts";
+import { useStore } from "../src/store/index.ts";
 import {
   flattenActivePanelWidgets,
   withPanelStates,
@@ -120,6 +122,15 @@ function createRepeaterWidgets(rowCount, templateWidgetCount, startIndex) {
 }
 
 function createScenes() {
+  const standardScenes = [
+    { name: "A - Canvas medium (20 widgets)", count: 20 },
+    { name: "B - Canvas large (500 widgets)", count: 500 },
+    { name: "C - Canvas stress (1000 widgets)", count: 1_000 },
+  ].map(({ name, count }) => ({
+    name,
+    widgets: Array.from({ length: count }, (_, index) => widget(`${name}-${index}`, index)),
+    totalFeatureWidgets: count,
+  }));
   const panelRoots = Array.from({ length: 20 }, (_, index) =>
     createPanel(`panel-${index}`, 5, 10, index * 50),
   );
@@ -175,15 +186,16 @@ function createScenes() {
   );
 
   return [
+    ...standardScenes,
     {
-      name: "A - Dynamic panels",
+      name: "D - Dynamic panels",
       widgets: activePanels,
       panelCount: 20,
       totalFeatureWidgets: 1_020,
       panelSwitchMs,
     },
     {
-      name: "B - Repeater virtualization",
+      name: "E - Repeater virtualization",
       widgets: repeater.widgets,
       repeaterRowCount: repeater.rowCount,
       renderedRepeaterRows: repeater.renderedRowCount,
@@ -191,13 +203,13 @@ function createScenes() {
       totalFeatureWidgets: 2_500,
     },
     {
-      name: "C - Nested panels",
+      name: "F - Nested panels",
       widgets: nestedWidgets,
       panelCount: 30,
       totalFeatureWidgets: nestedWidgets.length,
     },
     {
-      name: "D - Expressions",
+      name: "G - Expressions",
       widgets: Array.from({ length: 200 }, (_, index) =>
         widget(`expression-${index}`, index),
       ),
@@ -207,7 +219,7 @@ function createScenes() {
       totalFeatureWidgets: 200,
     },
     {
-      name: "E - Full Axure-parity mix",
+      name: "I - Full Axure-parity mix",
       widgets: [
         ...mixedPanelWidgets,
         ...mixedRepeaters.flatMap((result) => result.widgets),
@@ -224,7 +236,7 @@ function createScenes() {
       annotationCount: 100,
     },
     {
-      name: "F - Flow diagram",
+      name: "H - Flow diagram",
       widgets: flow.screens.map((screen, index) => {
         const position = flow.positions[screen.id];
         return {
@@ -254,6 +266,70 @@ function createScenes() {
   ];
 }
 
+function measureStoreWorkload() {
+  const store = useStore.getState();
+  store.newProject("Performance benchmark");
+  const widgetTemplate = {
+    ...widget("store-widget", 0),
+    type: "rectangle",
+    opacity: 1,
+    visible: true,
+    locked: false,
+    zIndex: 0,
+    style: {},
+    props: {},
+  };
+  const addStart = performance.now();
+  for (let index = 0; index < 100; index += 1) {
+    const project = useStore.getState().project;
+    const screen = project.screens[0];
+    if (!screen) throw new Error("Store benchmark project has no screen.");
+    useStore.getState().setProject({
+      ...project,
+      screens: [{
+        ...screen,
+        widgets: [...screen.widgets, { ...widgetTemplate, id: `store-widget-${index}` }],
+      }],
+    });
+  }
+  const add100Ms = performance.now() - addStart;
+
+  const historyStore = useStore.getState();
+  historyStore.clearHistory();
+  for (let index = 0; index < 50; index += 1) {
+    historyStore.pushHistory({
+      ...historyStore.project,
+      name: `Snapshot ${index}`,
+    });
+  }
+  const undoRedoStart = performance.now();
+  for (let index = 0; index < 50; index += 1) historyStore.undo();
+  for (let index = 0; index < 50; index += 1) historyStore.redo();
+  const undoRedo50Ms = performance.now() - undoRedoStart;
+
+  const selectionIds = Array.from({ length: 500 }, (_, index) => `selection-${index}`);
+  const project = useStore.getState().project;
+  const screen = project.screens[0];
+  if (!screen) throw new Error("Store benchmark project has no screen.");
+  useStore.getState().setProject({
+    ...project,
+    screens: [{
+      ...screen,
+      widgets: selectionIds.map((id, index) => ({
+        ...widgetTemplate,
+        id,
+        x: index * 2,
+      })),
+    }],
+  });
+  const selectionStart = performance.now();
+  useStore.getState().select(selectionIds);
+  const selection500Ms = performance.now() - selectionStart;
+  useStore.getState().loadProject(createEmptyProject("Performance benchmark cleanup"));
+
+  return { add100Ms, undoRedo50Ms, selection500Ms };
+}
+
 function percentile(samples, fraction) {
   if (samples.length === 0) return 0;
   const sorted = [...samples].sort((left, right) => left - right);
@@ -262,6 +338,7 @@ function percentile(samples, fraction) {
 
 async function measureMode(stage, layer, nodes, scenario, mode, durationMs) {
   const frameTimes = [];
+  const operationTimes = [];
   let lastTimestamp;
   let startTimestamp;
   return new Promise((resolve, reject) => {
@@ -272,6 +349,7 @@ async function measureMode(stage, layer, nodes, scenario, mode, durationMs) {
       }
       const elapsed = timestamp - startTimestamp;
       const progress = elapsed / durationMs;
+      const operationStart = performance.now();
       if (mode === "pan") {
         stage.position({
           x: -1_500 + Math.sin(progress * Math.PI * 2) * 1_200,
@@ -303,11 +381,15 @@ async function measureMode(stage, layer, nodes, scenario, mode, durationMs) {
         }
       }
       stage.draw();
+      if (mode === "pan" || mode === "zoom") {
+        operationTimes.push(performance.now() - operationStart);
+      }
       if (elapsed >= durationMs) {
         resolve({
           fps: frameTimes.length / (durationMs / 1_000),
           p95Ms: percentile(frameTimes, 0.95),
           p99Ms: percentile(frameTimes, 0.99),
+          operationP95Ms: percentile(operationTimes, 0.95),
           frameTimes,
         });
         return;
@@ -329,6 +411,7 @@ async function measureFlowMode(
   durationMs,
 ) {
   const frameTimes = [];
+  const operationTimes = [];
   let lastTimestamp;
   let startTimestamp;
   return new Promise((resolve, reject) => {
@@ -340,6 +423,7 @@ async function measureFlowMode(
         }
         const elapsed = timestamp - startTimestamp;
         const progress = elapsed / durationMs;
+        const operationStart = performance.now();
         let pan = { x: 24, y: 24 };
         let zoom = 1;
         if (mode === "pan") {
@@ -377,9 +461,13 @@ async function measureFlowMode(
             ) ? "" : "none";
           }
         }
+        if (mode === "pan" || mode === "zoom") {
+          operationTimes.push(performance.now() - operationStart);
+        }
         if (elapsed >= durationMs) {
           resolve({
             fps: frameTimes.length / (durationMs / 1_000),
+            operationP95Ms: percentile(operationTimes, 0.95),
             frameTimes,
           });
           return;
@@ -487,7 +575,12 @@ async function runFlowScene(scenario, modeDurationMs) {
     widgetCount: scenario.widgets.length,
     modes: Object.fromEntries(Object.entries(modes).map(([name, result]) => [
       name,
-      { fps: result.fps, p95Ms: percentile(result.frameTimes, 0.95), p99Ms: percentile(result.frameTimes, 0.99) },
+      {
+        fps: result.fps,
+        p95Ms: percentile(result.frameTimes, 0.95),
+        p99Ms: percentile(result.frameTimes, 0.99),
+        ...(result.operationP95Ms === undefined ? {} : { operationP95Ms: result.operationP95Ms }),
+      },
     ])),
     fps: Math.min(...Object.values(modes).map((result) => result.fps)),
     frameTimeP95Ms: percentile(allFrames, 0.95),
@@ -536,7 +629,12 @@ async function runScene(scenario, modeDurationMs) {
     widgetCount: scenario.widgets.length,
     modes: Object.fromEntries(Object.entries(modes).map(([name, result]) => [
       name,
-      { fps: result.fps, p95Ms: percentile(result.frameTimes, 0.95), p99Ms: percentile(result.frameTimes, 0.99) },
+      {
+        fps: result.fps,
+        p95Ms: percentile(result.frameTimes, 0.95),
+        p99Ms: percentile(result.frameTimes, 0.99),
+        ...(result.operationP95Ms === undefined ? {} : { operationP95Ms: result.operationP95Ms }),
+      },
     ])),
     fps: Math.min(...Object.values(modes).map((mode) => mode.fps)),
     frameTimeP95Ms: percentile(allFrames, 0.95),
@@ -613,10 +711,10 @@ window.runAxureParityBenchmarks = async (options = {}) => {
     results.push(await runScene(scenario, modeDurationMs));
     console.log(`Completed ${scenario.name}`);
   }
-  const fullMix = scenarios.find((scenario) => scenario.name === "E - Full Axure-parity mix");
+  const fullMix = scenarios.find((scenario) => scenario.name === "I - Full Axure-parity mix");
   if (!fullMix) throw new Error("Full mix scene is missing from the benchmark suite.");
   console.log(`Starting ${soakDurationMs}ms heap soak`);
   const soak = await runSoak(soakDurationMs, fullMix.widgets.length, () => {});
   console.log("Completed heap soak");
-  return { scenes: results, soak };
+  return { scenes: results, soak, store: measureStoreWorkload() };
 };
