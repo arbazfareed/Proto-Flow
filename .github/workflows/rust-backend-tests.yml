@@ -4,7 +4,7 @@ on:
   pull_request:
     branches: [main]
   push:
-    branches: [main, feature/pf-t702-rust-backend-tests]
+    branches: [main, feature/pf-t702-rust-backend-tests, feature/pf-t707-security-audit]
 
 jobs:
   rust-tests:
