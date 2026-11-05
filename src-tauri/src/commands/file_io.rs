@@ -106,35 +106,18 @@ impl StagedProjectFile {
             return Err("The project path must include a file name.".into());
         }
 
-        #[cfg(unix)]
-        let existing_permissions = match fs::metadata(target) {
-            Ok(metadata) => Some(metadata.permissions()),
-            Err(error) if error.kind() == std::io::ErrorKind::NotFound => None,
-            Err(error) => {
-                return Err(format!(
-                    "Could not inspect the existing project file: {error}"
-                ));
-            }
-        };
-
         for _ in 0..10 {
             let temp_name = format!(".protoflow-{}.tmp", Uuid::new_v4());
             let temp_path = parent.join(temp_name);
-            match OpenOptions::new()
-                .write(true)
-                .create_new(true)
-                .open(&temp_path)
+            let mut options = OpenOptions::new();
+            options.write(true).create_new(true);
+            #[cfg(unix)]
             {
+                use std::os::unix::fs::OpenOptionsExt;
+                options.mode(0o600);
+            }
+            match options.open(&temp_path) {
                 Ok(mut file) => {
-                    #[cfg(unix)]
-                    if let Some(permissions) = existing_permissions.as_ref() {
-                        if let Err(error) = file.set_permissions(permissions.clone()) {
-                            let _ = fs::remove_file(&temp_path);
-                            return Err(format!(
-                                "Could not preserve project file permissions: {error}"
-                            ));
-                        }
-                    }
                     if let Err(error) = write_and_sync(&mut file, content) {
                         let _ = fs::remove_file(&temp_path);
                         return Err(format!("Could not write temporary project file: {error}"));
@@ -958,21 +941,42 @@ mod tests {
 
     #[cfg(unix)]
     #[test]
-    fn atomic_replacement_preserves_existing_file_permissions() {
+    fn atomic_replacement_uses_private_file_permissions() {
         use std::os::unix::fs::{PermissionsExt, symlink};
 
         let directory = tempfile::tempdir().unwrap();
         let target = directory.path().join("project.pflow");
         fs::write(&target, "old").unwrap();
-        fs::set_permissions(&target, fs::Permissions::from_mode(0o640)).unwrap();
+        fs::set_permissions(&target, fs::Permissions::from_mode(0o644)).unwrap();
 
         atomic_write_project(&target, "new").unwrap();
 
-        assert_eq!(
-            fs::metadata(&target).unwrap().permissions().mode() & 0o777,
-            0o640
-        );
+        let mode = fs::metadata(&target).unwrap().permissions().mode() & 0o777;
+        assert_eq!(mode & 0o600, 0o600);
+        assert_eq!(mode & 0o077, 0);
+    }
 
+    #[cfg(unix)]
+    #[test]
+    fn new_project_files_use_private_permissions() {
+        use std::os::unix::fs::PermissionsExt;
+
+        let directory = tempfile::tempdir().unwrap();
+        let target = directory.path().join("project.pflow");
+
+        atomic_write_project(&target, "new").unwrap();
+
+        let mode = fs::metadata(&target).unwrap().permissions().mode() & 0o777;
+        assert_eq!(mode & 0o600, 0o600);
+        assert_eq!(mode & 0o077, 0);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn rejects_symlink_loops_when_reading_projects() {
+        use std::os::unix::fs::symlink;
+
+        let directory = tempfile::tempdir().unwrap();
         let loop_a = directory.path().join("loop-a.pflow");
         let loop_b = directory.path().join("loop-b.pflow");
         symlink(&loop_b, &loop_a).unwrap();
