@@ -1,12 +1,11 @@
-name: Axure-parity performance
+name: Performance benchmarks
 
 on:
   pull_request:
     branches:
       - main
   push:
-    branches:
-      - main
+    branches: [main, feature/pf-t705-performance-benchmarks]
     paths:
       - "src/canvas/**"
       - "src/flow/**"
@@ -14,8 +13,8 @@ on:
       - "src/preview/**"
       - "src/project/**"
       - "scripts/axure-parity-benchmark.*"
-      - "scripts/axure-parity-performance-baseline.json"
       - "scripts/run-axure-parity-benchmark.mjs"
+      - "benchmarks/**"
       - "scripts/canvas-benchmark.*"
       - "scripts/canvas-performance-baseline.json"
       - "scripts/run-canvas-benchmark.mjs"
@@ -27,7 +26,10 @@ on:
 jobs:
   benchmark:
     runs-on: ubuntu-24.04
-    timeout-minutes: 15
+    timeout-minutes: 25
+    permissions:
+      contents: read
+      issues: write
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -36,12 +38,39 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npx playwright install --with-deps chromium
-      - run: npm run benchmark:axure-parity
+      - run: npm run benchmark:performance
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: axure-parity-performance-${{ github.run_id }}
+          name: performance-benchmarks-${{ github.run_id }}
           path: |
+            benchmarks/trends.json
             reports/PERF-AXURE-PARITY.md
             reports/axure-parity-latest.json
+            reports/bundle-map.html
           if-no-files-found: ignore
+      - uses: actions/github-script@v7
+        if: always() && github.event_name == 'pull_request' && hashFiles('reports/PERF-AXURE-PARITY.md') != ''
+        continue-on-error: true
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const fs = require('node:fs');
+            const marker = '<!-- pf-t705-performance -->';
+            const report = fs.readFileSync('reports/PERF-AXURE-PARITY.md', 'utf8');
+            const body = `${marker}\n## PF-T705 performance benchmark\n\n${report}`;
+            const { owner, repo } = context.repo;
+            const issue_number = context.issue.number;
+            const { data: comments } = await github.rest.issues.listComments({
+              owner, repo, issue_number, per_page: 100,
+            });
+            const previous = comments.find((comment) =>
+              comment.user?.type === 'Bot' && comment.body?.includes(marker),
+            );
+            if (previous) {
+              await github.rest.issues.updateComment({
+                owner, repo, comment_id: previous.id, body,
+              });
+            } else {
+              await github.rest.issues.createComment({ owner, repo, issue_number, body });
+            }

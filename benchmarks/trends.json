@@ -1,0 +1,26 @@
+{
+  "schemaVersion": 1,
+  "runs": [
+    {
+      "generatedAt": "2026-11-05T15:06:15.618Z",
+      "sceneFps": {
+        "A - Canvas medium (20 widgets)": 60.1,
+        "B - Canvas large (500 widgets)": 60.1,
+        "C - Canvas stress (1000 widgets)": 60.1,
+        "D - Dynamic panels": 60.1,
+        "E - Repeater virtualization": 60.1,
+        "F - Nested panels": 60.1,
+        "G - Expressions": 60.1,
+        "I - Full Axure-parity mix": 60.1,
+        "H - Flow diagram": 60.1
+      },
+      "bundleTotalBytes": 3737038,
+      "javascriptGzipBytes": 986152,
+      "heapGrowthMiB": 0.035243988037109375,
+      "startupColdMs": 1801.0217999999995,
+      "startupWarmMs": 551.8023999999996,
+      "failures": [],
+      "warnings": []
+    }
+  ]
+}

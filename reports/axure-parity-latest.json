@@ -1,214 +1,418 @@
 {
-  "generatedAt": "2026-10-25T08:30:19.660Z",
+  "generatedAt": "2026-11-05T15:06:15.618Z",
+  "browser": "Chromium 156.0.8078.4",
   "results": {
     "scenes": [
       {
-        "name": "A - Dynamic panels",
+        "name": "A - Canvas medium (20 widgets)",
+        "totalFeatureWidgets": 20,
+        "widgetCount": 20,
+        "modes": {
+          "idle": {
+            "fps": 60.1,
+            "p95Ms": 16.799999999999272,
+            "p99Ms": 16.800000000000182,
+            "operationP95Ms": 0
+          },
+          "pan": {
+            "fps": 60.1,
+            "p95Ms": 16.700000000000728,
+            "p99Ms": 16.80000000000109,
+            "operationP95Ms": 0.2999999523162842
+          },
+          "zoom": {
+            "fps": 60.1,
+            "p95Ms": 16.799999999999272,
+            "p99Ms": 16.799999999999272,
+            "operationP95Ms": 0.2999999523162842
+          },
+          "drag": {
+            "fps": 60.1,
+            "p95Ms": 16.700000000004366,
+            "p99Ms": 16.80000000000291,
+            "operationP95Ms": 0
+          }
+        },
+        "fps": 60.1,
+        "frameTimeP95Ms": 16.700000000004366,
+        "frameTimeP99Ms": 16.80000000000109
+      },
+      {
+        "name": "B - Canvas large (500 widgets)",
+        "totalFeatureWidgets": 500,
+        "widgetCount": 500,
+        "modes": {
+          "idle": {
+            "fps": 60.1,
+            "p95Ms": 16.799999999995634,
+            "p99Ms": 16.80000000000291,
+            "operationP95Ms": 0
+          },
+          "pan": {
+            "fps": 60.1,
+            "p95Ms": 16.700000000004366,
+            "p99Ms": 16.80000000000291,
+            "operationP95Ms": 1.899999976158142
+          },
+          "zoom": {
+            "fps": 60.1,
+            "p95Ms": 16.79999999998836,
+            "p99Ms": 16.80000000000291,
+            "operationP95Ms": 1
+          },
+          "drag": {
+            "fps": 60.1,
+            "p95Ms": 16.70000000001164,
+            "p99Ms": 16.80000000000291,
+            "operationP95Ms": 0
+          }
+        },
+        "fps": 60.1,
+        "frameTimeP95Ms": 16.70000000001164,
+        "frameTimeP99Ms": 16.80000000000291
+      },
+      {
+        "name": "C - Canvas stress (1000 widgets)",
+        "totalFeatureWidgets": 1000,
+        "widgetCount": 1000,
+        "modes": {
+          "idle": {
+            "fps": 60.1,
+            "p95Ms": 16.70000000001164,
+            "p99Ms": 16.80000000000291,
+            "operationP95Ms": 0
+          },
+          "pan": {
+            "fps": 60.1,
+            "p95Ms": 16.79999999998836,
+            "p99Ms": 16.80000000000291,
+            "operationP95Ms": 1.5
+          },
+          "zoom": {
+            "fps": 60.1,
+            "p95Ms": 16.70000000001164,
+            "p99Ms": 16.80000000000291,
+            "operationP95Ms": 1.2999999523162842
+          },
+          "drag": {
+            "fps": 60.1,
+            "p95Ms": 16.70000000001164,
+            "p99Ms": 16.80000000000291,
+            "operationP95Ms": 0
+          }
+        },
+        "fps": 60.1,
+        "frameTimeP95Ms": 16.70000000001164,
+        "frameTimeP99Ms": 16.80000000000291
+      },
+      {
+        "name": "D - Dynamic panels",
         "panelCount": 20,
         "totalFeatureWidgets": 1020,
-        "panelSwitchMs": 0.5449999988079071,
+        "panelSwitchMs": 0.2149999976158142,
         "widgetCount": 220,
         "modes": {
           "idle": {
-            "fps": 59,
-            "p95Ms": 16.800000000000182,
-            "p99Ms": 49.94399999999996
+            "fps": 60.1,
+            "p95Ms": 16.70000000001164,
+            "p99Ms": 16.80000000000291,
+            "operationP95Ms": 0
           },
           "pan": {
-            "fps": 61,
-            "p95Ms": 16.700000000000273,
-            "p99Ms": 16.800000000000182
+            "fps": 60.1,
+            "p95Ms": 16.79999999998836,
+            "p99Ms": 16.800000000017462,
+            "operationP95Ms": 0.40000009536743164
           },
           "zoom": {
-            "fps": 61,
-            "p95Ms": 16.800000000000182,
-            "p99Ms": 16.800000000000182
+            "fps": 60.1,
+            "p95Ms": 16.70000000001164,
+            "p99Ms": 16.800000000017462,
+            "operationP95Ms": 0.5
           },
           "drag": {
-            "fps": 60,
-            "p95Ms": 16.799999999999272,
-            "p99Ms": 16.800000000000182
+            "fps": 60.1,
+            "p95Ms": 16.70000000001164,
+            "p99Ms": 16.800000000017462,
+            "operationP95Ms": 0
           }
         },
-        "fps": 59,
-        "frameTimeP95Ms": 16.800000000000182,
-        "frameTimeP99Ms": 16.800000000000182
+        "fps": 60.1,
+        "frameTimeP95Ms": 16.70000000001164,
+        "frameTimeP99Ms": 16.800000000017462
       },
       {
-        "name": "B - Repeater virtualization",
+        "name": "E - Repeater virtualization",
         "repeaterRowCount": 500,
         "renderedRepeaterRows": 14,
-        "repeaterRenderMs": 0.09999990463256836,
+        "repeaterRenderMs": 0.10000002384185791,
         "totalFeatureWidgets": 2500,
         "widgetCount": 70,
         "modes": {
           "idle": {
-            "fps": 60,
-            "p95Ms": 16.700000000000728,
-            "p99Ms": 16.800000000000182
+            "fps": 60.1,
+            "p95Ms": 16.70000000001164,
+            "p99Ms": 16.800000000017462,
+            "operationP95Ms": 0
           },
           "pan": {
-            "fps": 60,
-            "p95Ms": 16.800000000000182,
-            "p99Ms": 16.800000000000182
+            "fps": 60.1,
+            "p95Ms": 16.70000000001164,
+            "p99Ms": 16.79999999998836,
+            "operationP95Ms": 0.2999999523162842
           },
           "zoom": {
-            "fps": 60,
-            "p95Ms": 16.700000000000728,
-            "p99Ms": 16.80000000000109
+            "fps": 60.1,
+            "p95Ms": 16.79999999998836,
+            "p99Ms": 16.800000000017462,
+            "operationP95Ms": 0.20000004768371582
           },
           "drag": {
-            "fps": 60,
-            "p95Ms": 16.700000000000728,
-            "p99Ms": 16.799999999999272
+            "fps": 60.1,
+            "p95Ms": 16.79999999998836,
+            "p99Ms": 16.800000000017462,
+            "operationP95Ms": 0
           }
         },
-        "fps": 60,
-        "frameTimeP95Ms": 16.700000000000728,
-        "frameTimeP99Ms": 16.800000000000182
+        "fps": 60.1,
+        "frameTimeP95Ms": 16.70000000001164,
+        "frameTimeP99Ms": 16.800000000017462
       },
       {
-        "name": "C - Nested panels",
+        "name": "F - Nested panels",
         "panelCount": 30,
         "totalFeatureWidgets": 310,
         "widgetCount": 310,
         "modes": {
           "idle": {
-            "fps": 60,
-            "p95Ms": 16.700000000000728,
-            "p99Ms": 16.799999999999272
+            "fps": 60.1,
+            "p95Ms": 16.70000000001164,
+            "p99Ms": 16.800000000017462,
+            "operationP95Ms": 0
           },
           "pan": {
-            "fps": 60,
-            "p95Ms": 16.799999999999272,
-            "p99Ms": 16.80000000000109
+            "fps": 60.1,
+            "p95Ms": 16.70000000001164,
+            "p99Ms": 16.800000000017462,
+            "operationP95Ms": 0.5999999046325684
           },
           "zoom": {
-            "fps": 61,
-            "p95Ms": 16.700000000000728,
-            "p99Ms": 16.80000000000109
+            "fps": 60.1,
+            "p95Ms": 16.70000000001164,
+            "p99Ms": 16.800000000017462,
+            "operationP95Ms": 0.8999999761581421
           },
           "drag": {
-            "fps": 61,
-            "p95Ms": 16.700000000000728,
-            "p99Ms": 16.80000000000109
+            "fps": 60.1,
+            "p95Ms": 16.79999999998836,
+            "p99Ms": 16.800000000017462,
+            "operationP95Ms": 0
           }
         },
-        "fps": 60,
-        "frameTimeP95Ms": 16.700000000000728,
-        "frameTimeP99Ms": 16.80000000000109
+        "fps": 60.1,
+        "frameTimeP95Ms": 16.70000000001164,
+        "frameTimeP99Ms": 16.800000000017462
       },
       {
-        "name": "D - Expressions",
+        "name": "G - Expressions",
         "expressionCount": 200,
-        "expressionEvaluationMs": 0.6120000004768371,
-        "maxExpressionMs": 0.020999999046325685,
+        "expressionEvaluationMs": 0.38500000000000006,
+        "maxExpressionMs": 0.005,
         "totalFeatureWidgets": 200,
         "widgetCount": 200,
         "modes": {
           "idle": {
-            "fps": 60,
-            "p95Ms": 16.700000000000728,
-            "p99Ms": 16.80000000000109
+            "fps": 60.1,
+            "p95Ms": 16.70000000001164,
+            "p99Ms": 16.800000000017462,
+            "operationP95Ms": 0
           },
           "pan": {
-            "fps": 61,
-            "p95Ms": 16.799999999999272,
-            "p99Ms": 16.80000000000109
+            "fps": 60.1,
+            "p95Ms": 16.70000000001164,
+            "p99Ms": 16.800000000017462,
+            "operationP95Ms": 0.40000009536743164
           },
           "zoom": {
-            "fps": 61,
-            "p95Ms": 16.700000000000728,
-            "p99Ms": 16.700000000000728
+            "fps": 60.1,
+            "p95Ms": 16.79999999998836,
+            "p99Ms": 16.79999999998836,
+            "operationP95Ms": 0.40000009536743164
           },
           "drag": {
-            "fps": 60,
-            "p95Ms": 16.799999999999272,
-            "p99Ms": 16.80000000000291
+            "fps": 60.1,
+            "p95Ms": 16.70000000001164,
+            "p99Ms": 16.79999999998836,
+            "operationP95Ms": 0
           }
         },
-        "fps": 60,
-        "frameTimeP95Ms": 16.799999999999272,
-        "frameTimeP99Ms": 16.80000000000291
+        "fps": 60.1,
+        "frameTimeP95Ms": 16.70000000001164,
+        "frameTimeP99Ms": 16.800000000017462
       },
       {
-        "name": "E - Full Axure-parity mix",
+        "name": "I - Full Axure-parity mix",
         "panelCount": 10,
         "repeaterRowCount": 2500,
         "renderedRepeaterRows": 70,
         "repeaterRenderMs": 0.10000002384185791,
         "expressionCount": 100,
-        "expressionEvaluationMs": 0.6120000004768371,
-        "maxExpressionMs": 0.020999999046325685,
+        "expressionEvaluationMs": 0.38500000000000006,
+        "maxExpressionMs": 0.005,
         "totalFeatureWidgets": 12710,
         "annotationCount": 100,
         "widgetCount": 510,
         "modes": {
           "idle": {
-            "fps": 61,
-            "p95Ms": 16.799999999999272,
-            "p99Ms": 16.80000000000291
+            "fps": 60.1,
+            "p95Ms": 16.79999999998836,
+            "p99Ms": 16.800000000046566,
+            "operationP95Ms": 0
           },
           "pan": {
-            "fps": 61,
-            "p95Ms": 16.700000000000728,
-            "p99Ms": 16.799999999999272
+            "fps": 60.1,
+            "p95Ms": 16.70000000001164,
+            "p99Ms": 16.79999999998836,
+            "operationP95Ms": 0.8000000715255737
           },
           "zoom": {
-            "fps": 61,
-            "p95Ms": 16.700000000000728,
-            "p99Ms": 16.799999999999272
+            "fps": 60.1,
+            "p95Ms": 16.70000000001164,
+            "p99Ms": 16.79999999998836,
+            "operationP95Ms": 1.2999999523162842
           },
           "drag": {
-            "fps": 60,
-            "p95Ms": 16.700000000000728,
-            "p99Ms": 16.799999999999272
+            "fps": 60.1,
+            "p95Ms": 16.70000000001164,
+            "p99Ms": 16.79999999998836,
+            "operationP95Ms": 0
           }
         },
-        "fps": 60,
-        "frameTimeP95Ms": 16.700000000000728,
-        "frameTimeP99Ms": 16.799999999999272
+        "fps": 60.1,
+        "frameTimeP95Ms": 16.70000000001164,
+        "frameTimeP99Ms": 16.79999999998836
       },
       {
-        "name": "F - Flow diagram",
+        "name": "H - Flow diagram",
         "screenCount": 100,
         "transitionCount": 300,
-        "flowLayoutMs": 148,
+        "flowLayoutMs": 85,
         "totalFeatureWidgets": 100,
         "widgetCount": 100,
         "modes": {
           "idle": {
-            "fps": 58,
-            "p95Ms": 16.799999999999272,
-            "p99Ms": 50
+            "fps": 60.1,
+            "p95Ms": 16.79999999998836,
+            "p99Ms": 16.79999999998836,
+            "operationP95Ms": 0
           },
           "pan": {
-            "fps": 60,
-            "p95Ms": 16.700000000000728,
-            "p99Ms": 16.799999999999272
+            "fps": 60.1,
+            "p95Ms": 16.79999999998836,
+            "p99Ms": 16.800000000046566,
+            "operationP95Ms": 0.6000000238418579
           },
           "zoom": {
-            "fps": 61,
-            "p95Ms": 16.799999999999272,
-            "p99Ms": 16.799999999999272
+            "fps": 60.1,
+            "p95Ms": 16.79999999998836,
+            "p99Ms": 16.800000000046566,
+            "operationP95Ms": 0.5
           },
           "drag": {
-            "fps": 60,
-            "p95Ms": 16.80000000000291,
-            "p99Ms": 16.80000000000291
+            "fps": 60.1,
+            "p95Ms": 16.79999999998836,
+            "p99Ms": 16.800000000046566,
+            "operationP95Ms": 0
           }
         },
-        "fps": 58,
-        "frameTimeP95Ms": 16.799999999999272,
-        "frameTimeP99Ms": 16.80000000000291
+        "fps": 60.1,
+        "frameTimeP95Ms": 16.79999999998836,
+        "frameTimeP99Ms": 16.800000000046566
       }
     ],
     "soak": {
       "durationMs": 300000,
-      "startBytes": 7977036,
-      "midpointBytes": 8042368,
-      "endBytes": 8012560,
-      "growthBytes": 35524
+      "startBytes": 18939027,
+      "midpointBytes": 18977483,
+      "endBytes": 18975983,
+      "growthBytes": 36956
+    },
+    "store": {
+      "add100Ms": 8.900000095367432,
+      "undoRedo50Ms": 5.399999976158142,
+      "selection500Ms": 0.3999999761581421
+    },
+    "startup": {
+      "coldMs": 1801.0217999999995,
+      "warmMs": 551.8023999999996
+    },
+    "bundle": {
+      "totalBytes": 3737038,
+      "javascriptGzipBytes": 986152,
+      "assets": [
+        {
+          "name": "CanvasStage-D9MsnROw.js",
+          "bytes": 71820,
+          "javascriptGzipBytes": 22499
+        },
+        {
+          "name": "FlowDiagram-CKPLfBuu.js",
+          "bytes": 64641,
+          "javascriptGzipBytes": 21776
+        },
+        {
+          "name": "heic2any-DnLRQnP7.js",
+          "bytes": 1352189,
+          "javascriptGzipBytes": 340501
+        },
+        {
+          "name": "index-CrT21U5m.css",
+          "bytes": 188388,
+          "javascriptGzipBytes": 0
+        },
+        {
+          "name": "index-DHNtYnqh.js",
+          "bytes": 1960102,
+          "javascriptGzipBytes": 571607
+        },
+        {
+          "name": "rolldown-runtime-Dd_uD5pT.js",
+          "bytes": 1106,
+          "javascriptGzipBytes": 627
+        },
+        {
+          "name": "UTIF-n3vjOISw.js",
+          "bytes": 83546,
+          "javascriptGzipBytes": 29142
+        },
+        {
+          "name": "index.html",
+          "bytes": 636,
+          "javascriptGzipBytes": 0
+        },
+        {
+          "name": "privacy.html",
+          "bytes": 7361,
+          "javascriptGzipBytes": 0
+        },
+        {
+          "name": "tauri.svg",
+          "bytes": 2605,
+          "javascriptGzipBytes": 0
+        },
+        {
+          "name": "terms.html",
+          "bytes": 3147,
+          "javascriptGzipBytes": 0
+        },
+        {
+          "name": "vite.svg",
+          "bytes": 1497,
+          "javascriptGzipBytes": 0
+        }
+      ]
     }
-  }
+  },
+  "failures": [],
+  "warnings": []
 }

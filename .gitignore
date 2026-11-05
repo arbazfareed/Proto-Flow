@@ -14,6 +14,7 @@ coverage
 *.local
 test-results
 playwright-report
+reports/bundle-map.html
 
 # Editor directories and files
 .vscode/*
