@@ -115,6 +115,7 @@ import { InteractionBuilder } from "./InteractionBuilder";
 import { WidgetNotesManager, WidgetNotesPanel } from "./WidgetNotes";
 import { trackEvent } from "../diagnostics/observability";
 import { emitTutorialAction } from "../tutorial/events";
+import { HelpLink } from "../help/HelpLink";
 
 const CanvasStage = lazy(() =>
   import("../canvas/CanvasStage").then((module) => ({
@@ -545,6 +546,7 @@ interface LeftSidebarProps {
   onToggle: () => void;
   onOpenPalette: () => void;
   onUpdates: () => void;
+  onOpenHelp: () => void;
   onOpenParityDocumentation: () => void;
   onOpenTutorial: () => void;
   activeTool: ShapeTool | null;
@@ -558,6 +560,7 @@ export function LeftSidebar({
   onToggle,
   onOpenPalette,
   onUpdates,
+  onOpenHelp,
   onOpenParityDocumentation,
   onOpenTutorial,
   activeTool,
@@ -575,6 +578,7 @@ export function LeftSidebar({
     <aside className="sidebar left-sidebar" data-onboarding-target="sidebar">
       <div className="sidebar-heading">
         <span>WORKSPACE</span>
+        <HelpLink article="workspace-tour" label="workspace tour" />
         <button className="icon-button small-icon" aria-label="Close workspace panel" onClick={onToggle}>
           <PanelLeftClose size={15} />
         </button>
@@ -622,7 +626,8 @@ export function LeftSidebar({
       ) : <VariablesPanel />}
       <div className="sidebar-footer">
         <button className="nav-item" onClick={onOpenPalette}><Keyboard size={16} /><span>Keyboard shortcuts</span></button>
-        <button className="nav-item" onClick={onUpdates}><CircleHelp size={16} /><span>Help & updates</span></button>
+        <button className="nav-item" onClick={onOpenHelp}><CircleHelp size={16} /><span>Help &amp; docs</span><kbd>F1</kbd></button>
+        <button className="nav-item" onClick={onUpdates}><Bell size={16} /><span>Check for updates</span></button>
         <button className="nav-item" onClick={onOpenTutorial}><CircleHelp size={16} /><span>Open tutorial project</span></button>
         <button className="nav-item" onClick={onOpenParityDocumentation}><FileText size={16} /><span>Parity & compatibility</span></button>
         <div className="sidebar-version"><span className="version-pulse" /> Phase 1 · Local workspace</div>
@@ -817,6 +822,7 @@ export function CanvasArea({
           >
             <StickyNote size={15} />
           </button>
+          <HelpLink article="workspace-tour" label="canvas workspace" />
           {!rightPanelOpen && <button className="icon-button small-icon" aria-label="Show inspector panel" onClick={onToggleRight}><PanelRightClose size={15} /></button>}
           <div className="canvas-view-menu-anchor">
             <button
@@ -2274,7 +2280,7 @@ function DynamicPanelSection({ screen, widget }: { screen: Project["screens"][nu
 
   return (
     <section className="inspector-section dynamic-panel-section" aria-label="Dynamic panel states">
-      <div className="section-label"><span>STATES</span></div>
+      <div className="section-label"><span>STATES</span><HelpLink article="dynamic-panels" label="dynamic panels" /></div>
       {states.map((state, index) => (
         <div className={`dynamic-panel-state${state.id === activeState?.id ? " is-active" : ""}`} key={state.id}>
           <button
@@ -2359,7 +2365,7 @@ function RepeaterSection({ screen, widget }: { screen: Project["screens"][number
 
   return (
     <section className="inspector-section repeater-section" aria-label="Repeater data">
-      <div className="section-label"><span>REPEATER</span></div>
+      <div className="section-label"><span>REPEATER</span><HelpLink article="repeaters" label="repeaters" /></div>
       <label className="field-label" htmlFor="repeater-layout">Row layout</label>
       <select
         id="repeater-layout"
@@ -2877,6 +2883,7 @@ export function RightInspector({ onToggle, onUpdates, onRename, tutorialProjectI
       <section className="right-inspector-panel" aria-label="Inspector">
       <div className="inspector-top">
         <div><span className="inspector-overline">INSPECTOR</span><h2>{selectedWidget ? selectedLabel : selectedWidgets.length > 1 ? `${selectedWidgets.length} items selected` : "Select an element"}</h2></div>
+        <HelpLink article="geometry-inspector" label="inspector" />
       </div>
       <div className="inspector-body">
         {selectedWidget ? (

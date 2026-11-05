@@ -19,6 +19,7 @@ import {
   type WidgetOverride,
 } from "../project/schema";
 import { useStore } from "../store";
+import { HelpLink } from "../help/HelpLink";
 
 function saveScreenUpdate(screenId: string, update: (screen: Screen) => Screen): void {
   const current = useStore.getState();
@@ -295,6 +296,7 @@ export function BreakpointToolbar({ screen }: { screen?: Screen } = {}) {
           >
             <Plus size={13} />
           </button>
+          <HelpLink article="breakpoints-overrides" label="responsive breakpoints" />
         </div>
       )}
       {activeScreen && managerOpen && (

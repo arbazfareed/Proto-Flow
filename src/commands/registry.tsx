@@ -2,6 +2,7 @@ import type { ReactNode } from "react";
 import {
   ArrowDownToLine,
   Bell,
+  CircleHelp,
   Eye,
   FilePlus2,
   FileText,
@@ -68,6 +69,7 @@ export interface CoreCommandActions {
   openPlugins: () => void;
   openVersionHistory: () => void;
   createCheckpoint: () => void;
+  openHelp: () => void;
 }
 
 export function createCoreCommands(actions: CoreCommandActions): AppCommand[] {
@@ -156,6 +158,14 @@ export function createCoreCommands(actions: CoreCommandActions): AppCommand[] {
       keywords: ["version", "upgrade"],
       icon: <Bell />,
       run: actions.checkForUpdates,
+    },
+    {
+      id: "help.open",
+      label: "Open Help & Docs",
+      keywords: ["documentation", "guides", "articles", "manual", "search"],
+      shortcut: "F1",
+      icon: <CircleHelp />,
+      run: actions.openHelp,
     },
     {
       id: "app.plugins",

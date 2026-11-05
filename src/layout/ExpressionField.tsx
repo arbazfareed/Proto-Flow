@@ -2,6 +2,7 @@ import { useId, useRef } from "react";
 import type { ExpressionContext } from "../project/expressions";
 import { evaluateExpression, EXPRESSION_FUNCTIONS } from "../project/expressions";
 import type { Project } from "../project/schema";
+import { HelpLink } from "../help/HelpLink";
 
 export function ExpressionField({
   label,
@@ -86,7 +87,10 @@ export function ExpressionField({
 
   return (
     <div className="expression-field">
-      <label className="field-label" htmlFor={`${listId}-input`}>{label}</label>
+      <div className="expression-field-label">
+        <label className="field-label" htmlFor={`${listId}-input`}>{label}</label>
+        <HelpLink article="rich-expressions" label="rich expressions" />
+      </div>
       {multiline ? (
         <textarea
           ref={inputRef as React.RefObject<HTMLTextAreaElement>}

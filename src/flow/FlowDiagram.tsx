@@ -11,6 +11,7 @@ import {
   ZoomOut,
 } from "lucide-react";
 import { useStore } from "../store";
+import { HelpLink } from "../help/HelpLink";
 import { collectWidgetsDeep } from "../project/dynamicPanels";
 import {
   autoLayoutScreens,
@@ -301,6 +302,7 @@ export function FlowDiagram({ onNotify, onOpenScreen }: FlowDiagramProps) {
           <strong>Screen flow</strong>
           <span>{project.screens.length} screens · {edges.length} navigation links</span>
         </div>
+        <HelpLink article="flow-diagrams" label="screen flow diagrams" />
         <div className="flow-toolbar-actions">
           <button className="button button-secondary flow-tool-button" onClick={autoLayout} title="Arrange screens automatically">
             <LayoutGrid size={14} /> Auto layout

@@ -11,6 +11,7 @@ export interface ShortcutActions {
   toggleGrid: () => void;
   toggleSnap: () => void;
   openPreview: () => void;
+  openHelp: () => void;
 }
 
 export interface ShortcutEvent {
@@ -52,6 +53,12 @@ export function handleGlobalShortcut(
 
   if (key === "escape" && actions.paletteOpen) {
     actions.closePalette();
+    return;
+  }
+
+  if (key === "f1") {
+    event.preventDefault();
+    actions.openHelp();
     return;
   }
 

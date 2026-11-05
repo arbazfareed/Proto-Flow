@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Bold, Download, Italic, List, Plus, Search, StickyNote, X } from "lucide-react";
 import { useStore } from "../store";
+import { HelpLink } from "../help/HelpLink";
 import type { Project, Widget, WidgetNotes as Notes } from "../project/schema";
 import {
   exportWidgetNotesCsv,
@@ -284,6 +285,7 @@ export function WidgetNotesManager({
             <h2 id="notes-manager-title">Widget notes</h2>
             <p>{allRecords.length} annotated widget{allRecords.length === 1 ? "" : "s"}</p>
           </div>
+          <HelpLink article="widget-annotations" label="widget annotations" />
           <button className="icon-button" aria-label="Close widget notes" onClick={onClose}><X size={17} /></button>
         </header>
         <div className="notes-manager-tools">
