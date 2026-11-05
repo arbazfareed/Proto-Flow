@@ -23,6 +23,7 @@ import { useWalletStore } from "../wallet/store";
 import { collectWidgetsDeep, getPanelStates, PANEL_TRANSITIONS } from "../project/dynamicPanels";
 import { ExpressionField } from "./ExpressionField";
 import type { ScreenInputMode } from "../project/inputModes";
+import { HelpLink } from "../help/HelpLink";
 
 const EVENTS = [
   ["onClick", "Click"],
@@ -393,6 +394,7 @@ export function InteractionBuilder({
           <strong>TRIGGERS</strong>
           <p>Rules for {widget.name ?? widget.type}</p>
         </div>
+        <HelpLink article="rule-builder" label="interaction rules" />
         <div className="interaction-builder-actions">
           <button type="button" className="interaction-add-button" onClick={() => setAiOpen((open) => !open)}>
             <Sparkles size={13} /> Generate with AI

@@ -46,6 +46,7 @@ describe("command registry", () => {
       openPlugins: vi.fn(),
       openVersionHistory: vi.fn(),
       createCheckpoint: vi.fn(),
+      openHelp: vi.fn(),
     };
     const commands = new Map(
       createCoreCommands(actions).map((command) => [command.id, command]),
@@ -65,6 +66,7 @@ describe("command registry", () => {
       "canvas.toggle-snap",
       "app.check-updates",
       "app.plugins",
+      "help.open",
     ]) {
       await commands.get(id)?.run();
     }
@@ -80,5 +82,6 @@ describe("command registry", () => {
     expect(actions.openPlugins).toHaveBeenCalledOnce();
     expect(actions.openVersionHistory).toHaveBeenCalledOnce();
     expect(actions.createCheckpoint).toHaveBeenCalledOnce();
+    expect(actions.openHelp).toHaveBeenCalledOnce();
   });
 });

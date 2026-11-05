@@ -12,6 +12,7 @@ import {
 } from "lucide-react";
 import { DEVICE_CATEGORIES, DEVICE_PRESETS, findDevicePreset, toScreenDevice } from "./catalog";
 import type { DeviceCategory, DevicePreset, ScreenDevice } from "./types";
+import { HelpLink } from "../help/HelpLink";
 
 const CATEGORY_LABELS: Record<DeviceCategory, string> = {
   phone: "Phones",
@@ -194,6 +195,7 @@ export function DevicePicker({
             <span className="inspector-overline">{mode === "create" ? "NEW SCREEN" : "SCREEN SETTINGS"}</span>
             <h2 id="screen-picker-title">{mode === "create" ? "Choose a device" : "Change device"}</h2>
           </div>
+          <HelpLink article="device-frames" label="device frames" />
           <button className="icon-button small-icon" aria-label="Close device picker" onClick={onClose}>
             <X size={15} />
           </button>

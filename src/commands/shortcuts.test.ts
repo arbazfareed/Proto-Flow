@@ -19,6 +19,7 @@ function createActions(): ShortcutActions {
     toggleGrid: vi.fn(),
     toggleSnap: vi.fn(),
     openPreview: vi.fn(),
+    openHelp: vi.fn(),
   };
 }
 
@@ -57,6 +58,17 @@ describe("global keyboard shortcuts", () => {
 
     expect(event.preventDefault).toHaveBeenCalledOnce();
     expect(actions.openPreview).toHaveBeenCalledOnce();
+  });
+
+  it("opens help with F1, including while editing text", () => {
+    const actions = createActions();
+    const target = Object.assign(new EventTarget(), { tagName: "INPUT" });
+    const event = createEvent("F1", { ctrlKey: false, target });
+
+    handleGlobalShortcut(event, actions);
+
+    expect(event.preventDefault).toHaveBeenCalledOnce();
+    expect(actions.openHelp).toHaveBeenCalledOnce();
   });
 
   it("routes save, undo and redo shortcuts", () => {

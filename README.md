@@ -23,6 +23,10 @@ npm run build
 npm test
 ```
 
+## In-app help
+
+Press **F1** or choose **Help & docs** in the workspace sidebar to search the offline help library. Guides are Markdown files in `docs/help/`, bundled with the app at build time; contextual help buttons open the related article. Article feedback stays on the current device. Deep links use `protoflow://docs/{slug}`.
+
 PF-T513 Axure-style compatibility evidence and the three reproducible workflow protocols are documented in [AXURE-PARITY.md](./AXURE-PARITY.md) and [docs/axure-parity-workflows.md](./docs/axure-parity-workflows.md). Run the focused regression suite with `npm run test:axure-parity`.
 
 Local Rust build caches are kept outside the checkout in a sibling `ProtoFlow-build` directory. See [the cache relocation record](./reports/BUILD-CACHE-RELOCATION.md) for what was moved and the disk-space limitation.
