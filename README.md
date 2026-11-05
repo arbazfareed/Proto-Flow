@@ -24,9 +24,14 @@ npm test
 npm run test:ci
 npm run test:components
 npm run test:components:ci
+npm run test:e2e:browser
+npm run build:e2e:desktop
+npm run test:e2e:desktop
 ```
 
 The component suite uses React Testing Library, jsdom, and shared Tauri/MSW setup. Its coverage gate applies to the selected, behavior-tested UI modules in `vite.components.config.ts`; component tests are excluded from the default non-DOM Vitest suite.
+
+PF-T704 E2E coverage runs browser journeys with Playwright and Windows desktop smoke journeys with WebdriverIO/Tauri WebDriver. Browser tests use isolated contexts and stub cloud requests; desktop tests use a unique temporary WebView2 data directory. Run `npm run test:e2e` on Windows after installing the Node, Rust, MSVC, and WebView2 prerequisites.
 
 ## In-app help
 
