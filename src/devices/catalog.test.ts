@@ -70,6 +70,10 @@ describe("device preset catalog", () => {
     });
   });
 
+  it("returns no match for an unknown device preset", () => {
+    expect(findDevicePreset("not-a-device")).toBeUndefined();
+  });
+
   it("keeps every preset valid at all documented display scales and orientations", () => {
     for (const preset of DEVICE_PRESETS) {
       for (const displayScale of [1, 1.25, 1.5, 2]) {

@@ -1,14 +1,21 @@
 import { describe, expect, it } from "vitest";
 import {
+  collectRepeaterTemplateWidgets,
   MAX_REPEATER_ROWS,
+  getRepeaterBoundWidgetIds,
   getRepeaterDataset,
+  getRepeaterTemplate,
   interpolateItem,
   isRepeaterItemVisible,
   parseRepeaterCsv,
   parseRepeaterDataset,
   repeaterDataBytes,
   repeaterDatasetToCsv,
+  mergeActiveRepeaterWidgets,
+  updateRepeater,
+  withRepeaterTemplate,
 } from "./repeaters";
+import { getPanelStates, withPanelStates } from "./dynamicPanels";
 import { createEmptyProject, parseProject, type Widget } from "./schema";
 
 function widget(type: string, props: Record<string, unknown>): Widget {
@@ -87,5 +94,91 @@ describe("repeater data helpers", () => {
         }],
       }],
     })).toThrow(/at most 1,000 record objects/i);
+  });
+
+  it("filters malformed datasets and validates every row and primitive field", () => {
+    const repeater = widget("repeater", { dataset: [{ value: 1 }, null, [], "bad"] });
+    expect(getRepeaterDataset(repeater)).toEqual([{ value: 1 }]);
+    expect(getRepeaterTemplate(widget("repeater", { rowTemplate: [] }))).toEqual([]);
+    expect(() => parseRepeaterDataset([null])).toThrow(/row 1 must be an object/i);
+    expect(() => parseRepeaterDataset([{ value: {} }])).toThrow(/must be text/i);
+    expect(() => parseRepeaterDataset([{ value: Number.POSITIVE_INFINITY }])).toThrow(/must be finite/i);
+    expect(() => parseRepeaterDataset([{ value: 1 }])).not.toThrow();
+  });
+
+  it("merges edited repeater rows in local coordinates and updates nested repeaters", () => {
+    const repeater = widget("repeater", { rowTemplate: { widgets: [] } });
+    const child = widget("text", {});
+    child.groupId = repeater.id;
+    const configured = withRepeaterTemplate(repeater, [child]);
+    const addition = { ...widget("button", {}), groupId: repeater.id, x: 50, y: 80 };
+    const movedChild = { ...child, x: 30, y: 45 };
+    const merged = mergeActiveRepeaterWidgets(
+      [configured],
+      [movedChild, addition],
+      repeater.id,
+    );
+
+    expect(merged[0].props.rowTemplate).toEqual({
+      widgets: [
+        expect.objectContaining({ id: child.id, x: 20, y: 25 }),
+        expect.objectContaining({ id: addition.id, x: 40, y: 60 }),
+      ],
+    });
+    const rootWidgets = [configured];
+    expect(mergeActiveRepeaterWidgets(rootWidgets, [child], null)).toBe(rootWidgets);
+    const renamed = updateRepeater(merged, repeater.id, (item) => ({
+      ...item,
+      props: { ...item.props, label: "Updated" },
+    }));
+    expect(renamed[0].props.label).toBe("Updated");
+    expect(updateRepeater(merged, crypto.randomUUID(), (item) => item)).toEqual(merged);
+  });
+
+  it("checks data binding IDs and collects widgets nested in panel and repeater states", () => {
+    const bound = widget("text", {});
+    const panelChild = widget("button", {});
+    const state = { id: crypto.randomUUID(), name: "Open", widgets: [panelChild] };
+    const panel = withPanelStates(widget("dynamic-panel", {}), [state], state.id);
+    const nestedRepeater = withRepeaterTemplate(widget("repeater", {}), [bound]);
+    const repeater = withRepeaterTemplate(widget("repeater", {
+      itemBinding: { title: bound.id, ignored: 42, nested: null },
+    }), [panel, nestedRepeater]);
+
+    expect(getRepeaterBoundWidgetIds(repeater)).toEqual([bound.id]);
+    expect(getRepeaterBoundWidgetIds(widget("repeater", { itemBinding: [] }))).toEqual([]);
+    expect(collectRepeaterTemplateWidgets(repeater).map((item) => item.id))
+      .toEqual([panel.id, panelChild.id, nestedRepeater.id, bound.id]);
+    expect(getPanelStates(panel)[0].widgets).toContainEqual(panelChild);
+  });
+
+  it("covers visibility rules for malformed, typed, and fallback operators", () => {
+    expect(isRepeaterItemVisible(widget("text", {}), {})).toBe(true);
+    expect(isRepeaterItemVisible(widget("text", { visibleWhen: [] }), {})).toBe(true);
+    expect(isRepeaterItemVisible(widget("text", {
+      visibleWhen: { field: 1, operator: "equals" },
+    }), {})).toBe(true);
+    expect(isRepeaterItemVisible(widget("text", {
+      visibleWhen: { field: "status", operator: "notEquals", value: "closed" },
+    }), { status: "open" })).toBe(true);
+    expect(isRepeaterItemVisible(widget("text", {
+      visibleWhen: { field: "score", operator: "lessThan", value: 4 },
+    }), { score: 2 })).toBe(true);
+    expect(isRepeaterItemVisible(widget("text", {
+      visibleWhen: { field: "score", operator: "greaterThan", value: 4 },
+    }), { score: "5" })).toBe(false);
+    expect(isRepeaterItemVisible(widget("text", {
+      visibleWhen: { field: "score", operator: "other", value: 4 },
+    }), { score: 4 })).toBe(true);
+  });
+
+  it("handles empty CSV, UTF-8 BOM, escaped quotes, blank rows, and invalid headers", () => {
+    expect(parseRepeaterCsv("")).toEqual([]);
+    expect(parseRepeaterCsv('\uFEFFname,quote\nAda,"said ""hello"""\n,\n'))
+      .toEqual([{ name: "Ada", quote: 'said "hello"' }]);
+    expect(() => parseRepeaterCsv("name,name\nAda,Grace")).toThrow(/non-empty and unique/i);
+    expect(() => parseRepeaterCsv("name,\nAda,Grace")).toThrow(/non-empty and unique/i);
+    expect(repeaterDatasetToCsv([])).toBe("");
+    expect(repeaterDatasetToCsv([{ value: 'a"b' }])).toBe('value\r\n"a""b"');
   });
 });

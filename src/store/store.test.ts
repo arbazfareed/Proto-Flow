@@ -11,6 +11,11 @@ function resetStore(): void {
     lastSavedAt: null,
     activeScreenId: null,
     activeBreakpointId: null,
+    activePanelEdit: null,
+    activeRepeaterEdit: null,
+    hoveredWidgetId: null,
+    hoveredCanvasWidgetId: null,
+    hoveredLayerWidgetId: null,
     past: [],
     future: [],
     zoom: 1,
@@ -90,6 +95,17 @@ describe("composed Zustand store", () => {
     expect(useStore.getState().past).toHaveLength(HISTORY_LIMIT);
   });
 
+  it("leaves empty history unchanged and clears both history stacks", () => {
+    const store = useStore.getState();
+    expect(store.undo()).toBeUndefined();
+    expect(store.redo()).toBeUndefined();
+    store.pushHistory(createEmptyProject("Before clear"));
+    store.undo();
+    expect(useStore.getState().future).toHaveLength(1);
+    useStore.getState().clearHistory();
+    expect(useStore.getState()).toMatchObject({ past: [], future: [] });
+  });
+
   it("clamps zoom, replaces pan immutably, and manages grid and selection", () => {
     const store = useStore.getState();
     store.setZoom(0);
@@ -144,6 +160,36 @@ describe("composed Zustand store", () => {
     expect(useStore.getState().activeBreakpointId).toBeNull();
   });
 
+  it("ignores unknown screens and coordinates canvas, panel, breakpoint, and hover state", () => {
+    const store = useStore.getState();
+    const initialActiveScreenId = store.getActiveScreenId();
+    store.setActiveScreen(crypto.randomUUID());
+    expect(useStore.getState().getActiveScreenId()).toBe(initialActiveScreenId);
+
+    store.setActivePanelEdit({ panelId: "panel", stateId: "state" });
+    store.setActiveRepeaterEdit("repeater");
+    store.setActiveBreakpoint("tablet");
+    store.setCanvasHoveredWidget("canvas-widget");
+    store.setLayerHoveredWidget("layer-widget");
+    expect(useStore.getState()).toMatchObject({
+      activePanelEdit: { panelId: "panel", stateId: "state" },
+      activeRepeaterEdit: "repeater",
+      activeBreakpointId: "tablet",
+      hoveredWidgetId: "layer-widget",
+      hoveredCanvasWidgetId: "canvas-widget",
+      hoveredLayerWidgetId: "layer-widget",
+    });
+
+    store.setLayerHoveredWidget(null);
+    expect(useStore.getState().hoveredWidgetId).toBe("canvas-widget");
+    store.setCanvasHoveredWidget(null);
+    expect(useStore.getState().hoveredWidgetId).toBeNull();
+    store.setActivePanelEdit(null);
+    store.setActiveRepeaterEdit(null);
+    expect(useStore.getState().activePanelEdit).toBeNull();
+    expect(useStore.getState().activeRepeaterEdit).toBeNull();
+  });
+
   it("falls back to the start screen if the active screen was removed", () => {
     const project = createEmptyProject();
     const secondScreen = { ...project.screens[0], id: crypto.randomUUID() };
@@ -170,6 +216,8 @@ describe("composed Zustand store", () => {
     store.setStatusBarTimeMode("real");
     store.toggleBattery();
     store.toggleSignal();
+    store.toggleNotesOverlay();
+    store.setInspectorTab("notes");
     expect(useStore.getState()).toMatchObject({
       paletteOpen: true,
       leftPanelOpen: false,
@@ -180,6 +228,8 @@ describe("composed Zustand store", () => {
       statusBarTimeMode: "real",
       showBattery: false,
       showSignal: false,
+      notesOverlay: true,
+      inspectorTab: "notes",
     });
     store.setPaletteOpen(false);
     expect(useStore.getState().paletteOpen).toBe(false);

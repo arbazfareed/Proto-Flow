@@ -98,6 +98,32 @@ describe("selection geometry", () => {
 
     const matched = getSelectionUpdates([first, second], "match-width");
     expect(matched.find((item) => item.id === second.id)?.width).toBe(20);
+    expect(getSelectionUpdates([first, second], "match-height")
+      .find((item) => item.id === second.id)?.height).toBe(first.height);
+  });
+
+  it("aligns and distributes selections along both axes", () => {
+    const widgets = [
+      widget(10, 20, 20, 10),
+      widget(50, 40, 10, 20),
+      widget(90, 60, 30, 30),
+    ];
+
+    expect(getSelectionUpdates(widgets, "align-left").map(({ x }) => x))
+      .toEqual([10, 10, 10]);
+    expect(getSelectionUpdates(widgets, "align-center").map(({ x }) => x))
+      .toEqual([55, 60, 50]);
+    expect(getSelectionUpdates(widgets, "align-right").map(({ x }) => x))
+      .toEqual([100, 110, 90]);
+    expect(getSelectionUpdates(widgets, "align-top").map(({ y }) => y))
+      .toEqual([20, 20, 20]);
+    expect(getSelectionUpdates(widgets, "align-middle").map(({ y }) => y))
+      .toEqual([50, 45, 40]);
+    expect(getSelectionUpdates(widgets, "align-bottom").map(({ y }) => y))
+      .toEqual([80, 70, 60]);
+    expect(getSelectionUpdates(widgets, "distribute-vertical").map(({ y }) => y))
+      .toEqual([20, 35, 60]);
+    expect(getSelectionUpdates([], "align-left")).toEqual([]);
   });
 
   it("distributes items evenly without moving the outermost items", () => {

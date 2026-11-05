@@ -29,4 +29,20 @@ describe("screen input modes", () => {
     expect(parsed.screens[0].inputMode).toBe("touch");
     expect(parseProject(project).screens[0].inputMode).toBe("mouse");
   });
+
+  it("uses viewport-width boundaries for unknown custom device presets", () => {
+    const customDevice = (width: number) => ({
+      presetId: "custom",
+      width,
+      height: 900,
+      dpr: 1,
+      insets: { top: 0, bottom: 0, left: 0, right: 0 },
+    });
+
+    expect(inferScreenInputMode(undefined)).toBe("mouse");
+    expect(inferScreenInputMode(customDevice(767))).toBe("touch");
+    expect(inferScreenInputMode(customDevice(768))).toBe("both");
+    expect(inferScreenInputMode(customDevice(1_023))).toBe("both");
+    expect(inferScreenInputMode(customDevice(1_024))).toBe("mouse");
+  });
 });
