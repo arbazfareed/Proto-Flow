@@ -56,6 +56,9 @@ import { createTutorialProjectCopy } from "./tutorial/project";
 import { TutorialGuide } from "./tutorial/TutorialGuide";
 import { emitTutorialAction } from "./tutorial/events";
 import { TUTORIAL_UI_STRINGS } from "./tutorial/content";
+import { HelpPanel } from "./help/HelpPanel";
+import { HELP_NAVIGATION_EVENT } from "./help/navigation";
+import { getHelpArticle, parseHelpDeepLink } from "./help/docs";
 import type { DeviceCategory } from "./devices/types";
 import type { ShapeTool } from "./canvas/shapeTools";
 import {
@@ -102,6 +105,8 @@ function AppShell() {
   const [onboardingTipVisible, setOnboardingTipVisible] = useState(false);
   const [tutorialOpen, setTutorialOpen] = useState(false);
   const [tutorialSession, setTutorialSession] = useState(0);
+  const [helpOpen, setHelpOpen] = useState(false);
+  const [helpArticleSlug, setHelpArticleSlug] = useState<string | undefined>();
   const walletInitializationStarted = useRef(false);
   const previewConnected = useRef(false);
   const openPreviewShortcut = useRef<(() => Promise<void>) | null>(null);
@@ -131,19 +136,6 @@ function AppShell() {
       }
     } catch (error) {
       notify(error instanceof Error ? error.message : "Could not open the beta feedback form.", true);
-    }
-  }, [notify]);
-
-  const openParityDocumentation = useCallback(async () => {
-    const url = "https://github.com/arbazfareed/Proto-Flow/tree/main/docs";
-    try {
-      if (isTauri()) {
-        await openExternal(url);
-      } else {
-        window.open(url, "_blank", "noopener,noreferrer");
-      }
-    } catch (error) {
-      notify(error instanceof Error ? error.message : "Could not open the compatibility documentation.", true);
     }
   }, [notify]);
 
@@ -344,23 +336,59 @@ function AppShell() {
   }, [notify]);
 
   useEffect(() => {
+    const openHelpFromContext = (event: Event) => {
+      const slug = (event as CustomEvent<{ slug?: string }>).detail?.slug;
+      if (slug && !getHelpArticle(slug)) {
+        notify(`The help article "${slug}" was not found.`, true);
+        return;
+      }
+      if (slug) setHelpArticleSlug(slug);
+      setHelpOpen(true);
+    };
+    window.addEventListener(HELP_NAVIGATION_EVENT, openHelpFromContext);
+    return () => window.removeEventListener(HELP_NAVIGATION_EVENT, openHelpFromContext);
+  }, [notify]);
+
+  useEffect(() => {
     if (!isTauri()) {
+      const slug = parseHelpDeepLink(window.location.href);
+      if (slug) {
+        if (getHelpArticle(slug)) {
+          setHelpArticleSlug(slug);
+          setHelpOpen(true);
+        } else {
+          notify(`The help article "${slug}" was not found.`, true);
+        }
+      }
       void processAuthCallback(window.location.href);
       return;
     }
 
     let disposed = false;
     let stopDeepLink: (() => void) | undefined;
+    const handleUrl = (url: string) => {
+      const slug = parseHelpDeepLink(url);
+      if (slug) {
+        if (getHelpArticle(slug)) {
+          setHelpArticleSlug(slug);
+          setHelpOpen(true);
+        } else {
+          notify(`The help article "${slug}" was not found.`, true);
+        }
+        return;
+      }
+      void processAuthCallback(url);
+    };
     const setup = async () => {
       stopDeepLink = await onOpenUrl((urls) => {
-        for (const url of urls) void processAuthCallback(url);
+        for (const url of urls) handleUrl(url);
       });
       if (disposed) {
         stopDeepLink();
         return;
       }
       const initialUrls = await getCurrent();
-      for (const url of initialUrls ?? []) void processAuthCallback(url);
+      for (const url of initialUrls ?? []) handleUrl(url);
     };
     void setup().catch((callbackError) => {
       notify(
@@ -521,6 +549,7 @@ function AppShell() {
       openPlugins: () => setPluginManagerOpen(true),
       openVersionHistory: () => setVersionHistoryOpen(true),
       createCheckpoint: () => void createManualCheckpoint(),
+      openHelp: () => setHelpOpen(true),
     }),
     [createManualCheckpoint, createNewProject, openFile, redo, requestUpdateCheck, save, toggleGrid, toggleSnap, undo],
   );
@@ -547,6 +576,7 @@ function AppShell() {
         toggleGrid,
         toggleSnap,
         openPreview: () => { void openPreviewShortcut.current?.(); },
+        openHelp: () => setHelpOpen(true),
       });
     };
     window.addEventListener("keydown", onKeyDown);
@@ -840,7 +870,11 @@ function AppShell() {
           onToggle={toggleLeftPanel}
           onOpenPalette={() => setPaletteOpen(true)}
           onUpdates={requestUpdateCheck}
-          onOpenParityDocumentation={() => void openParityDocumentation()}
+          onOpenParityDocumentation={() => {
+            setHelpArticleSlug("axure-figma-migration");
+            setHelpOpen(true);
+          }}
+          onOpenHelp={() => setHelpOpen(true)}
           onOpenTutorial={() => void openTutorialProject()}
           activeTool={activeTool}
           onSelectTool={setActiveTool}
@@ -896,6 +930,13 @@ function AppShell() {
         />
       )}
       {tutorialOpen && <TutorialGuide key={tutorialSession} onClose={closeTutorial} />}
+      {helpOpen && (
+        <HelpPanel
+          initialSlug={helpArticleSlug}
+          onClose={() => setHelpOpen(false)}
+          onNotify={notify}
+        />
+      )}
       {versionHistoryOpen && (
         <VersionHistoryDialog
           project={currentProject}
@@ -935,7 +976,7 @@ function AppShell() {
       {onboardingTipVisible && (
         <div className="onboarding-tip" role="status">
           <span>Tip: Need a hand? Browse Help and Docs whenever you’re ready.</span>
-          <button type="button" onClick={() => void openParityDocumentation()}>Open docs</button>
+          <button type="button" onClick={() => setHelpOpen(true)}>Open docs</button>
           <button type="button" aria-label="Dismiss onboarding tip" onClick={() => setOnboardingTipVisible(false)}>Dismiss</button>
         </div>
       )}

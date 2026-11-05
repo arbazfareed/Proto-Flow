@@ -11,6 +11,13 @@ export interface RepeaterTemplate {
   widgets: Widget[];
 }
 
+export function getRepeaterRowHeight(widget: Widget): number {
+  const rowHeight = widget.props.rowHeight;
+  return typeof rowHeight === "number" && Number.isFinite(rowHeight) && rowHeight > 0
+    ? rowHeight
+    : widget.height;
+}
+
 export function getRepeaterDataset(widget: Widget): RepeaterRecord[] {
   const value = widget.props.dataset;
   if (!Array.isArray(value)) return [];

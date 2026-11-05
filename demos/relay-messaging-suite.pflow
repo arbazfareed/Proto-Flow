@@ -11,6 +11,20 @@
       "scope": "project",
       "type": "string",
       "initial": "Messages stay between you."
+    },
+    {
+      "id": "36d3f9cf-bcca-48d9-95ce-341df0c4b257",
+      "name": "draftMessage",
+      "scope": "project",
+      "type": "string",
+      "initial": ""
+    },
+    {
+      "id": "0b2c6c31-bc15-4058-96de-a5b1eaae5609",
+      "name": "sentMessage",
+      "scope": "project",
+      "type": "string",
+      "initial": ""
     }
   ],
   "symbols": [],
@@ -9490,12 +9504,12 @@
         },
         {
           "id": "0a85b995-27da-478a-889a-72a51309a896",
-          "type": "text",
-          "name": "Message composer placeholder",
+          "type": "input",
+          "name": "Message composer",
           "x": 493,
-          "y": 814,
-          "width": 450,
-          "height": 24,
+          "y": 807,
+          "width": 840,
+          "height": 40,
           "visible": true,
           "constraints": {
             "horizontal": "left",
@@ -9506,12 +9520,15 @@
           "locked": false,
           "zIndex": 82,
           "style": {
-            "fill": "#96a39d",
+            "fill": null,
             "stroke": null,
             "strokeWidth": 0
           },
           "props": {
-            "text": "Write something kind…",
+            "label": "Message to Eva",
+            "placeholder": "Type a message",
+            "variableName": "draftMessage",
+            "text": "",
             "fontFamily": "Arial",
             "fontSize": 12,
             "fontWeight": "normal",
@@ -9522,15 +9539,23 @@
           "overrides": {
             "mobile": {
               "x": 57,
-              "y": 706,
-              "width": 223,
-              "height": 24,
+              "y": 697,
+              "width": 255,
+              "height": 40,
               "visible": true
             },
             "tablet": {
               "x": 389,
-              "width": 365,
-              "height": 24,
+              "y": 807,
+              "width": 300,
+              "height": 40,
+              "visible": true
+            },
+            "desktop": {
+              "x": 493,
+              "y": 807,
+              "width": 840,
+              "height": 40,
               "visible": true
             }
           }
@@ -10232,6 +10257,106 @@
               "visible": false
             }
           }
+        },
+        {
+          "id": "3df19410-7cbd-476c-9ce0-b5f6638b9184",
+          "type": "rectangle",
+          "name": "Latest outgoing bubble",
+          "x": 1040,
+          "y": 700,
+          "width": 360,
+          "height": 58,
+          "rotation": 0,
+          "opacity": 1,
+          "visible": false,
+          "locked": false,
+          "zIndex": 99,
+          "style": {
+            "fill": "#d9eee2",
+            "stroke": null,
+            "strokeWidth": 0,
+            "cornerRadius": [
+              18,
+              18,
+              4,
+              18
+            ]
+          },
+          "props": {},
+          "overrides": {
+            "mobile": {
+              "x": 37,
+              "y": 625,
+              "width": 333,
+              "height": 55,
+              "visible": false
+            },
+            "tablet": {
+              "x": 400,
+              "y": 700,
+              "width": 348,
+              "height": 58,
+              "visible": false
+            },
+            "desktop": {
+              "x": 1040,
+              "y": 700,
+              "width": 360,
+              "height": 58,
+              "visible": false
+            }
+          }
+        },
+        {
+          "id": "c2be1c42-223b-4063-936a-6c63ee78a298",
+          "type": "text",
+          "name": "Latest outgoing bubble message",
+          "x": 1056,
+          "y": 709,
+          "width": 328,
+          "height": 40,
+          "rotation": 0,
+          "opacity": 1,
+          "visible": false,
+          "locked": false,
+          "zIndex": 100,
+          "style": {
+            "fill": "#2d463b",
+            "stroke": null,
+            "strokeWidth": 0
+          },
+          "props": {
+            "text": "{{sentMessage}}",
+            "fontFamily": "Arial",
+            "fontSize": 12,
+            "fontWeight": "normal",
+            "align": "left",
+            "verticalAlign": "middle",
+            "lineHeight": 1.25
+          },
+          "overrides": {
+            "mobile": {
+              "x": 53,
+              "y": 634,
+              "width": 301,
+              "height": 37,
+              "visible": false
+            },
+            "tablet": {
+              "x": 416,
+              "y": 709,
+              "width": 316,
+              "height": 40,
+              "visible": false
+            },
+            "desktop": {
+              "x": 1056,
+              "y": 709,
+              "width": 328,
+              "height": 40,
+              "visible": false
+            }
+          }
         }
       ],
       "interactionRules": [
@@ -10239,12 +10364,40 @@
           "id": "69573c49-cdc4-47ed-b4b9-396ad289feaa",
           "widgetId": "9d04a8d1-8179-4533-ae72-4d2b4b47867d",
           "event": "onClick",
-          "conditions": [],
+          "conditions": [
+            {
+              "variable": "draftMessage",
+              "operator": "notEquals",
+              "value": ""
+            }
+          ],
           "actions": [
             {
               "type": "setVariable",
               "target": "sendState",
               "value": "Message sent · just now"
+            },
+            {
+              "type": "setVariable",
+              "target": "sentMessage",
+              "value": "[[draftMessage]]"
+            },
+            {
+              "type": "show",
+              "target": "3df19410-7cbd-476c-9ce0-b5f6638b9184"
+            },
+            {
+              "type": "show",
+              "target": "c2be1c42-223b-4063-936a-6c63ee78a298"
+            },
+            {
+              "type": "hide",
+              "target": "4a29d281-264b-43c2-8ba8-41476db03c77"
+            },
+            {
+              "type": "setVariable",
+              "target": "draftMessage",
+              "value": ""
             }
           ]
         },
@@ -10252,12 +10405,40 @@
           "id": "97535a75-fba8-4e4e-8735-a38c635fc7a6",
           "widgetId": "759177b3-11dd-48b6-a111-89ccb07f32f1",
           "event": "onClick",
-          "conditions": [],
+          "conditions": [
+            {
+              "variable": "draftMessage",
+              "operator": "notEquals",
+              "value": ""
+            }
+          ],
           "actions": [
             {
               "type": "setVariable",
               "target": "sendState",
               "value": "Message sent · just now"
+            },
+            {
+              "type": "setVariable",
+              "target": "sentMessage",
+              "value": "[[draftMessage]]"
+            },
+            {
+              "type": "show",
+              "target": "3df19410-7cbd-476c-9ce0-b5f6638b9184"
+            },
+            {
+              "type": "show",
+              "target": "c2be1c42-223b-4063-936a-6c63ee78a298"
+            },
+            {
+              "type": "hide",
+              "target": "4a29d281-264b-43c2-8ba8-41476db03c77"
+            },
+            {
+              "type": "setVariable",
+              "target": "draftMessage",
+              "value": ""
             }
           ]
         },

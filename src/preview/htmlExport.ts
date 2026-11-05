@@ -127,7 +127,6 @@ export function responsiveLayoutStyles(project: Project): string {
           `height:${widget.height}px!important`,
           `transform:rotate(${widget.rotation}deg)!important`,
         ];
-        if (!widget.visible) geometry.push("display:none!important");
         return `${selector}{${geometry.join(";")}}`;
       }).join("\n");
       return `${mediaQuery(breakpoint.minWidth, breakpoint.maxWidth)}{${stageRule}${widgetRules}}`;

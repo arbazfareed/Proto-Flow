@@ -20,6 +20,7 @@ import {
 } from "../project/dynamicPanels";
 import {
   getRepeaterDataset,
+  getRepeaterRowHeight,
   getRepeaterTemplate,
   isRepeaterItemVisible,
   type RepeaterRecord,
@@ -147,7 +148,8 @@ function VirtualizedRepeater({
     ? Math.max(1, Math.floor((widget.width + gap) / (minimumColumnWidth + gap)))
     : 1;
   const rowCount = Math.ceil(rows.length / columns);
-  const stride = (horizontal ? widget.width : widget.height) + gap;
+  const rowHeight = getRepeaterRowHeight(widget);
+  const stride = (horizontal ? widget.width : rowHeight) + gap;
   const viewportExtent = horizontal ? widget.width : widget.height;
   const range = getVirtualRowRange(rowCount, stride, scrollOffset, viewportExtent, liteMode ? 0 : 2);
   const visibleTemplate = useMemo(
@@ -208,7 +210,7 @@ function VirtualizedRepeater({
                   left: horizontal ? slot * stride : column * (columnWidth + gap),
                   top: horizontal ? 0 : slot * stride,
                   width: columnWidth,
-                  height: widget.height,
+                  height: horizontal ? widget.height : rowHeight,
                   overflow: "hidden",
                 }}
                 onClick={() => {

@@ -102,6 +102,7 @@ function addWidget({
   tabletVisible = true,
   mobileVisible = true,
   initial = null,
+  widgetProps = {},
 }) {
   const widgetId = randomUUID();
   const boxAt = (device) =>
@@ -150,6 +151,7 @@ function addWidget({
     },
   };
   if (initial) widget.props[initial.key] = initial.value;
+  Object.assign(widget.props, widgetProps);
   widgets.push(widget);
   return widgetId;
 }
@@ -199,6 +201,21 @@ const label = (name, text, group, box, options = {}) =>
     visible: options.visible ?? true,
     tabletVisible: options.tabletVisible ?? true,
     mobileVisible: options.mobileVisible ?? true,
+  });
+
+const input = (name, group, box, options = {}) =>
+  addWidget({
+    type: "input",
+    name,
+    group,
+    box,
+    mobile: options.mobile ?? null,
+    tablet: options.tablet ?? null,
+    widgetProps: {
+      label: options.label,
+      placeholder: options.placeholder,
+      variableName: options.variableName,
+    },
   });
 
 const icon = (name, iconName, group, box, options = {}) =>
@@ -610,12 +627,14 @@ icon("Attach file", "Plus", "thread", { x: 35, y: 817, width: 19, height: 19 }, 
   bottomEdge: 64,
   mobile: { x: 26, y: 768, width: 19, height: 19 },
 });
-label("Message composer placeholder", "Write something kind…", "thread", { x: 69, y: 814, width: 450, height: 24 }, {
-  color: "#96a39d",
-  fontSize: 12,
+input("Message composer", "thread", { x: 69, y: 807, width: 860, height: 40 }, {
+  label: "Message to Eva",
+  placeholder: "Type a message",
+  variableName: "draftMessage",
   alignBottom: true,
-  bottomEdge: 62,
-  mobile: { x: 57, y: 766, width: 223, height: 24 },
+  bottomEdge: 53,
+  mobile: { x: 57, y: 757, width: 255, height: 40 },
+  tablet: { x: 69, y: 807, width: 300, height: 40 },
 });
 rect("Send message button", "thread", { x: desktopThread.width - 63, y: 806, width: 44, height: 42 }, "#244c3c", 14, {
   alignRight: true,
@@ -639,8 +658,27 @@ label("Send message confirmation", "{{sendState}}", "thread", { x: 20, y: 867, w
   bottomEdge: 13,
   mobile: { x: 18, y: 816, width: 340, height: 18 },
 });
+rect("Latest outgoing bubble", "thread", { x: 658, y: 700, width: 344, height: 58 }, "#d9eee2", 16, {
+  mobile: { x: 37, y: 625, width: 333, height: 55 },
+  tablet: { x: 104, y: 700, width: 328, height: 58 },
+  visible: false,
+  mobileVisible: false,
+  tabletVisible: false,
+});
+label("Latest outgoing bubble message", "{{sentMessage}}", "thread", { x: 674, y: 709, width: 312, height: 40 }, {
+  color: "#2d463b",
+  fontSize: 12,
+  mobile: { x: 53, y: 634, width: 301, height: 37 },
+  tablet: { x: 120, y: 709, width: 296, height: 40 },
+  visible: false,
+  mobileVisible: false,
+  tabletVisible: false,
+});
 const sendButtonId = widgets.find((widget) => widget.name === "Send message button").id;
 const sendArrowId = widgets.find((widget) => widget.name === "Send message arrow").id;
+const sentBubbleId = widgets.find((widget) => widget.name === "Latest outgoing bubble").id;
+const sentMessageId = widgets.find((widget) => widget.name === "Latest outgoing bubble message").id;
+const typingStatusId = widgets.find((widget) => widget.name === "Typing status").id;
 
 const project = {
   schemaVersion: "1.9.0",
@@ -655,6 +693,20 @@ const project = {
       scope: "project",
       type: "string",
       initial: "Messages stay between you.",
+    },
+    {
+      id: randomUUID(),
+      name: "draftMessage",
+      scope: "project",
+      type: "string",
+      initial: "",
+    },
+    {
+      id: randomUUID(),
+      name: "sentMessage",
+      scope: "project",
+      type: "string",
+      initial: "",
     },
   ],
   symbols: [],
@@ -679,9 +731,14 @@ const project = {
           id: randomUUID(),
           widgetId,
           event: "onClick",
-          conditions: [],
+          conditions: [{ variable: "draftMessage", operator: "notEquals", value: "" }],
           actions: [
             { type: "setVariable", target: "sendState", value: "Message sent · just now" },
+            { type: "setVariable", target: "sentMessage", value: "[[draftMessage]]" },
+            { type: "show", target: sentBubbleId },
+            { type: "show", target: sentMessageId },
+            { type: "hide", target: typingStatusId },
+            { type: "setVariable", target: "draftMessage", value: "" },
           ],
         })),
     },
