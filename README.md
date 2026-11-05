@@ -21,7 +21,12 @@ The Vite dev server listens on port `1420`. Frontend hot reload is enabled while
 ```sh
 npm run build
 npm test
+npm run test:ci
+npm run test:components
+npm run test:components:ci
 ```
+
+The component suite uses React Testing Library, jsdom, and shared Tauri/MSW setup. Its coverage gate applies to the selected, behavior-tested UI modules in `vite.components.config.ts`; component tests are excluded from the default non-DOM Vitest suite.
 
 ## In-app help
 
