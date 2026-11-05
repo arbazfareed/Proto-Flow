@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   MAX_REPEATER_ROWS,
   getRepeaterDataset,
+  getRepeaterRowHeight,
   interpolateItem,
   isRepeaterItemVisible,
   parseRepeaterCsv,
@@ -30,6 +31,13 @@ function widget(type: string, props: Record<string, unknown>): Widget {
 }
 
 describe("repeater data helpers", () => {
+  it("uses a compact row height when provided and preserves the viewport height by default", () => {
+    const repeater = widget("repeater", { rowHeight: 72 });
+    expect(getRepeaterRowHeight(repeater)).toBe(72);
+    expect(getRepeaterRowHeight(widget("repeater", {}))).toBe(120);
+    expect(getRepeaterRowHeight(widget("repeater", { rowHeight: 0 }))).toBe(120);
+  });
+
   it("parses and serializes CSV with quoted delimiters and primitive values", () => {
     const rows = parseRepeaterCsv('name,score,active\r\n"Ada, Lovelace",12,true\r\nGrace,9,false');
     expect(rows).toEqual([

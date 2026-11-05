@@ -66,6 +66,8 @@ const TEMPLATE_LABELS: Record<StarterTemplateId, { title: string; detail: string
   "form-flow": { title: "Form flow", detail: "A two-step dynamic panel", icon: "form" },
   "data-table": { title: "Data table", detail: "A repeater with sample rows", icon: "table" },
   "responsive-web": { title: "Responsive web", detail: "Mobile, tablet, and desktop breakpoints", icon: "responsive" },
+  login: { title: "Sign in", detail: "A polished, ready-to-edit login screen", icon: "login" },
+  storefront: { title: "Storefront", detail: "A product detail page with cart actions", icon: "storefront" },
 };
 
 const THEME_CHOICES: { id: ThemePreference; label: string; description: string }[] = [
