@@ -288,7 +288,7 @@ export function OnboardingWizard({
                   className={`onboarding-theme-preview theme-preview-${theme === "system"
                     ? window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light"
                     : theme}`}
-                  aria-label={`${theme} theme preview`}
+                  aria-hidden="true"
                 >
                   <div className="theme-preview-bar"><i /><i /><i /></div>
                   <div className="theme-preview-body"><div /><span /><span /></div>

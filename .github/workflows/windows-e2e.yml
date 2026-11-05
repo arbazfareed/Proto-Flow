@@ -4,7 +4,7 @@ on:
   pull_request:
     branches: [main]
   push:
-    branches: [main, feature/pf-t704-windows-e2e]
+    branches: [main, feature/pf-t704-windows-e2e, feature/pf-t706-accessibility]
 
 permissions:
   contents: read

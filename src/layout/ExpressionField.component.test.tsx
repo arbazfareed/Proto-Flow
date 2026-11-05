@@ -1,4 +1,5 @@
 import { fireEvent, screen } from "@testing-library/react";
+import { axe } from "jest-axe";
 import userEvent from "@testing-library/user-event";
 import { useState } from "react";
 import { describe, expect, it, vi } from "vitest";
@@ -48,6 +49,21 @@ describe("ExpressionField", () => {
     );
 
     expect(screen.getByRole("status")).toHaveTextContent("Expected number");
+  });
+
+  it("provides accessible labels and status for expression entry", async () => {
+    const project = createEmptyProject();
+    const { container } = renderWithProviders(
+      <ExpressionField
+        label="Formula"
+        value="[[2 + 2]]"
+        onChange={vi.fn()}
+        project={project}
+        screenId={project.screens[0].id}
+      />,
+    );
+
+    expect(await axe(container)).toMatchObject({ violations: [] });
   });
 
   it("inserts an expression at the current cursor and offers variable suggestions", async () => {

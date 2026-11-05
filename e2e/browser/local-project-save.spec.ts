@@ -5,7 +5,7 @@ import { startWorkspace } from "./workspace";
 test("downloads a portable local project without contacting cloud services", async ({ page }) => {
   await startWorkspace(page, "Responsive web");
   const downloadPromise = page.waitForEvent("download");
-  await page.getByRole("button", { name: "Download project (.pflow)" }).click();
+  await page.getByRole("button", { name: "Download .pflow project" }).click();
   const download = await downloadPromise;
 
   expect(download.suggestedFilename()).toBe("Responsive web.pflow");
