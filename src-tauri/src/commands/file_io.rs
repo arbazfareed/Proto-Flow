@@ -106,6 +106,17 @@ impl StagedProjectFile {
             return Err("The project path must include a file name.".into());
         }
 
+        #[cfg(unix)]
+        let existing_permissions = match fs::metadata(target) {
+            Ok(metadata) => Some(metadata.permissions()),
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => None,
+            Err(error) => {
+                return Err(format!(
+                    "Could not inspect the existing project file: {error}"
+                ));
+            }
+        };
+
         for _ in 0..10 {
             let temp_name = format!(".protoflow-{}.tmp", Uuid::new_v4());
             let temp_path = parent.join(temp_name);
@@ -115,6 +126,15 @@ impl StagedProjectFile {
                 .open(&temp_path)
             {
                 Ok(mut file) => {
+                    #[cfg(unix)]
+                    if let Some(permissions) = existing_permissions.as_ref() {
+                        if let Err(error) = file.set_permissions(permissions.clone()) {
+                            let _ = fs::remove_file(&temp_path);
+                            return Err(format!(
+                                "Could not preserve project file permissions: {error}"
+                            ));
+                        }
+                    }
                     if let Err(error) = write_and_sync(&mut file, content) {
                         let _ = fs::remove_file(&temp_path);
                         return Err(format!("Could not write temporary project file: {error}"));
@@ -205,6 +225,26 @@ fn atomic_write_project(path: &Path, content: &str) -> Result<(), String> {
         return Err("This project file exceeds the 10 MB limit.".into());
     }
     StagedProjectFile::create(path, content.as_bytes())?.commit(path)
+}
+
+fn save_project_at(path: &Path, content: &str) -> Result<String, String> {
+    atomic_write_project(path, content)?;
+    path_to_string(path)
+}
+
+fn read_project_file(path: &Path) -> Result<OpenedProject, String> {
+    validate_project_path(path)?;
+    let metadata =
+        fs::metadata(path).map_err(|error| format!("Could not inspect project file: {error}"))?;
+    if metadata.len() > MAX_PROJECT_FILE_BYTES {
+        return Err("This project file exceeds the 10 MB limit.".into());
+    }
+    let content = fs::read_to_string(path)
+        .map_err(|error| format!("Could not read project file: {error}"))?;
+    Ok(OpenedProject {
+        path: path_to_string(path)?,
+        content,
+    })
 }
 
 fn version_history_path(
@@ -387,8 +427,7 @@ pub fn save_project(
             None => return Ok(None),
         },
     };
-    atomic_write_project(&path, &content)?;
-    path_to_string(&path).map(Some)
+    save_project_at(&path, &content).map(Some)
 }
 
 #[tauri::command]
@@ -396,18 +435,7 @@ pub fn open_project(app: AppHandle) -> Result<Option<OpenedProject>, String> {
     let Some(path) = open_dialog(&app)? else {
         return Ok(None);
     };
-    validate_project_path(&path)?;
-    let metadata =
-        fs::metadata(&path).map_err(|error| format!("Could not inspect project file: {error}"))?;
-    if metadata.len() > MAX_PROJECT_FILE_BYTES {
-        return Err("This project file exceeds the 10 MB limit.".into());
-    }
-    let content = fs::read_to_string(&path)
-        .map_err(|error| format!("Could not read project file: {error}"))?;
-    Ok(Some(OpenedProject {
-        path: path_to_string(&path)?,
-        content,
-    }))
+    read_project_file(&path).map(Some)
 }
 
 #[tauri::command]
@@ -420,8 +448,7 @@ pub fn save_project_as(
         return Ok(None);
     };
     let path = with_project_extension(path);
-    atomic_write_project(&path, &content)?;
-    path_to_string(&path).map(Some)
+    save_project_at(&path, &content).map(Some)
 }
 
 #[tauri::command]
@@ -676,13 +703,16 @@ pub fn read_dropped_image(path: String) -> Result<ImageFile, String> {
 pub fn get_device_id() -> Result<String, String> {
     let hostname =
         hostname::get().map_err(|error| format!("Could not read the device hostname: {error}"))?;
-    let seed = format!(
-        "{}|{}|{}",
-        hostname.to_string_lossy(),
+    Ok(device_id_for(
+        &hostname.to_string_lossy(),
         std::env::consts::OS,
-        std::env::consts::ARCH
-    );
-    Ok(format!("{:x}", Sha256::digest(seed.as_bytes())))
+        std::env::consts::ARCH,
+    ))
+}
+
+fn device_id_for(hostname: &str, os: &str, arch: &str) -> String {
+    let seed = format!("{hostname}|{os}|{arch}");
+    format!("{:x}", Sha256::digest(seed.as_bytes()))
 }
 
 #[cfg(test)]
@@ -777,6 +807,57 @@ mod tests {
     }
 
     #[test]
+    fn saves_and_opens_project_at_explicit_path() {
+        let directory = tempfile::tempdir().unwrap();
+        let target = directory.path().join("project.pflow");
+        let content = r#"{"name":"Native tests","panels":[{"states":["closed","open"]}]}"#;
+
+        assert_eq!(
+            save_project_at(&target, content).unwrap(),
+            path_to_string(&target).unwrap()
+        );
+        let opened = read_project_file(&target).unwrap();
+        assert_eq!(opened.content, content);
+        assert_eq!(opened.path, path_to_string(&target).unwrap());
+    }
+
+    #[test]
+    fn opening_reports_missing_files_invalid_utf8_and_invalid_extensions() {
+        let directory = tempfile::tempdir().unwrap();
+        let missing = directory.path().join("missing.pflow");
+        let invalid_utf8 = directory.path().join("invalid.pflow");
+        fs::write(&invalid_utf8, [0xff, 0xfe]).unwrap();
+
+        assert!(
+            read_project_file(&missing)
+                .err()
+                .unwrap()
+                .contains("inspect project file")
+        );
+        assert!(
+            read_project_file(&invalid_utf8)
+                .err()
+                .unwrap()
+                .contains("read project file")
+        );
+        assert!(read_project_file(&directory.path().join("project.json")).is_err());
+    }
+
+    #[test]
+    fn saves_and_opens_projects_larger_than_ten_megabytes() {
+        let directory = tempfile::tempdir().unwrap();
+        let target = directory.path().join("large.pflow");
+        let content = format!(
+            r#"{{"panels":[{{"states":["closed","open"]}}],"repeaters":[{{"rows":[{{"name":"sample"}}]}}],"padding":"{}"}}"#,
+            "x".repeat(10_100_000)
+        );
+
+        save_project_at(&target, &content).unwrap();
+        assert_eq!(fs::metadata(&target).unwrap().len(), content.len() as u64);
+        assert_eq!(read_project_file(&target).unwrap().content, content);
+    }
+
+    #[test]
     fn interruption_before_replacement_preserves_original_project() {
         let directory = tempfile::tempdir().unwrap();
         let target = directory.path().join("project.pflow");
@@ -791,6 +872,62 @@ mod tests {
     }
 
     #[test]
+    fn failed_atomic_write_keeps_existing_file_and_cleans_up_temporary_file() {
+        let directory = tempfile::tempdir().unwrap();
+        let target = directory.path().join("project.pflow");
+        fs::create_dir(&target).unwrap();
+
+        assert!(atomic_write_project(&target, "replacement").is_err());
+        assert!(target.is_dir());
+        assert_eq!(fs::read_dir(directory.path()).unwrap().count(), 1);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn atomic_replacement_preserves_existing_file_permissions() {
+        use std::os::unix::fs::{PermissionsExt, symlink};
+
+        let directory = tempfile::tempdir().unwrap();
+        let target = directory.path().join("project.pflow");
+        fs::write(&target, "old").unwrap();
+        fs::set_permissions(&target, fs::Permissions::from_mode(0o640)).unwrap();
+
+        atomic_write_project(&target, "new").unwrap();
+
+        assert_eq!(
+            fs::metadata(&target).unwrap().permissions().mode() & 0o777,
+            0o640
+        );
+
+        let loop_a = directory.path().join("loop-a.pflow");
+        let loop_b = directory.path().join("loop-b.pflow");
+        symlink(&loop_b, &loop_a).unwrap();
+        symlink(&loop_a, &loop_b).unwrap();
+        assert!(read_project_file(&loop_a).is_err());
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn opens_project_paths_case_insensitively_and_handles_windows_separators() {
+        let directory = tempfile::tempdir().unwrap();
+        let target = directory.path().join("Project.PFLOW");
+        let content = "windows path content";
+        save_project_at(&target, content).unwrap();
+
+        let mixed_case = directory.path().join("project.pflow");
+        assert_eq!(read_project_file(&mixed_case).unwrap().content, content);
+        assert!(path_to_string(&target).unwrap().contains('\\'));
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn rejects_windows_paths_with_overlong_components() {
+        let directory = tempfile::tempdir().unwrap();
+        let target = directory.path().join(format!("{}.pflow", "x".repeat(280)));
+        assert!(atomic_write_project(&target, "content").is_err());
+    }
+
+    #[test]
     fn rejects_project_content_over_ten_megabytes() {
         let directory = tempfile::tempdir().unwrap();
         let target = directory.path().join("project.pflow");
@@ -798,6 +935,14 @@ mod tests {
 
         assert!(atomic_write_project(&target, &oversized).is_err());
         assert!(!target.exists());
+
+        fs::write(&target, oversized).unwrap();
+        assert!(
+            read_project_file(&target)
+                .err()
+                .unwrap()
+                .contains("10 MB limit")
+        );
     }
 
     #[test]
@@ -894,6 +1039,21 @@ mod tests {
                 .chars()
                 .all(|character| character.is_ascii_hexdigit())
         );
+    }
+
+    #[test]
+    fn device_fingerprint_is_deterministic_architecture_sensitive_and_hides_inputs() {
+        let first = device_id_for("private-hostname", "windows", "x86_64");
+        let same = device_id_for("private-hostname", "windows", "x86_64");
+        let other_arch = device_id_for("private-hostname", "windows", "aarch64");
+
+        assert_eq!(first, same);
+        assert_ne!(first, other_arch);
+        assert_eq!(first.len(), 64);
+        assert!(first.chars().all(|character| character.is_ascii_hexdigit()));
+        assert!(!first.contains("private-hostname"));
+        assert!(!first.contains("windows"));
+        assert!(!first.contains("x86_64"));
     }
 
     #[test]
