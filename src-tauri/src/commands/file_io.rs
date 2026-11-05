@@ -232,6 +232,39 @@ fn save_project_at(path: &Path, content: &str) -> Result<String, String> {
     path_to_string(path)
 }
 
+fn save_project_with_dialog<F>(
+    path: Option<PathBuf>,
+    content: &str,
+    save_dialog: F,
+) -> Result<Option<String>, String>
+where
+    F: FnOnce(&str) -> Result<Option<PathBuf>, String>,
+{
+    let path = match path {
+        Some(path) => path,
+        None => match save_dialog(&project_default_filename(content))? {
+            Some(path) => with_project_extension(path),
+            None => return Ok(None),
+        },
+    };
+    save_project_at(&path, content).map(Some)
+}
+
+fn save_project_as_with_dialog<F>(
+    default_filename: &str,
+    content: &str,
+    save_dialog: F,
+) -> Result<Option<String>, String>
+where
+    F: FnOnce(&str) -> Result<Option<PathBuf>, String>,
+{
+    let Some(path) = save_dialog(default_filename)? else {
+        return Ok(None);
+    };
+    let path = with_project_extension(path);
+    save_project_at(&path, content).map(Some)
+}
+
 fn read_project_file(path: &Path) -> Result<OpenedProject, String> {
     validate_project_path(path)?;
     let metadata =
@@ -245,6 +278,15 @@ fn read_project_file(path: &Path) -> Result<OpenedProject, String> {
         path: path_to_string(path)?,
         content,
     })
+}
+
+fn open_project_with_dialog<F>(open_dialog: F) -> Result<Option<OpenedProject>, String>
+where
+    F: FnOnce() -> Result<Option<PathBuf>, String>,
+{
+    open_dialog()?
+        .map(|path| read_project_file(&path))
+        .transpose()
 }
 
 fn version_history_path(
@@ -420,22 +462,14 @@ pub fn save_project(
     path: Option<String>,
     content: String,
 ) -> Result<Option<String>, String> {
-    let path = match path {
-        Some(path) => PathBuf::from(path),
-        None => match save_dialog(&app, &project_default_filename(&content))? {
-            Some(path) => with_project_extension(path),
-            None => return Ok(None),
-        },
-    };
-    save_project_at(&path, &content).map(Some)
+    save_project_with_dialog(path.map(PathBuf::from), &content, |filename| {
+        save_dialog(&app, filename)
+    })
 }
 
 #[tauri::command]
 pub fn open_project(app: AppHandle) -> Result<Option<OpenedProject>, String> {
-    let Some(path) = open_dialog(&app)? else {
-        return Ok(None);
-    };
-    read_project_file(&path).map(Some)
+    open_project_with_dialog(|| open_dialog(&app))
 }
 
 #[tauri::command]
@@ -444,11 +478,11 @@ pub fn save_project_as(
     default_filename: String,
     content: String,
 ) -> Result<Option<String>, String> {
-    let Some(path) = save_dialog(&app, &safe_default_filename(&default_filename))? else {
-        return Ok(None);
-    };
-    let path = with_project_extension(path);
-    save_project_at(&path, &content).map(Some)
+    save_project_as_with_dialog(
+        &safe_default_filename(&default_filename),
+        &content,
+        |filename| save_dialog(&app, filename),
+    )
 }
 
 #[tauri::command]
@@ -812,13 +846,53 @@ mod tests {
         let target = directory.path().join("project.pflow");
         let content = r#"{"name":"Native tests","panels":[{"states":["closed","open"]}]}"#;
 
+        let mut dialog_called = false;
         assert_eq!(
-            save_project_at(&target, content).unwrap(),
-            path_to_string(&target).unwrap()
+            save_project_with_dialog(Some(target.clone()), content, |_| {
+                dialog_called = true;
+                Ok(None)
+            })
+            .unwrap(),
+            Some(path_to_string(&target).unwrap())
         );
+        assert!(!dialog_called);
         let opened = read_project_file(&target).unwrap();
         assert_eq!(opened.content, content);
         assert_eq!(opened.path, path_to_string(&target).unwrap());
+    }
+
+    #[test]
+    fn save_and_open_dialog_cancellation_returns_none() {
+        let save_result = save_project_with_dialog(None, r#"{"name":"Cancel"}"#, |filename| {
+            assert_eq!(filename, "Cancel.pflow");
+            Ok(None)
+        });
+        assert_eq!(save_result.unwrap(), None);
+        assert!(open_project_with_dialog(|| Ok(None)).unwrap().is_none());
+    }
+
+    #[test]
+    fn save_as_always_invokes_dialog_and_appends_project_extension() {
+        let directory = tempfile::tempdir().unwrap();
+        let target = directory.path().join("selected");
+        let mut dialog_called = false;
+
+        let result = save_project_as_with_dialog("Safe name.pflow", "project", |filename| {
+            dialog_called = true;
+            assert_eq!(filename, "Safe name.pflow");
+            Ok(Some(target.clone()))
+        })
+        .unwrap();
+
+        assert!(dialog_called);
+        assert_eq!(
+            result,
+            Some(path_to_string(&target.with_extension("pflow")).unwrap())
+        );
+        assert_eq!(
+            fs::read_to_string(target.with_extension("pflow")).unwrap(),
+            "project"
+        );
     }
 
     #[test]
