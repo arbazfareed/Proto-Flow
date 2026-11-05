@@ -636,6 +636,61 @@ describe("ProtoFlow project schema", () => {
         ],
       }),
     ).toThrow(SchemaValidationError);
+
+    expect(() =>
+      parseProject({
+        ...project,
+        screens: [{
+          ...screen,
+          interactionRules: [{
+            ...rule,
+            conditions: [{ variable: "attempts", operator: "approximately", value: 1 }],
+          }],
+        }],
+      }),
+    ).toThrow(SchemaValidationError);
+  });
+
+  it("rejects empty dynamic panels and malformed repeater datasets and bindings", () => {
+    const project = createCompleteProject();
+    const screen = project.screens[0];
+    const baseWidget = screen.widgets[0];
+    const panel = {
+      ...baseWidget,
+      id: crypto.randomUUID(),
+      type: "dynamic-panel",
+      props: { states: [], activeStateId: "" },
+    };
+    const repeater = {
+      ...baseWidget,
+      id: crypto.randomUUID(),
+      type: "repeater",
+      props: {
+        dataset: [{ value: { nested: true } }],
+        layout: "diagonal",
+        gap: -1,
+        rowTemplate: { widgets: [] },
+        itemBinding: { title: crypto.randomUUID() },
+      },
+    };
+
+    try {
+      parseProject({
+        ...project,
+        screens: [{ ...screen, widgets: [panel, repeater] }],
+      });
+      expect.fail("Expected malformed panel and repeater data to fail validation.");
+    } catch (error) {
+      expect(error).toBeInstanceOf(SchemaValidationError);
+      const messages = (error as SchemaValidationError).issues.map((issue) => issue.message);
+      expect(messages).toEqual(expect.arrayContaining([
+        "A dynamic panel must have at least one state.",
+        "Repeater fields must be text, numbers, booleans, or null.",
+        "Repeater layout must be vertical, horizontal, or grid.",
+        "Repeater gap must be a non-negative finite number.",
+        "Repeater bindings must map field names to widgets in its row template.",
+      ]));
+    }
   });
 
   it("bounds widget coordinates and enforces dimensions of at least one unit", () => {

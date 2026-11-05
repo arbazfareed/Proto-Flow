@@ -12,7 +12,9 @@
     "benchmark:axure-parity": "node scripts/run-axure-parity-benchmark.mjs",
     "test:axure-parity": "vitest run src/project/axureParityWorkflows.test.ts src/project/dynamicPanels.test.ts src/project/repeaters.test.ts src/project/expressions.test.ts src/project/variables.test.ts src/project/interactions.test.ts src/project/flow.test.ts src/project/widgetNotes.test.ts src/project/richText.test.ts src/project/versionHistory.test.ts src/preview/runtime.test.ts src/preview/publishBundle.test.ts src/preview/codeExport.test.ts src/preview/htmlExport.test.ts",
     "verify:devices": "node scripts/run-device-verification.mjs",
-    "test": "vitest run"
+    "test": "vitest",
+    "test:ci": "vitest run --coverage",
+    "test:ui": "vitest --ui"
   },
   "dependencies": {
     "@dagrejs/dagre": "^3.1.1",
@@ -51,6 +53,8 @@
     "@types/react-dom": "^19.1.6",
     "@types/utif": "^3.0.6",
     "@vitejs/plugin-react": "^6.0.2",
+    "@vitest/coverage-v8": "^5.1.0",
+    "@vitest/ui": "^5.1.0",
     "playwright": "^1.64.1",
     "tailwindcss": "^4.1.0",
     "typescript": "~6.0.3",
