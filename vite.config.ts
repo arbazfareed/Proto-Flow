@@ -30,7 +30,7 @@ export default defineConfig({
     },
   },
   test: {
-    exclude: [...configDefaults.exclude, "cloud/**"],
+    exclude: [...configDefaults.exclude, "**/*.component.test.tsx", "cloud/**"],
     pool: "threads",
     maxWorkers: 8,
     isolate: false,

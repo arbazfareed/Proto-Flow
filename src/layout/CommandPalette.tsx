@@ -43,6 +43,11 @@ export function CommandPalette() {
         aria-modal="true"
         aria-label="Command palette"
         onKeyDown={(event) => {
+          if (event.key === "Escape") {
+            event.preventDefault();
+            setPaletteOpen(false);
+            return;
+          }
           if (event.key !== "Tab") return;
 
           const focusable = Array.from(
@@ -65,7 +70,7 @@ export function CommandPalette() {
           }
         }}
       >
-        <Command label="Command palette" loop>
+        <Command label="Filter commands" loop>
           <div className="palette-search">
             <Search size={17} />
             <Command.Input
