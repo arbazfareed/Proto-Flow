@@ -9,6 +9,12 @@ test("flow view renders the project screen and version history saves a checkpoin
   await page.getByRole("button", { name: "Flow", exact: true }).click();
   await expect(page.getByRole("region", { name: "Screen flow diagram" })).toBeVisible();
   await expect(page.getByRole("article", { name: "Responsive web screen" })).toBeVisible();
+  const svgDownload = page.waitForEvent("download");
+  await page.getByRole("button", { name: "SVG", exact: true }).click();
+  expect((await svgDownload).suggestedFilename()).toBe("flow-diagram.svg");
+  const pngDownload = page.waitForEvent("download");
+  await page.getByRole("button", { name: "PNG", exact: true }).click();
+  expect((await pngDownload).suggestedFilename()).toBe("flow-diagram.png");
   await page.getByRole("button", { name: "Design", exact: true }).click();
 
   await page.getByRole("button", { name: "Quick actions" }).click();
@@ -23,4 +29,5 @@ test("flow view renders the project screen and version history saves a checkpoin
     "aria-pressed",
     "true",
   );
+  await expect(history.getByText("Stored locally on this device")).toBeVisible();
 });

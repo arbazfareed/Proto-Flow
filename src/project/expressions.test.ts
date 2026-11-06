@@ -125,6 +125,8 @@ describe("safe expression engine", () => {
     expect(() => evaluateExpression("1 + )")).toThrow();
     expect(() => evaluateExpression("fetch(1)")).toThrow(/unknown expression function/i);
     expect(() => evaluateExpression("item.constructor", { item: {} })).toThrow(/not allowed/i);
+    expect(evaluateExpression("window.location")).toBeUndefined();
+    expect(() => evaluateExpression("1 / 0")).toThrow(/finite/i);
     expect(() => evaluateExpression("1".repeat(2_001))).toThrow(/too long/i);
   });
 

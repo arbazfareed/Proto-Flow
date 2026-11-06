@@ -7,6 +7,7 @@ on:
   push:
     branches:
       - main
+      - feature/pf-t709-axure-parity-tests
   workflow_dispatch:
 
 permissions:
@@ -38,6 +39,8 @@ jobs:
         run: npx playwright install chromium
       - name: Run Axure-parity feature and workflow regressions
         run: npm run test:axure-parity
+      - name: Run Axure-parity component regressions
+        run: npm run test:components
       - name: Build browser application
         run: npm run build
       - name: Verify browser preview and device behavior

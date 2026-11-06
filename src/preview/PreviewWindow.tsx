@@ -105,7 +105,7 @@ function widgetStyle(widget: Widget, position?: WidgetPosition): CSSProperties {
   };
 }
 
-function VirtualizedRepeater({
+export function VirtualizedRepeater({
   widget,
   rows,
   template,

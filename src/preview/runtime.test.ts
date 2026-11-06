@@ -376,4 +376,93 @@ describe("PreviewRuntime", () => {
     });
     expect(runtime.runEvent(trigger, "onClick")).toEqual([]);
   });
+
+  it("applies every panel transition and isolates repeater-item interaction locals", () => {
+    const transitions = ["none", "fade", "slide-left", "slide-right", "slide-up", "slide-down"] as const;
+    const project = createProject();
+    const screen = project.screens[0];
+    const trigger = screen.widgets[0];
+    const panel = screen.widgets.find((widget) => widget.type === "dynamic-panel");
+    const repeater = screen.widgets.find((widget) => widget.type === "repeater");
+    if (!panel || !repeater) throw new Error("Test fixture is missing advanced widgets.");
+    panel.props.states = transitions.map((transition) => ({
+      id: transition,
+      name: transition,
+      widgets: [],
+    }));
+
+    for (const [index, transition] of transitions.entries()) {
+      screen.interactionRules = [{
+        id: crypto.randomUUID(),
+        widgetId: trigger.id,
+        event: "onClick",
+        conditions: [],
+        actions: [{
+          type: "setPanelState",
+          target: panel.id,
+          stateId: transition,
+          transition,
+          duration: index * 40,
+        }],
+      }];
+      const runtime = new PreviewRuntime(project);
+      expect(runtime.runEvent(trigger, "onClick")).toEqual([]);
+      expect(runtime.snapshot().panelTransitions[panel.id]).toEqual({
+        transition,
+        duration: index * 40,
+      });
+    }
+
+    project.variables.push({
+      id: crypto.randomUUID(),
+      name: "lastRepeaterItem",
+      scope: "project",
+      type: "string",
+      initial: "",
+    });
+    screen.interactionRules = [{
+      id: crypto.randomUUID(),
+      widgetId: repeater.id,
+      event: "onClick",
+      conditions: [],
+      localVariables: [{ name: "itemName", type: "string", initial: "isolated" }],
+      actions: [
+        { type: "setVariable", target: "itemName", value: "{{item.name}}" },
+        { type: "setVariable", target: "lastRepeaterItem", value: "[[ itemName ]]" },
+      ],
+    }];
+    const runtime = new PreviewRuntime(project);
+    for (const name of ["Alpha", "Beta"]) {
+      expect(runtime.runEvent(repeater, "onClick", { name })).toEqual([]);
+      expect(runtime.getVariable("lastRepeaterItem")).toBe(name);
+    }
+  });
+
+  it("resolves interaction-local variables before screen and project variables", () => {
+    const project = createProject();
+    const screen = project.screens[0];
+    const trigger = screen.widgets[0];
+    project.variables.push(
+      { id: crypto.randomUUID(), name: "score", scope: "project", type: "number", initial: 1 },
+      { id: crypto.randomUUID(), name: "score", scope: "screen", screenId: screen.id, type: "number", initial: 2 },
+      { id: crypto.randomUUID(), name: "observedScore", scope: "project", type: "number", initial: 0 },
+    );
+    screen.interactionRules = [{
+      id: crypto.randomUUID(),
+      widgetId: trigger.id,
+      event: "onClick",
+      conditions: [{ variable: "score", operator: "equals", value: 3 }],
+      localVariables: [{ name: "score", type: "number", initial: 3 }],
+      actions: [{ type: "setVariable", target: "observedScore", value: "[[ score ]]" }],
+    }];
+    const runtime = new PreviewRuntime(project);
+
+    expect(runtime.runEvent(trigger, "onClick")).toEqual([]);
+    expect(runtime.getVariable("observedScore")).toBe(3);
+    expect(runtime.getVariable("score")).toBe(2);
+    expect(runtime.snapshot().variables).toContainEqual(expect.objectContaining({
+      variable: expect.objectContaining({ name: "score", scope: "project" }),
+      value: 1,
+    }));
+  });
 });

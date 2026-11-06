@@ -8,6 +8,7 @@ on:
     branches:
       - main
       - feature/pf-t708-cross-browser-qa
+      - feature/pf-t709-axure-parity-tests
   workflow_dispatch:
 
 permissions:
