@@ -33,7 +33,18 @@ jobs:
       - run: npx playwright install chromium
       - run: npm run test:e2e:browser
       - run: npm run build:e2e:desktop
-      - run: npm run test:e2e:desktop
+      - name: Run desktop E2E tests
+        shell: pwsh
+        run: |
+          npm run test:e2e:desktop 2>&1 | Tee-Object -FilePath desktop-e2e.log
+          $testExitCode = $LASTEXITCODE
+          if ($testExitCode -ne 0) {
+            Get-Content desktop-e2e.log |
+              Select-String -Pattern 'FAILED|ERROR|Error:|timed out|Timeout|not found|failed' |
+              Select-Object -Last 20 |
+              ForEach-Object { Write-Output "::error::$($_.Line)" }
+            exit $testExitCode
+          }
       - uses: actions/upload-artifact@v4
         if: always()
         with:
@@ -41,5 +52,6 @@ jobs:
           path: |
             playwright-report/
             test-results/
+            desktop-e2e.log
           if-no-files-found: warn
           retention-days: 14
