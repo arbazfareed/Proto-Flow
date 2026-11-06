@@ -286,6 +286,7 @@ html[data-theme="light"] .layer-group-row.is-selected { background: #eeeafb; }
 html[data-theme="light"] .privacy-settings-dialog>p,
 html[data-theme="light"] .privacy-setting-option small,
 html[data-theme="light"] .privacy-local-logs small { color: #5d439e; }
+html[data-theme="light"] .privacy-settings-dialog .eyebrow { color: #5d439e; }
 html[data-theme="light"] .privacy-setting-option { color: var(--text-primary); border-color: var(--border); background: var(--surface-raised); }
 html[data-theme="light"] .privacy-setting-option strong,
 html[data-theme="light"] .privacy-local-logs strong { color: var(--text-primary); }
