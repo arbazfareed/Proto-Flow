@@ -85,6 +85,7 @@ describe("local HTML bundle export", () => {
     const imagePath = exportedProject.screens[0].widgets[0].props.src;
 
     expect(Object.keys(archive.files).sort()).toEqual([
+      "FONT-LICENSE.txt",
       "assets/",
       "assets/image-1.png",
       "index.html",
@@ -98,6 +99,8 @@ describe("local HTML bundle export", () => {
     );
     expect(html).toContain('<script src="./runtime.js" defer></script>');
     expect(html).toContain('<link rel="stylesheet" href="./style.css">');
+    expect(await archive.file("FONT-LICENSE.txt")?.async("text")).toContain("SIL OPEN FONT LICENSE");
+    expect(await archive.file("style.css")?.async("text")).toContain("@font-face{font-family:Inter");
     expect(runtime).toContain("image.srcset =");
     expect(await archive.file("runtime.js")!.async("text")).toContain("setVariable");
     expect(html).not.toMatch(/https?:\/\//i);

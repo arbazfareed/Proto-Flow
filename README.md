@@ -38,6 +38,8 @@ PF-T705 performance benchmarks cover canvas workloads, store operations, feature
 
 PF-T706 checks WCAG 2.1 AA accessibility in browser and Windows desktop E2E, with component-level axe checks. See [ACCESSIBILITY.md](./ACCESSIBILITY.md) for the manual audit checklist and [the accessibility statement](./public/accessibility.html).
 
+PF-T708 cross-browser export QA verifies responsive and per-device HTML, React exports, and published-preview bundles across Chromium, Firefox, WebKit, Chrome, Edge, and mobile emulations. It checks accessibility, interactions, breakpoint behavior, performance, and visual baselines. See [the compatibility matrix and QA commands](./docs/cross-browser-export-qa.md).
+
 ## In-app help
 
 Press **F1** or choose **Help & docs** in the workspace sidebar to search the offline help library. Guides are Markdown files in `docs/help/`, bundled with the app at build time; contextual help buttons open the related article. Article feedback stays on the current device. Deep links use `protoflow://docs/{slug}`.

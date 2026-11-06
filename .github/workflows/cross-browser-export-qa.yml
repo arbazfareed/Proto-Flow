@@ -1,0 +1,38 @@
+name: Cross-browser export QA
+
+on:
+  pull_request:
+    branches:
+      - main
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  export-browser-qa:
+    runs-on: windows-2022
+    timeout-minutes: 30
+    env:
+      PF_EXPORT_FULL: ${{ github.event_name != 'pull_request' && '1' || '0' }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - if: github.event_name == 'pull_request'
+        run: npx playwright install chromium
+      - if: github.event_name != 'pull_request'
+        run: npx playwright install chromium firefox webkit chrome msedge
+      - run: npm run qa:exports
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: cross-browser-export-qa-${{ github.run_id }}
+          path: reports/cross-browser-qa/
+          if-no-files-found: warn

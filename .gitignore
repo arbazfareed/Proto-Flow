@@ -15,6 +15,7 @@ coverage
 test-results
 playwright-report
 reports/bundle-map.html
+reports/cross-browser-qa/screenshots/
 
 # Editor directories and files
 .vscode/*
