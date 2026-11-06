@@ -25,7 +25,7 @@ async function expectAccessible(surface) {
   );
   if (seriousViolations.length > 0) {
     throw new Error(
-      `axe-core WCAG 2.1 AA violations on desktop ${surface}:\n${JSON.stringify(seriousViolations, null, 2)}`,
+      `axe-core WCAG 2.1 AA violations on desktop ${surface}: ${JSON.stringify(seriousViolations)}`,
     );
   }
 }
