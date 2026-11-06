@@ -40,9 +40,11 @@ jobs:
           $testExitCode = $LASTEXITCODE
           if ($testExitCode -ne 0) {
             Get-Content desktop-e2e.log |
-              Select-String -Pattern 'FAILED|ERROR|Error:|timed out|Timeout|not found|failed' |
-              Select-Object -Last 20 |
+              Select-String -Pattern 'FAILED|ERROR|Error:|TypeError|AssertionError|DevToolsActivePort|session not created|timed out|Timeout|Process completed' |
+              Where-Object { $_.Line -notmatch '\bWARN\b' } |
+              Select-Object -Last 8 |
               ForEach-Object { Write-Output "::error::$($_.Line)" }
+            Write-Output "::error::Desktop E2E exited with code $testExitCode; inspect the desktop-e2e.log artifact."
             exit $testExitCode
           }
       - uses: actions/upload-artifact@v4
