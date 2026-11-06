@@ -118,8 +118,12 @@ Conditions use variable names and operators equals, notEquals, greaterThan, grea
 Actions must use navigate, show, hide, setVariable, setPanelState, or setRepeaterData.
 Do not include an id or widgetId; the server assigns those. Do not add explanations or markdown.`;
 
-const INJECTION_PATTERN =
-  /\b(ignore|disregard|override|forget|bypass|reveal|expose)\b.{0,80}\b(previous|system|developer|instructions?|prompt|rules?)\b|\b(system|developer)\s+prompt\b|\bact\s+as\b.{0,40}\b(system|developer|assistant)\b/i;
+const INJECTION_PATTERNS = [
+  /\b(ignore|disregard|override|forget|bypass|reveal|expose)\b.{0,80}\b(previous|system|developer|instructions?|prompt|rules?)\b|\b(system|developer)\s+prompt\b|\bact\s+as\b.{0,40}\b(system|developer|assistant)\b/i,
+  /\b(?:DAN|do anything now|jailbreak)\b/i,
+  /\b(?:reveal|show|print|expose|leak)\b.{0,60}\b(?:secret|credential|api key|system prompt|developer prompt)\b/i,
+  /\b(?:generate|write|create|build)\b.{0,60}\b(?:malware|ransomware|virus|trojan|keylogger|credential stealer)\b/i,
+];
 
 export interface AiInteractionContext {
   prompt: string;
@@ -334,7 +338,7 @@ export async function generateInteractionRule(
     ...safeContext.screens.map((screen) => screen.name),
     ...safeContext.widgets.flatMap((widget) => [widget.name, widget.type]),
   ].join("\n");
-  if (INJECTION_PATTERN.test(untrustedText)) {
+  if (INJECTION_PATTERNS.some((pattern) => pattern.test(untrustedText))) {
     throw new AiInteractionError("This request looks like an attempt to override the AI instructions.", "PROMPT_REJECTED");
   }
 
