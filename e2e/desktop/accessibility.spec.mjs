@@ -25,7 +25,7 @@ async function expectAccessible(surface) {
   );
   if (seriousViolations.length > 0) {
     throw new Error(
-      `axe-core WCAG 2.1 AA violations on desktop ${surface}:\n${JSON.stringify(seriousViolations, null, 2)}`,
+      `axe-core WCAG 2.1 AA violations on desktop ${surface}: ${JSON.stringify(seriousViolations)}`,
     );
   }
 }
@@ -34,7 +34,10 @@ describe("Windows desktop accessibility", () => {
   it("audits the native workspace and verifies keyboard navigation and focus visibility", async () => {
     const privacyDialog = await $('[aria-labelledby="privacy-settings-title"]');
     await privacyDialog.waitForDisplayed({ timeout: 60_000 });
-    await expectAccessible("privacy preferences");
+    await browser.execute(() => document.documentElement.setAttribute("data-theme", "dark"));
+    await expectAccessible("privacy preferences (dark theme)");
+    await browser.execute(() => document.documentElement.setAttribute("data-theme", "light"));
+    await expectAccessible("privacy preferences (light theme)");
     await $('//button[normalize-space(.)="Continue with both off"]').click();
 
     const welcome = await $('[aria-labelledby="onboarding-title"]');

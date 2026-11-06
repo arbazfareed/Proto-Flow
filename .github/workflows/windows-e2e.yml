@@ -4,7 +4,7 @@ on:
   pull_request:
     branches: [main]
   push:
-    branches: [main, feature/pf-t704-windows-e2e, feature/pf-t706-accessibility, feature/pf-t707-security-audit]
+    branches: [main, feature/pf-t704-windows-e2e, feature/pf-t706-accessibility, feature/pf-t707-security-audit, feature/pf-t708-cross-browser-qa]
 
 permissions:
   contents: read
@@ -15,7 +15,7 @@ concurrency:
 
 jobs:
   browser-and-desktop:
-    runs-on: windows-latest
+    runs-on: windows-2022
     timeout-minutes: 45
     env:
       CARGO_TARGET_DIR: ${{ github.workspace }}\src-tauri\target
@@ -33,7 +33,20 @@ jobs:
       - run: npx playwright install chromium
       - run: npm run test:e2e:browser
       - run: npm run build:e2e:desktop
-      - run: npm run test:e2e:desktop
+      - name: Run desktop E2E tests
+        shell: pwsh
+        run: |
+          npm run test:e2e:desktop 2>&1 | Tee-Object -FilePath desktop-e2e.log
+          $testExitCode = $LASTEXITCODE
+          if ($testExitCode -ne 0) {
+            Get-Content desktop-e2e.log |
+              Select-String -Pattern 'FAILED|ERROR|Error:|TypeError|AssertionError|DevToolsActivePort|session not created|timed out|Timeout|Process completed' |
+              Where-Object { $_.Line -notmatch '\bWARN\b' } |
+              Select-Object -Last 8 |
+              ForEach-Object { Write-Output "::error::$($_.Line)" }
+            Write-Output "::error::Desktop E2E exited with code $testExitCode; inspect the desktop-e2e.log artifact."
+            exit $testExitCode
+          }
       - uses: actions/upload-artifact@v4
         if: always()
         with:
@@ -41,5 +54,6 @@ jobs:
           path: |
             playwright-report/
             test-results/
+            desktop-e2e.log
           if-no-files-found: warn
           retention-days: 14

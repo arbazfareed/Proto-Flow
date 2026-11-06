@@ -1,290 +1,10 @@
 {
-  "generatedAt": "2026-11-06T05:09:51.759Z",
+  "generatedAt": "2026-11-06T12:52:56.357Z",
   "mode": "full",
   "results": [
     {
       "browser": "chromium",
       "surface": "responsive-html",
-      "status": "passed",
-      "loadMilliseconds": 92,
-      "visual": {
-        "initialized": false,
-        "changedPixelRatio": 0
-      }
-    },
-    {
-      "browser": "chromium",
-      "surface": "device-desktop-html",
-      "status": "passed",
-      "loadMilliseconds": 41,
-      "visual": {
-        "initialized": false,
-        "changedPixelRatio": 0
-      }
-    },
-    {
-      "browser": "chromium",
-      "surface": "device-tablet-html",
-      "status": "passed",
-      "loadMilliseconds": 59,
-      "visual": {
-        "initialized": false,
-        "changedPixelRatio": 0
-      }
-    },
-    {
-      "browser": "chromium",
-      "surface": "device-mobile-html",
-      "status": "passed",
-      "loadMilliseconds": 57,
-      "visual": {
-        "initialized": false,
-        "changedPixelRatio": 0
-      }
-    },
-    {
-      "browser": "chromium",
-      "surface": "published-preview",
-      "status": "passed",
-      "loadMilliseconds": 89,
-      "visual": {
-        "initialized": false,
-        "changedPixelRatio": 0
-      }
-    },
-    {
-      "browser": "chromium",
-      "surface": "react-export",
-      "status": "passed",
-      "loadMilliseconds": 425,
-      "visual": {
-        "initialized": false,
-        "changedPixelRatio": 0
-      }
-    },
-    {
-      "browser": "firefox",
-      "surface": "responsive-html",
-      "status": "passed",
-      "loadMilliseconds": 837,
-      "visual": {
-        "initialized": false,
-        "changedPixelRatio": 0
-      }
-    },
-    {
-      "browser": "firefox",
-      "surface": "device-desktop-html",
-      "status": "passed",
-      "loadMilliseconds": 967,
-      "visual": {
-        "initialized": false,
-        "changedPixelRatio": 0
-      }
-    },
-    {
-      "browser": "firefox",
-      "surface": "device-tablet-html",
-      "status": "passed",
-      "loadMilliseconds": 169,
-      "visual": {
-        "initialized": false,
-        "changedPixelRatio": 0
-      }
-    },
-    {
-      "browser": "firefox",
-      "surface": "device-mobile-html",
-      "status": "passed",
-      "loadMilliseconds": 158,
-      "visual": {
-        "initialized": false,
-        "changedPixelRatio": 0
-      }
-    },
-    {
-      "browser": "firefox",
-      "surface": "published-preview",
-      "status": "passed",
-      "loadMilliseconds": 137,
-      "visual": {
-        "initialized": false,
-        "changedPixelRatio": 0
-      }
-    },
-    {
-      "browser": "firefox",
-      "surface": "react-export",
-      "status": "passed",
-      "loadMilliseconds": 333,
-      "visual": {
-        "initialized": false,
-        "changedPixelRatio": 0
-      }
-    },
-    {
-      "browser": "webkit",
-      "surface": "responsive-html",
-      "status": "passed",
-      "loadMilliseconds": 116,
-      "visual": {
-        "initialized": false,
-        "changedPixelRatio": 0
-      }
-    },
-    {
-      "browser": "webkit",
-      "surface": "device-desktop-html",
-      "status": "passed",
-      "loadMilliseconds": 38,
-      "visual": {
-        "initialized": false,
-        "changedPixelRatio": 0
-      }
-    },
-    {
-      "browser": "webkit",
-      "surface": "device-tablet-html",
-      "status": "passed",
-      "loadMilliseconds": 81,
-      "visual": {
-        "initialized": false,
-        "changedPixelRatio": 0
-      }
-    },
-    {
-      "browser": "webkit",
-      "surface": "device-mobile-html",
-      "status": "passed",
-      "loadMilliseconds": 74,
-      "visual": {
-        "initialized": false,
-        "changedPixelRatio": 0
-      }
-    },
-    {
-      "browser": "webkit",
-      "surface": "published-preview",
-      "status": "passed",
-      "loadMilliseconds": 140,
-      "visual": {
-        "initialized": false,
-        "changedPixelRatio": 0
-      }
-    },
-    {
-      "browser": "webkit",
-      "surface": "react-export",
-      "status": "passed",
-      "loadMilliseconds": 207,
-      "visual": {
-        "initialized": false,
-        "changedPixelRatio": 0
-      }
-    },
-    {
-      "browser": "chrome",
-      "surface": "responsive-html",
-      "status": "passed",
-      "loadMilliseconds": 320,
-      "visual": {
-        "initialized": false,
-        "changedPixelRatio": 0
-      }
-    },
-    {
-      "browser": "chrome",
-      "surface": "device-desktop-html",
-      "status": "passed",
-      "loadMilliseconds": 68,
-      "visual": {
-        "initialized": false,
-        "changedPixelRatio": 0
-      }
-    },
-    {
-      "browser": "chrome",
-      "surface": "device-tablet-html",
-      "status": "passed",
-      "loadMilliseconds": 100,
-      "visual": {
-        "initialized": false,
-        "changedPixelRatio": 0
-      }
-    },
-    {
-      "browser": "chrome",
-      "surface": "device-mobile-html",
-      "status": "passed",
-      "loadMilliseconds": 99,
-      "visual": {
-        "initialized": false,
-        "changedPixelRatio": 0
-      }
-    },
-    {
-      "browser": "chrome",
-      "surface": "published-preview",
-      "status": "passed",
-      "loadMilliseconds": 96,
-      "visual": {
-        "initialized": false,
-        "changedPixelRatio": 0
-      }
-    },
-    {
-      "browser": "chrome",
-      "surface": "react-export",
-      "status": "passed",
-      "loadMilliseconds": 449,
-      "visual": {
-        "initialized": false,
-        "changedPixelRatio": 0
-      }
-    },
-    {
-      "browser": "edge",
-      "surface": "responsive-html",
-      "status": "passed",
-      "loadMilliseconds": 181,
-      "visual": {
-        "initialized": false,
-        "changedPixelRatio": 0
-      }
-    },
-    {
-      "browser": "edge",
-      "surface": "device-desktop-html",
-      "status": "passed",
-      "loadMilliseconds": 81,
-      "visual": {
-        "initialized": false,
-        "changedPixelRatio": 0
-      }
-    },
-    {
-      "browser": "edge",
-      "surface": "device-tablet-html",
-      "status": "passed",
-      "loadMilliseconds": 102,
-      "visual": {
-        "initialized": false,
-        "changedPixelRatio": 0
-      }
-    },
-    {
-      "browser": "edge",
-      "surface": "device-mobile-html",
-      "status": "passed",
-      "loadMilliseconds": 146,
-      "visual": {
-        "initialized": false,
-        "changedPixelRatio": 0
-      }
-    },
-    {
-      "browser": "edge",
-      "surface": "published-preview",
       "status": "passed",
       "loadMilliseconds": 107,
       "visual": {
@@ -293,37 +13,77 @@
       }
     },
     {
-      "browser": "edge",
-      "surface": "react-export",
-      "status": "passed",
-      "loadMilliseconds": 1117,
-      "visual": {
-        "initialized": false,
-        "changedPixelRatio": 0
-      }
-    },
-    {
-      "browser": "chromium-mobile",
-      "surface": "responsive-html",
-      "status": "passed",
-      "loadMilliseconds": 305,
-      "visual": {
-        "initialized": false,
-        "changedPixelRatio": 0
-      }
-    },
-    {
-      "browser": "chromium-mobile",
+      "browser": "chromium",
       "surface": "device-desktop-html",
       "status": "passed",
-      "loadMilliseconds": 62,
+      "loadMilliseconds": 52,
       "visual": {
         "initialized": false,
         "changedPixelRatio": 0
       }
     },
     {
-      "browser": "chromium-mobile",
+      "browser": "chromium",
+      "surface": "device-tablet-html",
+      "status": "passed",
+      "loadMilliseconds": 23,
+      "visual": {
+        "initialized": false,
+        "changedPixelRatio": 0
+      }
+    },
+    {
+      "browser": "chromium",
+      "surface": "device-mobile-html",
+      "status": "passed",
+      "loadMilliseconds": 37,
+      "visual": {
+        "initialized": false,
+        "changedPixelRatio": 0
+      }
+    },
+    {
+      "browser": "chromium",
+      "surface": "published-preview",
+      "status": "passed",
+      "loadMilliseconds": 44,
+      "visual": {
+        "initialized": false,
+        "changedPixelRatio": 0
+      }
+    },
+    {
+      "browser": "chromium",
+      "surface": "react-export",
+      "status": "passed",
+      "loadMilliseconds": 177,
+      "visual": {
+        "initialized": false,
+        "changedPixelRatio": 0
+      }
+    },
+    {
+      "browser": "firefox",
+      "surface": "responsive-html",
+      "status": "passed",
+      "loadMilliseconds": 553,
+      "visual": {
+        "initialized": false,
+        "changedPixelRatio": 0
+      }
+    },
+    {
+      "browser": "firefox",
+      "surface": "device-desktop-html",
+      "status": "passed",
+      "loadMilliseconds": 173,
+      "visual": {
+        "initialized": false,
+        "changedPixelRatio": 0
+      }
+    },
+    {
+      "browser": "firefox",
       "surface": "device-tablet-html",
       "status": "passed",
       "loadMilliseconds": 73,
@@ -333,10 +93,250 @@
       }
     },
     {
+      "browser": "firefox",
+      "surface": "device-mobile-html",
+      "status": "passed",
+      "loadMilliseconds": 95,
+      "visual": {
+        "initialized": false,
+        "changedPixelRatio": 0
+      }
+    },
+    {
+      "browser": "firefox",
+      "surface": "published-preview",
+      "status": "passed",
+      "loadMilliseconds": 44,
+      "visual": {
+        "initialized": false,
+        "changedPixelRatio": 0
+      }
+    },
+    {
+      "browser": "firefox",
+      "surface": "react-export",
+      "status": "passed",
+      "loadMilliseconds": 139,
+      "visual": {
+        "initialized": false,
+        "changedPixelRatio": 0
+      }
+    },
+    {
+      "browser": "webkit",
+      "surface": "responsive-html",
+      "status": "passed",
+      "loadMilliseconds": 99,
+      "visual": {
+        "initialized": false,
+        "changedPixelRatio": 0
+      }
+    },
+    {
+      "browser": "webkit",
+      "surface": "device-desktop-html",
+      "status": "passed",
+      "loadMilliseconds": 71,
+      "visual": {
+        "initialized": false,
+        "changedPixelRatio": 0
+      }
+    },
+    {
+      "browser": "webkit",
+      "surface": "device-tablet-html",
+      "status": "passed",
+      "loadMilliseconds": 58,
+      "visual": {
+        "initialized": false,
+        "changedPixelRatio": 0
+      }
+    },
+    {
+      "browser": "webkit",
+      "surface": "device-mobile-html",
+      "status": "passed",
+      "loadMilliseconds": 39,
+      "visual": {
+        "initialized": false,
+        "changedPixelRatio": 0
+      }
+    },
+    {
+      "browser": "webkit",
+      "surface": "published-preview",
+      "status": "passed",
+      "loadMilliseconds": 74,
+      "visual": {
+        "initialized": false,
+        "changedPixelRatio": 0
+      }
+    },
+    {
+      "browser": "webkit",
+      "surface": "react-export",
+      "status": "passed",
+      "loadMilliseconds": 107,
+      "visual": {
+        "initialized": false,
+        "changedPixelRatio": 0
+      }
+    },
+    {
+      "browser": "chrome",
+      "surface": "responsive-html",
+      "status": "passed",
+      "loadMilliseconds": 220,
+      "visual": {
+        "initialized": false,
+        "changedPixelRatio": 0
+      }
+    },
+    {
+      "browser": "chrome",
+      "surface": "device-desktop-html",
+      "status": "passed",
+      "loadMilliseconds": 78,
+      "visual": {
+        "initialized": false,
+        "changedPixelRatio": 0
+      }
+    },
+    {
+      "browser": "chrome",
+      "surface": "device-tablet-html",
+      "status": "passed",
+      "loadMilliseconds": 53,
+      "visual": {
+        "initialized": false,
+        "changedPixelRatio": 0
+      }
+    },
+    {
+      "browser": "chrome",
+      "surface": "device-mobile-html",
+      "status": "passed",
+      "loadMilliseconds": 68,
+      "visual": {
+        "initialized": false,
+        "changedPixelRatio": 0
+      }
+    },
+    {
+      "browser": "chrome",
+      "surface": "published-preview",
+      "status": "passed",
+      "loadMilliseconds": 65,
+      "visual": {
+        "initialized": false,
+        "changedPixelRatio": 0
+      }
+    },
+    {
+      "browser": "chrome",
+      "surface": "react-export",
+      "status": "passed",
+      "loadMilliseconds": 277,
+      "visual": {
+        "initialized": false,
+        "changedPixelRatio": 0
+      }
+    },
+    {
+      "browser": "edge",
+      "surface": "responsive-html",
+      "status": "passed",
+      "loadMilliseconds": 277,
+      "visual": {
+        "initialized": false,
+        "changedPixelRatio": 0
+      }
+    },
+    {
+      "browser": "edge",
+      "surface": "device-desktop-html",
+      "status": "passed",
+      "loadMilliseconds": 96,
+      "visual": {
+        "initialized": false,
+        "changedPixelRatio": 0
+      }
+    },
+    {
+      "browser": "edge",
+      "surface": "device-tablet-html",
+      "status": "passed",
+      "loadMilliseconds": 109,
+      "visual": {
+        "initialized": false,
+        "changedPixelRatio": 0
+      }
+    },
+    {
+      "browser": "edge",
+      "surface": "device-mobile-html",
+      "status": "passed",
+      "loadMilliseconds": 185,
+      "visual": {
+        "initialized": false,
+        "changedPixelRatio": 0
+      }
+    },
+    {
+      "browser": "edge",
+      "surface": "published-preview",
+      "status": "passed",
+      "loadMilliseconds": 57,
+      "visual": {
+        "initialized": false,
+        "changedPixelRatio": 0
+      }
+    },
+    {
+      "browser": "edge",
+      "surface": "react-export",
+      "status": "passed",
+      "loadMilliseconds": 262,
+      "visual": {
+        "initialized": false,
+        "changedPixelRatio": 0
+      }
+    },
+    {
+      "browser": "chromium-mobile",
+      "surface": "responsive-html",
+      "status": "passed",
+      "loadMilliseconds": 126,
+      "visual": {
+        "initialized": false,
+        "changedPixelRatio": 0
+      }
+    },
+    {
+      "browser": "chromium-mobile",
+      "surface": "device-desktop-html",
+      "status": "passed",
+      "loadMilliseconds": 37,
+      "visual": {
+        "initialized": false,
+        "changedPixelRatio": 0
+      }
+    },
+    {
+      "browser": "chromium-mobile",
+      "surface": "device-tablet-html",
+      "status": "passed",
+      "loadMilliseconds": 61,
+      "visual": {
+        "initialized": false,
+        "changedPixelRatio": 0
+      }
+    },
+    {
       "browser": "chromium-mobile",
       "surface": "device-mobile-html",
       "status": "passed",
-      "loadMilliseconds": 119,
+      "loadMilliseconds": 44,
       "visual": {
         "initialized": false,
         "changedPixelRatio": 0
@@ -346,7 +346,7 @@
       "browser": "chromium-mobile",
       "surface": "published-preview",
       "status": "passed",
-      "loadMilliseconds": 83,
+      "loadMilliseconds": 57,
       "visual": {
         "initialized": false,
         "changedPixelRatio": 0
@@ -356,7 +356,7 @@
       "browser": "chromium-mobile",
       "surface": "react-export",
       "status": "passed",
-      "loadMilliseconds": 520,
+      "loadMilliseconds": 231,
       "visual": {
         "initialized": false,
         "changedPixelRatio": 0
@@ -366,7 +366,7 @@
       "browser": "webkit-mobile",
       "surface": "responsive-html",
       "status": "passed",
-      "loadMilliseconds": 94,
+      "loadMilliseconds": 67,
       "visual": {
         "initialized": false,
         "changedPixelRatio": 0
@@ -376,7 +376,7 @@
       "browser": "webkit-mobile",
       "surface": "device-desktop-html",
       "status": "passed",
-      "loadMilliseconds": 32,
+      "loadMilliseconds": 52,
       "visual": {
         "initialized": false,
         "changedPixelRatio": 0
@@ -386,7 +386,7 @@
       "browser": "webkit-mobile",
       "surface": "device-tablet-html",
       "status": "passed",
-      "loadMilliseconds": 47,
+      "loadMilliseconds": 52,
       "visual": {
         "initialized": false,
         "changedPixelRatio": 0
@@ -396,7 +396,7 @@
       "browser": "webkit-mobile",
       "surface": "device-mobile-html",
       "status": "passed",
-      "loadMilliseconds": 90,
+      "loadMilliseconds": 50,
       "visual": {
         "initialized": false,
         "changedPixelRatio": 0
@@ -406,7 +406,7 @@
       "browser": "webkit-mobile",
       "surface": "published-preview",
       "status": "passed",
-      "loadMilliseconds": 81,
+      "loadMilliseconds": 52,
       "visual": {
         "initialized": false,
         "changedPixelRatio": 0
@@ -416,7 +416,7 @@
       "browser": "webkit-mobile",
       "surface": "react-export",
       "status": "passed",
-      "loadMilliseconds": 191,
+      "loadMilliseconds": 121,
       "visual": {
         "initialized": false,
         "changedPixelRatio": 0
