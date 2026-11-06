@@ -185,4 +185,15 @@ describe("project version history", () => {
       expect.objectContaining({ widget: "Added", change: "removed" }),
     ]));
   });
+
+  it("keeps local history isolated between projects", async () => {
+    const first = createEmptyProject("First project");
+    const second = createEmptyProject("Second project");
+    await createProjectCheckpoint(first, null, "First baseline", "manual");
+
+    expect(await listProjectCheckpoints(second.id, null)).toEqual([]);
+    const checkpoints = await listProjectCheckpoints(first.id, null);
+    expect(reconstructCheckpoint(checkpoints, 0).name).toBe("First project");
+    expect(() => reconstructCheckpoint(checkpoints, 1)).toThrow(RangeError);
+  });
 });

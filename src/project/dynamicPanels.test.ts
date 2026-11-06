@@ -12,6 +12,7 @@ import {
   updatePanelState,
   withPanelStates,
 } from "./dynamicPanels";
+import { createEmptyProject, parseProject, serializeProject } from "./schema";
 
 function widget(type: string, x = 0): Widget {
   return {
@@ -128,6 +129,34 @@ describe("dynamic panel helpers", () => {
         widgets: [expect.objectContaining({ props: { label: "Changed" } })],
       }),
     ]);
+  });
+
+  it("round-trips panel states and active state while rejecting nesting beyond five levels", () => {
+    const project = createEmptyProject("Nested panels");
+    const panelState = (name: string, widgets: Widget[]) => ({
+      id: crypto.randomUUID(),
+      name,
+      widgets,
+    });
+    const makeNestedPanels = (count: number): Widget => {
+      let nested = widget("text");
+      for (let index = 0; index < count; index += 1) {
+        const state = panelState(`State ${index + 1}`, [nested]);
+        nested = withPanelStates(widget("dynamic-panel"), [state], state.id);
+      }
+      return nested;
+    };
+    const fiveLevels = makeNestedPanels(5);
+    project.screens[0].widgets = [fiveLevels];
+
+    const restored = parseProject(serializeProject(project));
+    expect(collectWidgetsDeep(restored.screens[0].widgets).map((item) => item.type))
+      .toEqual(["dynamic-panel", "dynamic-panel", "dynamic-panel", "dynamic-panel", "dynamic-panel", "text"]);
+
+    project.screens[0].widgets = [makeNestedPanels(6)];
+    expect(() => parseProject(serializeProject(project))).toThrow(
+      "Dynamic panels may be nested at most five levels deep.",
+    );
   });
 
   it("places new widgets at the root when the edit scope is missing or stale", () => {
