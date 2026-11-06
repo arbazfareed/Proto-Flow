@@ -82,11 +82,14 @@ describe("standalone published preview bundle", () => {
     const serialized = getPublishedProjectData(html);
 
     expect(html).toContain("<!doctype html>");
+    expect(html).toContain("@font-face{font-family:Inter");
+    expect(html).toContain('<template id="inter-font-license">');
+    expect(html).toContain("SIL OPEN FONT LICENSE");
     expect(serialized).not.toBeNull();
     expect(JSON.parse(serialized!)).toEqual(project);
     expect(html).toContain("{{status}}");
     expect(html).not.toMatch(/<script\s+src=/i);
-    expect(html).not.toMatch(/https?:\/\/(?!www\.w3\.org\/2000\/svg)/i);
+    expect(html).not.toMatch(/(?:src|href)\s*=\s*["']https?:\/\//i);
     expect(html).not.toMatch(/\b(?:fetch|XMLHttpRequest|localStorage|sessionStorage)\b/);
     expect(publishedBundleSize(html)).toBe(new TextEncoder().encode(html).byteLength);
   });
@@ -159,7 +162,7 @@ describe("standalone published preview bundle", () => {
     expect(html).toContain("function repeaterRows(value)");
     expect(html).toContain("case");
     expect(html).toContain('action.type === "sortRepeater"');
-    expect(html).toContain("renderWidget(child, activeScreen, rowData)");
+    expect(html).toContain("renderWidget(child, activeScreen, rowData, localVariables)");
     expect(html).toContain("item?.[name.slice(5)]");
     expect(html).toContain("function repeaterItemVisible(widget, item)");
     expect(html).toContain("function evaluateExpression(source, context = {})");

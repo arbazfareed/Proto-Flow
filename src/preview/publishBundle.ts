@@ -1,6 +1,12 @@
+/// <reference types="vite/client" />
+
 import type { Project } from "../project/schema";
 import { EXPRESSION_RUNTIME_SOURCE } from "../project/expressions";
 import { ensureRichTextRuns } from "../project/richText";
+import interFont from "@fontsource-variable/inter/files/inter-latin-wght-normal.woff2?inline";
+import interFontLicense from "@fontsource-variable/inter/LICENSE?raw";
+
+export const INTER_FONT_LICENSE = interFontLicense;
 
 export const PREVIEW_RUNTIME_SCRIPT = String.raw`
 ${EXPRESSION_RUNTIME_SOURCE}
@@ -399,7 +405,7 @@ function bindWidgetEvents(element, widget, item) {
     }
   }, { passive: true });
 }
-function renderWidget(widget, activeScreen, item) {
+function renderWidget(widget, activeScreen, item, localVariables = {}) {
   const element = document.createElement(widget.type === "button" || widget.type === "icon-button" ? "button"
     : widget.type === "card" ? "article"
       : widget.type === "alert" ? "aside"
@@ -660,7 +666,7 @@ function renderWidget(widget, activeScreen, item) {
       row.style.overflow = "hidden";
       bindWidgetEvents(row, widget, rowData);
       for (const child of template) {
-        if (child.visible && visibility.get(child.id) !== false && repeaterItemVisible(child, rowData)) row.append(renderWidget(child, activeScreen, rowData));
+        if (child.visible && visibility.get(child.id) !== false && repeaterItemVisible(child, rowData)) row.append(renderWidget(child, activeScreen, rowData, localVariables));
       }
       element.append(row);
     }
@@ -772,7 +778,8 @@ render();
 window.addEventListener("resize", resizeStage);
 `;
 
-export const PREVIEW_RUNTIME_STYLES = `*{box-sizing:border-box}html,body{margin:0;min-height:100%;font:14px system-ui,sans-serif;background:#15131b;color:#f5f3fa}
+export const PREVIEW_RUNTIME_STYLES = `@font-face{font-family:Inter;src:url("${interFont}") format("woff2");font-style:normal;font-weight:100 900;font-display:swap}
+*{box-sizing:border-box}html,body{margin:0;min-height:100%;font:14px Inter,system-ui,-apple-system,"Segoe UI",sans-serif;background:#15131b;color:#f5f3fa}
 .toolbar{position:sticky;top:0;z-index:2147483647;display:flex;gap:8px;align-items:center;padding:10px;background:#211e29;border-bottom:1px solid #37323f}
 .toolbar button,.toolbar select{min-height:32px;border:1px solid #494353;border-radius:6px;padding:5px 9px;background:#302b39;color:inherit}
 .toolbar button:disabled{opacity:.45}.stage-wrap{padding:28px;overflow:auto}.stage{position:relative;margin:0 auto;background:#fff;color:#24212b;overflow:hidden;box-shadow:0 12px 42px #0007}
@@ -783,7 +790,7 @@ export const PREVIEW_RUNTIME_STYLES = `*{box-sizing:border-box}html,body{margin:
 @keyframes protoflow-panel-slide-right{from{translate:-20px 0}to{translate:0 0}}
 @keyframes protoflow-panel-slide-up{from{translate:0 20px}to{translate:0 0}}
 @keyframes protoflow-panel-slide-down{from{translate:0 -20px}to{translate:0 0}}
-@media(prefers-reduced-motion:reduce){.widget[style*="protoflow-panel-"]{animation:none!important}}`;
+@media(prefers-reduced-motion:reduce){.widget{animation:none!important;transition:none!important}.skeleton-widget span{animation:none!important}}`;
 
 function escapeHtml(value: string): string {
   return value
@@ -820,6 +827,7 @@ export function generatePublishedPreviewHtml(project: Project): string {
 <body>
 <header class="toolbar"><button id="back" type="button" aria-label="Back">Back</button><select id="screen-picker" aria-label="Preview screen"></select><button id="restart" type="button">Restart</button><span>Published with ProtoFlow</span></header>
 <main class="stage-wrap"><section id="stage" class="stage" aria-label="Prototype preview"></section></main>
+<template id="inter-font-license">${INTER_FONT_LICENSE}</template>
 <script id="project-data" type="application/json">${projectData}</script>
 <script>${PREVIEW_RUNTIME_SCRIPT}</script>
 </body>

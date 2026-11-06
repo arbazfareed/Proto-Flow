@@ -1,7 +1,11 @@
+/// <reference types="vite/client" />
+
 import type { Project } from "../project/schema";
 import { EXPRESSION_RUNTIME_SOURCE } from "../project/expressions";
 import { widgetNotesCodeComments } from "../project/widgetNotes";
 import { ensureRichTextRuns } from "../project/richText";
+import interFont from "@fontsource-variable/inter/files/inter-latin-wght-normal.woff2?inline";
+import interFontLicense from "@fontsource-variable/inter/LICENSE?raw";
 
 export type CodeExportScope = "all" | "current";
 export type CodeExportTailwindVersion = "3" | "4";
@@ -93,6 +97,8 @@ export function generateSingleFileJsx(project: Project): string {
   return `import { useRef, useState, type CSSProperties, type ReactNode, type TouchEvent } from "react";
 ${notesComments ? `\n${notesComments}\n` : ""}
 
+const interFontData = ${JSON.stringify(interFont)};
+const interFontLicense = ${JSON.stringify(interFontLicense)};
 const project = ${jsxString(exportProject)};
 type Widget = typeof project.screens[number]["widgets"][number];
 type TouchGestureState = {
@@ -123,6 +129,8 @@ const repeaterItemVisible = (widget: Widget, item: Record<string, unknown>): boo
 
 export default function App() {
 ${EXPRESSION_RUNTIME_SOURCE}
+  void interFontLicense;
+  const fontFace = \`@font-face{font-family:Inter;src:url("\${interFontData}") format("woff2");font-style:normal;font-weight:100 900;font-display:swap}@media(prefers-reduced-motion:reduce){.pf-export *{animation:none!important;transition:none!important}}\`;
   const [screenId, setScreenId] = useState(project.startScreenId);
   const [runtimeVariables, setRuntimeVariables] = useState<Record<string, unknown>>(() =>
     Object.fromEntries(project.variables.map((entry) => [entry.id, entry.initial])));
@@ -583,7 +591,9 @@ ${EXPRESSION_RUNTIME_SOURCE}
       {...interactionHandlers(widget, item)}>{text}</div>;
   };
   return (
-    <main style={{ fontFamily: "system-ui, sans-serif", padding: 16 }}>
+    <>
+    <style>{fontFace}</style>
+    <main className="pf-export" style={{ fontFamily: "Inter, system-ui, -apple-system, 'Segoe UI', sans-serif", padding: 16 }}>
       <label>
         Screen{" "}
         <select value={screen.id} onChange={(event) => setScreenId(event.target.value)}>
@@ -594,6 +604,7 @@ ${EXPRESSION_RUNTIME_SOURCE}
         {screen.widgets.filter((widget) => widget.visible).sort((a, b) => a.zIndex - b.zIndex).map((widget) => renderWidget(widget))}
       </section>
     </main>
+    </>
   );
 }
 `;

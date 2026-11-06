@@ -48,6 +48,8 @@ describe("React code export preparation", () => {
     expect(source).toContain("aria-busy=\"true\"");
     expect(source).toContain("layoutPosition(widget)");
     expect(source).toContain("const crossOffset = parent.props.alignItems === \"center\"");
+    expect(source).toContain("@font-face{font-family:Inter");
+    expect(source).toContain("SIL OPEN FONT LICENSE");
   });
 
   it("exports rich text as semantic JSX and keeps variable interpolation in runs", () => {

@@ -2,6 +2,7 @@ import JSZip from "jszip";
 import type { Project } from "../project/schema";
 import {
   generatePublishedPreviewHtml,
+  INTER_FONT_LICENSE,
   PREVIEW_RUNTIME_SCRIPT,
   PREVIEW_RUNTIME_STYLES,
 } from "./publishBundle";
@@ -211,6 +212,7 @@ export async function generateLocalHtmlArchive(
   const zip = new JSZip();
   const assets = zip.folder("assets");
   if (!assets) throw new Error("Could not create the assets folder in the HTML bundle.");
+  zip.file("FONT-LICENSE.txt", INTER_FONT_LICENSE);
 
   if (options.includeAssets) {
     let assetIndex = 0;
@@ -278,6 +280,7 @@ export async function generateDeviceImageArchive(
     }
   }
   const zip = new JSZip();
+  zip.file("FONT-LICENSE.txt", INTER_FONT_LICENSE);
   const variants: Array<{ preset: typeof DEVICE_PRESETS[number]; screen: Project["screens"][number] }> = [];
   for (const category of ["desktop", "tablet", "phone"] as const) {
     const preset = DEVICE_PRESETS.find((item) => item.category === category);
