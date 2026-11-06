@@ -256,7 +256,6 @@ async function activateAdvanceButton(page, mobile) {
 async function compareScreenshot(page, label) {
   const screenshot = await page.screenshot({
     path: fileURLToPath(new URL(`${label}.png`, screenshotDirectory)),
-    fullPage: true,
     animations: "disabled",
   });
   const baselineUrl = new URL(`${label}.png`, baselineDirectory);
@@ -365,7 +364,7 @@ async function exerciseReactPage(page, url, label, mobile) {
   await page.locator("em").filter({ hasText: "6" }).waitFor();
   await page.emulateMedia({ colorScheme: "dark", reducedMotion: "reduce" });
   await auditWithAxe(page, label);
-  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.setViewportSize(mobile ? { width: 390, height: 844 } : { width: 1440, height: 900 });
   const visual = await compareScreenshot(page, label);
   assert.deepEqual(pageErrors, [], `${label} runtime errors`);
   return { loadMilliseconds, visual };

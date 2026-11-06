@@ -7,6 +7,7 @@ on:
   push:
     branches:
       - main
+      - feature/pf-t708-cross-browser-qa
   workflow_dispatch:
 
 permissions:
