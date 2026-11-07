@@ -27,7 +27,9 @@ export async function startWorkspace(
   })).toBeVisible();
 
   await page.getByRole("button", { name: "Continue" }).click();
-  await page.getByRole("button", { name: new RegExp(templateName) }).click();
+  await page.locator(".onboarding-template-card")
+    .filter({ hasText: templateName })
+    .click();
   await page.getByRole("button", { name: "Continue" }).click();
   await page.getByRole("button", { name: "Got it" }).click();
   await page.getByRole("button", { name: "Skip tour" }).click();

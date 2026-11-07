@@ -4,7 +4,7 @@ on:
   pull_request:
     branches: [main]
   push:
-    branches: [main, feature/pf-t704-windows-e2e, feature/pf-t706-accessibility, feature/pf-t707-security-audit, feature/pf-t708-cross-browser-qa, feature/pf-t709-axure-parity-tests, feature/pf-t710-device-responsive-tests, feature/pf-t711-multi-device-preview-export-tests, feature/pf-t713-onboarding-tutorial-docs-tests]
+    branches: [main, feature/pf-t704-windows-e2e, feature/pf-t706-accessibility, feature/pf-t707-security-audit, feature/pf-t708-cross-browser-qa, feature/pf-t709-axure-parity-tests, feature/pf-t710-device-responsive-tests, feature/pf-t711-multi-device-preview-export-tests, feature/pf-t713-onboarding-tutorial-docs-tests, feature/pf-t716-axure-workflow-regressions]
 
 permissions:
   contents: read
@@ -31,7 +31,7 @@ jobs:
           workspaces: src-tauri -> target
       - run: npm ci
       - run: npx playwright install chromium
-      - run: npm run test:e2e:browser
+      - run: npm run test:e2e:browser -- --workers=1
       - run: npm run build:e2e:desktop
       - name: Run desktop E2E tests
         shell: pwsh
