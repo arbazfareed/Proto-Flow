@@ -7,6 +7,12 @@ import { startWorkspace } from "./workspace";
 test("exports offline responsive HTML, device variants, and 1x/2x/3x images for free", async ({
   page,
 }) => {
+  const meteredRequests: string[] = [];
+  page.on("request", (request) => {
+    if (new URL(request.url()).pathname === "/action/run") {
+      meteredRequests.push(request.url());
+    }
+  });
   await startWorkspace(page, "Responsive web");
   await page.getByRole("button", { name: "Export HTML bundle" }).click();
 
@@ -51,6 +57,7 @@ test("exports offline responsive HTML, device variants, and 1x/2x/3x images for 
       expect(dimensions[ratio - 1].height).toBe(dimensions[0].height * ratio);
     }
   }
+  expect(meteredRequests).toEqual([]);
 });
 
 test("shows responsive React export settings and the three-credit ZIP price without exporting", async ({
