@@ -934,6 +934,7 @@ function AppShell() {
         <HelpPanel
           initialSlug={helpArticleSlug}
           onClose={() => setHelpOpen(false)}
+          onOpenTutorial={() => void openTutorialProject()}
           onNotify={notify}
         />
       )}

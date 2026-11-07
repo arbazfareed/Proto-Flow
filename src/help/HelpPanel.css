@@ -48,6 +48,11 @@
 .help-code-block { position:relative; margin:12px 0 16px; }
 .help-code-block pre { overflow:auto; margin:0; padding:13px 70px 13px 13px; border:1px solid var(--border); border-radius:6px; color:var(--text-primary); background:var(--surface-raised); font:10px/1.6 ui-monospace,SFMono-Regular,Consolas,monospace; }
 .help-code-block pre code { padding:0; color:inherit; background:transparent; }
+.help-table-scroll { max-width:100%; overflow:auto; margin:12px 0 16px; }
+.help-table { width:100%; border-collapse:collapse; font-size:10px; }
+.help-table th,.help-table td { min-width:90px; padding:7px 9px; border:1px solid var(--border); text-align:left; vertical-align:top; }
+.help-table th { color:var(--text-primary); background:var(--surface-raised); font-weight:650; }
+.help-table td { color:var(--text-secondary); }
 .help-copy-code { position:absolute; top:7px; right:7px; display:flex; align-items:center; gap:4px; padding:4px 6px; border:1px solid var(--border); border-radius:4px; color:var(--text-secondary); background:var(--surface-panel); font-size:9px; cursor:pointer; }
 .help-feedback { display:flex; max-width:720px; flex-wrap:wrap; align-items:center; justify-content:space-between; gap:12px; margin-top:25px; padding:13px; border:1px solid var(--border); border-radius:7px; background:var(--surface-raised); }
 .help-feedback>div:first-child { display:flex; flex-direction:column; gap:3px; }
@@ -62,7 +67,8 @@
 .help-pagination { display:flex; max-width:720px; justify-content:space-between; gap:8px; margin:16px 0 0; }
 .help-pagination button { display:flex; align-items:center; gap:4px; padding:6px 8px; border:1px solid var(--border); border-radius:5px; color:var(--text-secondary); background:var(--surface-raised); font-size:9px; cursor:pointer; }
 .help-pagination button:disabled { opacity:.4; cursor:default; }
-.help-panel-footer { display:flex; min-height:35px; align-items:center; justify-content:space-between; padding:4px 15px; border-top:1px solid var(--border); color:var(--text-muted); font-size:9px; }
+.help-panel-footer { display:flex; min-height:35px; align-items:center; justify-content:space-between; gap:12px; padding:4px 15px; border-top:1px solid var(--border); color:var(--text-muted); font-size:9px; }
+.help-panel-footer-actions { display:flex; align-items:center; gap:8px; }
 .help-panel-footer button { padding:4px 7px; font-size:9px; }
 .help-link { display:inline-grid; width:22px; height:22px; flex:0 0 22px; place-items:center; padding:0; border:1px solid transparent; border-radius:5px; color:var(--text-muted); background:transparent; cursor:pointer; }
 .help-link:hover { color:var(--accent); border-color:var(--border); background:var(--surface-raised); }

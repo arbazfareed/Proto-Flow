@@ -1,9 +1,12 @@
 import { fireEvent, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { useState } from "react";
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { renderWithProviders } from "../test/render";
+import { trackEvent } from "../diagnostics/observability";
 import { OnboardingWizard } from "./OnboardingWizard";
+
+vi.mock("../diagnostics/observability", () => ({ trackEvent: vi.fn() }));
 
 function renderWizard() {
   const props = {
@@ -32,6 +35,10 @@ function renderWizard() {
   }
   return { props, ...renderWithProviders(<ControlledWizard />) };
 }
+
+afterEach(() => {
+  vi.clearAllMocks();
+});
 
 describe("OnboardingWizard", () => {
   it("chooses a theme and requires a starter template before continuing", async () => {
@@ -73,6 +80,43 @@ describe("OnboardingWizard", () => {
     expect(screen.getByRole("heading", { name: "You’ve got 50 credits." })).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: /Finish/ }));
     expect(props.onComplete).toHaveBeenCalledWith("dashboard");
+    const events = vi.mocked(trackEvent).mock.calls;
+    expect(events.map(([event]) => event)).toEqual(expect.arrayContaining([
+      "onboarding_started",
+      "onboarding_step_1",
+      "onboarding_step_2",
+      "onboarding_step_3",
+      "onboarding_step_4",
+      "onboarding_step_5",
+      "device_tour_viewed",
+    ]));
+    expect(events.every(([, properties]) => properties === undefined)).toBe(true);
+  });
+
+  it("preserves choices when moving backward and offers the tutorial at the end", async () => {
+    const user = userEvent.setup();
+    const { props } = renderWizard();
+
+    await user.click(screen.getByRole("radio", { name: /Light/ }));
+    await user.click(screen.getByRole("button", { name: "Continue" }));
+    await user.click(screen.getByRole("button", { name: /Sign in/ }));
+    await user.click(screen.getByRole("button", { name: "Continue" }));
+    await user.click(screen.getByRole("button", { name: "Back" }));
+    expect(screen.getByRole("button", { name: /Sign in/ })).toHaveAttribute("aria-pressed", "true");
+    await user.click(screen.getByRole("button", { name: "Back" }));
+    expect(screen.getByRole("radio", { name: /Light/ })).toHaveAttribute("aria-checked", "true");
+
+    await user.click(screen.getByRole("button", { name: "Continue" }));
+    await user.click(screen.getByRole("button", { name: /Sign in/ }));
+    await user.click(screen.getByRole("button", { name: "Continue" }));
+    await user.click(screen.getByRole("button", { name: "Got it" }));
+    await user.click(screen.getByRole("button", { name: "Skip tour" }));
+    await user.click(screen.getByRole("button", { name: "Take the tour" }));
+
+    expect(props.onThemeChange).toHaveBeenCalledWith("light");
+    expect(props.onDeviceTourCompleted).toHaveBeenCalledOnce();
+    expect(props.onTakeTutorial).toHaveBeenCalledOnce();
+    expect(props.onComplete).not.toHaveBeenCalled();
   });
 
   it("opens an existing project and provides the tutorial action", async () => {

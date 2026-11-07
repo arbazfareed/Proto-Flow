@@ -45,6 +45,7 @@ export async function finishFirstLaunch(page: Page): Promise<void> {
     name: "From first sketch to clickable prototype.",
   })).toBeVisible();
 
+  await page.getByRole("radio", { name: /Light/ }).click();
   await page.getByRole("button", { name: "Continue" }).click();
   await page.getByRole("button", { name: "Responsive web" }).click();
   await page.getByRole("button", { name: "Continue" }).click();
