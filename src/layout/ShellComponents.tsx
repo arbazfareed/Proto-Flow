@@ -192,6 +192,7 @@ interface TopBarProps {
   onRedo: () => void;
   onOpenPalette: () => void;
   onOpenPreview: () => void;
+  onImportCode: () => void;
   onPublishCloudPreview: () => void;
   onOpenCollaboration: () => void;
   onExportReactCode: () => void;
@@ -234,6 +235,7 @@ export function TopBar({
   onRedo,
   onOpenPalette,
   onOpenPreview,
+  onImportCode,
   onPublishCloudPreview,
   onOpenCollaboration,
   onExportReactCode,
@@ -374,6 +376,9 @@ export function TopBar({
         </button>
         <button className="button button-secondary" aria-label="Open preview" title="Open live preview" onClick={onOpenPreview}>
           <MonitorPlay size={14} /> Preview
+        </button>
+        <button className="button button-secondary import-code-trigger" aria-label="Import Code" title="Import HTML, CSS, and JavaScript into the canvas" onClick={onImportCode}>
+          <Code2 size={14} /> Import Code
         </button>
         <button className="button button-secondary" aria-label="Publish to cloud" title="Publish a shareable cloud preview" onClick={onPublishCloudPreview}>
           <CloudUpload size={14} /> Publish
