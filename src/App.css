@@ -887,7 +887,7 @@
 .preview-frame-grid.is-columns .preview-frame-card { min-height:0; }
 .preview-frame-grid.is-columns .preview-frame-viewport { min-height:160px; }
 .preview-frame-grid.is-grid { grid-template-columns:repeat(auto-fit,minmax(min(100%,280px),1fr)); }
-.preview-frame-grid.is-grid .preview-frame-card { min-height:0; }
+.preview-frame-grid.is-grid .preview-frame-card { min-height:212px; }
 .preview-frame-grid.is-grid .preview-frame-viewport { min-height:180px; }
 .preview-capture-button { flex:0 0 auto; }
 .preview-device-icon { color:#cbb7ff; font-size:17px; line-height:1; }

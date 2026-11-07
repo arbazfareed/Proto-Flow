@@ -12,6 +12,7 @@ const fullRun = process.env.PF_DEVICE_FULL === "1";
 const updateBaselines = process.env.PF_DEVICE_UPDATE_BASELINES === "1";
 const screenshotDirectory = new URL("../reports/device-verification/screenshots/", import.meta.url);
 const baselineDirectory = new URL("../reports/device-verification/baselines/", import.meta.url);
+const updatePreviewBaselines = process.env.PF_DEVICE_UPDATE_PREVIEW_BASELINES === "1";
 const server = spawn(
   process.execPath,
   [fileURLToPath(new URL("../node_modules/vite/bin/vite.js", import.meta.url)), "--host", "127.0.0.1", "--port", "1421", "--strictPort"],
@@ -23,7 +24,12 @@ server.stderr.on("data", (chunk) => { serverOutput += chunk.toString(); });
 let browser;
 let exportServer;
 
-function deviceProjectSource(inputMode = "both") {
+function deviceProjectSource(inputMode = "both", navigateOnClick = true) {
+  const navigateOnClickActions = navigateOnClick
+    ? `
+        { type: "setVariable", target: "caption", value: "Updated shared value" },
+        { type: "navigate", target: detailsScreen.id }`
+    : "";
   return `
     return (async () => {
     const { createEmptyProject } = await import("/src/project/schema.ts");
@@ -50,7 +56,19 @@ function deviceProjectSource(inputMode = "both") {
       visible: true, locked: false, zIndex: 2, style: {},
       props: { label: "Interaction probe" },
     };
+    const detailsScreen = {
+      ...screen,
+      id: crypto.randomUUID(),
+      name: "Details",
+      widgets: [{
+        ...textWidget,
+        id: crypto.randomUUID(),
+        name: "Details label",
+      }],
+      interactionRules: [],
+    };
     screen.widgets.push(textWidget, button);
+    project.screens.push(detailsScreen);
     project.variables.push({
       id: crypto.randomUUID(), name: "caption", type: "string",
       initial: "Shared state", scope: "project",
@@ -63,7 +81,10 @@ function deviceProjectSource(inputMode = "both") {
     });
     screen.interactionRules.push({
       id: crypto.randomUUID(), widgetId: button.id, event: "onClick", conditions: [],
-      actions: [{ type: "setVariable", target: "mouseSeen", value: true }],
+      actions: [
+        { type: "setVariable", target: "mouseSeen", value: true },
+        ${navigateOnClickActions}
+      ],
     }, {
       id: crypto.randomUUID(), widgetId: button.id, event: "onTap", conditions: [],
       actions: [{ type: "setVariable", target: "touchSeen", value: true }],
@@ -73,18 +94,19 @@ function deviceProjectSource(inputMode = "both") {
   `;
 }
 
-async function deliverProject(page, inputMode = "both") {
+async function deliverProject(page, inputMode = "both", navigateOnClick = true) {
   await page.evaluate(async (source) => {
     const project = await new Function(source)();
+    window.__pfPreviewProject = project;
     const channel = new BroadcastChannel("protoflow-preview");
     channel.postMessage({ type: "project", project });
     channel.close();
-  }, deviceProjectSource(inputMode));
+  }, deviceProjectSource(inputMode, navigateOnClick));
   await page.locator(".preview-frame-card").first().waitFor({ state: "visible", timeout: 20_000 });
 }
 
 async function updatePreviewInputMode(page, inputMode) {
-  await deliverProject(page, inputMode);
+  await deliverProject(page, inputMode, false);
   await page.waitForFunction(
     (mode) => document.querySelector(".preview-screen")?.getAttribute("data-input-mode") === mode,
     inputMode,
@@ -92,36 +114,46 @@ async function updatePreviewInputMode(page, inputMode) {
 }
 
 async function verifyInputModes(page) {
-  const probe = page.getByRole("button", { name: "Interaction probe" }).first();
   const variablesToggle = page.getByRole("button", { name: "Toggle variables" });
   const variable = (name) => page.locator(".preview-variable-inspector label")
     .filter({ hasText: name }).locator("input");
   if (!(await page.locator(".preview-variable-inspector").count())) await variablesToggle.click();
 
   await updatePreviewInputMode(page, "both");
-  await probe.click();
+  await page.getByRole("button", { name: "Interaction probe" }).first().click();
   assert.equal(await variable("mouseSeen").isChecked(), true);
-  await variable("mouseSeen").setChecked(false);
-  await probe.tap();
+  await updatePreviewInputMode(page, "both");
+  await page.getByRole("button", { name: "Interaction probe" }).first().tap();
   assert.equal(await variable("touchSeen").isChecked(), true);
   assert.equal(await variable("mouseSeen").isChecked(), true);
 
   await updatePreviewInputMode(page, "touch");
+  const touchProbe = page.getByRole("button", { name: "Interaction probe" }).first();
   await variable("mouseSeen").setChecked(false);
-  await probe.click();
+  await touchProbe.click();
   assert.equal(await variable("mouseSeen").isChecked(), false);
-  await probe.tap();
+  await touchProbe.tap();
   assert.equal(await variable("touchSeen").isChecked(), true);
 
   await updatePreviewInputMode(page, "mouse");
+  const mouseProbe = page.getByRole("button", { name: "Interaction probe" }).first();
   await variable("touchSeen").setChecked(false);
-  await probe.tap();
+  await mouseProbe.tap();
   assert.equal(await variable("touchSeen").isChecked(), false);
-  await probe.click();
+  await mouseProbe.click();
   assert.equal(await variable("mouseSeen").isChecked(), true);
 }
 
-async function verifyPreview(page) {
+async function setRangeValue(locator, value) {
+  await locator.evaluate((input, nextValue) => {
+    const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value").set;
+    setter.call(input, String(nextValue));
+    input.dispatchEvent(new Event("input", { bubbles: true }));
+    input.dispatchEvent(new Event("change", { bubbles: true }));
+  }, value);
+}
+
+async function verifyPreview(page, dpr) {
   const layout = page.getByLabel("Preview layout");
   await layout.selectOption("single");
   assert.equal(await page.locator(".preview-frame-card").count(), 1);
@@ -129,20 +161,141 @@ async function verifyPreview(page) {
   assert.equal(await page.locator(".preview-frame-card").count(), 3);
   await layout.selectOption("grid");
   assert.equal(await page.locator(".preview-frame-card").count(), 4);
+  const fittedFrames = await page.locator(".preview-frame-card").evaluateAll((cards) =>
+    cards.map((card) => {
+      const viewport = card.querySelector(".preview-frame-viewport").getBoundingClientRect();
+      const screen = card.querySelector(".preview-screen").getBoundingClientRect();
+      return screen.width <= viewport.width && screen.height <= viewport.height;
+    }),
+  );
+  assert.ok(fittedFrames.every(Boolean), "all selected device frames fit their preview cards");
+  const devicePicker = page.locator(".preview-device-selection");
+  await devicePicker.locator("summary").click();
+  const selectedPreset = devicePicker.locator('input[type="checkbox"]:checked').first();
+  const selectedPresetName = (await selectedPreset.evaluate((input) =>
+    input.closest("label")?.textContent?.trim() ?? "",
+  ));
+  assert.ok(selectedPresetName, "custom device picker exposes an accessible preset label");
+  await selectedPreset.uncheck();
+  assert.equal(await page.locator(".preview-frame-card").count(), 3);
+  await devicePicker.getByLabel(selectedPresetName).check();
+  assert.equal(await page.locator(".preview-frame-card").count(), 4);
+  await devicePicker.locator("summary").click();
+  await compareDeviceScreenshot(
+    page,
+    `multi-device-preview-${Math.round(dpr * 100)}dpi`,
+    screenshotDirectory,
+    updatePreviewBaselines,
+  );
 
   await page.getByRole("button", { name: "Toggle variables" }).click();
-  const variable = page.locator(".preview-variable-inspector input").first();
-  await variable.fill("Updated shared value");
-  await page.locator(".preview-widget").first().getByText("Updated shared value").waitFor();
+  await page.locator(".preview-frame-card").first()
+    .getByRole("button", { name: "Interaction probe" }).click();
+  await page.waitForFunction(() =>
+    document.querySelector('[aria-label="Preview screen"]')?.selectedOptions[0]?.textContent === "Details",
+  );
+  await page.locator(".preview-frame-heading").getByText("Details").first().waitFor();
   const visibleTexts = await page.locator(".preview-widget").allTextContents();
   assert.equal(visibleTexts.filter((text) => text.includes("Updated shared value")).length, 4);
+
+  await page.evaluate(() => {
+    const project = window.__pfPreviewProject;
+    project.screens[1].name = "Details (updated)";
+    const channel = new BroadcastChannel("protoflow-preview");
+    channel.postMessage({ type: "project", project });
+    channel.close();
+  });
+  await page.waitForFunction(() =>
+    document.querySelector('[aria-label="Preview screen"]')?.selectedOptions[0]?.textContent === "Details (updated)",
+  );
+  const caption = page.locator(".preview-variable-inspector label")
+    .filter({ hasText: "caption" }).locator("input");
+  assert.equal(await caption.inputValue(), "Updated shared value");
 
   await page.getByRole("button", { name: "Rotate devices" }).click();
   assert.equal(await page.getByRole("button", { name: "Rotate devices" }).getAttribute("aria-pressed"), "true");
   assert.match(await page.locator(".preview-frame-heading span").first().textContent(), /900 × 1440/);
+  const zoom = page.getByLabel("Preview zoom");
+  await setRangeValue(zoom, 75);
+  assert.equal(await zoom.inputValue(), "75");
 
+  if (dpr === 1) {
+    const frameRate = await page.evaluate(async () => {
+      let frames = 0;
+      const start = performance.now();
+      await new Promise((resolve) => {
+        const tick = () => {
+          frames += 1;
+          if (frames < 61) requestAnimationFrame(tick);
+          else resolve();
+        };
+        requestAnimationFrame(tick);
+      });
+      return frames * 1000 / (performance.now() - start);
+    });
+    assert.ok(frameRate >= 50, `four-device preview sustained ${frameRate.toFixed(1)} animation frames per second`);
+    console.log(`Four-device preview animation-frame rate: ${frameRate.toFixed(1)} FPS.`);
+  }
+
+  const screenshotDownload = page.waitForEvent("download");
   await page.getByRole("button", { name: "Capture preview screenshot" }).click();
+  const download = await screenshotDownload;
+  assert.match(download.suggestedFilename(), /-grid-preview\.png$/);
   await page.getByText("Preview screenshot saved as a 2× PNG.").waitFor({ timeout: 15_000 });
+
+  await page.setViewportSize({ width: 360, height: 320 });
+  await page.waitForTimeout(50);
+  const grid = page.locator(".preview-frame-grid");
+  const scrollMetrics = await page.evaluate(() => {
+    const gridElement = document.querySelector(".preview-frame-grid");
+    const contentElement = document.querySelector(".preview-content");
+    return {
+      cards: document.querySelectorAll(".preview-frame-card").length,
+      gridColumns: getComputedStyle(gridElement).gridTemplateColumns,
+      gridRows: getComputedStyle(gridElement).gridTemplateRows,
+      cardBounds: Array.from(document.querySelectorAll(".preview-frame-card"), (card) => {
+        const bounds = card.getBoundingClientRect();
+        return { x: bounds.x, y: bounds.y, width: bounds.width, height: bounds.height };
+      }),
+      grid: {
+        clientWidth: gridElement.clientWidth,
+        scrollWidth: gridElement.scrollWidth,
+        clientHeight: gridElement.clientHeight,
+        scrollHeight: gridElement.scrollHeight,
+      },
+      content: {
+        clientWidth: contentElement.clientWidth,
+        scrollWidth: contentElement.scrollWidth,
+        clientHeight: contentElement.clientHeight,
+        scrollHeight: contentElement.scrollHeight,
+      },
+    };
+  });
+  const { grid: gridMetrics, content: contentMetrics } = scrollMetrics;
+  const panAxis = gridMetrics.scrollWidth > gridMetrics.clientWidth ||
+      contentMetrics.scrollWidth > contentMetrics.clientWidth
+    ? "scrollLeft"
+    : "scrollTop";
+  const panTarget = (panAxis === "scrollLeft"
+    ? gridMetrics.scrollWidth > gridMetrics.clientWidth
+    : gridMetrics.scrollHeight > gridMetrics.clientHeight)
+    ? grid
+    : page.locator(".preview-content");
+  assert.ok(
+    [gridMetrics, contentMetrics].some(({ scrollWidth, clientWidth, scrollHeight, clientHeight }) =>
+      scrollWidth > clientWidth || scrollHeight > clientHeight,
+    ),
+    `four-device grid is scrollable at compact size (${JSON.stringify(scrollMetrics)})`,
+  );
+  await panTarget.evaluate((element, axis) => {
+    element[axis] = axis === "scrollLeft" ? element.scrollWidth : element.scrollHeight;
+  }, panAxis);
+  assert.ok(
+    await panTarget.evaluate((element, axis) => element[axis] > 0, panAxis),
+    "multi-device grid supports scrolling/panning",
+  );
+  await page.setViewportSize({ width: 1440, height: 960 });
+  await grid.evaluate((element) => { element.scrollTop = 0; });
 }
 
 async function verifyDeviceFrames(page, dpr, screenshotDirectory) {
@@ -224,7 +377,7 @@ async function verifyDeviceFrames(page, dpr, screenshotDirectory) {
   return presetIds.length;
 }
 
-async function compareDeviceScreenshot(page, name, screenshotUrl) {
+async function compareDeviceScreenshot(page, name, screenshotUrl, update = updateBaselines) {
   const screenshot = await page.screenshot({
     path: fileURLToPath(new URL(`${name}.png`, screenshotUrl)),
     animations: "disabled",
@@ -241,7 +394,7 @@ async function compareDeviceScreenshot(page, name, screenshotUrl) {
     await writeFile(baselineUrl, screenshot);
     return { initialized: true, changedPixelRatio: 0 };
   }
-  if (updateBaselines) {
+  if (update) {
     await writeFile(baselineUrl, screenshot);
     return { initialized: true, changedPixelRatio: 0 };
   }
@@ -362,9 +515,11 @@ async function verifyResponsiveExport(engine, exportUrl) {
       throw new Error(`${engine.name()} export did not render #stage: ${await page.locator("body").innerText()}`);
     });
     for (const [width, height, expectedStageWidth, expectedWidgetWidth] of [
-      [390, 844, 390, 200],
+      [320, 844, 390, 200],
       [768, 1024, 768, 139],
-      [1280, 800, 1440, 260],
+      [1024, 800, 1440, 260],
+      [1440, 900, 1440, 260],
+      [3840, 2160, 1440, 260],
     ]) {
       await page.setViewportSize({ width, height });
       await page.waitForTimeout(50);
@@ -373,11 +528,19 @@ async function verifyResponsiveExport(engine, exportUrl) {
       const widget = page.locator(`[data-widget-id]`).first();
       const widgetWidth = await widget.evaluate((node) => Number.parseFloat(getComputedStyle(node).width));
       assert.ok(Math.abs(widgetWidth - expectedWidgetWidth) <= 1, `${engine.name()} widget width at ${width}px: ${widgetWidth}`);
+      if (width === 320) {
+        const stageWrap = page.locator(".stage-wrap");
+        const scrollWidth = await stageWrap.evaluate((element) => element.scrollWidth);
+        assert.ok(scrollWidth > width, `${engine.name()} 320px export canvas can be panned`);
+        await stageWrap.evaluate((element) => { element.scrollLeft = element.scrollWidth; });
+        assert.ok(await stageWrap.evaluate((element) => element.scrollLeft > 0), `${engine.name()} 320px canvas is reachable`);
+        await stageWrap.evaluate((element) => { element.scrollLeft = 0; });
+      }
     }
     for (const [variantName, width] of [
-      ["index-desktop.html", 1280],
+      ["index-desktop.html", 1440],
       ["index-tablet.html", 768],
-      ["index-mobile.html", 390],
+      ["index-mobile.html", 320],
     ]) {
       await page.setViewportSize({ width, height: 900 });
       await page.goto(`${exportUrl}/${variantName}`, { waitUntil: "load" });
@@ -427,7 +590,7 @@ try {
       throw new Error(`${error.message}\n${serverOutput}`);
     });
     await deliverProject(page);
-    await verifyPreview(page);
+    await verifyPreview(page, dpr);
     if (dpr === 1) await verifyInputModes(page);
     const label = `${Math.round(dpr * 100)}`;
     await page.screenshot({
@@ -451,7 +614,7 @@ try {
   const engines = fullRun ? [chromium, firefox, webkit] : [chromium];
   for (const engine of engines) {
     await verifyResponsiveExport(engine, exportUrl);
-    console.log(`${engine.name()} responsive and per-device HTML exports passed at all three breakpoints.`);
+    console.log(`${engine.name()} responsive HTML passed at 320, 390, 768, 1024, 1440, 1920, and 3840px; variants passed.`);
   }
 } catch (error) {
   console.error(error);

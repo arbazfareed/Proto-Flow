@@ -245,7 +245,7 @@ export interface Widget { id: string; type: string; name?: string; groupId?: str
 export interface Condition { variable: string; operator: string; value: unknown }
 export interface Action { type: string; target: string; value?: unknown }
 export interface Rule { id: string; widgetId?: string; event: string; conditionMode?: "all" | "any"; conditions: Condition[]; actions: Action[] }
-export interface Screen { id: string; name: string; device?: { width: number; height: number; [key: string]: unknown }; compactLayout?: boolean; breakpoints?: Breakpoint[]; widgets: Widget[]; interactionRules: Rule[] }
+export interface Screen { id: string; name: string; flowPosition?: { x: number; y: number }; device?: { width: number; height: number; [key: string]: unknown }; inputMode?: "touch" | "mouse" | "both"; compactLayout?: boolean; breakpoints?: Breakpoint[]; widgets: Widget[]; interactionRules: Rule[] }
 export interface Project { schemaVersion: string; id: string; name: string; createdAt: string; updatedAt: string; startScreenId: string; variables: Variable[]; screens: Screen[]; symbols: Array<{ id: string; name: string; width: number; height: number; widgets: Widget[] }> }
 `,
     "src/project.ts": `import type { Project } from "./types";

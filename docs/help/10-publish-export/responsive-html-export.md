@@ -5,3 +5,5 @@ Choose **Export HTML** to create a local, standalone HTML prototype bundle. The 
 The export is generated on your device and can be opened locally without publishing to ProtoFlow's cloud. Use it to share a prototype artifact or check the rendered result outside the editor.
 
 Review the generated page at representative viewport sizes. Responsive output depends on the project's widget geometry and responsive rules; it is not a production application or replacement for accessibility and browser testing.
+
+To compare this with separate device pages, image exports, or a runnable React project, see [choosing between responsive and per-device export](help:choosing-responsive-vs-per-device).
