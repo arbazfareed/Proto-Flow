@@ -35,6 +35,8 @@ import { UpdateToast } from "./layout/UpdateToast";
 import { WalletDialog } from "./layout/WalletDialog";
 import { CloudPreviewDialog } from "./layout/CloudPreviewDialog";
 import { ReactCodeExportDialog } from "./layout/ReactCodeExportDialog";
+import { ImportCodeDialog, type ImportedCode } from "./layout/ImportCodeDialog";
+import { importHtmlToWidgets } from "./project/htmlImport";
 import { HtmlExportDialog } from "./layout/HtmlExportDialog";
 import { PluginManagerDialog } from "./layout/PluginManagerDialog";
 import { CollaborationDialog } from "./layout/CollaborationDialog";
@@ -46,7 +48,7 @@ import { formatProjectValidationError, SchemaValidationError } from "./project/s
 import type { Screen } from "./project/schema";
 import { createDefaultBreakpoints } from "./project/responsive";
 import { inferScreenInputMode } from "./project/inputModes";
-import { DEVICE_PRESETS, toScreenDevice } from "./devices/catalog";
+import { DEFAULT_DEVICE_PRESET, DEVICE_PRESETS, toScreenDevice } from "./devices/catalog";
 import { fitWindowSizeToMonitor, getPreviewWindowSize } from "./preview/windowSizing";
 import { useWalletStore } from "./wallet/store";
 import { createProjectCheckpoint, startVersionHistoryAutosave } from "./project/versionHistory";
@@ -92,6 +94,7 @@ function AppShell() {
   const [cloudPreviewOpen, setCloudPreviewOpen] = useState(false);
   const [reactExportOpen, setReactExportOpen] = useState(false);
   const [htmlExportOpen, setHtmlExportOpen] = useState(false);
+  const [importCodeOpen, setImportCodeOpen] = useState(false);
   const [pluginManagerOpen, setPluginManagerOpen] = useState(false);
   const [collaborationMounted, setCollaborationMounted] = useState(false);
   const [collaborationOpen, setCollaborationOpen] = useState(false);
@@ -838,6 +841,37 @@ function AppShell() {
     void openTutorialProject();
   }, [completeOnboarding, onboardingState.selectedTemplate, openTutorialProject]);
 
+  const renderImportedCode = useCallback(({ html, css }: ImportedCode) => {
+    const state = useStore.getState();
+    const screenId = state.getActiveScreenId();
+    const screen = state.project.screens.find((item) => item.id === screenId);
+    if (!screen) throw new Error("Select a screen before rendering imported code.");
+
+    const firstZIndex = screen.widgets.reduce(
+      (highest, widget) => Math.max(highest, widget.zIndex),
+      -1,
+    ) + 1;
+    const importedWidgets = importHtmlToWidgets(
+      html,
+      css,
+      screen.device?.width ?? DEFAULT_DEVICE_PRESET.viewport.width,
+      firstZIndex,
+    );
+    if (state.activePanelEdit) state.setActivePanelEdit(null);
+    if (state.activeRepeaterEdit) state.setActiveRepeaterEdit(null);
+    state.setProject({
+      ...state.project,
+      updatedAt: new Date().toISOString(),
+      screens: state.project.screens.map((item) =>
+        item.id === screenId
+          ? { ...item, widgets: [...item.widgets, ...importedWidgets] }
+          : item,
+      ),
+    });
+    state.select(importedWidgets.map((widget) => widget.id));
+    notify(`Rendered ${importedWidgets.length} elements on the canvas.`);
+  }, [notify]);
+
   return (
     <div className="app-shell">
       <TopBar
@@ -849,6 +883,7 @@ function AppShell() {
         onRedo={redo}
         onOpenPalette={() => setPaletteOpen(true)}
         onOpenPreview={() => void openPreview()}
+        onImportCode={() => setImportCodeOpen(true)}
         onPublishCloudPreview={() => setCloudPreviewOpen(true)}
         onOpenCollaboration={openCollaboration}
         onExportReactCode={() => setReactExportOpen(true)}
@@ -901,6 +936,12 @@ function AppShell() {
       <RestoreModal />
       <UpdateToast requestId={updateCheckRequest} />
       <CommandPalette />
+      {importCodeOpen && (
+        <ImportCodeDialog
+          onClose={() => setImportCodeOpen(false)}
+          onRenderOnCanvas={renderImportedCode}
+        />
+      )}
       {privacyDialogOpen && (
         <PrivacySettingsDialog
           firstLaunch={privacyFirstLaunch}
