@@ -160,7 +160,14 @@ describe("React code export preparation", () => {
     expect(source).toContain('"onSwipeLeft"');
     expect(source).toContain('"onPinchOut"');
     expect(source).toContain('runInteractions(widget, "onKeyDown", item)');
+    expect(source).toContain('if (event.pointerType !== "touch") runInteractions(widget, "onClick", item)');
+    expect(source).toContain('...(mode === "mouse" ? {');
+    expect(source).toContain('...(mode === "both" ? {');
+    expect(source).toContain('...(mode !== "mouse" ? {');
+    expect(source).toContain('if (mode === "touch" && (event.key === "Enter" || event.key === " "))');
     expect(source).toContain("onPointerUp");
+    expect(source).toContain("onPointerLeave");
+    expect(source).toContain("onMouseLeave");
     const transpiled = ts.transpileModule(source, {
       compilerOptions: { jsx: ts.JsxEmit.ReactJSX, target: ts.ScriptTarget.ES2022 },
       reportDiagnostics: true,
@@ -303,7 +310,7 @@ describe("React code export preparation", () => {
     const source = generateSingleFileJsx(prepared);
     expect(source).toContain("let localValue = definition.initial");
     expect(source).toContain("localVariables[definition.name] = localValue");
-    expect(source).toContain('onClick: () => runInteractions(widget, "onClick", item)');
+    expect(source).toContain('onClick: (event: { pointerType?: string }) =>');
     const transpiled = ts.transpileModule(source, {
       compilerOptions: { jsx: ts.JsxEmit.ReactJSX, target: ts.ScriptTarget.ES2022 },
       reportDiagnostics: true,

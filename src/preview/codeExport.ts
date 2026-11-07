@@ -234,13 +234,19 @@ ${EXPRESSION_RUNTIME_SOURCE}
       },
       onChange: () => runInteractions(widget, "onChange", item),
       ...(mode === "mouse" ? {
-        onClick: () => runInteractions(widget, "onClick", item),
-        onDoubleClick: () => runInteractions(widget, "onDoubleClick", item),
-        onContextMenu: (event: { preventDefault: () => void }) => {
+        onClick: (event: { pointerType?: string }) => {
+          if (event.pointerType !== "touch") runInteractions(widget, "onClick", item);
+        },
+        onDoubleClick: (event: { pointerType?: string }) => {
+          if (event.pointerType !== "touch") runInteractions(widget, "onDoubleClick", item);
+        },
+        onContextMenu: (event: { pointerType?: string; preventDefault: () => void }) => {
+          if (event.pointerType === "touch") return;
           event.preventDefault();
           runInteractions(widget, "onRightClick", item);
         },
         onMouseEnter: () => runInteractions(widget, "onHover", item),
+        onMouseLeave: () => runInteractions(widget, "onHover", item),
         onMouseDown: () => runInteractions(widget, "onMouseDown", item),
         onMouseUp: () => runInteractions(widget, "onMouseUp", item),
       } : {}),
@@ -257,11 +263,17 @@ ${EXPRESSION_RUNTIME_SOURCE}
         onPointerEnter: (event: { pointerType: string }) => {
           if (event.pointerType === "mouse") runInteractions(widget, "onHover", item);
         },
+        onPointerLeave: (event: { pointerType: string }) => {
+          if (event.pointerType === "mouse") runInteractions(widget, "onHover", item);
+        },
         onPointerDown: (event: { pointerType: string }) => {
           if (event.pointerType === "mouse") runInteractions(widget, "onMouseDown", item);
         },
-        onDoubleClick: () => runInteractions(widget, "onDoubleClick", item),
-        onContextMenu: (event: { preventDefault: () => void }) => {
+        onDoubleClick: (event: { pointerType?: string }) => {
+          if (event.pointerType !== "touch") runInteractions(widget, "onDoubleClick", item);
+        },
+        onContextMenu: (event: { pointerType?: string; preventDefault: () => void }) => {
+          if (event.pointerType === "touch") return;
           event.preventDefault();
           runInteractions(widget, "onRightClick", item);
         },

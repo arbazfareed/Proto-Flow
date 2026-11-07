@@ -51,6 +51,10 @@ function stringProp(widget: Widget, key: string, fallback = ""): string {
   return typeof value === "string" ? value : fallback;
 }
 
+function isTouchPointerEvent(event: MouseEvent<HTMLElement>): boolean {
+  return "pointerType" in event.nativeEvent && event.nativeEvent.pointerType === "touch";
+}
+
 function getWidgetText(
   widget: Widget,
   runtime: PreviewRuntime,
@@ -244,7 +248,7 @@ export function VirtualizedRepeater({
   );
 }
 
-function PreviewWidget({
+export function PreviewWidget({
   widget,
   runtime,
   screenId,
@@ -312,24 +316,29 @@ function PreviewWidget({
   };
   const commonHandlers = {
     onClick: (event: MouseEvent<HTMLElement>) => {
-      if (inputMode !== "touch" || event.detail === 0) runEvent(widget, "onClick", item);
+      if (event.detail === 0 || (inputMode !== "touch" && !isTouchPointerEvent(event))) {
+        runEvent(widget, "onClick", item);
+      }
     },
-    onDoubleClick: () => {
-      if (inputMode !== "touch") runEvent(widget, "onDoubleClick", item);
+    onDoubleClick: (event: MouseEvent<HTMLElement>) => {
+      if (inputMode !== "touch" && !isTouchPointerEvent(event)) runEvent(widget, "onDoubleClick", item);
     },
     onContextMenu: (event: MouseEvent<HTMLElement>) => {
-      if (inputMode === "touch") return;
+      if (inputMode === "touch" || isTouchPointerEvent(event)) return;
       event.preventDefault();
       runEvent(widget, "onRightClick", item);
     },
-    onMouseEnter: () => {
-      if (inputMode !== "touch") runEvent(widget, "onHover", item);
+    onMouseEnter: (event: MouseEvent<HTMLElement>) => {
+      if (inputMode !== "touch" && !isTouchPointerEvent(event)) runEvent(widget, "onHover", item);
     },
-    onMouseDown: () => {
-      if (inputMode !== "touch") runEvent(widget, "onMouseDown", item);
+    onMouseLeave: (event: MouseEvent<HTMLElement>) => {
+      if (inputMode !== "touch" && !isTouchPointerEvent(event)) runEvent(widget, "onHover", item);
     },
-    onMouseUp: () => {
-      if (inputMode !== "touch") runEvent(widget, "onMouseUp", item);
+    onMouseDown: (event: MouseEvent<HTMLElement>) => {
+      if (inputMode !== "touch" && !isTouchPointerEvent(event)) runEvent(widget, "onMouseDown", item);
+    },
+    onMouseUp: (event: MouseEvent<HTMLElement>) => {
+      if (inputMode !== "touch" && !isTouchPointerEvent(event)) runEvent(widget, "onMouseUp", item);
     },
     onFocus: () => runEvent(widget, "onFocus", item),
     onBlur: () => runEvent(widget, "onBlur", item),
