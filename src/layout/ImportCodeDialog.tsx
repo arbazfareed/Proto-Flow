@@ -1,6 +1,29 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { KeyboardEvent } from "react";
-import { Code2, ShieldCheck, X } from "lucide-react";
+import {
+  Calendar,
+  Check,
+  ChevronDown,
+  Code2,
+  Compass,
+  FileText,
+  Image,
+  Layout,
+  Link2,
+  List,
+  ListOrdered,
+  Mail,
+  MousePointer2,
+  Music,
+  Search,
+  ShieldCheck,
+  Table,
+  Type,
+  Video,
+  X,
+} from "lucide-react";
+import type { LucideIcon } from "lucide-react";
+import { findRequiredIcons } from "../project/htmlImport";
 
 export interface ImportedCode {
   html: string;
@@ -58,6 +81,27 @@ const CONTENT_SECURITY_POLICY = [
   "object-src 'none'",
 ].join("; ");
 
+const REQUIRED_ICON_COMPONENTS: Record<string, LucideIcon> = {
+  Calendar,
+  Check,
+  ChevronDown,
+  Code2,
+  Compass,
+  FileText,
+  Image,
+  Layout,
+  Link: Link2,
+  List,
+  ListOrdered,
+  Mail,
+  MousePointer2,
+  Music,
+  Search,
+  Table,
+  Type,
+  Video,
+};
+
 export function compileSandboxDocument(html: string, css: string, javascript: string): string {
   const safeCss = css.replace(/<\/style/gi, "<\\/style");
   const safeJavascript = javascript.replace(/<\/script/gi, "<\\/script");
@@ -85,6 +129,12 @@ export function ImportCodeDialog({ onClose, onRenderOnCanvas }: ImportCodeDialog
   const [error, setError] = useState("");
   const dialogRef = useRef<HTMLElement>(null);
   const activeEditorRef = useRef<HTMLTextAreaElement>(null);
+  const iconAnalysis = useMemo(() => {
+    if (html.length > 200_000) {
+      return { requiredIcons: [], truncated: false, unavailable: true };
+    }
+    return { ...findRequiredIcons(html), unavailable: false };
+  }, [html]);
 
   useEffect(() => {
     const previousFocus = document.activeElement instanceof HTMLElement
@@ -220,6 +270,28 @@ export function ImportCodeDialog({ onClose, onRenderOnCanvas }: ImportCodeDialog
               referrerPolicy="no-referrer"
               srcDoc={previewDocument}
             />
+            <div className="import-code-required-icons" aria-label="Required icons">
+              <span>REQUIRED ICONS</span>
+              <div>
+                {iconAnalysis.requiredIcons.length
+                  ? iconAnalysis.requiredIcons.map((name) => {
+                    const Icon = REQUIRED_ICON_COMPONENTS[name] ?? FileText;
+                    return (
+                      <span className="import-code-icon-chip" key={name}>
+                        <Icon size={12} aria-hidden="true" />
+                        {name}
+                      </span>
+                    );
+                  })
+                  : <span className="import-code-no-icons">No semantic icons detected</span>}
+                {iconAnalysis.truncated && (
+                  <span className="import-code-no-icons">Icon scan limited to 2,000 elements</span>
+                )}
+                {iconAnalysis.unavailable && (
+                  <span className="import-code-no-icons">Source exceeds parser limits</span>
+                )}
+              </div>
+            </div>
           </section>
         </div>
 

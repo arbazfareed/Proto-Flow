@@ -23,7 +23,21 @@ test("PF-T801 imports code in a sandbox and renders editable elements on the can
   await frame.getByRole("button", { name: "Try it" }).click();
   await expect(frame.getByRole("button", { name: "It works!" })).toBeVisible();
 
-  await page.getByRole("textbox", { name: "HTML code" }).fill(
+  const htmlEditor = page.getByRole("textbox", { name: "HTML code" });
+  const requiredIcons = page.getByLabel("Required icons");
+  await htmlEditor.fill(
+    '<video aria-label="Intro"></video><table><tr><td>Report</td></tr></table><input type="date" aria-label="Start date">',
+  );
+  await expect(requiredIcons).toContainText("Video");
+  await expect(requiredIcons).toContainText("Table");
+  await expect(requiredIcons).toContainText("Calendar");
+  await expect(frame.getByText("Report")).toBeVisible();
+  await testInfo.attach("PF-T802-required-icon-matches", {
+    body: await page.screenshot({ path: testInfo.outputPath("pf-t802-required-icons.png") }),
+    contentType: "image/png",
+  });
+
+  await htmlEditor.fill(
     "<main><h1>Imported campaign</h1><p>Editable copy</p><button>Learn more</button></main>",
   );
   await expect(frame.getByRole("heading", { name: "Imported campaign" })).toBeVisible();

@@ -1,10 +1,10 @@
-name: PF-T801 code import sandbox
+name: Code import parser and sandbox
 
 on:
   pull_request:
     branches: [main]
   push:
-    branches: [feature/pf-t801-import-modal-sandbox]
+    branches: [feature/pf-t801-import-modal-sandbox, feature/pf-t802-smart-parser-icon-matcher]
   workflow_dispatch:
 
 permissions:
@@ -22,7 +22,7 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npx playwright install --with-deps chromium
-      - name: Run import and sandbox unit tests
+      - name: Run parser, icon matcher, and sandbox unit tests
         run: npx vitest run src/project/htmlImport.test.ts src/layout/ImportCodeDialog.component.test.tsx
       - name: Run PF-T801 browser workflow
         run: npx playwright test e2e/browser/import-code.spec.ts

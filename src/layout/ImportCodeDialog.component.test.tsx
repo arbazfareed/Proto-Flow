@@ -45,6 +45,19 @@ describe("ImportCodeDialog", () => {
     expect(onClose).toHaveBeenCalledOnce();
   });
 
+  it("shows relevant code icons for semantic markup", () => {
+    renderWithProviders(<ImportCodeDialog onClose={vi.fn()} onRenderOnCanvas={vi.fn()} />);
+    fireEvent.change(screen.getByRole("textbox", { name: "HTML code" }), {
+      target: {
+        value: `<video aria-label="Intro"></video><table><tr><td>Report</td></tr></table><input type="date" aria-label="Start date">`,
+      },
+    });
+
+    expect(screen.getByLabelText("Required icons")).toHaveTextContent("Video");
+    expect(screen.getByLabelText("Required icons")).toHaveTextContent("Table");
+    expect(screen.getByLabelText("Required icons")).toHaveTextContent("Calendar");
+  });
+
   it("keeps the dialog open and announces import errors", () => {
     const onRenderOnCanvas = vi.fn(() => {
       throw new Error("Nothing importable.");

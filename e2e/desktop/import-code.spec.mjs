@@ -38,6 +38,18 @@ describe("PF-T801 Windows desktop code import", () => {
     await htmlTab.click();
     const htmlEditor = await $('[aria-label="HTML code"]');
     await htmlEditor.setValue(
+      '<video aria-label="Intro"></video><table><tr><td>Report</td></tr></table><input type="date" aria-label="Start date">',
+    );
+    const requiredIcons = await $('[aria-label="Required icons"]');
+    await browser.waitUntil(async () => (await requiredIcons.getText()).includes("Calendar"));
+    expect(await requiredIcons.getText()).toContain("Video");
+    expect(await requiredIcons.getText()).toContain("Table");
+    await browser.waitUntil(async () =>
+      (await iframe.getAttribute("srcdoc"))?.includes('aria-label="Intro"') ?? false,
+    );
+    await browser.saveScreenshot(path.join(evidenceDirectory, "pf-t802-required-icons.png"));
+
+    await htmlEditor.setValue(
       "<main><h1>Desktop import proof</h1><p>Editable canvas content</p><button>Continue</button></main>",
     );
     await browser.waitUntil(async () =>

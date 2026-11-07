@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { importHtmlToWidgets } from "./htmlImport";
+import { importHtmlToWidgets, parseHtmlToAst } from "./htmlImport";
 
 describe("importHtmlToWidgets", () => {
   beforeEach(() => {
@@ -52,5 +52,65 @@ describe("importHtmlToWidgets", () => {
       .toThrow("HTML import is limited to 200 KB");
     expect(() => importHtmlToWidgets("<p>Test</p>", "x".repeat(100_001), 800))
       .toThrow("CSS import is limited to 100 KB");
+  });
+
+  it("builds a flat AST with parent links, computed styles, and required semantic icons", () => {
+    const ast = parseHtmlToAst(
+      `<main class="p-4 bg-blue-500"><section class="text-center fw-bold fs-2"><video aria-label="Intro"></video><table><tbody><tr><td>Report</td></tr></tbody></table><input type="date" aria-label="Start date"></section></main>`,
+      `section { color: #123456; }`,
+    );
+
+    expect(ast.nodes.map(({ tagName }) => tagName)).toEqual([
+      "main", "section", "video", "table", "tbody", "tr", "td", "input",
+    ]);
+    expect(ast.nodes[0]).toMatchObject({
+      id: "node-1",
+      parentId: null,
+      computedStyles: { padding: "16px", "background-color": "rgb(59, 130, 246)" },
+    });
+    expect(ast.nodes[1]).toMatchObject({
+      parentId: "node-1",
+      computedStyles: { color: "rgb(18, 52, 86)", "font-size": "32px", "font-weight": "700", "text-align": "center" },
+    });
+    expect(ast.nodes[2]).toMatchObject({
+      tagName: "video",
+      parentId: "node-2",
+      suggestedIcon: "Video",
+    });
+    expect(ast.nodes[7]).toMatchObject({
+      tagName: "input",
+      suggestedIcon: "Calendar",
+    });
+    expect(ast.requiredIcons).toEqual(["Layout", "Video", "Table", "Calendar"]);
+  });
+
+  it("maps common Tailwind and Bootstrap utility classes", () => {
+    const ast = parseHtmlToAst(
+      `<div class="text-red-600 bg-gray-100 rounded-lg"><p class="text-sm font-bold text-center">Tailwind</p><button class="btn btn-primary fw-bold">Bootstrap</button></div>`,
+      "",
+    );
+
+    expect(ast.nodes[0].computedStyles).toMatchObject({
+      color: "rgb(220, 38, 38)",
+      "background-color": "rgb(243, 244, 246)",
+      "border-radius": "8px",
+    });
+    expect(ast.nodes[1].computedStyles).toMatchObject({
+      "font-size": "14px",
+      "font-weight": "700",
+      "text-align": "center",
+    });
+    expect(ast.nodes[2].computedStyles).toMatchObject({
+      color: "rgb(255, 255, 255)",
+      "background-color": "rgb(13, 110, 253)",
+      "font-weight": "700",
+    });
+  });
+
+  it("reports when AST analysis reaches its node limit", () => {
+    const ast = parseHtmlToAst(`<main>${"<div></div>".repeat(2_000)}</main>`, "");
+
+    expect(ast.nodes).toHaveLength(2_000);
+    expect(ast.truncated).toBe(true);
   });
 });
