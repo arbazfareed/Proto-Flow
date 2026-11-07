@@ -23,7 +23,8 @@ To intentionally refresh baselines, inspect the generated screenshots and run th
 | OS / environment | Browser/device | Scale factors | Result |
 |---|---|---|---|
 | Windows 11 Pro Education 10.0.26300, local | Chromium; native Tauri WebView2 desktop E2E | 100%, 125%, 150%, 200% emulated | Locally exercised; see branch run results below. |
-| Ubuntu 24.04, GitHub Actions | Chromium device frames; Chromium, Firefox, and WebKit responsive exports | 100%, 125%, 150%, 200% emulated | CI coverage; headless browser, not native desktop certification. |
+| Ubuntu 24.04, GitHub Actions | Chromium device frames; Chromium, Firefox, and WebKit responsive exports | 100%, 125%, 150%, 200% emulated | Full PF-T710 workflow passed; headless browser, not native desktop certification. |
+| Windows Server 2022, GitHub Actions | Native Tauri WebView2 desktop E2E | Runner DPI | Windows E2E workflow passed. |
 | Ubuntu 24.04, X11 and Wayland | Native desktop | — | Not separately exercised. |
 | Kali, Debian 12, Fedora 40, Arch | Native desktop and browser | — | Not exercised; no distro-specific runner/VM is configured. |
 | Physical displays at 100%, 125%, 150%, and 200% | Any | Physical DPI | Not certified; Playwright uses emulated device scale factors. |
@@ -34,4 +35,6 @@ The four emulated scale factors do not substitute for the requested 6-OS × Linu
 
 On Windows 11 Pro Education 10.0.26300, the full device verifier rendered all 21 presets at all four emulated scale factors, compared 92 screenshots against the checked-in baselines, and passed responsive export checks in Chromium, Firefox, and WebKit. The full unit suite passed 467/467; the full component suite passed 34/34; the Chromium browser E2E suite passed 12/12; and native WebView2 desktop E2E passed 3/3, including the frame/safe-area controls and orientation flow.
 
-The PF-T710 GitHub Actions run uploads the generated screenshot set. A platform or display combination not run is explicitly left unverified rather than marked as passing.
+Commit `1989249` passed the Ubuntu 24.04 device and responsive verification workflow and the Windows Server 2022 browser-and-desktop E2E workflow. GitHub Actions also reported the unit tests, cross-browser export QA, performance benchmarks, Rust backend tests, Axure-parity compatibility, and signed Windows release workflows successful. The [device verification run](https://github.com/arbazfareed/Proto-Flow/actions/runs/42318137634) uploads the generated screenshot set.
+
+A platform or display combination not run is explicitly left unverified rather than marked as passing.
