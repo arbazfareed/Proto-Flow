@@ -161,6 +161,27 @@ async function verifyPreview(page, dpr) {
   assert.equal(await page.locator(".preview-frame-card").count(), 3);
   await layout.selectOption("grid");
   assert.equal(await page.locator(".preview-frame-card").count(), 4);
+  await page.waitForFunction(() => {
+    const cards = Array.from(document.querySelectorAll(".preview-frame-card"));
+    return cards.length === 4 && cards.every((card) => {
+      const viewport = card.querySelector(".preview-frame-viewport");
+      const screen = card.querySelector(".preview-screen");
+      const stage = card.querySelector(".preview-frame-stage");
+      if (!viewport || !screen || !stage) return false;
+      const viewportStyle = getComputedStyle(viewport);
+      const availableWidth = viewport.clientWidth -
+        parseFloat(viewportStyle.paddingLeft) - parseFloat(viewportStyle.paddingRight);
+      const availableHeight = viewport.clientHeight -
+        parseFloat(viewportStyle.paddingTop) - parseFloat(viewportStyle.paddingBottom);
+      const expectedScale = Math.min(
+        1,
+        Math.max(0.01, (availableWidth - 28) / screen.offsetWidth),
+        Math.max(0.01, (availableHeight - 28) / screen.offsetHeight),
+      );
+      return Math.abs(parseFloat(stage.style.width) - screen.offsetWidth * expectedScale) < 2 &&
+        Math.abs(parseFloat(stage.style.height) - screen.offsetHeight * expectedScale) < 2;
+    });
+  }, undefined, { timeout: 10_000 });
   const fittedFrames = await page.locator(".preview-frame-card").evaluateAll((cards) =>
     cards.map((card) => {
       const viewport = card.querySelector(".preview-frame-viewport").getBoundingClientRect();
