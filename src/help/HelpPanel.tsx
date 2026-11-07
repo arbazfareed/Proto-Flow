@@ -22,6 +22,7 @@ interface HelpNavigationDetail {
 interface HelpPanelProps {
   initialSlug?: string;
   onClose: () => void;
+  onOpenTutorial: () => void;
   onNotify: (message: string, isError?: boolean) => void;
 }
 
@@ -70,6 +71,17 @@ function inlineMarkdown(text: string): ReactNode[] {
   return nodes;
 }
 
+function markdownTableCells(line: string): string[] {
+  return line.trim().replace(/^\|/, "").replace(/\|$/, "")
+    .split(/(?<!\\)\|/)
+    .map((cell) => cell.trim().replace(/\\\|/g, "|"));
+}
+
+function isMarkdownTableDivider(line: string): boolean {
+  const cells = markdownTableCells(line);
+  return cells.length > 0 && cells.every((cell) => /^:?-{3,}:?$/.test(cell));
+}
+
 function MarkdownArticle({ markdown, onCopyCode }: {
   markdown: string;
   onCopyCode: (code: string) => void;
@@ -101,6 +113,49 @@ function MarkdownArticle({ markdown, onCopyCode }: {
         </div>,
       );
       index += 1;
+      continue;
+    }
+    if (line.includes("|") && index + 1 < lines.length && isMarkdownTableDivider(lines[index + 1])) {
+      const headers = markdownTableCells(line);
+      const alignments = markdownTableCells(lines[index + 1]).map((cell) =>
+        cell.startsWith(":") && cell.endsWith(":")
+          ? "center" as const
+          : cell.endsWith(":")
+            ? "right" as const
+            : "left" as const,
+      );
+      index += 2;
+      const rows: string[][] = [];
+      while (index < lines.length && lines[index].includes("|") && lines[index].trim()) {
+        rows.push(markdownTableCells(lines[index]));
+        index += 1;
+      }
+      blocks.push(
+        <div className="help-table-scroll" key={`table-${index}`}>
+          <table className="help-table">
+            <thead>
+              <tr>
+                {headers.map((header, column) => (
+                  <th key={`header-${column}`} scope="col" style={{ textAlign: alignments[column] }}>
+                    {inlineMarkdown(header)}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((row, rowIndex) => (
+                <tr key={`row-${rowIndex}`}>
+                  {headers.map((_, column) => (
+                    <td key={`cell-${column}`} style={{ textAlign: alignments[column] }}>
+                      {inlineMarkdown(row[column] ?? "")}
+                    </td>
+                  ))}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>,
+      );
       continue;
     }
     const heading = line.match(/^(#{1,3})\s+(.+)$/);
@@ -165,13 +220,14 @@ function saveFeedback(slug: string, rating: "yes" | "no"): void {
   localStorage.setItem("protoflow:help-feedback", JSON.stringify(feedback));
 }
 
-export function HelpPanel({ initialSlug, onClose, onNotify }: HelpPanelProps) {
+export function HelpPanel({ initialSlug, onClose, onOpenTutorial, onNotify }: HelpPanelProps) {
   const [selectedSlug, setSelectedSlug] = useState(initialSlug ?? HELP_ARTICLES[0]?.slug ?? "");
   const [query, setQuery] = useState("");
   const [feedback, setFeedback] = useState(readFeedback);
   const [comment, setComment] = useState("");
   const [commentSubmitted, setCommentSubmitted] = useState(false);
   const [recentSlugs, setRecentSlugs] = useState<string[]>([]);
+  const panelRef = useRef<HTMLElement>(null);
   const searchRef = useRef<HTMLInputElement>(null);
   const article = getHelpArticle(selectedSlug) ?? HELP_ARTICLES[0];
   const results = useMemo(() => searchHelpArticles(query, recentSlugs), [query, recentSlugs]);
@@ -186,12 +242,40 @@ export function HelpPanel({ initialSlug, onClose, onNotify }: HelpPanelProps) {
   );
 
   useEffect(() => {
+    const previousFocus = document.activeElement instanceof HTMLElement
+      ? document.activeElement
+      : null;
     searchRef.current?.focus();
-    const closeOnEscape = (event: KeyboardEvent) => {
-      if (event.key === "Escape") onClose();
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        onClose();
+        return;
+      }
+      if (event.key !== "Tab" || !panelRef.current) return;
+      const focusable = [...panelRef.current.querySelectorAll<HTMLElement>(
+        "button:not([disabled]), input:not([disabled]), textarea:not([disabled]), a[href], [tabindex]:not([tabindex='-1'])",
+      )].filter((element) => element.getClientRects().length > 0);
+      if (focusable.length === 0) {
+        event.preventDefault();
+        panelRef.current.focus();
+        return;
+      }
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      if (event.shiftKey && (document.activeElement === first || !panelRef.current.contains(document.activeElement))) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey &&
+        (document.activeElement === last || !panelRef.current.contains(document.activeElement))) {
+        event.preventDefault();
+        first.focus();
+      }
     };
-    window.addEventListener("keydown", closeOnEscape);
-    return () => window.removeEventListener("keydown", closeOnEscape);
+    document.addEventListener("keydown", handleKeyDown, true);
+    return () => {
+      document.removeEventListener("keydown", handleKeyDown, true);
+      if (previousFocus?.isConnected) previousFocus.focus();
+    };
   }, [onClose]);
 
   useEffect(() => {
@@ -286,7 +370,14 @@ export function HelpPanel({ initialSlug, onClose, onNotify }: HelpPanelProps) {
     <div className="help-backdrop" role="presentation" onMouseDown={(event) => {
       if (event.target === event.currentTarget) onClose();
     }}>
-      <section className="help-panel" role="dialog" aria-modal="true" aria-labelledby="help-title">
+      <section
+        ref={panelRef}
+        className="help-panel"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="help-title"
+        tabIndex={-1}
+      >
         <header className="help-header">
           <div>
             <span className="inspector-overline">OFFLINE HELP</span>
@@ -435,9 +526,17 @@ export function HelpPanel({ initialSlug, onClose, onNotify }: HelpPanelProps) {
         </div>
         <footer className="help-panel-footer">
           <span>{HELP_ARTICLES.length} guides · Search and read offline</span>
-          <button type="button" onClick={() => void copyText(articleLink, "Deep link copied.")}>
-            <Copy size={12} /> Copy deep link
-          </button>
+          <div className="help-panel-footer-actions">
+            <button type="button" onClick={() => {
+              onClose();
+              onOpenTutorial();
+            }}>
+              Start interactive tutorial
+            </button>
+            <button type="button" onClick={() => void copyText(articleLink, "Deep link copied.")}>
+              <Copy size={12} /> Copy deep link
+            </button>
+          </div>
         </footer>
       </section>
     </div>

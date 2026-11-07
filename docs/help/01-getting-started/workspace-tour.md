@@ -4,4 +4,4 @@ The workspace has three main areas: the left sidebar for screens, elements, symb
 
 Use the Design and Flow views to switch between editing a screen and inspecting navigation between screens. Preview runs the prototype interactions. The top bar also provides project save/open, undo/redo, export, collaboration, and quick actions.
 
-Press **F1** to open these guides. The interactive tutorial is available from the sidebar and walks through selection, styling, rules, device frames, responsive layouts, panels, repeaters, expressions, Flow, and export.
+Press **F1** to open these guides. Choose **Start interactive tutorial** at the bottom of this panel, or **Open tutorial project** in the sidebar, to walk through selection, styling, rules, device frames, responsive layouts, panels, repeaters, expressions, Flow, and export. The tutorial uses a separate editable project copy and restores your current project when you finish.
