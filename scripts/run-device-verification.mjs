@@ -1,13 +1,17 @@
 import assert from "node:assert/strict";
 import { createServer } from "node:http";
 import { spawn } from "node:child_process";
-import { mkdir } from "node:fs/promises";
+import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import { chromium, firefox, webkit } from "playwright";
 import JSZip from "jszip";
+import { PNG } from "pngjs";
 
 const baseUrl = "http://127.0.0.1:1421";
 const fullRun = process.env.PF_DEVICE_FULL === "1";
+const updateBaselines = process.env.PF_DEVICE_UPDATE_BASELINES === "1";
+const screenshotDirectory = new URL("../reports/device-verification/screenshots/", import.meta.url);
+const baselineDirectory = new URL("../reports/device-verification/baselines/", import.meta.url);
 const server = spawn(
   process.execPath,
   [fileURLToPath(new URL("../node_modules/vite/bin/vite.js", import.meta.url)), "--host", "127.0.0.1", "--port", "1421", "--strictPort"],
@@ -141,7 +145,7 @@ async function verifyPreview(page) {
   await page.getByText("Preview screenshot saved as a 2× PNG.").waitFor({ timeout: 15_000 });
 }
 
-async function verifyDeviceFrames(page, dpr, screenshotPath) {
+async function verifyDeviceFrames(page, dpr, screenshotDirectory) {
   await page.goto(`${baseUrl}/scripts/device-frame-fixture.html`, { waitUntil: "load" });
   const picker = page.getByLabel("Device preset");
   await page.locator("#frame-stage canvas").first().waitFor({ state: "attached", timeout: 5_000 }).catch(async () => {
@@ -165,15 +169,101 @@ async function verifyDeviceFrames(page, dpr, screenshotPath) {
       canvas.toDataURL("image/png"),
     );
     assert.ok(canvasData.length > 2_000, `Konva device frame rendered for ${presetId} at DPR ${dpr}`);
+    const screenshotName = `${presetId}-${Math.round(dpr * 100)}dpi`;
+    await compareDeviceScreenshot(page, screenshotName, screenshotDirectory);
     if (presetId === "iphone-15-pro") {
-      await page.screenshot({ path: screenshotPath, fullPage: false });
+      await compareDeviceScreenshot(
+        page,
+        `device-frame-${Math.round(dpr * 100)}dpi`,
+        screenshotDirectory,
+      );
       await page.getByRole("button", { name: "Rotate" }).click();
       await page.getByRole("status").filter({ hasText: "852 × 393" }).waitFor();
+      await compareDeviceScreenshot(
+        page,
+        `iphone-15-pro-landscape-${Math.round(dpr * 100)}dpi`,
+        screenshotDirectory,
+      );
       await page.getByRole("button", { name: "Rotate" }).click();
       await page.getByRole("status").filter({ hasText: "393 × 852" }).waitFor();
     }
   }
+  await picker.selectOption("iphone-15-pro");
+  const frameCanvas = page.locator("#frame-stage canvas").first();
+  const frameToggle = page.getByRole("button", { name: "Show device frame" });
+  const initialFrame = await frameCanvas.evaluate((canvas) => canvas.toDataURL("image/png"));
+  await frameToggle.click();
+  await page.waitForFunction(
+    (before) => document.querySelector("#frame-stage canvas")?.toDataURL("image/png") !== before,
+    initialFrame,
+  );
+  assert.equal(await frameToggle.getAttribute("aria-pressed"), "false");
+  const frameHidden = await frameCanvas.evaluate((canvas) => canvas.toDataURL("image/png"));
+  await frameToggle.click();
+  await page.waitForFunction(
+    (before) => document.querySelector("#frame-stage canvas")?.toDataURL("image/png") !== before,
+    frameHidden,
+  );
+  assert.equal(await frameToggle.getAttribute("aria-pressed"), "true");
+
+  const safeAreaToggle = page.getByRole("button", { name: "Show safe area" });
+  const initialSafeArea = await frameCanvas.evaluate((canvas) => canvas.toDataURL("image/png"));
+  await safeAreaToggle.click();
+  await page.waitForFunction(
+    (before) => document.querySelector("#frame-stage canvas")?.toDataURL("image/png") !== before,
+    initialSafeArea,
+  );
+  assert.equal(await safeAreaToggle.getAttribute("aria-pressed"), "false");
+  const safeAreaHidden = await frameCanvas.evaluate((canvas) => canvas.toDataURL("image/png"));
+  await safeAreaToggle.click();
+  await page.waitForFunction(
+    (before) => document.querySelector("#frame-stage canvas")?.toDataURL("image/png") !== before,
+    safeAreaHidden,
+  );
+  assert.equal(await safeAreaToggle.getAttribute("aria-pressed"), "true");
   return presetIds.length;
+}
+
+async function compareDeviceScreenshot(page, name, screenshotUrl) {
+  const screenshot = await page.screenshot({
+    path: fileURLToPath(new URL(`${name}.png`, screenshotUrl)),
+    animations: "disabled",
+  });
+  const baselineUrl = new URL(`${name}.png`, baselineDirectory);
+  let baselineBytes;
+  try {
+    baselineBytes = await readFile(baselineUrl);
+  } catch (error) {
+    if (error.code !== "ENOENT") throw error;
+    if (process.env.CI && !updateBaselines) {
+      throw new Error(`Missing device screenshot baseline ${baselineUrl.pathname}; generate and review it locally.`);
+    }
+    await writeFile(baselineUrl, screenshot);
+    return { initialized: true, changedPixelRatio: 0 };
+  }
+  if (updateBaselines) {
+    await writeFile(baselineUrl, screenshot);
+    return { initialized: true, changedPixelRatio: 0 };
+  }
+  const actualImage = PNG.sync.read(screenshot);
+  const baselineImage = PNG.sync.read(baselineBytes);
+  assert.equal(actualImage.width, baselineImage.width, `${name} screenshot width`);
+  assert.equal(actualImage.height, baselineImage.height, `${name} screenshot height`);
+  let changedPixels = 0;
+  for (let offset = 0; offset < actualImage.data.length; offset += 4) {
+    if (
+      Math.abs(actualImage.data[offset] - baselineImage.data[offset]) > 12 ||
+      Math.abs(actualImage.data[offset + 1] - baselineImage.data[offset + 1]) > 12 ||
+      Math.abs(actualImage.data[offset + 2] - baselineImage.data[offset + 2]) > 12 ||
+      Math.abs(actualImage.data[offset + 3] - baselineImage.data[offset + 3]) > 12
+    ) changedPixels += 1;
+  }
+  const changedPixelRatio = changedPixels / (actualImage.width * actualImage.height);
+  assert.ok(
+    changedPixelRatio <= 0.01,
+    `${name} screenshot changed ${(changedPixelRatio * 100).toFixed(2)}% of pixels`,
+  );
+  return { initialized: false, changedPixelRatio };
 }
 
 async function createExportFiles() {
@@ -318,8 +408,8 @@ try {
   if (!ready) throw new Error(`Vite did not become ready:\n${serverOutput}`);
 
   browser = await chromium.launch({ headless: true });
-  const screenshots = new URL("../reports/device-verification/screenshots/", import.meta.url);
-  await mkdir(screenshots, { recursive: true });
+  await mkdir(screenshotDirectory, { recursive: true });
+  await mkdir(baselineDirectory, { recursive: true });
   const dpis = [1, 1.25, 1.5, 2];
   for (const dpr of dpis) {
     const context = await browser.newContext({
@@ -341,13 +431,13 @@ try {
     if (dpr === 1) await verifyInputModes(page);
     const label = `${Math.round(dpr * 100)}`;
     await page.screenshot({
-      path: fileURLToPath(new URL(`multi-device-preview-${label}dpi.png`, screenshots)),
+      path: fileURLToPath(new URL(`multi-device-preview-${label}dpi.png`, screenshotDirectory)),
       fullPage: false,
     });
     const frameCount = await verifyDeviceFrames(
       page,
       dpr,
-      fileURLToPath(new URL(`device-frame-${label}dpi.png`, screenshots)),
+      screenshotDirectory,
     );
     console.log(`Chromium preview and ${frameCount} device frames passed at ${label}% emulated display scale.`);
     await context.close();

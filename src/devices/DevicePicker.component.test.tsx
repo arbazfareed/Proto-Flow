@@ -50,6 +50,24 @@ describe("DevicePicker", () => {
     expect(localStorage.getItem("protoflow:recent-device-presets")).toContain(firstPhone.id);
   });
 
+  it("shows a newly used preset in the recently used group when reopened", async () => {
+    localStorage.removeItem("protoflow:recent-device-presets");
+    const user = userEvent.setup();
+    const { props, rerender } = renderPicker();
+
+    await user.click(screen.getByRole("button", { name: new RegExp(firstPhone.name) }));
+    rerender(<DevicePicker {...props} open={false} />);
+    rerender(<DevicePicker {...props} open />);
+
+    const recentGroup = screen.getByRole("heading", { name: "Recently used" })
+      .closest(".device-picker-group");
+    if (!(recentGroup instanceof HTMLElement)) {
+      throw new Error("Recently used devices group is missing.");
+    }
+    expect(within(recentGroup)
+      .getByRole("button", { name: new RegExp(firstPhone.name) })).toBeInTheDocument();
+  });
+
   it("validates custom safe areas before creating the device", async () => {
     const user = userEvent.setup();
     const { props } = renderPicker();

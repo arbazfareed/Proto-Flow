@@ -7,11 +7,16 @@ on:
   push:
     branches:
       - main
+      - feature/pf-t710-device-responsive-tests
     paths:
       - "src/devices/**"
       - "src/preview/**"
       - "src/project/**"
+      - "src/canvas/snapping*"
+      - "src/layout/ResponsiveControls.tsx"
       - "src/layout/HtmlExportDialog.tsx"
+      - "e2e/browser/breakpoint-manager.spec.ts"
+      - "e2e/browser/device-frame.spec.ts"
       - "examples/**"
       - "scripts/run-device-verification.mjs"
       - "scripts/device-frame-fixture.*"
@@ -37,7 +42,8 @@ jobs:
         run: npx playwright install --with-deps chromium firefox webkit
       - if: github.event_name == 'pull_request'
         run: npx playwright install --with-deps chromium
-      - run: npm test -- --run src/devices/catalog.test.ts src/devices/frame.test.ts src/preview/deviceLayouts.test.ts src/preview/htmlExport.test.ts src/preview/codeExport.test.ts src/project/responsive.test.ts
+      - run: npm test -- --run src/devices/catalog.test.ts src/devices/frame.test.ts src/preview/deviceLayouts.test.ts src/preview/htmlExport.test.ts src/preview/codeExport.test.ts src/project/responsive.test.ts src/canvas/snapping.test.ts
+      - run: npm run test:components -- src/devices/DevicePicker.component.test.tsx
       - run: npm run verify:devices
       - uses: actions/upload-artifact@v4
         if: always()
