@@ -1,0 +1,35 @@
+name: PF-T716 Axure workflow browser regressions
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [feature/pf-t716-axure-workflow-regressions]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  linux-browser-workflows:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+      - name: Run PF-T716 browser workflows
+        run: npx playwright test e2e/browser/axure-workflows.spec.ts
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: pf-t716-linux-browser-evidence
+          path: |
+            playwright-report/
+            test-results/browser/
+          if-no-files-found: warn
+          retention-days: 14
