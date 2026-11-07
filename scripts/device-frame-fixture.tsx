@@ -9,9 +9,11 @@ import type { Widget } from "../src/project/schema";
 
 const picker = document.querySelector<HTMLSelectElement>("#frame-preset");
 const rotateButton = document.querySelector<HTMLButtonElement>("#rotate-frame");
+const frameToggle = document.querySelector<HTMLButtonElement>("#toggle-frame");
+const safeAreaToggle = document.querySelector<HTMLButtonElement>("#toggle-safe-area");
 const status = document.querySelector<HTMLElement>("#frame-status");
 const stageContainer = document.querySelector<HTMLElement>("#frame-stage");
-if (!picker || !rotateButton || !status || !stageContainer) {
+if (!picker || !rotateButton || !frameToggle || !safeAreaToggle || !status || !stageContainer) {
   throw new Error("Device frame verification fixture is missing a required control.");
 }
 
@@ -40,6 +42,8 @@ const warningWidget: Widget = {
 
 function VerificationApp() {
   const [device, setDevice] = useState<ScreenDevice>(() => toScreenDevice(DEVICE_PRESETS[0]));
+  const [showFrame, setShowFrame] = useState(true);
+  const [showSafeArea, setShowSafeArea] = useState(true);
   const preset = DEVICE_PRESETS.find((item) => item.id === device.presetId) ?? DEVICE_PRESETS[0];
   const scale = Math.min(
     Math.max(1, window.innerWidth - 48) / device.width,
@@ -55,15 +59,25 @@ function VerificationApp() {
       setDevice(toScreenDevice(selected));
     };
     const rotate = () => setDevice((current) => rotateDevice(current));
+    const showFrame = (event: Event) =>
+      setShowFrame((event as CustomEvent<boolean>).detail);
+    const showSafeArea = (event: Event) =>
+      setShowSafeArea((event as CustomEvent<boolean>).detail);
     window.addEventListener("deviceframepreset", selectPreset);
     window.addEventListener("deviceframerotate", rotate);
+    window.addEventListener("deviceframeshow", showFrame);
+    window.addEventListener("deviceframesafeshow", showSafeArea);
     return () => {
       window.removeEventListener("deviceframepreset", selectPreset);
       window.removeEventListener("deviceframerotate", rotate);
+      window.removeEventListener("deviceframeshow", showFrame);
+      window.removeEventListener("deviceframesafeshow", showSafeArea);
     };
   }, []);
 
   picker.value = preset.id;
+  frameToggle.setAttribute("aria-pressed", String(showFrame));
+  safeAreaToggle.setAttribute("aria-pressed", String(showSafeArea));
   status.textContent = `${preset.name} · ${device.width} × ${device.height} · DPR ${window.devicePixelRatio}`;
 
   return (
@@ -74,8 +88,8 @@ function VerificationApp() {
         widgets={[warningWidget]}
         transform={{ x: 24, y: 20, scale }}
         visible
-        showFrame
-        showSafeArea
+        showFrame={showFrame}
+        showSafeArea={showSafeArea}
         statusBarTheme="dark"
         statusBarTimeMode="static"
         showBattery
@@ -90,6 +104,31 @@ picker.addEventListener("change", () => {
 });
 rotateButton.addEventListener("click", () => {
   window.dispatchEvent(new CustomEvent("deviceframerotate"));
+});
+frameToggle.addEventListener("click", () => {
+  window.dispatchEvent(new CustomEvent("deviceframetoggle"));
+});
+safeAreaToggle.addEventListener("click", () => {
+  window.dispatchEvent(new CustomEvent("deviceframesafeareatoggle"));
+});
+
+window.addEventListener("deviceframetoggle", () => {
+  frameToggle.setAttribute(
+    "aria-pressed",
+    String(frameToggle.getAttribute("aria-pressed") !== "true"),
+  );
+  window.dispatchEvent(new CustomEvent("deviceframeshow", {
+    detail: frameToggle.getAttribute("aria-pressed") === "true",
+  }));
+});
+window.addEventListener("deviceframesafeareatoggle", () => {
+  safeAreaToggle.setAttribute(
+    "aria-pressed",
+    String(safeAreaToggle.getAttribute("aria-pressed") !== "true"),
+  );
+  window.dispatchEvent(new CustomEvent("deviceframesafeshow", {
+    detail: safeAreaToggle.getAttribute("aria-pressed") === "true",
+  }));
 });
 
 createRoot(stageContainer).render(<VerificationApp />);
