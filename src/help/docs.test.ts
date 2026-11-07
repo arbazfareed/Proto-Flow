@@ -10,9 +10,9 @@ import {
 } from "./docs";
 
 describe("offline help library", () => {
-  it("bundles 55 titled Markdown articles across categories", () => {
-    expect(HELP_ARTICLES).toHaveLength(55);
-    expect(new Set(HELP_ARTICLES.map((article) => article.slug)).size).toBe(55);
+  it("bundles 56 titled Markdown articles across categories", () => {
+    expect(HELP_ARTICLES).toHaveLength(56);
+    expect(new Set(HELP_ARTICLES.map((article) => article.slug)).size).toBe(56);
     expect(HELP_CATEGORIES).toContain("Canvas Devices");
     expect(HELP_CATEGORIES).toContain("Advanced Features");
     expect(HELP_ARTICLES.every((article) => article.title && article.markdown.trim())).toBe(true);
