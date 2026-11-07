@@ -1,5 +1,6 @@
 import React from "react";
 import ReactDOM from "react-dom/client";
+import "@fontsource-variable/inter";
 import App from "./App";
 import { startAutosave } from "./project/autosave";
 import { AppErrorBoundary } from "./diagnostics/AppErrorBoundary";

@@ -181,6 +181,11 @@ async function verifyPreview(page, dpr) {
   await devicePicker.getByLabel(selectedPresetName).check();
   assert.equal(await page.locator(".preview-frame-card").count(), 4);
   await devicePicker.locator("summary").click();
+  await page.evaluate(() => document.fonts.ready.then(() => undefined));
+  const interLoaded = await page.evaluate(() =>
+    Array.from(document.fonts).some((font) => font.family === "Inter Variable" && font.status === "loaded"),
+  );
+  assert.ok(interLoaded, "preview uses the bundled Inter font before visual comparison");
   await compareDeviceScreenshot(
     page,
     `multi-device-preview-${Math.round(dpr * 100)}dpi`,
