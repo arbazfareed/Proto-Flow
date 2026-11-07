@@ -5,3 +5,5 @@ Use multi-device preview to inspect the same prototype at multiple viewport size
 Multi-device preview is a layout check, not a guarantee of exact physical-device rendering. Confirm that important controls remain visible, safe-area guidance is respected, and text does not clip at the chosen dimensions.
 
 For a single device-frame setup in the editor, see **Device frames overview**. For responsive HTML export, see **Responsive HTML export**.
+
+To choose the right export format after previewing, see [choosing between responsive and per-device export](help:choosing-responsive-vs-per-device).

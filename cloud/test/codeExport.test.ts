@@ -85,6 +85,37 @@ describe("React/Tailwind archive generator", () => {
 
   it("generates a responsive React export and emits type-safe responsive source", async () => {
     const project = createEmptyProject("Responsive React");
+    const screen = project.screens[0];
+    screen.device = {
+      presetId: "desktop-1440-900",
+      width: 1440,
+      height: 900,
+      dpr: 1,
+      orientation: "landscape",
+      insets: { top: 0, right: 0, bottom: 0, left: 0 },
+    };
+    screen.breakpoints = [
+      { id: "mobile", name: "Mobile", minWidth: 0, maxWidth: 767, width: 390, height: 844 },
+      { id: "tablet", name: "Tablet", minWidth: 768, maxWidth: 1023, width: 768, height: 1024 },
+      { id: "desktop", name: "Desktop", minWidth: 1024, width: 1440, height: 900 },
+    ];
+    screen.widgets.push({
+      id: crypto.randomUUID(),
+      type: "text",
+      x: 120,
+      y: 80,
+      width: 260,
+      height: 48,
+      rotation: 0,
+      opacity: 1,
+      visible: true,
+      locked: false,
+      zIndex: 1,
+      style: {},
+      props: { text: "Responsive label" },
+      overrides: { mobile: { x: 12, width: 200 } },
+      cascadeMode: "fluid",
+    });
     const archive = await generateReactCodeArchive(encodeProjectForCodeExport(project), {
       ...options,
       responsive: true,
@@ -92,6 +123,7 @@ describe("React/Tailwind archive generator", () => {
     const zip = await JSZip.loadAsync(archive.zipBase64, { base64: true });
     const renderer = await zip.file("src/components/ScreenRenderer.tsx")!.async("text");
     const helper = await zip.file("src/project/responsive.ts")!.async("text");
+    const types = await zip.file("src/types.ts")!.async("text");
     const compilerOptions = {
       jsx: ts.JsxEmit.ReactJSX,
       target: ts.ScriptTarget.ES2022,
@@ -101,6 +133,8 @@ describe("React/Tailwind archive generator", () => {
     expect(zip.file("src/project/responsive.ts")).not.toBeNull();
     expect(renderer).toContain("window.addEventListener(\"resize\", updateWidth)");
     expect(renderer).toContain("resolveWidgetsForBreakpoint");
+    expect(types).toContain('inputMode?: "touch" | "mouse" | "both"');
+    expect(types).toContain("flowPosition?: { x: number; y: number }");
     for (const source of [renderer, helper]) {
       const output = ts.transpileModule(source, {
         compilerOptions,
@@ -110,5 +144,16 @@ describe("React/Tailwind archive generator", () => {
         diagnostic.category === ts.DiagnosticCategory.Error,
       )).toEqual([]);
     }
+    const helperOutput = ts.transpileModule(helper, {
+      compilerOptions: { module: ts.ModuleKind.ESNext, target: ts.ScriptTarget.ES2022 },
+      reportDiagnostics: true,
+    });
+    const responsiveHelper = await import(
+      `data:text/javascript;base64,${Buffer.from(helperOutput.outputText).toString("base64")}`
+    ) as typeof import("../../src/project/responsive");
+    const mobile = responsiveHelper.getScreenBreakpoints(screen).find((breakpoint) => breakpoint.id === "mobile");
+    if (!mobile) throw new Error("Responsive React export omitted the mobile breakpoint.");
+    const resolved = responsiveHelper.resolveWidgetsForBreakpoint(screen.widgets, mobile, 1440, 900);
+    expect(resolved[0]).toMatchObject({ x: 12, width: 200 });
   });
 });

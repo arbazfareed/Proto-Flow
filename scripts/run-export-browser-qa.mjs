@@ -322,6 +322,7 @@ async function exerciseHtmlPage(page, url, label, responsive, ids, mobile) {
       [390, 390, 200],
       [768, 768, 139],
       [1024, 1440, 260],
+      [1440, 1440, 260],
       [1920, 1440, 260],
       [3840, 1440, 260],
     ];
@@ -334,6 +335,14 @@ async function exerciseHtmlPage(page, url, label, responsive, ids, mobile) {
       }));
       assert.equal(actual.width, stageWidth, `${label} stage at ${width}px`);
       assert.ok(Math.abs(actual.widget - widgetWidth) <= 1, `${label} widget at ${width}px was ${actual.widget}px`);
+      if (width === 320) {
+        const stageWrap = page.locator(".stage-wrap");
+        const scrollWidth = await stageWrap.evaluate((element) => element.scrollWidth);
+        assert.ok(scrollWidth > 320, `${label} 320px viewport can pan across the configured mobile canvas`);
+        await stageWrap.evaluate((element) => { element.scrollLeft = element.scrollWidth; });
+        assert.ok(await stageWrap.evaluate((element) => element.scrollLeft > 0), `${label} 320px canvas is horizontally reachable`);
+        await stageWrap.evaluate((element) => { element.scrollLeft = 0; });
+      }
     }
   }
 
@@ -344,6 +353,10 @@ async function exerciseHtmlPage(page, url, label, responsive, ids, mobile) {
   assert.equal(animationName, "none", `${label} disables panel motion when requested`);
   await auditWithAxe(page, label);
   await page.setViewportSize(responsive ? { width: 1440, height: 900 } : { width: 390, height: 844 });
+  await page.locator(".stage-wrap").evaluate((element) => {
+    element.scrollLeft = 0;
+    element.scrollTop = 0;
+  });
   const visual = await compareScreenshot(page, label);
   assert.deepEqual(pageErrors, [], `${label} runtime errors`);
   return { loadMilliseconds, visual };
@@ -396,11 +409,12 @@ async function runBrowserTarget(name, engine, exportBaseUrl, mobile = false, cha
       visual: responsive.visual,
     });
 
-    for (const [variant, filename] of [
-      ["desktop", "index-desktop.html"],
-      ["tablet", "index-tablet.html"],
-      ["mobile", "index-mobile.html"],
+    for (const [variant, filename, viewportWidth] of [
+      ["desktop", "index-desktop.html", 1440],
+      ["tablet", "index-tablet.html", 768],
+      ["mobile", "index-mobile.html", 320],
     ]) {
+      await page.setViewportSize({ width: viewportWidth, height: 900 });
       await page.goto(`${exportBaseUrl}/variants/${filename}`, { waitUntil: "load" });
       await page.locator("#stage[data-screen-id]").waitFor({ state: "attached" });
       await page.evaluate(() => document.fonts.ready);
@@ -414,7 +428,19 @@ async function runBrowserTarget(name, engine, exportBaseUrl, mobile = false, cha
         getComputedStyle(panel).animationName,
       );
       assert.equal(animationName, "none", `${prefix}-${variant} disables panel motion when requested`);
-      await page.setViewportSize(mobile ? { width: 390, height: 844 } : { width: 1440, height: 900 });
+      if (mobile) {
+        await page.setViewportSize({ width: 390, height: 844 });
+        await page.goto(`${exportBaseUrl}/variants/${filename}`, { waitUntil: "load" });
+        await page.locator("#stage[data-screen-id]").waitFor({ state: "attached" });
+        await activateAdvanceButton(page, mobile);
+        await page.getByText("Panel open", { exact: false }).waitFor();
+      } else {
+        await page.setViewportSize({ width: 1440, height: 900 });
+      }
+      await page.locator(".stage-wrap").evaluate((element) => {
+        element.scrollLeft = 0;
+        element.scrollTop = 0;
+      });
       const visual = await compareScreenshot(page, `${prefix}-device-${variant}`);
       results.push({
         browser: prefix,

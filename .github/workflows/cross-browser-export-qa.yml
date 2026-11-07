@@ -9,6 +9,7 @@ on:
       - main
       - feature/pf-t708-cross-browser-qa
       - feature/pf-t709-axure-parity-tests
+      - feature/pf-t711-multi-device-preview-export-tests
   workflow_dispatch:
 
 permissions:
@@ -19,7 +20,7 @@ jobs:
     runs-on: windows-2022
     timeout-minutes: 30
     env:
-      PF_EXPORT_FULL: ${{ (github.event_name == 'workflow_dispatch' || github.ref == 'refs/heads/main') && '1' || '0' }}
+      PF_EXPORT_FULL: ${{ (github.event_name == 'workflow_dispatch' || github.ref == 'refs/heads/main' || github.ref == 'refs/heads/feature/pf-t711-multi-device-preview-export-tests') && '1' || '0' }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4

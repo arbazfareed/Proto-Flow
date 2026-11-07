@@ -15,6 +15,60 @@ describe("Windows desktop Axure-parity workflows", () => {
     await $('//button[normalize-space(.)="Finish"]').click();
 
     await $('[aria-label="Quick actions"]').waitForDisplayed();
+    await $('[aria-label="Export HTML bundle"]').click();
+    const htmlExport = await $('[role="dialog"][aria-labelledby="html-export-title"]');
+    await htmlExport.waitForDisplayed();
+    expect(await htmlExport.getText()).toContain("0 credits · no upload · local export");
+    await $('[aria-label="Close HTML export dialog"]').click();
+
+    await $('//button[normalize-space(.)="Export code"]').click();
+    const reactExport = await $('[role="dialog"][aria-labelledby="react-export-title"]');
+    await reactExport.waitForDisplayed();
+    expect(await reactExport.getText()).toContain("ZIP export costs 3 credits");
+    expect(await reactExport.getText()).toContain("Download project ZIP (3 credits)");
+    await $('[aria-label="Close React export dialog"]').click();
+
+    const editorWindow = await browser.getWindowHandle();
+    await $('[aria-label="Open preview"]').click();
+    await browser.waitUntil(async () => (await browser.getWindowHandles()).length > 1, {
+      timeout: 30_000,
+      timeoutMsg: "Native multi-device preview window did not open",
+    });
+    const previewWindow = (await browser.getWindowHandles()).find((handle) => handle !== editorWindow);
+    if (!previewWindow) throw new Error("Native multi-device preview window handle was not returned.");
+    await browser.switchToWindow(previewWindow);
+    try {
+      const layout = await $('[aria-label="Preview layout"]');
+      await layout.waitForDisplayed({ timeout: 20_000 });
+      await expect(layout).toHaveValue("single");
+      await layout.selectByAttribute("value", "columns");
+      await browser.waitUntil(async () => (await $$(".preview-frame-card")).length === 3);
+      await layout.selectByAttribute("value", "grid");
+      await browser.waitUntil(async () => (await $$(".preview-frame-card")).length === 4);
+
+      await $(".preview-device-selection summary").click();
+      await (await $$(".preview-device-selection label"))[0].waitForDisplayed();
+      await (await $$(".preview-device-selection label"))[0].click();
+      await browser.waitUntil(async () => (await $$(".preview-frame-card")).length === 3);
+      await (await $$(".preview-device-selection label"))[0].click();
+      await browser.waitUntil(async () => (await $$(".preview-frame-card")).length === 4);
+      await $(".preview-device-selection summary").click();
+
+      const rotate = await $('[aria-label="Rotate devices"]');
+      await rotate.click();
+      await expect(rotate).toHaveAttribute("aria-pressed", "true");
+      const zoom = await $('[aria-label="Preview zoom"]');
+      await zoom.waitForDisplayed();
+      await expect(zoom).toHaveAttribute("min", "25");
+      await expect(zoom).toHaveAttribute("max", "150");
+      await browser.waitUntil(async () =>
+        (await $(".preview-status").getText()).includes("4 devices · shared runtime state"),
+      );
+    } finally {
+      await browser.closeWindow();
+      await browser.switchToWindow(editorWindow);
+    }
+
     const canvasViewOptionsButton = await $(
       '.canvas-view-menu-anchor > button[aria-label="Canvas view options"]',
     );
