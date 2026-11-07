@@ -23,6 +23,9 @@ describe("PF-T801 Windows desktop code import", () => {
     await dialog.waitForDisplayed();
     const iframe = await $('iframe[title="Sandboxed code preview"]');
     await expect(iframe).toHaveAttribute("sandbox", "allow-scripts");
+    await browser.waitUntil(async () =>
+      (await iframe.getAttribute("srcdoc"))?.includes("connect-src 'none'") ?? false,
+    );
     const previewSource = await iframe.getAttribute("srcdoc");
     expect(previewSource).toContain("connect-src 'none'");
     expect(previewSource).toContain("Welcome to ProtoFlow");
