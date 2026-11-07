@@ -279,11 +279,16 @@ export function PreviewWidget({
 }) {
   const touchStart = useRef<{ x: number; y: number; distance?: number; centerX?: number; centerY?: number } | null>(null);
   const longPressTimer = useRef<number | undefined>(undefined);
+  const touchClickTimer = useRef<number | undefined>(undefined);
+  const suppressCompatibilityClick = useRef(false);
   const longPressFired = useRef(false);
   const multiTouchFired = useRef(false);
   const lastTap = useRef(0);
   const [dismissed, setDismissed] = useState(false);
-  useEffect(() => () => window.clearTimeout(longPressTimer.current), []);
+  useEffect(() => () => {
+    window.clearTimeout(longPressTimer.current);
+    window.clearTimeout(touchClickTimer.current);
+  }, []);
   const controlKey = item ? `${widget.id}:${JSON.stringify(item)}` : widget.id;
   const storedControlValue = controlValues[controlKey];
   const inputValue = typeof storedControlValue === "string"
@@ -316,9 +321,26 @@ export function PreviewWidget({
   };
   const commonHandlers = {
     onClick: (event: MouseEvent<HTMLElement>) => {
-      if (event.detail === 0 || (inputMode !== "touch" && !isTouchPointerEvent(event))) {
+      if (event.detail === 0) {
+        suppressCompatibilityClick.current = false;
+        window.clearTimeout(touchClickTimer.current);
         runEvent(widget, "onClick", item);
+        return;
       }
+      const pointerType = "pointerType" in event.nativeEvent
+        ? event.nativeEvent.pointerType
+        : undefined;
+      if (pointerType === "touch") {
+        suppressCompatibilityClick.current = false;
+        window.clearTimeout(touchClickTimer.current);
+        return;
+      }
+      if (suppressCompatibilityClick.current && pointerType !== "mouse") {
+        suppressCompatibilityClick.current = false;
+        window.clearTimeout(touchClickTimer.current);
+        return;
+      }
+      if (inputMode !== "touch" && pointerType !== "touch") runEvent(widget, "onClick", item);
     },
     onDoubleClick: (event: MouseEvent<HTMLElement>) => {
       if (inputMode !== "touch" && !isTouchPointerEvent(event)) runEvent(widget, "onDoubleClick", item);
@@ -402,6 +424,11 @@ export function PreviewWidget({
     },
     onTouchEnd: (event: TouchEvent<HTMLElement>) => {
       if (inputMode === "mouse") return;
+      suppressCompatibilityClick.current = true;
+      window.clearTimeout(touchClickTimer.current);
+      touchClickTimer.current = window.setTimeout(() => {
+        suppressCompatibilityClick.current = false;
+      }, 800);
       runEvent(widget, "onTouchEnd", item);
       window.clearTimeout(longPressTimer.current);
       const start = touchStart.current;

@@ -126,6 +126,26 @@ describe("PreviewWidget input-mode interactions", () => {
     expect(runEvent.mock.calls.map(([, event]) => event)).toEqual(["onClick"]);
   });
 
+  it("suppresses the compatibility click after touch when the browser omits pointerType", () => {
+    const { button, runEvent } = renderWidget("both");
+    touchEvent(button, "touchStart", [{ clientX: 20, clientY: 30 }]);
+    touchEvent(button, "touchEnd", [], [{ clientX: 20, clientY: 30 }]);
+    fireEvent.click(button, { detail: 1 });
+    expect(runEvent.mock.calls.map(([, event]) => event)).toEqual([
+      "onTouchStart",
+      "onTouchEnd",
+      "onTap",
+    ]);
+
+    fireEvent.click(button, { detail: 1 });
+    expect(runEvent.mock.calls.map(([, event]) => event)).toEqual([
+      "onTouchStart",
+      "onTouchEnd",
+      "onTap",
+      "onClick",
+    ]);
+  });
+
   it("fires touch start, tap, double-tap, and directional swipe with feedback", () => {
     const { button, runEvent, onGestureFeedback } = renderWidget("both");
     touchEvent(button, "touchStart", [{ clientX: 20, clientY: 30 }]);

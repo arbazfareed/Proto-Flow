@@ -106,7 +106,13 @@ async function deliverProject(page, inputMode = "both", navigateOnClick = true) 
 }
 
 async function updatePreviewInputMode(page, inputMode) {
-  await deliverProject(page, inputMode, false);
+  await page.evaluate((mode) => {
+    const project = window.__pfPreviewProject;
+    project.screens[0].inputMode = mode;
+    const channel = new BroadcastChannel("protoflow-preview");
+    channel.postMessage({ type: "project", project });
+    channel.close();
+  }, inputMode);
   await page.waitForFunction(
     (mode) => document.querySelector(".preview-screen")?.getAttribute("data-input-mode") === mode,
     inputMode,
@@ -118,10 +124,13 @@ async function verifyInputModes(page) {
   const variable = (name) => page.locator(".preview-variable-inspector label")
     .filter({ hasText: name }).locator("input");
   if (!(await page.locator(".preview-variable-inspector").count())) await variablesToggle.click();
+  const startScreenId = await page.evaluate(() => window.__pfPreviewProject.screens[0].id);
+  await page.getByRole("combobox", { name: "Preview screen" }).selectOption(startScreenId);
 
   await updatePreviewInputMode(page, "both");
   await page.getByRole("button", { name: "Interaction probe" }).first().click();
   assert.equal(await variable("mouseSeen").isChecked(), true);
+  await page.getByRole("button", { name: "Back" }).click();
   await updatePreviewInputMode(page, "both");
   await page.getByRole("button", { name: "Interaction probe" }).first().tap();
   assert.equal(await variable("touchSeen").isChecked(), true);
