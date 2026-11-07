@@ -689,7 +689,7 @@
 .inspector-font-size-stepper { display:flex; height:29px; align-items:center; gap:4px; }
 .inspector-font-size-stepper input { width:58px; height:28px; padding:0 5px; border:1px solid #403c49; border-radius:4px; outline:0; color:#f0edf7; background:#19181f; font:11px ui-monospace,SFMono-Regular,Consolas,monospace; text-align:center; }
 .inspector-font-size-stepper input:focus { border-color:#9b80ef; box-shadow:0 0 0 2px #8c71de26; }
-.inspector-font-size-stepper input::placeholder { color:#888390; font:9px Inter,system-ui,sans-serif; }
+.inspector-font-size-stepper input::placeholder { color:#888390; font:9px "Inter Variable",Inter,system-ui,sans-serif; }
 .inspector-font-size-stepper>span { color:#9994a2; font-size:9px; }
 .inspector-font-size-stepper button { display:grid; width:26px; height:26px; place-items:center; padding:0; border:1px solid #403c49; border-radius:4px; color:#c5b8e8; background:#2a2731; cursor:pointer; }
 .inspector-font-size-stepper button:hover:not(:disabled) { border-color:#7661ad; color:#fff; background:#393343; }
@@ -702,7 +702,7 @@
 .geometry-input-wrap { display:flex; min-width:0; height:30px; align-items:center; border:1px solid #35363d; border-radius:5px; background:#1e1f23; }
 .geometry-input-wrap:focus-within { border-color:#8c71de; box-shadow:0 0 0 2px #8c71de26; }
 .geometry-input { width:100%; min-width:0; height:28px; padding:0 7px; border:0; outline:0; color:#e2e2e8; background:transparent; font:10px ui-monospace,SFMono-Regular,Consolas,monospace; font-variant-numeric:tabular-nums; }
-.geometry-input::placeholder { color:#89858f; font:9px Inter,system-ui,sans-serif; }
+.geometry-input::placeholder { color:#89858f; font:9px "Inter Variable",Inter,system-ui,sans-serif; }
 .geometry-input-invalid { border-color:#d86e79 !important; }
 .geometry-expression-error { color:#e98a94; }
 .geometry-input:disabled { opacity:.45; }
@@ -851,7 +851,7 @@
 .responsive-field input[type="number"] { padding-right: 46px; }
 .responsive-reset-field { position: absolute; right:5px; bottom:8px; padding:3px 5px; border:0; border-radius:3px; color:#a99bd0; background:#2b2832; font-size:8px; cursor:pointer; }
 .responsive-reset-field:hover { color:#e0d8f7; background:#393344; }
-.preview-app { display:flex; width:100vw; height:100vh; flex-direction:column; overflow:hidden; color:#e6e3ec; background:#141519; font:12px Inter,Segoe UI,sans-serif; }
+.preview-app { display:flex; width:100vw; height:100vh; flex-direction:column; overflow:hidden; color:#e6e3ec; background:#141519; font:12px "Inter Variable",Inter,Segoe UI,sans-serif; }
 .preview-toolbar { display:flex; min-height:44px; align-items:center; gap:7px; padding:6px 10px; border-bottom:1px solid #303137; background:#1b1c20; }
 .preview-performance-warning { display:flex; flex:0 0 auto; align-items:center; justify-content:space-between; gap:10px; padding:7px 12px; border-bottom:1px solid #705b2f; color:#f1d99a; background:#392f1a; font-size:11px; }
 .preview-performance-warning button { flex:0 0 auto; padding:5px 9px; border:1px solid #b18b3e; border-radius:5px; color:#fff1c5; background:#59451e; cursor:pointer; font:inherit; }
@@ -963,7 +963,7 @@
 .preview-variable-inspector input:not([type="checkbox"]) { width:110px; min-width:0; padding:5px; border:1px solid #393a42; border-radius:4px; color:#eee; background:#292a30; }
 .preview-status { display:flex; justify-content:space-between; gap:8px; padding:6px 10px; border-top:1px solid #303137; color:#aaaab3; background:#1b1c20; font-size:9px; }
 .preview-toast { position:fixed; z-index:2147483002; right:12px; bottom:36px; max-width:min(460px,calc(100vw - 24px)); padding:10px 12px; border:1px solid #75454a; border-radius:6px; color:#ffd8dc; background:#3b2024; box-shadow:0 8px 24px #0008; font-size:11px; }
-.preview-loading { display:grid; width:100vw; height:100vh; place-items:center; color:#cbc8d2; background:#141519; font:13px Inter,Segoe UI,sans-serif; }
+.preview-loading { display:grid; width:100vw; height:100vh; place-items:center; color:#cbc8d2; background:#141519; font:13px "Inter Variable",Inter,Segoe UI,sans-serif; }
 .responsive-visible-field { display:flex; align-items:center; gap:7px; margin:13px 0; color:#b9b9c1; font-size:9px; }
 .responsive-visible-field input { accent-color:#9b80ef; }
 .responsive-visible-field .responsive-reset-field { position:static; margin-left:auto; }
