@@ -95,6 +95,7 @@ function AppShell() {
   const [reactExportOpen, setReactExportOpen] = useState(false);
   const [htmlExportOpen, setHtmlExportOpen] = useState(false);
   const [importCodeOpen, setImportCodeOpen] = useState(false);
+  const [importCodeDraft, setImportCodeDraft] = useState<ImportedCode | null>(null);
   const [pluginManagerOpen, setPluginManagerOpen] = useState(false);
   const [collaborationMounted, setCollaborationMounted] = useState(false);
   const [collaborationOpen, setCollaborationOpen] = useState(false);
@@ -841,7 +842,7 @@ function AppShell() {
     void openTutorialProject();
   }, [completeOnboarding, onboardingState.selectedTemplate, openTutorialProject]);
 
-  const renderImportedCode = useCallback(({ html, css }: ImportedCode) => {
+  const renderImportedCode = useCallback(({ html, css }: Pick<ImportedCode, "html" | "css">) => {
     const state = useStore.getState();
     const screenId = state.getActiveScreenId();
     const screen = state.project.screens.find((item) => item.id === screenId);
@@ -938,6 +939,8 @@ function AppShell() {
       <CommandPalette />
       {importCodeOpen && (
         <ImportCodeDialog
+          initialCode={importCodeDraft}
+          onDraftChange={setImportCodeDraft}
           onClose={() => setImportCodeOpen(false)}
           onRenderOnCanvas={renderImportedCode}
         />

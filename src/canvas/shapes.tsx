@@ -694,6 +694,7 @@ function ImageShape({ widget, stroke, strokeWidth, onThumbnailReady }: ShapeComp
         }
       };
       element.crossOrigin = "anonymous";
+      element.referrerPolicy = "no-referrer";
       element.src = sourceData.startsWith("data:")
         ? sourceData
         : /^https:\/\//i.test(sourceData)

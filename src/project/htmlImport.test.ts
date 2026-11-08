@@ -57,6 +57,44 @@ describe("importHtmlToWidgets", () => {
     expect(heading.y).toBeLessThan(paragraph.y);
   });
 
+  it("extracts embedded document styles and applies shorthands, grid layout, and media rules", () => {
+    const html = `<!doctype html><html><head><style>
+      * { box-sizing: border-box; font-family: Arial, sans-serif; }
+      .hero { display: flex; padding: 20px 10%; background: linear-gradient(90deg, #e4f8ee 45%, #fff); }
+      .cards { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
+      .card { padding: 16px; border: 1px solid #dddddd; border-radius: 12px; box-shadow: 0 4px 15px #ddd; }
+      .card img { width: 100%; height: 100px; }
+      @media (max-width: 600px) { .cards { grid-template-columns: 1fr; } }
+    </style></head><body>
+      <main class="hero"><div><h1>Welcome</h1></div><img src="https://images.example.test/hero.png"></main>
+      <section class="cards"><article class="card"><img src="https://images.example.test/one.png"><h2>One</h2></article><article class="card"><img src="https://images.example.test/two.png"><h2>Two</h2></article><article class="card"><img src="https://images.example.test/three.png"><h2>Three</h2></article></section>
+      <script>document.body.dataset.ready = "true";</script>
+    </body></html>`;
+    const widgets = importHtmlToWidgets(html, "", 1200);
+    const hero = widgets.find(({ name }) => name === "main hero");
+    const heroHeading = widgets.find(({ name }) => name === "h1 Welcome");
+    const heroImage = widgets.find(({ name }) => name?.includes("img"));
+    const cards = widgets.filter(({ name }) => name === "article card");
+
+    expect(hero?.style.fill).toBe("#e4f8ee");
+    expect(heroHeading?.props.fontFamily).toBe("Arial");
+    expect(heroImage?.props.src).toBe("https://images.example.test/hero.png");
+    expect(cards).toHaveLength(3);
+    expect(cards[0].x).toBeLessThan(cards[1].x);
+    expect(cards[1].x).toBeLessThan(cards[2].x);
+    expect(cards[0].style).toMatchObject({
+      stroke: "#dddddd",
+      strokeWidth: 1,
+      cornerRadius: 12,
+    });
+    expect(cards[0].style.shadow).toMatchObject({ offsetY: 4, blur: 15 });
+
+    const mobileWidgets = importHtmlToWidgets(html, "", 390);
+    const mobileCards = mobileWidgets.filter(({ name }) => name === "article card");
+    expect(mobileCards[0].x).toBe(mobileCards[1].x);
+    expect(mobileCards[0].y).toBeLessThan(mobileCards[1].y);
+  });
+
   it("maps SVG paths and scales their viewBox onto the canvas", () => {
     const widgets = importHtmlToWidgets(
       `<main><svg viewBox="10 20 100 50"><path d="M10 20 L110 20 L110 70 Z"/></svg></main>`,

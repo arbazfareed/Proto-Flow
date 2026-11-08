@@ -1,6 +1,7 @@
 import { createShapeWidget } from "../canvas/shapes";
 import type { ShapeTool } from "../canvas/shapeTools";
 import type { Widget } from "./schema";
+import { extractImportedCode } from "./importedCode";
 
 const MAX_HTML_LENGTH = 200_000;
 const MAX_CSS_LENGTH = 100_000;
@@ -170,6 +171,11 @@ const COMPUTED_STYLE_PROPERTIES = [
   "line-height",
   "opacity",
   "text-decoration",
+  "justify-content",
+  "align-items",
+  "grid-template-columns",
+  "object-fit",
+  "box-shadow",
   "padding",
   "padding-left",
   "padding-right",
@@ -324,7 +330,10 @@ function utilityDeclarations(element: Element): CssDeclarations {
 }
 
 function isSafeStyleValue(property: string, value: string): boolean {
-  if (property === "color" || property === "background-color" || property === "border-color" || property === "fill" || property === "stroke") {
+  if (
+    property === "color" || property === "background-color" || property === "border-color" ||
+    property === "fill" || property === "stroke"
+  ) {
     if ((property === "fill" || property === "stroke") && value.toLowerCase() === "none") return true;
     return Boolean(colorToHex(value))
       || /^(?:transparent|currentcolor)$/i.test(value);
@@ -332,36 +341,136 @@ function isSafeStyleValue(property: string, value: string): boolean {
   if (property === "font-family") return /^[\w\s,"'-]+$/.test(value);
   if (property === "font-weight") return /^(?:normal|bold|bolder|lighter|[1-9]00)$/i.test(value);
   if (property === "text-align") return /^(?:left|right|center|justify|start|end)$/i.test(value);
+  if (property === "justify-content") return /^(?:flex-start|flex-end|center|space-between|space-around|space-evenly)$/i.test(value);
+  if (property === "align-items") return /^(?:stretch|flex-start|flex-end|center|baseline)$/i.test(value);
+  if (property === "object-fit") return /^(?:fill|contain|cover|none|scale-down)$/i.test(value);
   if (LENGTH_STYLE_PROPERTIES.has(property)) {
     return value === "0" || /^(?:auto|none|-?\d+(?:\.\d+)?(?:px|rem|em|%))$/i.test(value);
   }
   if (property === "display") return /^(?:block|inline|inline-block|flex|inline-flex|grid|inline-grid|none|table|list-item)$/i.test(value);
+  if (property === "position") return /^(?:static|relative|absolute|sticky|fixed)$/i.test(value);
   if (property === "flex-direction") return /^(?:row|row-reverse|column|column-reverse)$/i.test(value);
   if (property === "gap") return value === "0" || /^-?\d+(?:\.\d+)?(?:px|rem|em)$/i.test(value);
   if (property === "border-style") return /^(?:none|solid|dashed|dotted|double)$/i.test(value);
   if (property === "opacity") return /^(?:0|1|0?\.\d+)$/.test(value);
   if (property === "text-decoration") return /^(?:none|underline|overline|line-through)$/i.test(value);
+  if (property === "grid-template-columns") {
+    return /^(?:repeat\(\s*\d+\s*,\s*\d+(?:\.\d+)?fr\s*\)|[\d\s.,()%frpxrem]+)$/i.test(value);
+  }
+  if (property === "box-shadow") return /^[\w\s#(),.%+-]+$/.test(value) && value.length < 160;
   return property === "stroke-width" && (/^\d+(?:\.\d+)?(?:px)?$/i.test(value));
 }
 
-function parseCssRules(css: string): Array<{ selector: string; declarations: CssDeclarations }> {
-  const rules: Array<{ selector: string; declarations: CssDeclarations }> = [];
-  for (const match of css.matchAll(/([^{}]+)\{([^{}]*)\}/g)) {
-    const declarations = Object.fromEntries(
-      match[2].split(";").flatMap((declaration) => {
-        const separator = declaration.indexOf(":");
-        if (separator < 0) return [];
-        return [[
-          declaration.slice(0, separator).trim().toLowerCase(),
-          declaration.slice(separator + 1).trim(),
-        ]];
-      }),
-    );
-    for (const selector of match[1].split(",")) {
-      const normalized = selector.trim();
-      if (normalized && !normalized.startsWith("@")) rules.push({ selector: normalized, declarations });
+function splitCssTokens(value: string): string[] {
+  const tokens: string[] = [];
+  let token = "";
+  let depth = 0;
+  for (const character of value.trim()) {
+    if (character === "(") depth += 1;
+    if (character === ")") depth = Math.max(0, depth - 1);
+    if (/\s/.test(character) && depth === 0) {
+      if (token) tokens.push(token);
+      token = "";
+    } else {
+      token += character;
     }
   }
+  if (token) tokens.push(token);
+  return tokens;
+}
+
+function expandCssDeclarations(declarations: CssDeclarations): CssDeclarations {
+  const expanded = { ...declarations };
+  for (const property of ["padding", "margin"]) {
+    const values = splitCssTokens(expanded[property] ?? "");
+    if (values.length < 1 || values.length > 4) continue;
+    const [top, right = top, bottom = top, left = right] = values;
+    expanded[`${property}-top`] ??= top;
+    expanded[`${property}-right`] ??= right;
+    expanded[`${property}-bottom`] ??= bottom;
+    expanded[`${property}-left`] ??= left;
+  }
+
+  const border = splitCssTokens(expanded.border ?? "");
+  if (border.length) {
+    const width = border.find((part) => /^(?:\d+(?:\.\d+)?)(?:px|rem|em)?$/i.test(part));
+    const style = border.find((part) => /^(?:none|solid|dashed|dotted|double)$/i.test(part));
+    const color = border.find((part) => colorToHex(part) !== undefined);
+    if (width) expanded["border-width"] ??= width;
+    if (style) expanded["border-style"] ??= style;
+    if (color) expanded["border-color"] ??= color;
+    if (style === "none") expanded["border-width"] = "0";
+  }
+
+  const background = expanded.background;
+  if (background && !expanded["background-color"]) {
+    const gradientColors = background.match(/(?:#[\da-f]{3,8}|rgba?\([^)]+\)|hsla?\([^)]+\))/ig) ?? [];
+    const namedColor = splitCssTokens(background).find((part) => colorToHex(part) !== undefined);
+    const color = gradientColors[0] ?? namedColor;
+    if (color) expanded["background-color"] = color;
+  }
+
+  return expanded;
+}
+
+function parseCssDeclarations(source: string): CssDeclarations {
+  const declarations: CssDeclarations = {};
+  for (const declaration of source.split(";")) {
+    const separator = declaration.indexOf(":");
+    if (separator < 0) continue;
+    const property = declaration.slice(0, separator).trim().toLowerCase();
+    const value = declaration.slice(separator + 1).trim();
+    if (property && value) declarations[property] = value;
+  }
+  return declarations;
+}
+
+function mediaQueryMatches(query: string, viewportWidth: number): boolean {
+  const maxWidth = query.match(/\(\s*max-width\s*:\s*(\d+(?:\.\d+)?)(?:px)?\s*\)/i)?.[1];
+  const minWidth = query.match(/\(\s*min-width\s*:\s*(\d+(?:\.\d+)?)(?:px)?\s*\)/i)?.[1];
+  return (!maxWidth || viewportWidth <= Number(maxWidth)) &&
+    (!minWidth || viewportWidth >= Number(minWidth));
+}
+
+function findClosingBrace(source: string, openIndex: number): number {
+  let depth = 1;
+  for (let index = openIndex + 1; index < source.length; index += 1) {
+    if (source[index] === "{") depth += 1;
+    else if (source[index] === "}") {
+      depth -= 1;
+      if (depth === 0) return index;
+    }
+  }
+  return -1;
+}
+
+function parseCssRules(
+  css: string,
+  viewportWidth = 1440,
+): Array<{ selector: string; declarations: CssDeclarations }> {
+  const rules: Array<{ selector: string; declarations: CssDeclarations }> = [];
+  const parseBlock = (source: string) => {
+    let cursor = 0;
+    while (cursor < source.length) {
+      const openIndex = source.indexOf("{", cursor);
+      if (openIndex < 0) break;
+      const closeIndex = findClosingBrace(source, openIndex);
+      if (closeIndex < 0) break;
+      const selector = source.slice(cursor, openIndex).replace(/\/\*[\s\S]*?\*\//g, "").trim();
+      const contents = source.slice(openIndex + 1, closeIndex);
+      if (/^@media\b/i.test(selector)) {
+        if (mediaQueryMatches(selector.slice(6), viewportWidth)) parseBlock(contents);
+      } else if (selector && !selector.startsWith("@")) {
+        const declarations = parseCssDeclarations(contents);
+        for (const item of selector.split(",")) {
+          const normalized = item.trim();
+          if (normalized) rules.push({ selector: normalized, declarations });
+        }
+      }
+      cursor = closeIndex + 1;
+    }
+  };
+  parseBlock(css.replace(/\/\*[\s\S]*?\*\//g, ""));
   return rules;
 }
 
@@ -374,14 +483,10 @@ function declarationsFor(element: Element, rules: ReturnType<typeof parseCssRule
       continue;
     }
   }
-  for (const property of element.getAttribute("style")?.split(";") ?? []) {
-    const separator = property.indexOf(":");
-    if (separator >= 0) {
-      declarations[property.slice(0, separator).trim().toLowerCase()] = property.slice(separator + 1).trim();
-    }
-  }
+  Object.assign(declarations, parseCssDeclarations(element.getAttribute("style") ?? ""));
+  const expanded = expandCssDeclarations(declarations);
   return Object.fromEntries(
-    Object.entries(declarations).filter(([property, value]) => isSafeStyleValue(property, value)),
+    Object.entries(expanded).filter(([property, value]) => isSafeStyleValue(property, value)),
   );
 }
 
@@ -480,8 +585,18 @@ function cssLength(value: string | undefined, basis: number, fallback: number): 
 function safeImageSource(element: Element): { src: string; mime: string } {
   const source = element.getAttribute("src")?.trim() ?? "";
   const match = source.match(/^data:(image\/(?:png|jpeg|gif|webp));base64,([a-z\d+/=]+)$/i);
-  if (!match || source.length > 200_000) return { src: "", mime: "" };
-  return { src: source, mime: match[1].toLowerCase() };
+  if (match && source.length <= 200_000) {
+    return { src: source, mime: match[1].toLowerCase() };
+  }
+  try {
+    const url = new URL(source);
+    if (url.protocol === "https:" && !url.username && !url.password) {
+      return { src: url.href, mime: "" };
+    }
+  } catch {
+    return { src: "", mime: "" };
+  }
+  return { src: "", mime: "" };
 }
 
 function svgPathData(element: Element): string | undefined {
@@ -535,6 +650,23 @@ function setWidgetStyles(widget: Widget, styles: CssDeclarations, isContainer: b
 
   const radius = cssLength(styles["border-radius"], 0, 0);
   if (radius) widget.style.cornerRadius = Math.min(64, radius);
+  const shadow = styles["box-shadow"];
+  if (shadow && shadow !== "none") {
+    const tokens = splitCssTokens(shadow);
+    const lengths = tokens.filter((token) => /^(?:-?\d+(?:\.\d+)?)(?:px|rem|em)?$/i.test(token))
+      .slice(0, 3)
+      .map((token) => cssLength(token, 0, 0));
+    const color = tokens.find((token) => colorToHex(token));
+    if (color && lengths.length >= 2) {
+      widget.style.shadow = {
+        color: colorToHex(color),
+        offsetX: lengths[0],
+        offsetY: lengths[1],
+        blur: lengths[2] ?? 0,
+        opacity: 0.22,
+      };
+    }
+  }
   const opacity = Number(styles.opacity);
   if (Number.isFinite(opacity)) widget.opacity = Math.max(0, Math.min(1, opacity));
 }
@@ -607,7 +739,8 @@ function createHtmlWidget(
   }
 
   const widget = createShapeWidget(tool, box.x, box.y, box.width, box.height, props);
-  widget.name = `${tag.toLowerCase()} ${text.slice(0, 72)}`.trim().slice(0, 120) || tag.toLowerCase();
+  const classLabel = Array.from(element.classList).slice(0, 2).join(" ");
+  widget.name = `${tag.toLowerCase()} ${text || classLabel}`.trim().slice(0, 120) || tag.toLowerCase();
   widget.zIndex = zIndex;
   if (parentId) widget.groupId = parentId;
   setWidgetStyles(widget, styles, isContainer);
@@ -624,6 +757,7 @@ function renderElementTree(
   depth: number,
   rules: ReturnType<typeof parseCssRules>,
   state: { widgets: Widget[]; nextZIndex: number },
+  allocatedWidth?: number,
 ): number {
   const tag = element.tagName.toUpperCase();
   if (
@@ -704,19 +838,22 @@ function renderElementTree(
     (tag === "IMG" || tag === "VIDEO" ? element.getAttribute("width") ?? undefined : undefined);
   const heightValue = styles.height ??
     (tag === "IMG" || tag === "VIDEO" ? element.getAttribute("height") ?? undefined : undefined);
+  const maxWidth = cssLength(styles["max-width"], availableWidth, availableWidth);
+  const minWidth = cssLength(styles["min-width"], availableWidth, 0);
+  const naturalWidth = allocatedWidth ?? cssLength(
+    widthValue,
+    availableWidth,
+    tag === "BUTTON"
+      ? Math.max(88, Math.ceil(text.length * fontSize * 0.62 + 28))
+      : tag === "INPUT" || tag === "SELECT" || tag === "TEXTAREA"
+        ? Math.min(240, availableWidth)
+        : tag === "IMG" || tag === "VIDEO"
+          ? Math.min(tag === "VIDEO" ? 320 : 200, availableWidth)
+          : availableWidth - marginLeft - marginRight,
+  );
   const width = Math.max(1, Math.min(
     availableWidth,
-    cssLength(
-      widthValue,
-      availableWidth,
-      tag === "BUTTON"
-        ? Math.max(88, Math.ceil(text.length * fontSize * 0.62 + 28))
-        : tag === "INPUT" || tag === "SELECT" || tag === "TEXTAREA"
-          ? Math.min(240, availableWidth)
-          : tag === "IMG" || tag === "VIDEO"
-            ? Math.min(tag === "VIDEO" ? 320 : 200, availableWidth)
-            : availableWidth - marginLeft - marginRight,
-    ),
+    Math.max(minWidth, Math.min(maxWidth, naturalWidth)),
   ));
   const left = x + marginLeft;
   const top = y + marginTop;
@@ -727,15 +864,20 @@ function renderElementTree(
   const paddingBottom = cssLength(styles["padding-bottom"], width, padding);
   const lineHeight = cssLength(styles["line-height"], fontSize, fontSize * 1.2);
   const explicitHeight = heightValue !== undefined;
+  const minHeight = cssLength(styles["min-height"], width, 0);
+  const maxHeight = cssLength(styles["max-height"], width, 16_384);
   const desiredHeight = explicitHeight
-    ? cssLength(heightValue, width, 1)
+    ? Math.max(minHeight, Math.min(maxHeight, cssLength(heightValue, width, 1)))
     : isContainer
-      ? 1
+      ? minHeight || 1
       : tag === "IMG" || tag === "VIDEO"
-        ? tag === "VIDEO" ? 180 : 120
+        ? Math.max(minHeight, Math.min(maxHeight, tag === "VIDEO" ? 180 : 120))
         : ["BUTTON", "INPUT", "TEXTAREA", "SELECT"].includes(tag)
-        ? 40
-        : Math.max(1, Math.ceil(Math.max(1, text.length) * fontSize * 0.55 / Math.max(1, width - paddingLeft - paddingRight))) * lineHeight + paddingTop + paddingBottom;
+        ? Math.max(minHeight, Math.min(maxHeight, 40))
+        : Math.max(minHeight, Math.min(
+          maxHeight,
+          Math.max(1, Math.ceil(Math.max(1, text.length) * fontSize * 0.55 / Math.max(1, width - paddingLeft - paddingRight))) * lineHeight + paddingTop + paddingBottom,
+        ));
 
   const directText = getDirectText(element);
   const hasDirectText = Boolean(getElementText(element));
@@ -771,6 +913,10 @@ function renderElementTree(
   const display = styles.display;
   const flexRow = (display === "flex" || display === "inline-flex") && styles["flex-direction"] !== "column";
   const gap = cssLength(styles.gap, childWidth, 0);
+  const gridColumns = styles["grid-template-columns"]?.match(/^repeat\(\s*(\d+)\s*,/i)?.[1];
+  const gridColumnCount = display === "grid"
+    ? Math.max(1, Math.min(12, Number(gridColumns) || splitCssTokens(styles["grid-template-columns"] ?? "").length || 1))
+    : 1;
 
   if (isContainer && directText && state.widgets.length < MAX_IMPORTED_WIDGETS) {
     const textElement = element.ownerDocument.createElement("p");
@@ -787,28 +933,96 @@ function renderElementTree(
     childBottom = childStartY + textHeight + gap;
   }
 
-  const rowChildWidth = flexRow && children.length
-    ? Math.max(1, (childWidth - gap * (children.length - 1)) / children.length)
+  const columnCount = flexRow ? Math.max(1, children.length) : gridColumnCount;
+  const rowChildWidth = columnCount > 1
+    ? Math.max(1, (childWidth - gap * (columnCount - 1)) / columnCount)
     : childWidth;
-  let cursorX = childStartX;
-  for (const child of children) {
-    if (state.widgets.length >= MAX_IMPORTED_WIDGETS) break;
-    const childY = flexRow ? childStartY : childBottom;
-    const nextY = renderElementTree(
-      child,
-      cursorX,
-      childY,
-      rowChildWidth,
-      styles,
-      ownId,
-      depth + 1,
-      rules,
-      state,
-    );
-    if (flexRow) {
-      cursorX += rowChildWidth + gap;
+  if (flexRow && children.length) {
+    const flexBaseWidths = children.map((child) => {
+      const childStyles = declarationsFor(child, rules);
+      if (childStyles.width) return cssLength(childStyles.width, childWidth, childWidth);
+      if (childStyles["max-width"]) return cssLength(childStyles["max-width"], childWidth, childWidth);
+      return 0;
+    });
+    const fixedWidth = flexBaseWidths.reduce((sum, item) => sum + item, 0);
+    const autoCount = flexBaseWidths.filter((item) => item === 0).length;
+    const freeWidth = Math.max(0, childWidth - gap * (children.length - 1) - fixedWidth);
+    const autoWidth = autoCount ? freeWidth / autoCount : 0;
+    const totalWidth = fixedWidth + autoWidth * autoCount;
+    const shrink = totalWidth + gap * (children.length - 1) > childWidth
+      ? Math.max(0, childWidth - gap * (children.length - 1)) / Math.max(1, totalWidth)
+      : 1;
+    const widths = flexBaseWidths.map((item) => (item || autoWidth) * shrink);
+    const justifyGap = styles["justify-content"] === "space-between" && children.length > 1 && gap === 0
+      ? Math.max(0, (childWidth - widths.reduce((sum, item) => sum + item, 0)) / (children.length - 1))
+      : gap;
+    let cursorX = childStartX;
+    const rowChildren: Array<{ startIndex: number; endIndex: number; nextY: number }> = [];
+    for (const [index, child] of children.entries()) {
+      const startIndex = state.widgets.length;
+      const nextY = renderElementTree(
+        child,
+        cursorX,
+        childStartY,
+        widths[index],
+        styles,
+        ownId,
+        depth + 1,
+        rules,
+        state,
+        widths[index],
+      );
+      rowChildren.push({ startIndex, endIndex: state.widgets.length, nextY });
+      cursorX += widths[index] + justifyGap;
       childBottom = Math.max(childBottom, nextY);
-    } else {
+    }
+    if (styles["align-items"] === "center" || styles["align-items"] === "flex-end") {
+      const rowBottom = Math.max(...rowChildren.map(({ nextY }) => nextY));
+      for (const childLayout of rowChildren) {
+        const remaining = rowBottom - childLayout.nextY;
+        const shift = styles["align-items"] === "center" ? remaining / 2 : remaining;
+        for (const widget of state.widgets.slice(childLayout.startIndex, childLayout.endIndex)) {
+          widget.y += shift;
+        }
+      }
+    }
+  } else if (columnCount > 1) {
+    let rowTop = childStartY;
+    for (let offset = 0; offset < children.length; offset += columnCount) {
+      if (state.widgets.length >= MAX_IMPORTED_WIDGETS) break;
+      const rowChildren = children.slice(offset, offset + columnCount);
+      let rowBottom = rowTop;
+      for (const [column, child] of rowChildren.entries()) {
+        const nextY = renderElementTree(
+          child,
+          childStartX + column * (rowChildWidth + gap),
+          rowTop,
+          rowChildWidth,
+          styles,
+          ownId,
+          depth + 1,
+          rules,
+          state,
+        );
+        rowBottom = Math.max(rowBottom, nextY);
+      }
+      rowTop = rowBottom + gap;
+    }
+    childBottom = Math.max(childBottom, rowTop);
+  } else {
+    for (const child of children) {
+      if (state.widgets.length >= MAX_IMPORTED_WIDGETS) break;
+      const nextY = renderElementTree(
+        child,
+        childStartX,
+        childBottom,
+        rowChildWidth,
+        styles,
+        ownId,
+        depth + 1,
+        rules,
+        state,
+      );
       childBottom = nextY + gap;
     }
   }
@@ -826,8 +1040,10 @@ export function parseHtmlToAst(html: string, css: string): ImportedHtmlAst {
   if (html.length > MAX_HTML_LENGTH) throw new Error("HTML import is limited to 200 KB.");
   if (css.length > MAX_CSS_LENGTH) throw new Error("CSS import is limited to 100 KB.");
 
-  const document = new DOMParser().parseFromString(html, "text/html");
-  const rules = parseCssRules(css);
+  const extracted = extractImportedCode(html, css);
+  if (extracted.css.length > MAX_CSS_LENGTH) throw new Error("CSS import is limited to 100 KB.");
+  const document = new DOMParser().parseFromString(extracted.html, "text/html");
+  const rules = parseCssRules(extracted.css);
   const nodes: ImportedHtmlNode[] = [];
   const requiredIcons = new Set<string>();
   let truncated = false;
@@ -890,8 +1106,10 @@ export function importHtmlToWidgets(
   if (html.length > MAX_HTML_LENGTH) throw new Error("HTML import is limited to 200 KB.");
   if (css.length > MAX_CSS_LENGTH) throw new Error("CSS import is limited to 100 KB.");
 
-  const document = new DOMParser().parseFromString(html, "text/html");
-  const rules = parseCssRules(css);
+  const extracted = extractImportedCode(html, css);
+  if (extracted.css.length > MAX_CSS_LENGTH) throw new Error("CSS import is limited to 100 KB.");
+  const document = new DOMParser().parseFromString(extracted.html, "text/html");
+  const rules = parseCssRules(extracted.css, canvasWidth);
   const bodyStyles = declarationsFor(document.body, rules);
   const bodyPadding = cssLength(bodyStyles.padding, canvasWidth, 0);
   const rootX = 24 + cssLength(bodyStyles["padding-left"], canvasWidth, bodyPadding);

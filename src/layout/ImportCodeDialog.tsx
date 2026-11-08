@@ -24,15 +24,19 @@ import {
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { findRequiredIcons } from "../project/htmlImport";
+import { extractImportedCode } from "../project/importedCode";
 
 export interface ImportedCode {
   html: string;
   css: string;
+  javascript: string;
 }
 
 interface ImportCodeDialogProps {
+  initialCode?: ImportedCode | null;
   onClose: () => void;
-  onRenderOnCanvas: (code: ImportedCode) => void;
+  onDraftChange?: (code: ImportedCode) => void;
+  onRenderOnCanvas: (code: Pick<ImportedCode, "html" | "css">) => void;
 }
 
 const INITIAL_HTML = `<main class="card">
@@ -72,7 +76,7 @@ const CONTENT_SECURITY_POLICY = [
   "default-src 'none'",
   "script-src 'unsafe-inline'",
   "style-src 'unsafe-inline'",
-  "img-src data: blob:",
+  "img-src data: blob: https:",
   "font-src data:",
   "connect-src 'none'",
   "form-action 'none'",
@@ -103,8 +107,12 @@ const REQUIRED_ICON_COMPONENTS: Record<string, LucideIcon> = {
 };
 
 export function compileSandboxDocument(html: string, css: string, javascript: string): string {
-  const safeCss = css.replace(/<\/style/gi, "<\\/style");
-  const safeJavascript = javascript.replace(/<\/script/gi, "<\\/script");
+  const extracted = extractImportedCode(html, css, javascript);
+  if (extracted.html.length + extracted.css.length + extracted.javascript.length > 300_000) {
+    throw new Error("Imported HTML, CSS, and JavaScript are limited to 300 KB.");
+  }
+  const safeCss = extracted.css.replace(/<\/style/gi, "<\\/style");
+  const safeJavascript = extracted.javascript.replace(/<\/script/gi, "<\\/script");
   return `<!doctype html>
 <html lang="en">
 <head>
@@ -114,17 +122,37 @@ export function compileSandboxDocument(html: string, css: string, javascript: st
   <style>${safeCss}</style>
 </head>
 <body>
-${html}
+${extracted.html}
 <script>${safeJavascript}</script>
 </body>
 </html>`;
 }
 
-export function ImportCodeDialog({ onClose, onRenderOnCanvas }: ImportCodeDialogProps) {
+function getExternalCode(
+html: string,
+css: string,
+javascript: string,
+): { css: string; javascript: string } {
+const documentSources = extractImportedCode(html);
+const hasEmbeddedSources = Boolean(documentSources.css || documentSources.javascript);
+const isFullDocument = /<!doctype\b|<html(?:\s|>)/i.test(html);
+const shouldIgnoreUntouchedDefaults = hasEmbeddedSources || isFullDocument;
+return {
+  css: shouldIgnoreUntouchedDefaults && css === INITIAL_CSS ? "" : css,
+  javascript: shouldIgnoreUntouchedDefaults && javascript === INITIAL_JS ? "" : javascript,
+};
+}
+
+export function ImportCodeDialog({
+  initialCode,
+  onClose,
+  onDraftChange,
+  onRenderOnCanvas,
+}: ImportCodeDialogProps) {
   const [activeTab, setActiveTab] = useState<"html" | "css" | "js">("html");
-  const [html, setHtml] = useState(INITIAL_HTML);
-  const [css, setCss] = useState(INITIAL_CSS);
-  const [javascript, setJavascript] = useState(INITIAL_JS);
+  const [html, setHtml] = useState(initialCode?.html ?? INITIAL_HTML);
+  const [css, setCss] = useState(initialCode?.css ?? INITIAL_CSS);
+  const [javascript, setJavascript] = useState(initialCode?.javascript ?? INITIAL_JS);
   const [previewDocument, setPreviewDocument] = useState("");
   const [error, setError] = useState("");
   const dialogRef = useRef<HTMLElement>(null);
@@ -146,7 +174,8 @@ export function ImportCodeDialog({ onClose, onRenderOnCanvas }: ImportCodeDialog
 
   useEffect(() => {
     const timeout = window.setTimeout(() => {
-      setPreviewDocument(compileSandboxDocument(html, css, javascript));
+      const externalCode = getExternalCode(html, css, javascript);
+      setPreviewDocument(compileSandboxDocument(html, externalCode.css, externalCode.javascript));
     }, 300);
     return () => window.clearTimeout(timeout);
   }, [css, html, javascript]);
@@ -176,7 +205,7 @@ export function ImportCodeDialog({ onClose, onRenderOnCanvas }: ImportCodeDialog
   const handleRender = () => {
     setError("");
     try {
-      onRenderOnCanvas({ html, css });
+      onRenderOnCanvas({ html, css: getExternalCode(html, css, javascript).css });
       onClose();
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "The code could not be rendered on the canvas.");
@@ -184,7 +213,26 @@ export function ImportCodeDialog({ onClose, onRenderOnCanvas }: ImportCodeDialog
   };
 
   const currentValue = activeTab === "html" ? html : activeTab === "css" ? css : javascript;
-  const updateCurrentValue = activeTab === "html" ? setHtml : activeTab === "css" ? setCss : setJavascript;
+  const updateCurrentValue = (value: string) => {
+    const hasEmbeddedCode = /<!doctype\b|<html(?:\s|>)|<style\b|<script\b/i.test(value);
+    const nextCss = activeTab === "html" && hasEmbeddedCode && css === INITIAL_CSS ? "" : css;
+    const nextJavascript = activeTab === "html" && hasEmbeddedCode && javascript === INITIAL_JS
+      ? ""
+      : javascript;
+    const updated = {
+      html: activeTab === "html" ? value : html,
+      css: activeTab === "css" ? value : nextCss,
+      javascript: activeTab === "js" ? value : nextJavascript,
+    };
+    if (activeTab === "html") setHtml(value);
+    else if (activeTab === "css") setCss(value);
+    else setJavascript(value);
+    if (activeTab === "html") {
+      if (nextCss !== css) setCss(nextCss);
+      if (nextJavascript !== javascript) setJavascript(nextJavascript);
+    }
+    onDraftChange?.(updated);
+  };
 
   return (
     <div
@@ -255,7 +303,7 @@ export function ImportCodeDialog({ onClose, onRenderOnCanvas }: ImportCodeDialog
               />
             </div>
             <p className="import-code-hint">
-              HTML and CSS are mapped to editable canvas elements. JavaScript runs only in the isolated preview.
+              Embedded styles/scripts are extracted automatically. CSS is mapped to canvas elements; JavaScript runs only in the isolated preview.
             </p>
           </section>
 

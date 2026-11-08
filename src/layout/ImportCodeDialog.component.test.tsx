@@ -45,6 +45,58 @@ describe("ImportCodeDialog", () => {
     expect(onClose).toHaveBeenCalledOnce();
   });
 
+  it("extracts embedded document CSS and JavaScript for the sandbox preview", async () => {
+    renderWithProviders(<ImportCodeDialog onClose={vi.fn()} onRenderOnCanvas={vi.fn()} />);
+    const html = `<!doctype html><html><head><style>.hero { color: #123456; }</style></head>
+      <body><main class="hero"><h1>Full document</h1></main>
+      <script>document.querySelector("h1").dataset.ready = "true";</script></body></html>`;
+    fireEvent.change(screen.getByRole("textbox", { name: "HTML code" }), {
+      target: { value: html },
+    });
+
+    const preview = screen.getByTitle("Sandboxed code preview");
+    await waitFor(() => {
+      expect(preview.getAttribute("srcdoc")).toContain(".hero { color: #123456; }");
+      expect(preview.getAttribute("srcdoc")).toContain('document.querySelector("h1").dataset.ready');
+    });
+    expect(preview.getAttribute("srcdoc")).not.toContain("#f3f0fa");
+    expect(preview.getAttribute("srcdoc")).not.toContain("<html lang=\"en\"><head");
+  });
+
+  it("restores the latest HTML, CSS, and JavaScript after closing and reopening", () => {
+    let draft: { html: string; css: string; javascript: string } | null = null;
+    const onDraftChange = vi.fn((updated) => {
+      draft = updated;
+    });
+    const html = "<!doctype html><html><head><style>h1 { color: green; }</style></head><body><h1>My draft</h1></body></html>";
+    const javascript = "document.body.dataset.edited = 'yes';";
+    const first = renderWithProviders(
+      <ImportCodeDialog
+        onClose={vi.fn()}
+        onDraftChange={onDraftChange}
+        onRenderOnCanvas={vi.fn()}
+      />,
+    );
+    fireEvent.change(screen.getByRole("textbox", { name: "HTML code" }), { target: { value: html } });
+    fireEvent.click(screen.getByRole("tab", { name: "JS" }));
+    fireEvent.change(screen.getByRole("textbox", { name: "JS code" }), {
+      target: { value: javascript },
+    });
+    first.unmount();
+
+    renderWithProviders(
+      <ImportCodeDialog
+        initialCode={draft}
+        onClose={vi.fn()}
+        onDraftChange={onDraftChange}
+        onRenderOnCanvas={vi.fn()}
+      />,
+    );
+    expect(screen.getByRole("textbox", { name: "HTML code" })).toHaveValue(html);
+    fireEvent.click(screen.getByRole("tab", { name: "JS" }));
+    expect(screen.getByRole("textbox", { name: "JS code" })).toHaveValue(javascript);
+  });
+
   it("shows relevant code icons for semantic markup", () => {
     renderWithProviders(<ImportCodeDialog onClose={vi.fn()} onRenderOnCanvas={vi.fn()} />);
     fireEvent.change(screen.getByRole("textbox", { name: "HTML code" }), {

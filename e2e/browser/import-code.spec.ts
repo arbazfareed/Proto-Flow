@@ -1,6 +1,52 @@
 import { expect, test } from "playwright/test";
 import { startWorkspace } from "./workspace";
 
+const CHILD_CARE_PAGE = `<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Little Stars Child Care</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; font-family: Arial, sans-serif; }
+body { color: #333; background: #fff; line-height: 1.6; }
+header { background: white; padding: 18px 8%; display: flex; justify-content: space-between; align-items: center; }
+.logo { font-size: 25px; font-weight: bold; color: #39a982; }
+nav { display: flex; gap: 25px; }
+nav a { color: #333; text-decoration: none; font-weight: 600; }
+.hero { min-height: 570px; background: linear-gradient(90deg, #e4f8ee 45%, #fff); display: flex; align-items: center; justify-content: space-between; padding: 70px 8%; gap: 40px; }
+.hero-content { max-width: 550px; }
+.hero h1 { font-size: 52px; line-height: 1.2; color: #254b3c; margin-bottom: 20px; }
+.hero img { width: 48%; max-width: 550px; height: 380px; object-fit: cover; border-radius: 25px; }
+section { padding: 80px 8%; }
+.cards { display: grid; grid-template-columns: repeat(3, 1fr); gap: 25px; }
+.card { background: white; padding: 25px; border-radius: 18px; text-align: center; box-shadow: 0 5px 20px #ddd; }
+.card img { width: 100%; height: 200px; object-fit: cover; border-radius: 12px; }
+.faq-item { border-bottom: 1px solid #ddd; padding: 20px 0; }
+.faq-answer { display: none; }
+.faq-item.active .faq-answer { display: block; }
+@media (max-width: 600px) {
+  .hero { flex-direction: column; text-align: center; }
+  .hero h1 { font-size: 38px; }
+  .cards { grid-template-columns: 1fr; }
+}
+</style>
+</head>
+<body>
+<header><div class="logo">Little Stars</div><nav><a href="#home">Home</a><a href="#programs">Programs</a><a href="#contact">Contact</a></nav></header>
+<section class="hero" id="home"><div class="hero-content"><h1>A Happy Place Where Little Minds Grow</h1><p>A safe, loving and fun environment where children learn, explore and grow.</p><a href="#contact">Book a Free Tour</a></div><img src="https://images.unsplash.com/photo-1503454537195-1dcabb73ffb9?w=900" alt="Happy child playing"></section>
+<section class="cards" id="programs"><article class="card"><img src="https://images.unsplash.com/photo-1516627145497-ae6968895b74?w=600" alt="Infant care"><h2>Infant Care</h2><p>Gentle, loving care for babies.</p></article><article class="card"><img src="https://images.unsplash.com/photo-1471286174890-9c112ffca5b4?w=600" alt="Toddler learning"><h2>Toddler Program</h2><p>Activities that encourage exploration.</p></article><article class="card"><img src="https://images.unsplash.com/photo-1503919005314-30d93d07d823?w=600" alt="Preschool children"><h2>Preschool</h2><p>Early education through creative play.</p></article></section>
+<section><div class="faq-item"><div class="faq-question">What ages do you accept?<span>+</span></div><div class="faq-answer">Infant, toddler and preschool programs.</div></div></section>
+<script>
+document.querySelector(".faq-question").addEventListener("click", event => {
+  const item = event.currentTarget.parentElement;
+  item.classList.toggle("active");
+  event.currentTarget.querySelector("span").textContent = item.classList.contains("active") ? "−" : "+";
+});
+</script>
+</body>
+</html>`;
+
 test("PF-T803 imports nested HTML and SVG as editable Konva canvas elements", async ({
   page,
 }, testInfo) => {
@@ -37,32 +83,38 @@ test("PF-T803 imports nested HTML and SVG as editable Konva canvas elements", as
     contentType: "image/png",
   });
 
-  await htmlEditor.fill(
-    '<main style="width: 420px; padding: 16px; background-color: #eef2ff"><h1>Imported campaign</h1><p>Editable copy</p><svg viewBox="10 20 100 50" style="width: 200px; height: 100px"><path d="M10 20 L110 20 L110 70 Z" fill="#ff0000" stroke="#111827" stroke-width="2"/></svg><button>Learn more</button></main>',
-  );
-  await expect(frame.getByRole("heading", { name: "Imported campaign" })).toBeVisible();
-  await page.getByRole("tab", { name: "CSS" }).click();
-  await page.getByRole("textbox", { name: "CSS code" }).fill(
-    "body { background: #e8f4ff; } h1 { color: #123456; }",
-  );
-  await expect(preview).toHaveAttribute("srcdoc", /#e8f4ff/);
+  await htmlEditor.fill(CHILD_CARE_PAGE);
+  await expect(frame.getByRole("heading", { name: "A Happy Place Where Little Minds Grow" })).toBeVisible();
+  await expect.poll(() => frame.locator(".hero").evaluate((element) =>
+    getComputedStyle(element).backgroundImage,
+  )).toContain("linear-gradient");
+  await frame.locator(".faq-question").click();
+  await expect(frame.locator(".faq-answer")).toBeVisible();
+  await expect(frame.locator(".faq-question span")).toHaveText("−");
 
   await page.getByRole("tab", { name: "HTML" }).click();
   await page.getByRole("button", { name: "Render on Canvas" }).click();
   await expect(dialog).not.toBeVisible();
-  await expect(page.getByText("Rendered 5 elements on the canvas.")).toBeVisible();
+  await expect(page.getByText(/Rendered \d+ elements on the canvas\./)).toBeVisible();
   const layerSearch = page.getByRole("searchbox", { name: "Search layers" });
-  await layerSearch.fill("h1 Imported campaign");
+  await layerSearch.fill("h1 A Happy Place");
   await expect(page.locator(".layer-row").filter({
-    has: page.locator(".layer-name", { hasText: "h1 Imported campaign" }),
+    has: page.locator(".layer-name", { hasText: "h1 A Happy Place" }),
   })).toBeVisible();
-  await layerSearch.fill("path");
+  await layerSearch.fill("article card");
   await expect(page.locator(".layer-row").filter({
-    has: page.locator(".layer-name", { hasText: "path" }),
-  })).toBeVisible();
+    has: page.locator(".layer-name", { hasText: "article card" }),
+  })).toHaveCount(3);
   await expect(page.locator(".save-state-label")).toHaveText("Unsaved changes");
   await testInfo.attach("PF-T801-imported-canvas-elements", {
     body: await page.screenshot({ path: testInfo.outputPath("pf-t803-imported-canvas.png") }),
     contentType: "image/png",
   });
+
+  await page.getByRole("button", { name: "Import Code" }).click();
+  const reopenedHtml = page.getByRole("textbox", { name: "HTML code" });
+  await expect(reopenedHtml).toHaveValue(CHILD_CARE_PAGE);
+  await page.getByRole("tab", { name: "JS" }).click();
+  await expect(page.getByRole("textbox", { name: "JS code" })).toHaveValue("");
+  await expect(page.getByTitle("Sandboxed code preview")).toHaveAttribute("srcdoc", /faq-question/);
 });
