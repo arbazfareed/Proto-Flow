@@ -21,6 +21,7 @@ export class AppErrorBoundary extends Component<
   }
 
   componentDidCatch(error: Error, _info: ErrorInfo): void {
+    console.error("Unrecoverable application UI error", error, _info.componentStack);
     recordDiagnostic("error", "The application UI encountered an unrecoverable error.");
     trackEvent("error_shown", { category: "application" });
     void reportException(error).catch(() => {
