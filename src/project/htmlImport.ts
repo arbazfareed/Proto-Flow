@@ -1,6 +1,6 @@
 import { createShapeWidget } from "../canvas/shapes";
 import type { ShapeTool } from "../canvas/shapeTools";
-import type { Widget } from "./schema";
+import type { Breakpoint, Widget, WidgetOverride } from "./schema";
 import { extractImportedCode, parseImportedHtmlDocument } from "./importedCode";
 
 const MAX_HTML_LENGTH = 200_000;
@@ -34,6 +34,13 @@ export interface ImportedHtmlNode {
   parentId: string | null;
   suggestedIcon: string;
   textContent: string;
+}
+
+function cssLineHeightRatio(value: string | undefined, fontSize: number): number {
+  if (!value) return 1.2;
+  const parsed = Number(value);
+  if (Number.isFinite(parsed) && parsed > 0) return parsed;
+  return cssLength(value, fontSize, fontSize * 1.2) / fontSize;
 }
 
 export interface ImportedHtmlAst {
@@ -340,6 +347,7 @@ function isSafeStyleValue(property: string, value: string): boolean {
   }
   if (property === "font-family") return /^[\w\s,"'-]+$/.test(value);
   if (property === "font-weight") return /^(?:normal|bold|bolder|lighter|[1-9]00)$/i.test(value);
+  if (property === "line-height") return /^(?:normal|(?:\d+(?:\.\d+)?)(?:px|rem|em|%)?)$/i.test(value);
   if (property === "text-align") return /^(?:left|right|center|justify|start|end)$/i.test(value);
   if (property === "justify-content") return /^(?:flex-start|flex-end|center|space-between|space-around|space-evenly)$/i.test(value);
   if (property === "align-items") return /^(?:stretch|flex-start|flex-end|center|baseline)$/i.test(value);
@@ -733,7 +741,7 @@ function createHtmlWidget(
       fontSize,
       fontWeight: styles["font-weight"] ?? (/^H[1-6]$/.test(tag) ? "700" : "normal"),
       align: styles["text-align"] ?? "left",
-      lineHeight: Number(styles["line-height"]) || 1.2,
+      lineHeight: cssLineHeightRatio(styles["line-height"], fontSize),
       autoSize: true,
     };
   }
@@ -756,8 +764,9 @@ function renderElementTree(
   parentId: string | null,
   depth: number,
   rules: ReturnType<typeof parseCssRules>,
-  state: { widgets: Widget[]; nextZIndex: number },
+  state: { widgets: Widget[]; sourceKeys: string[]; nextZIndex: number },
   allocatedWidth?: number,
+  sourceKey = "root",
 ): number {
   const tag = element.tagName.toUpperCase();
   if (
@@ -800,7 +809,7 @@ function renderElementTree(
       viewBoxWidth,
       svgWidth * viewBoxHeight / viewBoxWidth,
     );
-    for (const path of Array.from(element.querySelectorAll("path")).slice(0, 20)) {
+    for (const [pathIndex, path] of Array.from(element.querySelectorAll("path")).slice(0, 20).entries()) {
       if (state.widgets.length >= MAX_IMPORTED_WIDGETS) break;
       const pathStyles = declarationsFor(path, rules);
       const pathWidget = createHtmlWidget(
@@ -818,7 +827,10 @@ function renderElementTree(
         parentId,
         { x: viewBoxX, y: viewBoxY, width: viewBoxWidth, height: viewBoxHeight },
       );
-      if (pathWidget) state.widgets.push(pathWidget);
+      if (pathWidget) {
+        state.widgets.push(pathWidget);
+        state.sourceKeys.push(`${sourceKey}.path.${pathIndex}`);
+      }
     }
     return y + svgHeight;
   }
@@ -862,7 +874,8 @@ function renderElementTree(
   const paddingRight = cssLength(styles["padding-right"], width, padding);
   const paddingTop = cssLength(styles["padding-top"], width, padding);
   const paddingBottom = cssLength(styles["padding-bottom"], width, padding);
-  const lineHeight = cssLength(styles["line-height"], fontSize, fontSize * 1.2);
+  const lineHeightRatio = cssLineHeightRatio(styles["line-height"], fontSize);
+  const lineHeight = fontSize * lineHeightRatio;
   const explicitHeight = heightValue !== undefined;
   const minHeight = cssLength(styles["min-height"], width, 0);
   const maxHeight = cssLength(styles["max-height"], width, 16_384);
@@ -897,7 +910,10 @@ function renderElementTree(
   const widget = willRender && tag !== "BODY" && state.widgets.length < MAX_IMPORTED_WIDGETS
     ? createHtmlWidget(element, styles, box, state.nextZIndex++, parentId)
     : undefined;
-  if (widget) state.widgets.push(widget);
+  if (widget) {
+    state.widgets.push(widget);
+    state.sourceKeys.push(sourceKey);
+  }
   const ownId = widget?.id ?? parentId;
   const childStartX = left + paddingLeft;
   const childStartY = top + paddingTop;
@@ -929,7 +945,10 @@ function renderElementTree(
       state.nextZIndex++,
       ownId,
     );
-    if (textWidget) state.widgets.push(textWidget);
+    if (textWidget) {
+      state.widgets.push(textWidget);
+      state.sourceKeys.push(`${sourceKey}.text`);
+    }
     childBottom = childStartY + textHeight + gap;
   }
 
@@ -971,6 +990,7 @@ function renderElementTree(
         rules,
         state,
         widths[index],
+        `${sourceKey}.${index}`,
       );
       rowChildren.push({ startIndex, endIndex: state.widgets.length, nextY });
       cursorX += widths[index] + justifyGap;
@@ -1003,6 +1023,8 @@ function renderElementTree(
           depth + 1,
           rules,
           state,
+          undefined,
+          `${sourceKey}.${offset + column}`,
         );
         rowBottom = Math.max(rowBottom, nextY);
       }
@@ -1022,6 +1044,8 @@ function renderElementTree(
         depth + 1,
         rules,
         state,
+        undefined,
+        `${sourceKey}.${children.indexOf(child)}`,
       );
       childBottom = nextY + gap;
     }
@@ -1030,7 +1054,7 @@ function renderElementTree(
   const measuredHeight = explicitHeight
     ? desiredHeight
     : isContainer
-      ? Math.max(32, childBottom - top + paddingBottom - (children.length ? gap : 0))
+      ? Math.max(minHeight, 32, childBottom - top + paddingBottom - (children.length ? gap : 0))
       : desiredHeight;
   if (widget) widget.height = Math.max(1, Math.min(16_384, measuredHeight));
   return top + measuredHeight + marginBottom;
@@ -1102,57 +1126,135 @@ export function importHtmlToWidgets(
   css: string,
   canvasWidth: number,
   firstZIndex = 0,
+  responsiveBreakpoints: readonly Pick<Breakpoint, "id" | "width">[] = [],
 ): Widget[] {
   if (html.length > MAX_HTML_LENGTH) throw new Error("HTML import is limited to 200 KB.");
   if (css.length > MAX_CSS_LENGTH) throw new Error("CSS import is limited to 100 KB.");
 
   const extracted = extractImportedCode(html, css);
   if (extracted.css.length > MAX_CSS_LENGTH) throw new Error("CSS import is limited to 100 KB.");
-  const { document, body } = parseImportedHtmlDocument(extracted.html);
-  const rules = parseCssRules(extracted.css, canvasWidth);
-  const bodyStyles = declarationsFor(body, rules);
-  const bodyPadding = cssLength(bodyStyles.padding, canvasWidth, 0);
-  const rootX = 24 + cssLength(bodyStyles["padding-left"], canvasWidth, bodyPadding);
-  const rootY = 24 + cssLength(bodyStyles["padding-top"], canvasWidth, bodyPadding);
-  const rootWidth = Math.max(
-    160,
-    Math.floor(canvasWidth) - 48 -
-      cssLength(bodyStyles["padding-left"], canvasWidth, bodyPadding) -
-      cssLength(bodyStyles["padding-right"], canvasWidth, bodyPadding),
-  );
-  const state = { widgets: [] as Widget[], nextZIndex: firstZIndex };
-  let cursorY = rootY;
+  const renderAtWidth = (width: number) => {
+    const { document, body } = parseImportedHtmlDocument(extracted.html);
+    const rules = parseCssRules(extracted.css, width);
+    const bodyStyles = declarationsFor(body, rules);
+    const bodyPadding = cssLength(bodyStyles.padding, width, 0);
+    const rootX = 24 + cssLength(bodyStyles["padding-left"], width, bodyPadding);
+    const rootY = 24 + cssLength(bodyStyles["padding-top"], width, bodyPadding);
+    const rootWidth = Math.max(
+      160,
+      Math.floor(width) - 48 -
+        cssLength(bodyStyles["padding-left"], width, bodyPadding) -
+        cssLength(bodyStyles["padding-right"], width, bodyPadding),
+    );
+    const state = {
+      widgets: [] as Widget[],
+      sourceKeys: [] as string[],
+      nextZIndex: firstZIndex,
+    };
+    let cursorY = rootY;
 
-  const bodyText = getDirectText(body);
-  if (bodyText && state.widgets.length < MAX_IMPORTED_WIDGETS) {
-    const textElement = document.createElement("p");
-    textElement.textContent = bodyText;
-    cursorY = renderElementTree(
-      textElement,
-      rootX,
-      cursorY,
-      rootWidth,
-      bodyStyles,
-      null,
-      0,
-      rules,
-      state,
-    );
+    const bodyText = getDirectText(body);
+    if (bodyText && state.widgets.length < MAX_IMPORTED_WIDGETS) {
+      const textElement = document.createElement("p");
+      textElement.textContent = bodyText;
+      cursorY = renderElementTree(
+        textElement,
+        rootX,
+        cursorY,
+        rootWidth,
+        bodyStyles,
+        null,
+        0,
+        rules,
+        state,
+        undefined,
+        "body.text",
+      );
+    }
+    for (const [index, child] of Array.from(body.children).entries()) {
+      if (state.widgets.length >= MAX_IMPORTED_WIDGETS) break;
+      cursorY = renderElementTree(
+        child,
+        rootX,
+        cursorY,
+        rootWidth,
+        bodyStyles,
+        null,
+        0,
+        rules,
+        state,
+        undefined,
+        `body.${index}`,
+      );
+    }
+    return state;
+  };
+
+  const base = renderAtWidth(canvasWidth);
+  if (base.widgets.length === 0) {
+    throw new Error("No supported text or controls were found in the HTML.");
   }
-  for (const child of Array.from(body.children)) {
-    if (state.widgets.length >= MAX_IMPORTED_WIDGETS) break;
-    cursorY = renderElementTree(
-      child,
-      rootX,
-      cursorY,
-      rootWidth,
-      bodyStyles,
-      null,
-      0,
-      rules,
-      state,
-    );
+
+  const baseIndex = new Map(base.sourceKeys.map((key, index) => [key, index]));
+  const variants = new Map<string, { widgets: Widget[]; sourceKeys: string[] }>();
+  for (const breakpoint of responsiveBreakpoints) {
+    if (!breakpoint.id || !Number.isFinite(breakpoint.width) || breakpoint.width <= 0) continue;
+    variants.set(breakpoint.id, renderAtWidth(breakpoint.width));
   }
-  if (state.widgets.length === 0) throw new Error("No supported text or controls were found in the HTML.");
-  return state.widgets;
+
+  for (const variant of variants.values()) {
+    const variantIdToSourceKey = new Map(
+      variant.widgets.map((widget, index) => [widget.id, variant.sourceKeys[index]]),
+    );
+    for (const [index, sourceKey] of variant.sourceKeys.entries()) {
+      if (baseIndex.has(sourceKey)) continue;
+      const variantWidget = variant.widgets[index];
+      const parentSourceKey = variantWidget.groupId
+        ? variantIdToSourceKey.get(variantWidget.groupId)
+        : undefined;
+      const parentIndex = parentSourceKey ? baseIndex.get(parentSourceKey) : undefined;
+      const widget: Widget = {
+        ...variantWidget,
+        id: crypto.randomUUID(),
+        zIndex: firstZIndex + base.widgets.length,
+        visible: false,
+        groupId: parentIndex === undefined ? undefined : base.widgets[parentIndex].id,
+        overrides: undefined,
+      };
+      baseIndex.set(sourceKey, base.widgets.length);
+      base.widgets.push(widget);
+      base.sourceKeys.push(sourceKey);
+    }
+  }
+
+  for (const [breakpointId, variant] of variants) {
+    const variantIndex = new Map(variant.sourceKeys.map((key, index) => [key, index]));
+    for (const [sourceKey, widgetIndex] of baseIndex) {
+      const widget = base.widgets[widgetIndex];
+      const variantWidgetIndex = variantIndex.get(sourceKey);
+      if (variantWidgetIndex === undefined) {
+        widget.overrides = {
+          ...widget.overrides,
+          [breakpointId]: { visible: false },
+        };
+        continue;
+      }
+      const variantWidget = variant.widgets[variantWidgetIndex];
+      const override: WidgetOverride = {};
+      for (const property of ["x", "y", "width", "height", "rotation", "opacity"] as const) {
+        if (widget[property] !== variantWidget[property]) override[property] = variantWidget[property];
+      }
+      if (JSON.stringify(widget.style) !== JSON.stringify(variantWidget.style)) {
+        override.style = variantWidget.style;
+      }
+      if (JSON.stringify(widget.props) !== JSON.stringify(variantWidget.props)) {
+        override.props = variantWidget.props;
+      }
+      if (widget.visible !== variantWidget.visible) override.visible = variantWidget.visible;
+      if (Object.keys(override).length) {
+        widget.overrides = { ...widget.overrides, [breakpointId]: override };
+      }
+    }
+  }
+  return base.widgets;
 }

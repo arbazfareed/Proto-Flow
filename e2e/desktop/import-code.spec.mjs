@@ -65,10 +65,11 @@ describe("PF-T803 Windows desktop HTML canvas rendering", () => {
     await browser.saveScreenshot(path.join(evidenceDirectory, "pf-t802-required-icons.png"));
 
     await htmlEditor.setValue(fullDocument);
-    await browser.saveScreenshot(path.join(evidenceDirectory, "pf-t803-full-document-preview.png"));
+    await browser.waitUntil(async () => (await htmlEditor.getValue()) === fullDocument);
     await browser.waitUntil(async () =>
       (await getPreviewSource())?.includes("Desktop full document") ?? false,
     );
+    await browser.saveScreenshot(path.join(evidenceDirectory, "pf-t803-full-document-preview.png"));
     const sandboxSource = await getPreviewSource();
     expect(sandboxSource).toContain(".hero { display: flex;");
     expect(sandboxSource).toContain('document.body.dataset.ready = "yes"');

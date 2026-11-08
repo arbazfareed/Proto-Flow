@@ -46,9 +46,10 @@ describe("Windows desktop first launch", () => {
     await $('//button[@role="radio" and .//strong[normalize-space(.)="Light"]]').click();
     await $('//button[normalize-space(.)="Continue"]').click();
 
-    const blankTemplate = await (
+    const blankTemplate = await $(
       '//button[contains(@class,"onboarding-template-card") and .//strong[normalize-space(.)="Blank project"]]'
     );
+    await blankTemplate.waitForDisplayed({ timeout: 30_000 });
     await blankTemplate.click();
     await $('//button[normalize-space(.)="Continue"]').click();
     await $('//button[normalize-space(.)="Got it"]').click();
