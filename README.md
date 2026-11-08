@@ -9,6 +9,7 @@ The application is built with React, TypeScript, Vite, Konva, and Tauri 2. Proje
 ### Design on a visual canvas
 
 - Create multi-screen interfaces with text, shapes, controls, images, icons, layouts, and common application components.
+- Import common raster and vector image formats, including HEIC/HEIF and TIFF; larger desktop project images can be stored as linked assets.
 - Arrange and edit layers, group related widgets, reuse symbols, and use familiar selection, alignment, zoom, grid, and snapping tools.
 - Organize screens with flow diagrams, and add notes, requirement IDs, priorities, and status to design elements.
 - Work with rich text, dynamic panels, repeaters, variables, and safe expressions to build realistic prototypes.
