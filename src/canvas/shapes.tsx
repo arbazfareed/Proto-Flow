@@ -8,6 +8,7 @@ import {
   Group,
   Image as KonvaImage,
   Line,
+  Path as KonvaPath,
   Rect,
   Star as KonvaStar,
   Text as KonvaText,
@@ -447,7 +448,7 @@ function ButtonShape({ widget, fill: baseFill, stroke, strokeWidth }: ShapeCompo
         lineHeight={typeof widget.props.lineHeight === "number" ? widget.props.lineHeight : 1.2}
         align={typeof widget.props.align === "string" ? widget.props.align : "center"}
         verticalAlign={typeof widget.props.verticalAlign === "string" ? widget.props.verticalAlign : "middle"}
-        fill={variant === "primary" ? "#191321" : colors.text}
+        fill={getWidgetProp(widget, "textColor", variant === "primary" ? "#191321" : colors.text)}
         perfectDrawEnabled={false}
       />
     </Group>
@@ -506,7 +507,7 @@ function InputShape({ widget, fill, stroke, strokeWidth }: ShapeComponentProps) 
         lineHeight={typeof widget.props.lineHeight === "number" ? widget.props.lineHeight : 1.2}
         align={typeof widget.props.align === "string" ? widget.props.align : "left"}
         verticalAlign={typeof widget.props.verticalAlign === "string" ? widget.props.verticalAlign : "middle"}
-        fill={value ? "#e9e9ec" : "#85858f"}
+        fill={getWidgetProp(widget, "textColor", value ? "#e9e9ec" : "#85858f")}
         perfectDrawEnabled={false}
       />
     </Group>
@@ -2494,6 +2495,38 @@ function GenericElementShape({
     typeof widget.props.label === "string"
       ? widget.props.label
       : fallbackLabel;
+  if (widget.type === "path") {
+    const data = typeof widget.props.pathData === "string" ? widget.props.pathData : "";
+    if (!data || data.length > 20_000 || !/^[MmZzLlHhVvCcSsQqTtAa0-9eE+.,\-\s]+$/.test(data)) {
+      return null;
+    }
+
+    const viewBoxX = typeof widget.props.pathViewBoxX === "number" ? widget.props.pathViewBoxX : 0;
+    const viewBoxY = typeof widget.props.pathViewBoxY === "number" ? widget.props.pathViewBoxY : 0;
+    const viewBoxWidth = typeof widget.props.pathViewBoxWidth === "number" && widget.props.pathViewBoxWidth > 0
+      ? widget.props.pathViewBoxWidth
+      : widget.width;
+    const viewBoxHeight = typeof widget.props.pathViewBoxHeight === "number" && widget.props.pathViewBoxHeight > 0
+      ? widget.props.pathViewBoxHeight
+      : widget.height;
+    const scaleX = widget.width / viewBoxWidth;
+    const scaleY = widget.height / viewBoxHeight;
+    return (
+      <KonvaPath
+        data={data}
+        x={-viewBoxX * scaleX}
+        y={-viewBoxY * scaleY}
+        scaleX={scaleX}
+        scaleY={scaleY}
+        fill={fill}
+        stroke={stroke}
+        strokeWidth={strokeWidth}
+        lineCap={widget.style.lineCap ?? "round"}
+        lineJoin={widget.style.lineJoin ?? "round"}
+        perfectDrawEnabled={false}
+      />
+    );
+  }
   if (["textarea", "text-area", "select", "dropdown", "date-picker", "search", "search-bar", "file-upload", "slider", "stepper"].includes(widget.type)) {
     return <FormPreviewShape widget={widget} fill={fill} stroke={stroke} strokeWidth={strokeWidth} />;
   }

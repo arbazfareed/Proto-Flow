@@ -2,7 +2,7 @@ import { mkdirSync } from "node:fs";
 import path from "node:path";
 import { expect } from "@wdio/globals";
 
-describe("PF-T801 Windows desktop code import", () => {
+describe("PF-T803 Windows desktop HTML canvas rendering", () => {
   it("previews code in a sandbox and imports editable elements onto the canvas", async () => {
     const privacyDialog = await $('[aria-labelledby="privacy-settings-title"]');
     await privacyDialog.waitForDisplayed({ timeout: 60_000 });
@@ -50,7 +50,7 @@ describe("PF-T801 Windows desktop code import", () => {
     await browser.saveScreenshot(path.join(evidenceDirectory, "pf-t802-required-icons.png"));
 
     await htmlEditor.setValue(
-      "<main><h1>Desktop import proof</h1><p>Editable canvas content</p><button>Continue</button></main>",
+      '<main style="width: 420px; padding: 16px; background-color: #eef2ff"><h1>Desktop import proof</h1><p>Editable canvas content</p><svg viewBox="10 20 100 50" style="width: 200px; height: 100px"><path d="M10 20 L110 20 L110 70 Z" fill="#ff0000" stroke="#111827" stroke-width="2"/></svg><button>Continue</button></main>',
     );
     await browser.waitUntil(async () =>
       (await iframe.getAttribute("srcdoc"))?.includes("Desktop import proof") ?? false,
@@ -64,6 +64,10 @@ describe("PF-T801 Windows desktop code import", () => {
     await expect(
       await $('//*[contains(@class,"layer-name") and normalize-space(.)="h1 Desktop import proof"]'),
     ).toBeDisplayed();
-    await browser.saveScreenshot(path.join(evidenceDirectory, "pf-t801-imported-canvas.png"));
+    await layerSearch.setValue("path");
+    await expect(
+      await $('//*[contains(@class,"layer-name") and normalize-space(.)="path"]'),
+    ).toBeDisplayed();
+    await browser.saveScreenshot(path.join(evidenceDirectory, "pf-t803-imported-canvas.png"));
   });
 });

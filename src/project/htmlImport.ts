@@ -11,6 +11,18 @@ const SEMANTIC_TAGS = new Set([
   "H1", "H2", "H3", "H4", "H5", "H6", "P", "BUTTON", "A", "INPUT",
   "TEXTAREA", "SELECT", "LI", "BLOCKQUOTE", "PRE", "CODE", "IMG",
 ]);
+const LAYOUT_TAGS = new Set([
+  "BODY", "MAIN", "DIV", "SECTION", "ARTICLE", "HEADER", "FOOTER", "NAV",
+  "FORM", "UL", "OL", "FIGURE", "ASIDE", "TABLE", "THEAD", "TBODY", "TFOOT", "TR",
+]);
+const INHERITED_STYLE_PROPERTIES = [
+  "color",
+  "font-family",
+  "font-size",
+  "font-weight",
+  "line-height",
+  "text-align",
+] as const;
 
 type CssDeclarations = Record<string, string>;
 
@@ -139,6 +151,8 @@ const COMPUTED_STYLE_PROPERTIES = [
   "font-weight",
   "text-align",
   "display",
+  "flex-direction",
+  "gap",
   "width",
   "height",
   "min-width",
@@ -294,18 +308,26 @@ function utilityDeclarations(element: Element): CssDeclarations {
         declarations[property] = `${TAILWIND_SPACING[spacing[2]]}px`;
       }
     }
+
+    if (className === "flex") declarations.display = "flex";
+    if (className === "inline-flex") declarations.display = "inline-flex";
+    if (className === "grid") declarations.display = "grid";
+    if (className === "flex-row") declarations["flex-direction"] = "row";
+    if (className === "flex-col") declarations["flex-direction"] = "column";
+    const gap = className.match(/^gap-(\d+)$/)?.[1];
+    if (gap && TAILWIND_SPACING[gap] !== undefined) {
+      declarations.gap = `${TAILWIND_SPACING[gap]}px`;
+    }
   }
 
   return declarations;
 }
 
 function isSafeStyleValue(property: string, value: string): boolean {
-  if (property === "color" || property === "background-color" || property === "border-color") {
+  if (property === "color" || property === "background-color" || property === "border-color" || property === "fill" || property === "stroke") {
+    if ((property === "fill" || property === "stroke") && value.toLowerCase() === "none") return true;
     return Boolean(colorToHex(value))
-      || /^(?:transparent|currentcolor)$/i.test(value)
-      || /^[a-z]+$/i.test(value)
-      || /^rgba?\([^)]+\)$/i.test(value)
-      || /^hsla?\([^)]+\)$/i.test(value);
+      || /^(?:transparent|currentcolor)$/i.test(value);
   }
   if (property === "font-family") return /^[\w\s,"'-]+$/.test(value);
   if (property === "font-weight") return /^(?:normal|bold|bolder|lighter|[1-9]00)$/i.test(value);
@@ -314,10 +336,12 @@ function isSafeStyleValue(property: string, value: string): boolean {
     return value === "0" || /^(?:auto|none|-?\d+(?:\.\d+)?(?:px|rem|em|%))$/i.test(value);
   }
   if (property === "display") return /^(?:block|inline|inline-block|flex|inline-flex|grid|inline-grid|none|table|list-item)$/i.test(value);
+  if (property === "flex-direction") return /^(?:row|row-reverse|column|column-reverse)$/i.test(value);
+  if (property === "gap") return value === "0" || /^-?\d+(?:\.\d+)?(?:px|rem|em)$/i.test(value);
   if (property === "border-style") return /^(?:none|solid|dashed|dotted|double)$/i.test(value);
   if (property === "opacity") return /^(?:0|1|0?\.\d+)$/.test(value);
   if (property === "text-decoration") return /^(?:none|underline|overline|line-through)$/i.test(value);
-  return false;
+  return property === "stroke-width" && (/^\d+(?:\.\d+)?(?:px)?$/i.test(value));
 }
 
 function parseCssRules(css: string): Array<{ selector: string; declarations: CssDeclarations }> {
@@ -386,35 +410,416 @@ function colorToHex(value: string | undefined): string | undefined {
       : `#${hex[1].toLowerCase()}`;
   }
   const rgb = value.match(/^rgba?\(\s*(\d{1,3})\s*,\s*(\d{1,3})\s*,\s*(\d{1,3})/i);
-  if (!rgb) return undefined;
-  const channels = rgb.slice(1).map(Number);
-  if (channels.some((channel) => channel > 255)) return undefined;
-  return `#${channels.map((channel) => channel.toString(16).padStart(2, "0")).join("")}`;
-}
-
-function parsePixels(value: string | undefined): number | undefined {
-  if (!value) return undefined;
-  const match = value.match(/^(\d+(?:\.\d+)?)(px|rem|em)$/i);
-  if (!match) return value === "0" ? 0 : undefined;
-  return Number(match[1]) * (match[2].toLowerCase() === "px" ? 1 : 16);
+  if (rgb) {
+    const channels = rgb.slice(1).map(Number);
+    if (channels.some((channel) => channel > 255)) return undefined;
+    return `#${channels.map((channel) => channel.toString(16).padStart(2, "0")).join("")}`;
+  }
+  if (
+    !/^(?:transparent|currentcolor)$/i.test(value) &&
+    typeof window !== "undefined" &&
+    typeof window.getComputedStyle === "function" &&
+    typeof document !== "undefined"
+  ) {
+    const probe = document.createElement("span");
+    probe.style.color = value;
+    const resolved = probe.style.color ? window.getComputedStyle(probe).color : "";
+    if (resolved && resolved.toLowerCase() !== value.toLowerCase()) {
+      return colorToHex(resolved);
+    }
+  }
+  return undefined;
 }
 
 function normalizedText(element: Element): string {
-  const source = element.tagName === "IMG"
+  const tag = element.tagName.toUpperCase();
+  const source = tag === "IMG"
     ? element.getAttribute("alt") ?? ""
-    : element.tagName === "INPUT" || element.tagName === "TEXTAREA" || element.tagName === "SELECT"
+    : tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT"
       ? element.getAttribute("aria-label") ?? element.getAttribute("placeholder") ?? element.getAttribute("value") ?? ""
       : element.textContent ?? "";
   return source.replace(/\s+/g, " ").trim().slice(0, 2_000);
 }
 
 function mapTagToTool(tagName: string): ShapeTool {
+  tagName = tagName.toUpperCase();
   if (/^H[1-6]$/.test(tagName)) return "heading";
   if (tagName === "BUTTON") return "button";
   if (tagName === "INPUT" || tagName === "TEXTAREA" || tagName === "SELECT") return "input";
   if (tagName === "A") return "link";
+  if (tagName === "IMG") return "image";
+  if (tagName === "PATH") return "path";
+  if (tagName === "VIDEO") return "video";
+  if (tagName === "TABLE") return "rectangle";
+  if (LAYOUT_TAGS.has(tagName)) return "rectangle";
   if (tagName === "LI" || tagName === "BLOCKQUOTE" || tagName === "PRE" || tagName === "CODE") return "paragraph";
   return "paragraph";
+}
+
+interface HtmlLayoutBox {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+
+function cssLength(value: string | undefined, basis: number, fallback: number): number {
+  if (!value) return fallback;
+  const match = value.match(/^(-?\d+(?:\.\d+)?)(px|rem|em|%)?$/i);
+  if (!match) return fallback;
+  const amount = Number(match[1]);
+  const unit = match[2]?.toLowerCase();
+  const result = unit === "%"
+    ? basis * amount / 100
+    : unit === "rem" || unit === "em"
+      ? amount * 16
+      : amount;
+  return Number.isFinite(result) ? Math.max(0, Math.min(16_384, result)) : fallback;
+}
+
+function safeImageSource(element: Element): { src: string; mime: string } {
+  const source = element.getAttribute("src")?.trim() ?? "";
+  const match = source.match(/^data:(image\/(?:png|jpeg|gif|webp));base64,([a-z\d+/=]+)$/i);
+  if (!match || source.length > 200_000) return { src: "", mime: "" };
+  return { src: source, mime: match[1].toLowerCase() };
+}
+
+function svgPathData(element: Element): string | undefined {
+  const data = element.getAttribute("d")?.trim() ?? "";
+  if (!data || data.length > 20_000 || !/^[MmZzLlHhVvCcSsQqTtAa0-9eE+.,\-\s]+$/.test(data)) return undefined;
+  return data;
+}
+
+function getElementText(element: Element): string {
+  if (["INPUT", "TEXTAREA", "SELECT"].includes(element.tagName.toUpperCase())) {
+    return normalizedText(element);
+  }
+  return Array.from(element.childNodes)
+    .filter((node) => node.nodeType === Node.TEXT_NODE)
+    .map((node) => node.textContent ?? "")
+    .join(" ")
+    .replace(/\s+/g, " ")
+    .trim()
+    .slice(0, 2_000);
+}
+
+function getDirectText(element: Element): string {
+  return Array.from(element.childNodes)
+    .filter((node) => node.nodeType === Node.TEXT_NODE)
+    .map((node) => node.textContent ?? "")
+    .join(" ")
+    .replace(/\s+/g, " ")
+    .trim()
+    .slice(0, 2_000);
+}
+
+function setWidgetStyles(widget: Widget, styles: CssDeclarations, isContainer: boolean): void {
+  const foreground = colorToHex(styles.color);
+  const background = colorToHex(styles["background-color"]);
+  const borderColor = colorToHex(styles["border-color"]);
+  const borderWidth = cssLength(styles["border-width"], 0, 0);
+
+  if (isContainer || widget.type === "button" || widget.type === "input") {
+    widget.style.fill = background ?? null;
+    widget.style.stroke = borderWidth > 0 ? borderColor ?? foreground ?? "#000000" : null;
+    widget.style.strokeWidth = borderWidth;
+  } else if (widget.type !== "image" && widget.type !== "path" && foreground) {
+    widget.style.fill = foreground;
+  }
+
+  if (widget.type === "path") {
+    widget.style.fill = styles.fill === "none" ? null : colorToHex(styles.fill) ?? "#000000";
+    widget.style.stroke = colorToHex(styles.stroke) ?? null;
+    widget.style.strokeWidth = cssLength(styles["stroke-width"], 0, 1);
+  }
+
+  const radius = cssLength(styles["border-radius"], 0, 0);
+  if (radius) widget.style.cornerRadius = Math.min(64, radius);
+  const opacity = Number(styles.opacity);
+  if (Number.isFinite(opacity)) widget.opacity = Math.max(0, Math.min(1, opacity));
+}
+
+function createHtmlWidget(
+  element: Element,
+  styles: CssDeclarations,
+  box: HtmlLayoutBox,
+  zIndex: number,
+  parentId: string | null,
+  pathViewBox?: { x: number; y: number; width: number; height: number },
+): Widget | undefined {
+  const tag = element.tagName.toUpperCase();
+  const tool = mapTagToTool(tag);
+  if (tag === "SVG") return undefined;
+  if (tag === "PATH" && !svgPathData(element)) return undefined;
+
+  const isContainer = LAYOUT_TAGS.has(tag);
+  const text = isContainer ? "" : normalizedText(element);
+  const fontSize = Math.max(8, Math.min(96, cssLength(
+    styles["font-size"],
+    box.width,
+    /^H[1-6]$/.test(tag) ? 30 - Number(tag[1]) * 2 : 16,
+  )));
+  const fontFamily = styles["font-family"]?.split(",")[0]?.replace(/["']/g, "").trim() ?? "Arial";
+  let props: Record<string, unknown>;
+
+  if (tool === "button") {
+    props = {
+      label: text,
+      variant: "primary",
+      state: "default",
+      fontSize,
+      fontFamily,
+      textColor: colorToHex(styles.color),
+    };
+  } else if (tool === "input") {
+    props = {
+      label: element.getAttribute("aria-label") ?? element.getAttribute("name") ?? "",
+      placeholder: element.getAttribute("placeholder") ?? text,
+      value: element.getAttribute("value") ?? "",
+      type: element.getAttribute("type") ?? "text",
+      fontSize,
+      fontFamily,
+      textColor: colorToHex(styles.color),
+    };
+  } else if (tool === "image") {
+    props = { ...safeImageSource(element), fileName: "", alt: element.getAttribute("alt") ?? "" };
+  } else if (tool === "path") {
+    props = {
+      label: "SVG path",
+      pathData: svgPathData(element) ?? "",
+      pathViewBoxX: pathViewBox?.x ?? 0,
+      pathViewBoxY: pathViewBox?.y ?? 0,
+      pathViewBoxWidth: pathViewBox?.width ?? box.width,
+      pathViewBoxHeight: pathViewBox?.height ?? box.height,
+    };
+  } else if (isContainer) {
+    props = { label: tag.toLowerCase(), layout: "freeform", gap: 0, padding: 0 };
+  } else {
+    props = {
+      text,
+      fontFamily,
+      fontSize,
+      fontWeight: styles["font-weight"] ?? (/^H[1-6]$/.test(tag) ? "700" : "normal"),
+      align: styles["text-align"] ?? "left",
+      lineHeight: Number(styles["line-height"]) || 1.2,
+      autoSize: true,
+    };
+  }
+
+  const widget = createShapeWidget(tool, box.x, box.y, box.width, box.height, props);
+  widget.name = `${tag.toLowerCase()} ${text.slice(0, 72)}`.trim().slice(0, 120) || tag.toLowerCase();
+  widget.zIndex = zIndex;
+  if (parentId) widget.groupId = parentId;
+  setWidgetStyles(widget, styles, isContainer);
+  return widget;
+}
+
+function renderElementTree(
+  element: Element,
+  x: number,
+  y: number,
+  availableWidth: number,
+  inheritedStyles: CssDeclarations,
+  parentId: string | null,
+  depth: number,
+  rules: ReturnType<typeof parseCssRules>,
+  state: { widgets: Widget[]; nextZIndex: number },
+): number {
+  const tag = element.tagName.toUpperCase();
+  if (
+    state.widgets.length >= MAX_IMPORTED_WIDGETS ||
+    depth > 32 ||
+    (SKIPPED_TAGS.has(tag) && tag !== "SVG") ||
+    element.hasAttribute("hidden")
+  ) return y;
+
+  const declarations = declarationsFor(element, rules);
+  const styles = {
+    ...Object.fromEntries(
+      INHERITED_STYLE_PROPERTIES.flatMap((property) =>
+        inheritedStyles[property] ? [[property, inheritedStyles[property]]] : [],
+      ),
+    ),
+    ...declarations,
+  };
+  if (styles.display === "none") return y;
+
+  if (tag === "SVG") {
+    const viewBox = element.getAttribute("viewBox")?.trim().split(/[\s,]+/).map(Number) ?? [];
+    const validViewBox = viewBox.length === 4 && viewBox.every(Number.isFinite) &&
+      viewBox[2] > 0 && viewBox[3] > 0;
+    const viewBoxX = validViewBox ? viewBox[0] : 0;
+    const viewBoxY = validViewBox ? viewBox[1] : 0;
+    const viewBoxWidth = validViewBox
+      ? viewBox[2]
+      : 100;
+    const viewBoxHeight = validViewBox
+      ? viewBox[3]
+      : 100;
+    const svgWidth = cssLength(
+      declarations.width ?? element.getAttribute("width") ?? undefined,
+      availableWidth,
+      Math.min(48, availableWidth),
+    );
+    const svgHeight = cssLength(
+      declarations.height ?? element.getAttribute("height") ?? undefined,
+      viewBoxWidth,
+      svgWidth * viewBoxHeight / viewBoxWidth,
+    );
+    for (const path of Array.from(element.querySelectorAll("path")).slice(0, 20)) {
+      if (state.widgets.length >= MAX_IMPORTED_WIDGETS) break;
+      const pathStyles = declarationsFor(path, rules);
+      const pathWidget = createHtmlWidget(
+        path,
+        {
+          ...styles,
+          ...pathStyles,
+          fill: path.getAttribute("fill") ?? pathStyles.fill ?? styles.fill,
+          stroke: path.getAttribute("stroke") ?? pathStyles.stroke ?? styles.stroke,
+          "stroke-width": path.getAttribute("stroke-width") ??
+            pathStyles["stroke-width"] ?? styles["stroke-width"],
+        },
+        { x, y, width: svgWidth, height: svgHeight },
+        state.nextZIndex++,
+        parentId,
+        { x: viewBoxX, y: viewBoxY, width: viewBoxWidth, height: viewBoxHeight },
+      );
+      if (pathWidget) state.widgets.push(pathWidget);
+    }
+    return y + svgHeight;
+  }
+
+  const isContainer = LAYOUT_TAGS.has(tag);
+  const marginTop = cssLength(styles["margin-top"], availableWidth, 0);
+  const marginBottom = cssLength(styles["margin-bottom"], availableWidth, 8);
+  const marginLeft = cssLength(styles["margin-left"], availableWidth, 0);
+  const marginRight = cssLength(styles["margin-right"], availableWidth, 0);
+  const text = getElementText(element);
+  const fontSize = cssLength(
+    styles["font-size"],
+    availableWidth,
+    /^H[1-6]$/.test(tag) ? 30 - Number(tag[1]) * 2 : 16,
+  );
+  const widthValue = styles.width ??
+    (tag === "IMG" || tag === "VIDEO" ? element.getAttribute("width") ?? undefined : undefined);
+  const heightValue = styles.height ??
+    (tag === "IMG" || tag === "VIDEO" ? element.getAttribute("height") ?? undefined : undefined);
+  const width = Math.max(1, Math.min(
+    availableWidth,
+    cssLength(
+      widthValue,
+      availableWidth,
+      tag === "BUTTON"
+        ? Math.max(88, Math.ceil(text.length * fontSize * 0.62 + 28))
+        : tag === "INPUT" || tag === "SELECT" || tag === "TEXTAREA"
+          ? Math.min(240, availableWidth)
+          : tag === "IMG" || tag === "VIDEO"
+            ? Math.min(tag === "VIDEO" ? 320 : 200, availableWidth)
+            : availableWidth - marginLeft - marginRight,
+    ),
+  ));
+  const left = x + marginLeft;
+  const top = y + marginTop;
+  const padding = cssLength(styles.padding, width, 0);
+  const paddingLeft = cssLength(styles["padding-left"], width, padding);
+  const paddingRight = cssLength(styles["padding-right"], width, padding);
+  const paddingTop = cssLength(styles["padding-top"], width, padding);
+  const paddingBottom = cssLength(styles["padding-bottom"], width, padding);
+  const lineHeight = cssLength(styles["line-height"], fontSize, fontSize * 1.2);
+  const explicitHeight = heightValue !== undefined;
+  const desiredHeight = explicitHeight
+    ? cssLength(heightValue, width, 1)
+    : isContainer
+      ? 1
+      : tag === "IMG" || tag === "VIDEO"
+        ? tag === "VIDEO" ? 180 : 120
+        : ["BUTTON", "INPUT", "TEXTAREA", "SELECT"].includes(tag)
+        ? 40
+        : Math.max(1, Math.ceil(Math.max(1, text.length) * fontSize * 0.55 / Math.max(1, width - paddingLeft - paddingRight))) * lineHeight + paddingTop + paddingBottom;
+
+  const directText = getDirectText(element);
+  const hasDirectText = Boolean(getElementText(element));
+  const willRender = isContainer || SEMANTIC_TAGS.has(tag) || tag === "TABLE" || tag === "VIDEO" ||
+    tag === "PATH" || hasDirectText;
+  const widgetHeight = explicitHeight
+    ? desiredHeight
+    : isContainer
+      ? 32
+      : desiredHeight;
+  const box = {
+    x: left,
+    y: top,
+    width,
+    height: Math.max(1, Math.min(16_384, widgetHeight)),
+  };
+  const widget = willRender && tag !== "BODY" && state.widgets.length < MAX_IMPORTED_WIDGETS
+    ? createHtmlWidget(element, styles, box, state.nextZIndex++, parentId)
+    : undefined;
+  if (widget) state.widgets.push(widget);
+  const ownId = widget?.id ?? parentId;
+  const childStartX = left + paddingLeft;
+  const childStartY = top + paddingTop;
+  const childWidth = Math.max(1, width - paddingLeft - paddingRight);
+  const children = (isContainer || tag === "TABLE" || tag === "SVG")
+    ? Array.from(element.children)
+      .filter((child) => (
+        !SKIPPED_TAGS.has(child.tagName.toUpperCase()) ||
+        child.tagName.toUpperCase() === "SVG"
+      ) && !child.hasAttribute("hidden"))
+    : [];
+  let childBottom = childStartY;
+  const display = styles.display;
+  const flexRow = (display === "flex" || display === "inline-flex") && styles["flex-direction"] !== "column";
+  const gap = cssLength(styles.gap, childWidth, 0);
+
+  if (isContainer && directText && state.widgets.length < MAX_IMPORTED_WIDGETS) {
+    const textElement = element.ownerDocument.createElement("p");
+    textElement.textContent = directText;
+    const textHeight = Math.max(1, Math.ceil(directText.length * fontSize * 0.55 / childWidth)) * lineHeight;
+    const textWidget = createHtmlWidget(
+      textElement,
+      styles,
+      { x: childStartX, y: childStartY, width: childWidth, height: textHeight },
+      state.nextZIndex++,
+      ownId,
+    );
+    if (textWidget) state.widgets.push(textWidget);
+    childBottom = childStartY + textHeight + gap;
+  }
+
+  const rowChildWidth = flexRow && children.length
+    ? Math.max(1, (childWidth - gap * (children.length - 1)) / children.length)
+    : childWidth;
+  let cursorX = childStartX;
+  for (const child of children) {
+    if (state.widgets.length >= MAX_IMPORTED_WIDGETS) break;
+    const childY = flexRow ? childStartY : childBottom;
+    const nextY = renderElementTree(
+      child,
+      cursorX,
+      childY,
+      rowChildWidth,
+      styles,
+      ownId,
+      depth + 1,
+      rules,
+      state,
+    );
+    if (flexRow) {
+      cursorX += rowChildWidth + gap;
+      childBottom = Math.max(childBottom, nextY);
+    } else {
+      childBottom = nextY + gap;
+    }
+  }
+
+  const measuredHeight = explicitHeight
+    ? desiredHeight
+    : isContainer
+      ? Math.max(32, childBottom - top + paddingBottom - (children.length ? gap : 0))
+      : desiredHeight;
+  if (widget) widget.height = Math.max(1, Math.min(16_384, measuredHeight));
+  return top + measuredHeight + marginBottom;
 }
 
 export function parseHtmlToAst(html: string, css: string): ImportedHtmlAst {
@@ -428,7 +833,7 @@ export function parseHtmlToAst(html: string, css: string): ImportedHtmlAst {
   let truncated = false;
 
   const collect = (element: Element, parentId: string | null) => {
-    if (SKIPPED_TAGS.has(element.tagName) || element.hasAttribute("hidden")) return;
+    if (SKIPPED_TAGS.has(element.tagName.toUpperCase()) || element.hasAttribute("hidden")) return;
     if (nodes.length >= MAX_AST_NODES) {
       truncated = true;
       return;
@@ -461,7 +866,7 @@ export function findRequiredIcons(html: string): Pick<ImportedHtmlAst, "required
   let truncated = false;
 
   const collect = (element: Element) => {
-    if (SKIPPED_TAGS.has(element.tagName) || element.hasAttribute("hidden")) return;
+    if (SKIPPED_TAGS.has(element.tagName.toUpperCase()) || element.hasAttribute("hidden")) return;
     if (nodeCount >= MAX_AST_NODES) {
       truncated = true;
       return;
@@ -476,92 +881,60 @@ export function findRequiredIcons(html: string): Pick<ImportedHtmlAst, "required
   return { requiredIcons: [...requiredIcons], truncated };
 }
 
-export function importHtmlToWidgets(html: string, css: string, canvasWidth: number, firstZIndex = 0): Widget[] {
+export function importHtmlToWidgets(
+  html: string,
+  css: string,
+  canvasWidth: number,
+  firstZIndex = 0,
+): Widget[] {
   if (html.length > MAX_HTML_LENGTH) throw new Error("HTML import is limited to 200 KB.");
   if (css.length > MAX_CSS_LENGTH) throw new Error("CSS import is limited to 100 KB.");
 
   const document = new DOMParser().parseFromString(html, "text/html");
   const rules = parseCssRules(css);
-  const elements: Element[] = [];
+  const bodyStyles = declarationsFor(document.body, rules);
+  const bodyPadding = cssLength(bodyStyles.padding, canvasWidth, 0);
+  const rootX = 24 + cssLength(bodyStyles["padding-left"], canvasWidth, bodyPadding);
+  const rootY = 24 + cssLength(bodyStyles["padding-top"], canvasWidth, bodyPadding);
+  const rootWidth = Math.max(
+    160,
+    Math.floor(canvasWidth) - 48 -
+      cssLength(bodyStyles["padding-left"], canvasWidth, bodyPadding) -
+      cssLength(bodyStyles["padding-right"], canvasWidth, bodyPadding),
+  );
+  const state = { widgets: [] as Widget[], nextZIndex: firstZIndex };
+  let cursorY = rootY;
 
-  const collect = (element: Element) => {
-    if (SKIPPED_TAGS.has(element.tagName) || element.hasAttribute("hidden")) return;
-    if (SEMANTIC_TAGS.has(element.tagName)) {
-      if (normalizedText(element)) elements.push(element);
-      return;
-    }
-    const directText = Array.from(element.childNodes)
-      .filter((node) => node.nodeType === Node.TEXT_NODE)
-      .map((node) => node.textContent ?? "")
-      .join(" ")
-      .replace(/\s+/g, " ")
-      .trim();
-    if (directText) elements.push(document.createElement("p"));
-    if (directText) elements[elements.length - 1].textContent = directText;
-    for (const child of Array.from(element.children)) collect(child);
-  };
-  for (const child of Array.from(document.body.children)) collect(child);
-  const bodyText = Array.from(document.body.childNodes)
-    .filter((node) => node.nodeType === Node.TEXT_NODE)
-    .map((node) => node.textContent ?? "")
-    .join(" ")
-    .replace(/\s+/g, " ")
-    .trim();
-  if (bodyText) {
-    const textNode = document.createElement("p");
-    textNode.textContent = bodyText;
-    elements.unshift(textNode);
+  const bodyText = getDirectText(document.body);
+  if (bodyText && state.widgets.length < MAX_IMPORTED_WIDGETS) {
+    const textElement = document.createElement("p");
+    textElement.textContent = bodyText;
+    cursorY = renderElementTree(
+      textElement,
+      rootX,
+      cursorY,
+      rootWidth,
+      bodyStyles,
+      null,
+      0,
+      rules,
+      state,
+    );
   }
-  if (elements.length === 0) throw new Error("No supported text or controls were found in the HTML.");
-
-  const width = Math.max(160, Math.floor(canvasWidth) - 48);
-  let y = 24;
-  return elements.slice(0, MAX_IMPORTED_WIDGETS).map((element, index) => {
-    const tag = element.tagName;
-    const text = normalizedText(element);
-    const tool = mapTagToTool(tag);
-    const declarations = computedStylesFor(element, rules);
-    const fontSize = Math.max(10, Math.min(72,
-      parsePixels(declarations["font-size"]) ?? (/^H[1-6]$/.test(tag) ? 30 - Number(tag[1]) * 2 : 16),
-    ));
-    const height = tag === "BUTTON" || tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT"
-      ? 42
-      : Math.max(28, Math.ceil(fontSize * 1.5));
-    const measuredWidth = tag === "BUTTON"
-      ? Math.min(width, Math.max(120, Math.ceil(text.length * fontSize * 0.65 + 32)))
-      : width;
-    const props = tool === "button"
-      ? { label: text, variant: "primary", state: "default", fontSize }
-      : tool === "input"
-        ? {
-            label: element.getAttribute("aria-label") ?? element.getAttribute("name") ?? "",
-            placeholder: element.getAttribute("placeholder") ?? text,
-            value: element.getAttribute("value") ?? "",
-            type: element.getAttribute("type") ?? "text",
-          }
-        : {
-            text,
-            fontFamily: declarations["font-family"]?.split(",")[0]?.replace(/["']/g, "").trim() ?? "Arial",
-            fontSize,
-            fontWeight: declarations["font-weight"] ?? (/^H[1-6]$/.test(tag) ? "700" : "normal"),
-            align: declarations["text-align"] ?? "left",
-            lineHeight: 1.2,
-            autoSize: true,
-          };
-    const widget = createShapeWidget(tool, 24, y, measuredWidth, height, props);
-    widget.name = `${tag.toLowerCase()} ${text.slice(0, 72)}`.trim().slice(0, 120);
-    widget.zIndex = firstZIndex + index;
-    const foreground = colorToHex(declarations.color);
-    const background = colorToHex(declarations["background-color"]);
-    if (tool === "button") {
-      if (background) widget.style.fill = background;
-      if (background) widget.style.stroke = background;
-    } else if (foreground) {
-      widget.style.fill = foreground;
-    }
-    const radius = parsePixels(declarations["border-radius"]);
-    if (radius !== undefined) widget.style.cornerRadius = Math.min(64, radius);
-    y += height + Math.max(8, Math.min(48, parsePixels(declarations["margin-bottom"]) ?? 12));
-    return widget;
-  });
+  for (const child of Array.from(document.body.children)) {
+    if (state.widgets.length >= MAX_IMPORTED_WIDGETS) break;
+    cursorY = renderElementTree(
+      child,
+      rootX,
+      cursorY,
+      rootWidth,
+      bodyStyles,
+      null,
+      0,
+      rules,
+      state,
+    );
+  }
+  if (state.widgets.length === 0) throw new Error("No supported text or controls were found in the HTML.");
+  return state.widgets;
 }
