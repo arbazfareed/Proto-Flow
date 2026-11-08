@@ -30,10 +30,11 @@ describe("PF-T803 Windows desktop HTML canvas rendering", () => {
     await $('[aria-label="Import Code"]').click();
     const dialog = await $('[role="dialog"][aria-labelledby="import-code-title"]');
     await dialog.waitForDisplayed();
-    const iframe = await $('iframe[title="Sandboxed code preview"]');
+    const previewFrame = () => $('iframe[title="Sandboxed code preview"]');
+    const iframe = await previewFrame();
     await expect(iframe).toHaveAttribute("sandbox", "allow-scripts");
     await browser.waitUntil(async () =>
-      (await iframe.getAttribute("srcdoc"))?.includes("connect-src 'none'") ?? false,
+      (await previewFrame().getAttribute("srcdoc"))?.includes("connect-src 'none'") ?? false,
     );
     const previewSource = await iframe.getAttribute("srcdoc");
     expect(previewSource).toContain("connect-src 'none'");
@@ -54,15 +55,15 @@ describe("PF-T803 Windows desktop HTML canvas rendering", () => {
     expect(await requiredIcons.getText()).toContain("Video");
     expect(await requiredIcons.getText()).toContain("Table");
     await browser.waitUntil(async () =>
-      (await iframe.getAttribute("srcdoc"))?.includes('aria-label="Intro"') ?? false,
+      (await previewFrame().getAttribute("srcdoc"))?.includes('aria-label="Intro"') ?? false,
     );
     await browser.saveScreenshot(path.join(evidenceDirectory, "pf-t802-required-icons.png"));
 
     await htmlEditor.setValue(fullDocument);
     await browser.waitUntil(async () =>
-      (await iframe.getAttribute("srcdoc"))?.includes("Desktop full document") ?? false,
+      (await previewFrame().getAttribute("srcdoc"))?.includes("Desktop full document") ?? false,
     );
-    const sandboxSource = await iframe.getAttribute("srcdoc");
+    const sandboxSource = await previewFrame().getAttribute("srcdoc");
     expect(sandboxSource).toContain(".hero { display: flex;");
     expect(sandboxSource).toContain('document.body.dataset.ready = "yes"');
 
@@ -89,6 +90,6 @@ describe("PF-T803 Windows desktop HTML canvas rendering", () => {
     await expect($('[aria-label="CSS code"]')).toHaveValue("");
     await $("#import-code-tab-js").click();
     await expect($('[aria-label="JS code"]')).toHaveValue("");
-    await expect(iframe).toHaveAttribute("srcdoc", /document\.body\.dataset\.ready/);
+    await expect(previewFrame()).toHaveAttribute("srcdoc", /document\.body\.dataset\.ready/);
   });
 });
