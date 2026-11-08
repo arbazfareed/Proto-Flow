@@ -4,6 +4,15 @@ import { expect } from "@wdio/globals";
 
 describe("PF-T803 Windows desktop HTML canvas rendering", () => {
   it("previews code in a sandbox and imports editable elements onto the canvas", async () => {
+    const fullDocument = `<!doctype html><html><head><title>Desktop child care test</title><style>
+      body { color: #333; font-family: Arial, sans-serif; }
+      .hero { display: flex; padding: 24px; gap: 20px; background: linear-gradient(90deg, #e4f8ee, #fff); }
+      .cards { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
+      .card { padding: 16px; border: 1px solid #ddd; border-radius: 12px; }
+    </style></head><body>
+      <main class="hero"><h1>Desktop full document</h1><p>Embedded styles imported</p></main>
+      <section class="cards"><article class="card"><h2>First</h2></article><article class="card"><h2>Second</h2></article><article class="card"><h2>Third</h2></article></section>
+      <script>document.body.dataset.ready = "yes";</script></body></html>`;
     const privacyDialog = await $('[aria-labelledby="privacy-settings-title"]');
     await privacyDialog.waitForDisplayed({ timeout: 60_000 });
     await $('//button[normalize-space(.)="Continue with both off"]').click();
@@ -21,12 +30,18 @@ describe("PF-T803 Windows desktop HTML canvas rendering", () => {
     await $('[aria-label="Import Code"]').click();
     const dialog = await $('[role="dialog"][aria-labelledby="import-code-title"]');
     await dialog.waitForDisplayed();
-    const iframe = await $('iframe[title="Sandboxed code preview"]');
+    const previewFrame = () => $('iframe[title="Sandboxed code preview"]');
+    const getPreviewSource = async () => {
+      const frame = await previewFrame();
+      if (!await frame.isExisting()) return null;
+      return frame.getAttribute("srcdoc");
+    };
+    const iframe = await previewFrame();
     await expect(iframe).toHaveAttribute("sandbox", "allow-scripts");
     await browser.waitUntil(async () =>
-      (await iframe.getAttribute("srcdoc"))?.includes("connect-src 'none'") ?? false,
+      (await getPreviewSource())?.includes("connect-src 'none'") ?? false,
     );
-    const previewSource = await iframe.getAttribute("srcdoc");
+    const previewSource = await getPreviewSource();
     expect(previewSource).toContain("connect-src 'none'");
     expect(previewSource).toContain("Welcome to ProtoFlow");
 
@@ -45,29 +60,46 @@ describe("PF-T803 Windows desktop HTML canvas rendering", () => {
     expect(await requiredIcons.getText()).toContain("Video");
     expect(await requiredIcons.getText()).toContain("Table");
     await browser.waitUntil(async () =>
-      (await iframe.getAttribute("srcdoc"))?.includes('aria-label="Intro"') ?? false,
+      (await getPreviewSource())?.includes('aria-label="Intro"') ?? false,
     );
     await browser.saveScreenshot(path.join(evidenceDirectory, "pf-t802-required-icons.png"));
 
-    await htmlEditor.setValue(
-      '<main style="width: 420px; padding: 16px; background-color: #eef2ff"><h1>Desktop import proof</h1><p>Editable canvas content</p><svg viewBox="10 20 100 50" style="width: 200px; height: 100px"><path d="M10 20 L110 20 L110 70 Z" fill="#ff0000" stroke="#111827" stroke-width="2"/></svg><button>Continue</button></main>',
-    );
+    await htmlEditor.setValue(fullDocument);
+    await browser.waitUntil(async () => (await htmlEditor.getValue()) === fullDocument);
     await browser.waitUntil(async () =>
-      (await iframe.getAttribute("srcdoc"))?.includes("Desktop import proof") ?? false,
+      (await getPreviewSource())?.includes("Desktop full document") ?? false,
     );
+    await browser.saveScreenshot(path.join(evidenceDirectory, "pf-t803-full-document-preview.png"));
+    const sandboxSource = await getPreviewSource();
+    expect(sandboxSource).toContain(".hero { display: flex;");
+    expect(sandboxSource).toContain('document.body.dataset.ready = "yes"');
 
     await $('//button[normalize-space(.)="Render on Canvas"]').click();
     await dialog.waitForDisplayed({ reverse: true });
     await expect($(".document-name")).toHaveText("Untitled project");
     const layerSearch = await $('[aria-label="Search layers"]');
-    await layerSearch.setValue("h1 Desktop import proof");
-    await expect(
-      await $('//*[contains(@class,"layer-name") and normalize-space(.)="h1 Desktop import proof"]'),
-    ).toBeDisplayed();
-    await layerSearch.setValue("path");
-    await expect(
-      await $('//*[contains(@class,"layer-name") and normalize-space(.)="path"]'),
-    ).toBeDisplayed();
+    await layerSearch.setValue("h1 Desktop full document");
+    const expectLayerVisible = async (name) => {
+      const matches = await $$(`//*[contains(@class,"layer-name") and normalize-space(.)="${name}"]`);
+      expect(matches.length).toBeGreaterThan(0);
+      await expect(matches[0]).toBeDisplayed();
+    };
+    await expectLayerVisible("h1 Desktop full document");
+    for (const heading of ["h2 First", "h2 Second", "h2 Third"]) {
+      await layerSearch.setValue(heading);
+      await expectLayerVisible(heading);
+    }
     await browser.saveScreenshot(path.join(evidenceDirectory, "pf-t803-imported-canvas.png"));
+
+    await $('[aria-label="Import Code"]').click();
+    const reopenedHtml = await $('[aria-label="HTML code"]');
+    await expect(reopenedHtml).toHaveValue(fullDocument);
+    await $("#import-code-tab-css").click();
+    await expect($('[aria-label="CSS code"]')).toHaveValue("");
+    await $("#import-code-tab-js").click();
+    await expect($('[aria-label="JS code"]')).toHaveValue("");
+    await browser.waitUntil(async () =>
+      (await getPreviewSource())?.includes("document.body.dataset.ready") ?? false,
+    );
   });
 });

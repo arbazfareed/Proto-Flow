@@ -46,7 +46,7 @@ import { commandRegistry, createCoreCommands } from "./commands/registry";
 import { handleGlobalShortcut } from "./commands/shortcuts";
 import { formatProjectValidationError, SchemaValidationError } from "./project/schema";
 import type { Screen } from "./project/schema";
-import { createDefaultBreakpoints } from "./project/responsive";
+import { createDefaultBreakpoints, getScreenBreakpoints } from "./project/responsive";
 import { inferScreenInputMode } from "./project/inputModes";
 import { DEFAULT_DEVICE_PRESET, DEVICE_PRESETS, toScreenDevice } from "./devices/catalog";
 import { fitWindowSizeToMonitor, getPreviewWindowSize } from "./preview/windowSizing";
@@ -95,6 +95,7 @@ function AppShell() {
   const [reactExportOpen, setReactExportOpen] = useState(false);
   const [htmlExportOpen, setHtmlExportOpen] = useState(false);
   const [importCodeOpen, setImportCodeOpen] = useState(false);
+  const [importCodeDraft, setImportCodeDraft] = useState<ImportedCode | null>(null);
   const [pluginManagerOpen, setPluginManagerOpen] = useState(false);
   const [collaborationMounted, setCollaborationMounted] = useState(false);
   const [collaborationOpen, setCollaborationOpen] = useState(false);
@@ -841,7 +842,7 @@ function AppShell() {
     void openTutorialProject();
   }, [completeOnboarding, onboardingState.selectedTemplate, openTutorialProject]);
 
-  const renderImportedCode = useCallback(({ html, css }: ImportedCode) => {
+  const renderImportedCode = useCallback(({ html, css }: Pick<ImportedCode, "html" | "css">) => {
     const state = useStore.getState();
     const screenId = state.getActiveScreenId();
     const screen = state.project.screens.find((item) => item.id === screenId);
@@ -856,6 +857,7 @@ function AppShell() {
       css,
       screen.device?.width ?? DEFAULT_DEVICE_PRESET.viewport.width,
       firstZIndex,
+      getScreenBreakpoints(screen),
     );
     if (state.activePanelEdit) state.setActivePanelEdit(null);
     if (state.activeRepeaterEdit) state.setActiveRepeaterEdit(null);
@@ -864,7 +866,11 @@ function AppShell() {
       updatedAt: new Date().toISOString(),
       screens: state.project.screens.map((item) =>
         item.id === screenId
-          ? { ...item, widgets: [...item.widgets, ...importedWidgets] }
+          ? {
+              ...item,
+              breakpoints: item.breakpoints ?? [...getScreenBreakpoints(item)],
+              widgets: [...item.widgets, ...importedWidgets],
+            }
           : item,
       ),
     });
@@ -938,6 +944,8 @@ function AppShell() {
       <CommandPalette />
       {importCodeOpen && (
         <ImportCodeDialog
+          initialCode={importCodeDraft}
+          onDraftChange={setImportCodeDraft}
           onClose={() => setImportCodeOpen(false)}
           onRenderOnCanvas={renderImportedCode}
         />

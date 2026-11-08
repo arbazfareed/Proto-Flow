@@ -1,6 +1,8 @@
 // @vitest-environment jsdom
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { importHtmlToWidgets, parseHtmlToAst } from "./htmlImport";
+import { findRequiredIcons, importHtmlToWidgets, parseHtmlToAst } from "./htmlImport";
+import { extractImportedCode } from "./importedCode";
+import { createDefaultBreakpoints, resolveWidgetsForBreakpoint } from "./responsive";
 
 describe("importHtmlToWidgets", () => {
   beforeEach(() => {
@@ -10,7 +12,32 @@ describe("importHtmlToWidgets", () => {
     });
   });
 
-  afterEach(() => vi.unstubAllGlobals());
+  afterEach(() => {
+    vi.restoreAllMocks();
+    vi.unstubAllGlobals();
+  });
+
+  it("extracts and imports documents when the parsed body is unavailable", () => {
+    const parse = DOMParser.prototype.parseFromString;
+    vi.spyOn(DOMParser.prototype, "parseFromString").mockImplementation((source, type) => {
+      const parsed = parse.call(new DOMParser(), source, type);
+      Object.defineProperty(parsed, "body", { configurable: true, value: null });
+      return parsed;
+    });
+
+    const html = `<!doctype html><html><head><style>.hero { color: #123456; }</style></head>
+      <body><main class="hero"><h1>Imported heading</h1><video></video></main>
+      <script>document.body.dataset.ready = "yes";</script></body></html>`;
+    const extracted = extractImportedCode(html);
+
+    expect(extracted.html).toContain("Imported heading");
+    expect(extracted.css).toContain(".hero { color: #123456; }");
+    expect(extracted.javascript).toContain('document.body.dataset.ready = "yes"');
+    expect(findRequiredIcons(html).requiredIcons).toContain("Video");
+
+    const widgets = importHtmlToWidgets(html, "", 800);
+    expect(widgets.some(({ props }) => props.text === "Imported heading")).toBe(true);
+  });
 
   it("maps supported HTML text and controls into editable canvas widgets", () => {
     const widgets = importHtmlToWidgets(
@@ -55,6 +82,96 @@ describe("importHtmlToWidgets", () => {
     expect(heading.y).toBeGreaterThan(section.y);
     expect(section.style.fill).toBeNull();
     expect(heading.y).toBeLessThan(paragraph.y);
+  });
+
+  it("extracts embedded document styles and applies shorthands, grid layout, and media rules", () => {
+    const html = `<!doctype html><html><head><style>
+      * { box-sizing: border-box; font-family: Arial, sans-serif; }
+      .hero { display: flex; padding: 20px 10%; background: linear-gradient(90deg, #e4f8ee 45%, #fff); }
+      .cards { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
+      .card { padding: 16px; border: 1px solid #dddddd; border-radius: 12px; box-shadow: 0 4px 15px #ddd; }
+      .card img { width: 100%; height: 100px; }
+      .mobile-only { display: none; }
+      @media (max-width: 600px) {
+        .cards { grid-template-columns: 1fr; }
+        .mobile-only { display: block; }
+      }
+    </style></head><body>
+      <main class="hero"><div><h1>Welcome</h1></div><img src="https://images.example.test/hero.png"></main>
+      <section class="cards"><article class="card"><img src="https://images.example.test/one.png"><h2>One</h2></article><article class="card"><img src="https://images.example.test/two.png"><h2>Two</h2></article><article class="card"><img src="https://images.example.test/three.png"><h2>Three</h2></article></section>
+      <div class="mobile-only">Mobile only</div>
+      <script>document.body.dataset.ready = "true";</script>
+    </body></html>`;
+    const widgets = importHtmlToWidgets(html, "", 1200, 0, [
+      { id: "desktop", width: 1200 },
+      { id: "mobile", width: 390 },
+    ]);
+    const hero = widgets.find(({ name }) => name === "main hero");
+    const heroHeading = widgets.find(({ name }) => name === "h1 Welcome");
+    const heroImage = widgets.find(({ name }) => name?.includes("img"));
+    const cards = widgets.filter(({ name }) => name === "article card");
+
+    expect(hero?.style.fill).toBe("#e4f8ee");
+    expect(heroHeading?.props.fontFamily).toBe("Arial");
+    expect(heroImage?.props.src).toBe("https://images.example.test/hero.png");
+    expect(cards).toHaveLength(3);
+    expect(cards[0].x).toBeLessThan(cards[1].x);
+    expect(cards[1].x).toBeLessThan(cards[2].x);
+    const mobileCardLayouts = cards.map(({ x, y, overrides }) => ({
+      x: overrides?.mobile?.x ?? x,
+      y: overrides?.mobile?.y ?? y,
+    }));
+    expect(mobileCardLayouts[0].x).toBe(mobileCardLayouts[1].x);
+    expect(mobileCardLayouts[1].x).toBe(mobileCardLayouts[2].x);
+    expect(mobileCardLayouts[0].y).toBeLessThan(mobileCardLayouts[1].y);
+    expect(mobileCardLayouts[1].y).toBeLessThan(mobileCardLayouts[2].y);
+    const mobileOnly = widgets.find(({ name }) => name === "div mobile-only");
+    const mobileOnlyText = widgets.find(({ name }) => name === "p Mobile only");
+    expect(mobileOnly).toMatchObject({
+      visible: false,
+      overrides: { mobile: { visible: true }, desktop: { visible: false } },
+    });
+    expect(mobileOnlyText?.groupId).toBe(mobileOnly?.id);
+    const resolvedMobile = resolveWidgetsForBreakpoint(
+      widgets,
+      createDefaultBreakpoints(1200)[0],
+      1200,
+    );
+    const resolvedMobileCards = cards.map(({ id }) =>
+      resolvedMobile.find((widget) => widget.id === id)!,
+    );
+    expect(resolvedMobileCards[0].x).toBe(resolvedMobileCards[1].x);
+    expect(resolvedMobileCards[1].x).toBe(resolvedMobileCards[2].x);
+    expect(resolvedMobileCards[0].y).toBeLessThan(resolvedMobileCards[1].y);
+    expect(resolvedMobileCards[1].y).toBeLessThan(resolvedMobileCards[2].y);
+    expect(resolvedMobile.find(({ id }) => id === mobileOnly?.id)?.visible).toBe(true);
+    expect(cards[0].style).toMatchObject({
+      stroke: "#dddddd",
+      strokeWidth: 1,
+      cornerRadius: 12,
+    });
+
+    expect(cards[0].style.shadow).toMatchObject({ offsetY: 4, blur: 15 });
+
+    const mobileWidgets = importHtmlToWidgets(html, "", 390);
+    const mobileCards = mobileWidgets.filter(({ name }) => name === "article card");
+    expect(mobileCards[0].x).toBe(mobileCards[1].x);
+    expect(mobileCards[0].y).toBeLessThan(mobileCards[1].y);
+  });
+
+  it("measures unitless CSS line heights and honors container minimum heights", () => {
+    const [container, heading, paragraph] = importHtmlToWidgets(
+      `<main class="hero"><h1>Responsive title</h1><p>Body copy</p></main>`,
+      `.hero { min-height: 570px; padding: 20px; }
+       h1 { font-size: 40px; line-height: 1.2; }
+       p { font-size: 16px; line-height: 1.6; }`,
+      1200,
+    );
+
+    expect(container.height).toBeGreaterThanOrEqual(570);
+    expect(heading.height).toBeGreaterThanOrEqual(48);
+    expect(paragraph.height).toBeGreaterThanOrEqual(25);
+    expect(paragraph.props.lineHeight).toBe(1.6);
   });
 
   it("maps SVG paths and scales their viewBox onto the canvas", () => {
