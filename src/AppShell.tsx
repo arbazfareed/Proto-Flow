@@ -36,7 +36,8 @@ import { WalletDialog } from "./layout/WalletDialog";
 import { CloudPreviewDialog } from "./layout/CloudPreviewDialog";
 import { ReactCodeExportDialog } from "./layout/ReactCodeExportDialog";
 import { ImportCodeDialog, type ImportedCode } from "./layout/ImportCodeDialog";
-import { importHtmlToWidgets } from "./project/htmlImport";
+import { findRequiredIcons, importHtmlToWidgets } from "./project/htmlImport";
+import { getImportedElementTools } from "./project/importedElementTools";
 import { HtmlExportDialog } from "./layout/HtmlExportDialog";
 import { PluginManagerDialog } from "./layout/PluginManagerDialog";
 import { CollaborationDialog } from "./layout/CollaborationDialog";
@@ -66,7 +67,7 @@ import { HelpPanel } from "./help/HelpPanel";
 import { HELP_NAVIGATION_EVENT } from "./help/navigation";
 import { getHelpArticle, parseHelpDeepLink } from "./help/docs";
 import type { DeviceCategory } from "./devices/types";
-import type { ShapeTool } from "./canvas/shapeTools";
+import { getShapeToolDefinition, type ShapeTool } from "./canvas/shapeTools";
 import {
   CanvasArea,
   LeftSidebar,
@@ -92,8 +93,10 @@ function AppShell() {
   const redo = useStore((state) => state.redo);
   const [notice, setNotice] = useState("");
   const [noticeIsError, setNoticeIsError] = useState(false);
+  const noticeTimeoutRef = useRef<number | null>(null);
   const [updateCheckRequest, setUpdateCheckRequest] = useState(0);
   const [activeTool, setActiveTool] = useState<ShapeTool | null>(null);
+  const [unlockedElementTools, setUnlockedElementTools] = useState<ShapeTool[]>([]);
   const [walletOpen, setWalletOpen] = useState(false);
   const [cloudPreviewOpen, setCloudPreviewOpen] = useState(false);
   const [reactExportOpen, setReactExportOpen] = useState(false);
@@ -124,10 +127,20 @@ function AppShell() {
   const initializeWallet = useWalletStore((state) => state.initialize);
 
   const notify = useCallback((message: string, isError = false) => {
+    if (noticeTimeoutRef.current !== null) {
+      window.clearTimeout(noticeTimeoutRef.current);
+    }
     setNotice(message);
     setNoticeIsError(isError);
     if (isError) trackEvent("error_shown", { category: categorizeTelemetryError(message) });
-    window.setTimeout(() => setNotice(""), 4000);
+    noticeTimeoutRef.current = window.setTimeout(() => {
+      setNotice("");
+      noticeTimeoutRef.current = null;
+    }, 4000);
+  }, []);
+
+  useEffect(() => () => {
+    if (noticeTimeoutRef.current !== null) window.clearTimeout(noticeTimeoutRef.current);
   }, []);
 
   const openBetaFeedback = useCallback(async () => {
@@ -863,6 +876,13 @@ function AppShell() {
       firstZIndex,
       getScreenBreakpoints(screen),
     );
+    const importedElementTools = getImportedElementTools(findRequiredIcons(html).requiredIcons);
+    const newlyUnlockedTools = importedElementTools.filter(
+      (tool) => !unlockedElementTools.includes(tool),
+    );
+    if (newlyUnlockedTools.length > 0) {
+      setUnlockedElementTools((current) => [...current, ...newlyUnlockedTools]);
+    }
     const screenWidgets = [...screen.widgets, ...importedWidgets];
     const breakpoints = expandBreakpointsForWidgets(
       getScreenBreakpoints(screen),
@@ -884,8 +904,17 @@ function AppShell() {
       ),
     });
     state.select(importedWidgets.map((widget) => widget.id));
-    notify(`Rendered ${importedWidgets.length} elements on the canvas.`);
-  }, [notify]);
+    if (newlyUnlockedTools.length > 0) {
+      const labels = newlyUnlockedTools.map(
+        (tool) => getShapeToolDefinition(tool)?.label ?? tool,
+      );
+      notify(
+        `Unlocked ${newlyUnlockedTools.length} new icons from imported code (${labels.join(", ")}).`,
+      );
+    } else {
+      notify(`Rendered ${importedWidgets.length} elements on the canvas.`);
+    }
+  }, [notify, unlockedElementTools]);
 
   return (
     <div className="app-shell">
@@ -927,6 +956,7 @@ function AppShell() {
           onOpenHelp={() => setHelpOpen(true)}
           onOpenTutorial={() => void openTutorialProject()}
           activeTool={activeTool}
+          unlockedTools={unlockedElementTools}
           onSelectTool={setActiveTool}
           onAddScreen={addLibraryScreen}
         />

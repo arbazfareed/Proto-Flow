@@ -16,6 +16,7 @@ describe("PF-T803 Windows desktop HTML canvas rendering", () => {
     </style></head><body>
       <main class="hero"><h1>Desktop full document</h1><p>Embedded styles imported</p></main>
       <section class="cards"><article class="card"><h2>First</h2></article><article class="card"><h2>Second</h2></article><article class="card"><h2>Third</h2></article></section>
+      <section><table><thead><tr><th>Age group</th></tr></thead><tbody><tr><td>Preschool</td></tr></tbody></table><video aria-label="Program introduction"></video><input type="date" aria-label="Start date"></section>
       ${longSections}
       <script>document.body.dataset.ready = "yes";</script></body></html>`;
     const privacyDialog = await $('[aria-labelledby="privacy-settings-title"]');
@@ -82,11 +83,26 @@ describe("PF-T803 Windows desktop HTML canvas rendering", () => {
     await $('//button[normalize-space(.)="Render on Canvas"]').click();
     await dialog.waitForDisplayed({ reverse: true });
     await expect($(".document-name")).toHaveText("Untitled project");
+    await $(".toast").waitForDisplayed();
+    await expect($(".toast")).toHaveText(/Unlocked \d+ new icons from imported code/);
+    const importedTools = await $('[aria-label="Detected in imported code"]');
+    const importedTable = await importedTools.$('[aria-label="Add Table"]');
+    const importedDatePicker = await importedTools.$('[aria-label="Add Date picker"]');
+    const importedVideo = await importedTools.$('[aria-label="Add Video"]');
+    await importedTable.waitForDisplayed();
+    await importedDatePicker.waitForDisplayed();
+    await importedVideo.waitForDisplayed();
+    await importedTable.click();
+    await expect(importedTable).toHaveAttribute("aria-pressed", "true");
     const layerSearch = await $('[aria-label="Search layers"]');
     await layerSearch.setValue("h1 Desktop full document");
     const expectLayerVisible = async (name) => {
-      const matches = await $$(`//*[contains(@class,"layer-name") and normalize-space(.)="${name}"]`);
-      expect(matches.length).toBeGreaterThan(0);
+      const selector = `//*[contains(@class,"layer-name") and normalize-space(.)="${name}"]`;
+      await browser.waitUntil(async () => (await $$(selector)).length > 0, {
+        timeout: 10_000,
+        timeoutMsg: `Expected layer "${name}" to appear in the filtered layer list`,
+      });
+      const matches = await $$(selector);
       await expect(matches[0]).toBeDisplayed();
     };
     await expectLayerVisible("h1 Desktop full document");
@@ -98,6 +114,12 @@ describe("PF-T803 Windows desktop HTML canvas rendering", () => {
     const selectedBreakpoint = await activeBreakpoint.$("option:checked");
     const desktopHeight = Number((await selectedBreakpoint.getText()).match(/×\s*(\d+)/)?.[1] ?? 0);
     expect(desktopHeight).toBeGreaterThan(900);
+    const mobileOption = await activeBreakpoint.$("option*=Mobile");
+    await activeBreakpoint.selectByAttribute("value", await mobileOption.getAttribute("value"));
+    await importedDatePicker.click();
+    await expect(importedDatePicker).toHaveAttribute("aria-pressed", "true");
+    const desktopOption = await activeBreakpoint.$("option*=Desktop");
+    await activeBreakpoint.selectByAttribute("value", await desktopOption.getAttribute("value"));
     for (let index = 1; index <= 6; index += 1) {
       await layerSearch.setValue(`h2 Milestone ${index}`);
       await expectLayerVisible(`h2 Milestone ${index}`);

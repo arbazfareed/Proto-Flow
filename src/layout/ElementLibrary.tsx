@@ -78,6 +78,7 @@ function getToolGroup(type: ShapeTool): string {
 
 export interface ElementLibraryProps {
   activeTool: ShapeTool | null;
+  unlockedTools?: readonly ShapeTool[];
   mode?: "popover" | "sidebar";
   anchorRef?: RefObject<HTMLDivElement | null>;
   onSelectTool?: (tool: ShapeTool) => void;
@@ -87,6 +88,7 @@ export interface ElementLibraryProps {
 
 interface ElementLibrarySectionProps {
   activeTool: ShapeTool | null;
+  unlockedTools: readonly ShapeTool[];
   mode: "popover" | "sidebar";
   anchorRef?: RefObject<HTMLDivElement | null>;
   onSelectTool: (tool: ShapeTool) => void;
@@ -96,6 +98,7 @@ interface ElementLibrarySectionProps {
 
 function ElementLibraryContents({
   activeTool,
+  unlockedTools,
   mode,
   anchorRef,
   onSelectTool,
@@ -118,6 +121,78 @@ function ElementLibraryContents({
     const group = getToolGroup(tool);
     groupedTools.set(group, [...(groupedTools.get(group) ?? []), tool]);
   }
+  const importedToolsByGroup = new Map<string, ShapeTool[]>();
+  for (const tool of unlockedTools) {
+    const group = getToolGroup(tool);
+    importedToolsByGroup.set(group, [...(importedToolsByGroup.get(group) ?? []), tool]);
+  }
+
+  const renderTool = (tool: ShapeTool) => {
+    const definition = getShapeToolDefinition(tool);
+    if (!definition) return null;
+    const guide = getWidgetLearningGuide(tool);
+    const guideId = `element-guide-${tool}`;
+    const isGuideOpen = selectedGuide === tool;
+    return (
+      <div className="element-library-entry" key={tool}>
+        <button
+          className={`element-library-item${activeTool === tool ? " is-active" : ""}`}
+          type="button"
+          draggable
+          title={`Drag ${definition.label} onto the canvas or click to draw`}
+          aria-label={`Add ${definition.label}`}
+          aria-pressed={activeTool === tool}
+          onDragStart={(event) => {
+            suppressClickAfterDragRef.current = true;
+            event.dataTransfer.effectAllowed = "copy";
+            event.dataTransfer.setData(ELEMENT_DRAG_MIME, tool);
+            event.dataTransfer.setData("text/plain", definition.label);
+          }}
+          onDragEnd={() => {
+            window.setTimeout(() => {
+              suppressClickAfterDragRef.current = false;
+            }, 0);
+          }}
+          onClick={(event) => {
+            if (suppressClickAfterDragRef.current) {
+              suppressClickAfterDragRef.current = false;
+              event.preventDefault();
+              return;
+            }
+            onSelectTool(tool);
+            if (mode === "popover") onClose();
+          }}
+        >
+          <WidgetIcon type={tool} size={17} />
+          <span>{definition.label}</span>
+        </button>
+        <button
+          className={`element-library-info-button${isGuideOpen ? " is-active" : ""}`}
+          type="button"
+          aria-label={`${isGuideOpen ? "Hide" : "Show"} ${definition.label} code tips`}
+          aria-expanded={isGuideOpen}
+          aria-controls={guideId}
+          title={`Learn about ${definition.label}`}
+          onClick={() => setSelectedGuide(isGuideOpen ? null : tool)}
+        >
+          <Info size={14} aria-hidden="true" />
+        </button>
+        {isGuideOpen && (
+          <div className="element-library-learn-copy" id={guideId}>
+            <div className="element-library-guide-markup">
+              <span>HTML</span>
+              <code>{guide.element}</code>
+            </div>
+            <div className="element-library-guide-markup">
+              <span>CSS</span>
+              <code>{guide.css}</code>
+            </div>
+            <p>{guide.note}</p>
+          </div>
+        )}
+      </div>
+    );
+  };
 
   useLayoutEffect(() => {
     if (mode === "sidebar") return;
@@ -241,6 +316,33 @@ function ElementLibraryContents({
         </div>
       </section>
 
+      {unlockedTools.length > 0 && (
+        <section
+          className="element-library-section element-library-imported"
+          aria-label="Detected in imported code"
+        >
+          <h3>
+            From imported code
+            <span>{unlockedTools.length}</span>
+          </h3>
+          {TOOL_GROUPS.map(({ id, label }) => {
+            const tools = importedToolsByGroup.get(id);
+            if (!tools?.length) return null;
+            return (
+              <div
+                className="element-library-imported-category"
+                key={id}
+                role="group"
+                aria-label={label}
+              >
+                <span>{label}</span>
+                <div className="element-library-grid">{tools.map(renderTool)}</div>
+              </div>
+            );
+          })}
+        </section>
+      )}
+
       {TOOL_GROUPS.map(({ id, label }) => {
         const tools = groupedTools.get(id);
         if (!tools?.length) return null;
@@ -251,72 +353,7 @@ function ElementLibraryContents({
               <span>{tools.length}</span>
             </h3>
             <div className="element-library-grid">
-              {tools.map((tool) => {
-                const definition = getShapeToolDefinition(tool);
-                if (!definition) return null;
-                const guide = getWidgetLearningGuide(tool);
-                const guideId = `element-guide-${tool}`;
-                const isGuideOpen = selectedGuide === tool;
-                return (
-                  <div className="element-library-entry" key={tool}>
-                    <button
-                      className={`element-library-item${activeTool === tool ? " is-active" : ""}`}
-                      type="button"
-                      draggable
-                      title={`Drag ${definition.label} onto the canvas or click to draw`}
-                      aria-label={`Add ${definition.label}`}
-                      aria-pressed={activeTool === tool}
-                      onDragStart={(event) => {
-                        suppressClickAfterDragRef.current = true;
-                        event.dataTransfer.effectAllowed = "copy";
-                        event.dataTransfer.setData(ELEMENT_DRAG_MIME, tool);
-                        event.dataTransfer.setData("text/plain", definition.label);
-                      }}
-                      onDragEnd={() => {
-                        window.setTimeout(() => {
-                          suppressClickAfterDragRef.current = false;
-                        }, 0);
-                      }}
-                      onClick={(event) => {
-                        if (suppressClickAfterDragRef.current) {
-                          suppressClickAfterDragRef.current = false;
-                          event.preventDefault();
-                          return;
-                        }
-                        onSelectTool(tool);
-                        if (mode === "popover") onClose();
-                      }}
-                    >
-                      <WidgetIcon type={tool} size={17} />
-                      <span>{definition.label}</span>
-                    </button>
-                    <button
-                      className={`element-library-info-button${isGuideOpen ? " is-active" : ""}`}
-                      type="button"
-                      aria-label={`${isGuideOpen ? "Hide" : "Show"} ${definition.label} code tips`}
-                      aria-expanded={isGuideOpen}
-                      aria-controls={guideId}
-                      title={`Learn about ${definition.label}`}
-                      onClick={() => setSelectedGuide(isGuideOpen ? null : tool)}
-                    >
-                      <Info size={14} aria-hidden="true" />
-                    </button>
-                    {isGuideOpen && (
-                      <div className="element-library-learn-copy" id={guideId}>
-                        <div className="element-library-guide-markup">
-                          <span>HTML</span>
-                          <code>{guide.element}</code>
-                        </div>
-                        <div className="element-library-guide-markup">
-                          <span>CSS</span>
-                          <code>{guide.css}</code>
-                        </div>
-                        <p>{guide.note}</p>
-                      </div>
-                    )}
-                  </div>
-                );
-              })}
+              {tools.map(renderTool)}
             </div>
           </section>
         );
@@ -341,6 +378,7 @@ function ElementLibraryContents({
 
 export function ElementLibrary({
   activeTool,
+  unlockedTools = [],
   mode = "popover",
   anchorRef,
   onSelectTool,
@@ -350,6 +388,7 @@ export function ElementLibrary({
   return (
     <ElementLibraryContents
       activeTool={activeTool}
+      unlockedTools={unlockedTools}
       mode={mode}
       anchorRef={anchorRef}
       onSelectTool={onSelectTool ?? (() => undefined)}

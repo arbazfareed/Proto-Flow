@@ -359,6 +359,9 @@
 .element-library-sidebar .element-library-guide-markup code { font-size:8px; }
 .element-library-sidebar .element-library-status-list { gap:4px; padding:0 4px; }
 .element-library-sidebar .element-library-status-item { padding:4px 5px; font-size:8px; }
+.element-library-imported { border-left:2px solid #8b69ed; background:color-mix(in srgb,#8b69ed 5%,transparent); }
+.element-library-imported-category { padding:3px 3px 5px; }
+.element-library-imported-category>span { display:block; margin:0 0 4px 5px; color:var(--text-muted); font-size:8px; font-weight:700; letter-spacing:.06em; text-transform:uppercase; }
 .symbol-library { flex:0 0 auto; padding:11px 10px; border-top:1px solid var(--border); }
 .symbol-count { min-width:16px; padding:1px 5px; border-radius:8px; color:#aaa0c8; background:#30283c; font-size:8px; text-align:center; }
 .symbol-library-empty { margin:6px 5px 2px; color:#82818c; font-size:9px; line-height:1.5; }
