@@ -9,7 +9,8 @@ The application is built with React, TypeScript, Vite, Konva, and Tauri 2. Proje
 ### Design on a visual canvas
 
 - Create multi-screen interfaces with text, shapes, controls, images, icons, layouts, and common application components.
-- Import common raster and vector image formats, including HEIC/HEIF and TIFF; larger desktop project images can be stored as linked assets.
+- Import PNG, JPEG, GIF, BMP, AVIF, HEIC/HEIF, TIFF, ICO, SVG, and WebP images. Individual source files are limited to 25 MB and decoded images to 50 megapixels. HEIC/HEIF and TIFF are converted to PNG for canvas rendering; SVG imports reject scripts and external resources.
+- Keep image-heavy desktop projects manageable: image payloads are measured by decoded bytes rather than base64 text length. On desktop, images of 500 KB or more, and images that would exceed the 2 MiB cumulative inline-image budget, are saved under the project's `assets/` directory and referenced from the `.pflow` file instead of embedding their base64 data. Smaller images remain embedded. Save As copies linked assets so the new project remains self-contained; browser projects keep images inline.
 - Arrange and edit layers, group related widgets, reuse symbols, and use familiar selection, alignment, zoom, grid, and snapping tools.
 - Organize screens with flow diagrams, and add notes, requirement IDs, priorities, and status to design elements.
 - Work with rich text, dynamic panels, repeaters, variables, and safe expressions to build realistic prototypes.
