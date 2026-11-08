@@ -31,9 +31,11 @@ describe("PF-T803 Windows desktop HTML canvas rendering", () => {
     const dialog = await $('[role="dialog"][aria-labelledby="import-code-title"]');
     await dialog.waitForDisplayed();
     const previewFrame = () => $('iframe[title="Sandboxed code preview"]');
-    const getPreviewSource = () => browser.execute(() =>
-      document.querySelector('iframe[title="Sandboxed code preview"]')?.getAttribute("srcdoc") ?? null,
-    );
+    const getPreviewSource = async () => {
+      const frame = await previewFrame();
+      if (!await frame.isExisting()) return null;
+      return frame.getAttribute("srcdoc");
+    };
     const iframe = await previewFrame();
     await expect(iframe).toHaveAttribute("sandbox", "allow-scripts");
     await browser.waitUntil(async () =>
@@ -63,6 +65,7 @@ describe("PF-T803 Windows desktop HTML canvas rendering", () => {
     await browser.saveScreenshot(path.join(evidenceDirectory, "pf-t802-required-icons.png"));
 
     await htmlEditor.setValue(fullDocument);
+    await browser.saveScreenshot(path.join(evidenceDirectory, "pf-t803-full-document-preview.png"));
     await browser.waitUntil(async () =>
       (await getPreviewSource())?.includes("Desktop full document") ?? false,
     );
