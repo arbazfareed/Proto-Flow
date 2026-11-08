@@ -15,24 +15,74 @@ describe("importHtmlToWidgets", () => {
   it("maps supported HTML text and controls into editable canvas widgets", () => {
     const widgets = importHtmlToWidgets(
       `<main><h1>Dashboard</h1><p>Revenue overview</p><button>Open report</button><input placeholder="Search reports"></main>`,
-      `h1 { color: #123456; font-size: 32px; } button { background-color: rgb(40, 50, 60); border-radius: 6px; }`,
+      `h1 { color: #123456; font-size: 32px; } button { color: red; background-color: rgb(40, 50, 60); border-radius: 6px; }`,
       1200,
       4,
     );
 
-    expect(widgets).toHaveLength(4);
-    expect(widgets.map(({ type }) => type)).toEqual(["heading", "paragraph", "button", "input"]);
-    expect(widgets.map(({ zIndex }) => zIndex)).toEqual([4, 5, 6, 7]);
-    expect(widgets[0]).toMatchObject({
+    expect(widgets).toHaveLength(5);
+    expect(widgets.map(({ type }) => type)).toEqual([
+      "rectangle", "heading", "paragraph", "button", "input",
+    ]);
+    expect(widgets.map(({ zIndex }) => zIndex)).toEqual([4, 5, 6, 7, 8]);
+    expect(widgets[1]).toMatchObject({
       name: "h1 Dashboard",
       props: { text: "Dashboard", fontSize: 32 },
       style: { fill: "#123456" },
     });
-    expect(widgets[2]).toMatchObject({
-      props: { label: "Open report" },
+    expect(widgets[3]).toMatchObject({
+      props: { label: "Open report", textColor: "#ff0000" },
       style: { fill: "#28323c", cornerRadius: 6 },
     });
-    expect(widgets[3].props).toMatchObject({ placeholder: "Search reports" });
+    expect(widgets[4].props).toMatchObject({ placeholder: "Search reports" });
+    expect(widgets.slice(1).every(({ groupId }) => groupId === widgets[0].id)).toBe(true);
+  });
+
+  it("preserves nested positions and applies container-only layout styles", () => {
+    const widgets = importHtmlToWidgets(
+      `<main style="width: 400px; padding: 12px; background-color: #f0f0f0"><section style="padding-left: 8px; padding-top: 6px"><h1>Title</h1><p>Body</p></section></main>`,
+      "",
+      1200,
+    );
+    const [main, section, heading, paragraph] = widgets;
+
+    expect(widgets).toHaveLength(4);
+    expect(main).toMatchObject({ x: 24, y: 24, width: 400, style: { fill: "#f0f0f0" } });
+    expect(section.groupId).toBe(main.id);
+    expect(heading.groupId).toBe(section.id);
+    expect(paragraph.groupId).toBe(section.id);
+    expect(heading.x).toBeGreaterThan(section.x);
+    expect(heading.y).toBeGreaterThan(section.y);
+    expect(section.style.fill).toBeNull();
+    expect(heading.y).toBeLessThan(paragraph.y);
+  });
+
+  it("maps SVG paths and scales their viewBox onto the canvas", () => {
+    const widgets = importHtmlToWidgets(
+      `<main><svg viewBox="10 20 100 50"><path d="M10 20 L110 20 L110 70 Z"/></svg></main>`,
+      `svg { width: 200px; height: 100px; } path { fill: #ff0000; stroke: #000000; stroke-width: 2px; }`,
+      1200,
+    );
+    const path = widgets[1];
+
+    expect(widgets).toHaveLength(2);
+    expect(path.type).toBe("path");
+    expect(path.props).toMatchObject({
+      pathData: "M10 20 L110 20 L110 70 Z",
+      pathViewBoxX: 10,
+      pathViewBoxY: 20,
+      pathViewBoxWidth: 100,
+      pathViewBoxHeight: 50,
+    });
+    expect(path).toMatchObject({
+      width: 200,
+      height: 100,
+      style: { fill: "#ff0000", stroke: "#000000", strokeWidth: 2 },
+    });
+    expect(parseHtmlToAst(
+      `<svg viewBox="0 0 10 10"><path d="M0 0 L10 10"/></svg>`,
+      "",
+    ).nodes).toHaveLength(0);
   });
 
   it("ignores scripts and rejects code with no importable content", () => {

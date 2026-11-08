@@ -1,7 +1,7 @@
 import { expect, test } from "playwright/test";
 import { startWorkspace } from "./workspace";
 
-test("PF-T801 imports code in a sandbox and renders editable elements on the canvas", async ({
+test("PF-T803 imports nested HTML and SVG as editable Konva canvas elements", async ({
   page,
 }, testInfo) => {
   await startWorkspace(page, "Blank project");
@@ -38,7 +38,7 @@ test("PF-T801 imports code in a sandbox and renders editable elements on the can
   });
 
   await htmlEditor.fill(
-    "<main><h1>Imported campaign</h1><p>Editable copy</p><button>Learn more</button></main>",
+    '<main style="width: 420px; padding: 16px; background-color: #eef2ff"><h1>Imported campaign</h1><p>Editable copy</p><svg viewBox="10 20 100 50" style="width: 200px; height: 100px"><path d="M10 20 L110 20 L110 70 Z" fill="#ff0000" stroke="#111827" stroke-width="2"/></svg><button>Learn more</button></main>',
   );
   await expect(frame.getByRole("heading", { name: "Imported campaign" })).toBeVisible();
   await page.getByRole("tab", { name: "CSS" }).click();
@@ -50,15 +50,19 @@ test("PF-T801 imports code in a sandbox and renders editable elements on the can
   await page.getByRole("tab", { name: "HTML" }).click();
   await page.getByRole("button", { name: "Render on Canvas" }).click();
   await expect(dialog).not.toBeVisible();
-  await expect(page.getByText("Rendered 3 elements on the canvas.")).toBeVisible();
+  await expect(page.getByText("Rendered 5 elements on the canvas.")).toBeVisible();
   const layerSearch = page.getByRole("searchbox", { name: "Search layers" });
   await layerSearch.fill("h1 Imported campaign");
   await expect(page.locator(".layer-row").filter({
     has: page.locator(".layer-name", { hasText: "h1 Imported campaign" }),
   })).toBeVisible();
+  await layerSearch.fill("path");
+  await expect(page.locator(".layer-row").filter({
+    has: page.locator(".layer-name", { hasText: "path" }),
+  })).toBeVisible();
   await expect(page.locator(".save-state-label")).toHaveText("Unsaved changes");
   await testInfo.attach("PF-T801-imported-canvas-elements", {
-    body: await page.screenshot({ path: testInfo.outputPath("pf-t801-imported-canvas.png") }),
+    body: await page.screenshot({ path: testInfo.outputPath("pf-t803-imported-canvas.png") }),
     contentType: "image/png",
   });
 });
