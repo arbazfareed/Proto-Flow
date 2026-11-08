@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { importHtmlToWidgets, parseHtmlToAst } from "./htmlImport";
+import { findRequiredIcons, importHtmlToWidgets, parseHtmlToAst } from "./htmlImport";
+import { extractImportedCode } from "./importedCode";
 
 describe("importHtmlToWidgets", () => {
   beforeEach(() => {
@@ -10,7 +11,32 @@ describe("importHtmlToWidgets", () => {
     });
   });
 
-  afterEach(() => vi.unstubAllGlobals());
+  afterEach(() => {
+    vi.restoreAllMocks();
+    vi.unstubAllGlobals();
+  });
+
+  it("extracts and imports documents when the parsed body is unavailable", () => {
+    const parse = DOMParser.prototype.parseFromString;
+    vi.spyOn(DOMParser.prototype, "parseFromString").mockImplementation((source, type) => {
+      const parsed = parse.call(new DOMParser(), source, type);
+      Object.defineProperty(parsed, "body", { configurable: true, value: null });
+      return parsed;
+    });
+
+    const html = `<!doctype html><html><head><style>.hero { color: #123456; }</style></head>
+      <body><main class="hero"><h1>Imported heading</h1><video></video></main>
+      <script>document.body.dataset.ready = "yes";</script></body></html>`;
+    const extracted = extractImportedCode(html);
+
+    expect(extracted.html).toContain("Imported heading");
+    expect(extracted.css).toContain(".hero { color: #123456; }");
+    expect(extracted.javascript).toContain('document.body.dataset.ready = "yes"');
+    expect(findRequiredIcons(html).requiredIcons).toContain("Video");
+
+    const widgets = importHtmlToWidgets(html, "", 800);
+    expect(widgets.some(({ props }) => props.text === "Imported heading")).toBe(true);
+  });
 
   it("maps supported HTML text and controls into editable canvas widgets", () => {
     const widgets = importHtmlToWidgets(

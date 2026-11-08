@@ -10,14 +10,16 @@ describe("ImportCodeDialog", () => {
 
     expect(preview.getAttribute("sandbox")).toBe("allow-scripts");
     await waitFor(() => {
-      expect(preview.getAttribute("srcdoc")).toContain("connect-src 'none'");
+      expect(screen.getByTitle("Sandboxed code preview").getAttribute("srcdoc"))
+        .toContain("connect-src 'none'");
     });
 
     fireEvent.change(screen.getByRole("textbox", { name: "HTML code" }), {
       target: { value: "<h1>Updated live preview</h1>" },
     });
     await waitFor(() => {
-      expect(preview.getAttribute("srcdoc")).toContain("Updated live preview");
+      expect(screen.getByTitle("Sandboxed code preview").getAttribute("srcdoc"))
+        .toContain("Updated live preview");
     });
     expect(preview.getAttribute("sandbox")).not.toContain("allow-same-origin");
   });
@@ -54,11 +56,12 @@ describe("ImportCodeDialog", () => {
       target: { value: html },
     });
 
-    const preview = screen.getByTitle("Sandboxed code preview");
     await waitFor(() => {
+      const preview = screen.getByTitle("Sandboxed code preview");
       expect(preview.getAttribute("srcdoc")).toContain(".hero { color: #123456; }");
       expect(preview.getAttribute("srcdoc")).toContain('document.querySelector("h1").dataset.ready');
     });
+    const preview = screen.getByTitle("Sandboxed code preview");
     expect(preview.getAttribute("srcdoc")).not.toContain("#f3f0fa");
     expect(preview.getAttribute("srcdoc")).not.toContain("<html lang=\"en\"><head");
   });

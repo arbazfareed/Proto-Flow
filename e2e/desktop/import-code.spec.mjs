@@ -66,12 +66,6 @@ describe("PF-T803 Windows desktop HTML canvas rendering", () => {
 
     await htmlEditor.setValue(fullDocument);
     await browser.saveScreenshot(path.join(evidenceDirectory, "pf-t803-full-document-preview.png"));
-    const appError = await $('[data-app-error]');
-    if (await appError.isExisting()) {
-      const error = await appError.getAttribute("data-app-error");
-      const stack = await appError.getAttribute("data-app-error-stack");
-      throw new Error(`App crashed during full-document preview: ${error}\n${stack}`);
-    }
     await browser.waitUntil(async () =>
       (await getPreviewSource())?.includes("Desktop full document") ?? false,
     );
@@ -84,14 +78,15 @@ describe("PF-T803 Windows desktop HTML canvas rendering", () => {
     await expect($(".document-name")).toHaveText("Untitled project");
     const layerSearch = await $('[aria-label="Search layers"]');
     await layerSearch.setValue("h1 Desktop full document");
-    await expect(
-      await $('//*[contains(@class,"layer-name") and normalize-space(.)="h1 Desktop full document"]'),
-    ).toBeDisplayed();
+    const expectLayerVisible = async (name) => {
+      const matches = await $$(`//*[contains(@class,"layer-name") and normalize-space(.)="${name}"]`);
+      expect(matches.length).toBeGreaterThan(0);
+      await expect(matches[0]).toBeDisplayed();
+    };
+    await expectLayerVisible("h1 Desktop full document");
     for (const heading of ["h2 First", "h2 Second", "h2 Third"]) {
       await layerSearch.setValue(heading);
-      await expect(
-        await $(`//*[contains(@class,"layer-name") and normalize-space(.)="${heading}"]`),
-      ).toBeDisplayed();
+      await expectLayerVisible(heading);
     }
     await browser.saveScreenshot(path.join(evidenceDirectory, "pf-t803-imported-canvas.png"));
 

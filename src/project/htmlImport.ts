@@ -1,7 +1,7 @@
 import { createShapeWidget } from "../canvas/shapes";
 import type { ShapeTool } from "../canvas/shapeTools";
 import type { Widget } from "./schema";
-import { extractImportedCode } from "./importedCode";
+import { extractImportedCode, parseImportedHtmlDocument } from "./importedCode";
 
 const MAX_HTML_LENGTH = 200_000;
 const MAX_CSS_LENGTH = 100_000;
@@ -1042,7 +1042,7 @@ export function parseHtmlToAst(html: string, css: string): ImportedHtmlAst {
 
   const extracted = extractImportedCode(html, css);
   if (extracted.css.length > MAX_CSS_LENGTH) throw new Error("CSS import is limited to 100 KB.");
-  const document = new DOMParser().parseFromString(extracted.html, "text/html");
+  const { body } = parseImportedHtmlDocument(extracted.html);
   const rules = parseCssRules(extracted.css);
   const nodes: ImportedHtmlNode[] = [];
   const requiredIcons = new Set<string>();
@@ -1069,14 +1069,14 @@ export function parseHtmlToAst(html: string, css: string): ImportedHtmlAst {
     for (const child of Array.from(element.children)) collect(child, id);
   };
 
-  for (const child of Array.from(document.body.children)) collect(child, null);
+  for (const child of Array.from(body.children)) collect(child, null);
   return { nodes, requiredIcons: [...requiredIcons], truncated };
 }
 
 export function findRequiredIcons(html: string): Pick<ImportedHtmlAst, "requiredIcons" | "truncated"> {
   if (html.length > MAX_HTML_LENGTH) throw new Error("HTML import is limited to 200 KB.");
 
-  const document = new DOMParser().parseFromString(html, "text/html");
+  const { body } = parseImportedHtmlDocument(html);
   const requiredIcons = new Set<string>();
   let nodeCount = 0;
   let truncated = false;
@@ -1093,7 +1093,7 @@ export function findRequiredIcons(html: string): Pick<ImportedHtmlAst, "required
     for (const child of Array.from(element.children)) collect(child);
   };
 
-  for (const child of Array.from(document.body.children)) collect(child);
+  for (const child of Array.from(body.children)) collect(child);
   return { requiredIcons: [...requiredIcons], truncated };
 }
 
@@ -1108,9 +1108,9 @@ export function importHtmlToWidgets(
 
   const extracted = extractImportedCode(html, css);
   if (extracted.css.length > MAX_CSS_LENGTH) throw new Error("CSS import is limited to 100 KB.");
-  const document = new DOMParser().parseFromString(extracted.html, "text/html");
+  const { document, body } = parseImportedHtmlDocument(extracted.html);
   const rules = parseCssRules(extracted.css, canvasWidth);
-  const bodyStyles = declarationsFor(document.body, rules);
+  const bodyStyles = declarationsFor(body, rules);
   const bodyPadding = cssLength(bodyStyles.padding, canvasWidth, 0);
   const rootX = 24 + cssLength(bodyStyles["padding-left"], canvasWidth, bodyPadding);
   const rootY = 24 + cssLength(bodyStyles["padding-top"], canvasWidth, bodyPadding);
@@ -1123,7 +1123,7 @@ export function importHtmlToWidgets(
   const state = { widgets: [] as Widget[], nextZIndex: firstZIndex };
   let cursorY = rootY;
 
-  const bodyText = getDirectText(document.body);
+  const bodyText = getDirectText(body);
   if (bodyText && state.widgets.length < MAX_IMPORTED_WIDGETS) {
     const textElement = document.createElement("p");
     textElement.textContent = bodyText;
@@ -1139,7 +1139,7 @@ export function importHtmlToWidgets(
       state,
     );
   }
-  for (const child of Array.from(document.body.children)) {
+  for (const child of Array.from(body.children)) {
     if (state.widgets.length >= MAX_IMPORTED_WIDGETS) break;
     cursorY = renderElementTree(
       child,

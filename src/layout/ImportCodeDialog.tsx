@@ -313,6 +313,7 @@ export function ImportCodeDialog({
               <span>Updates after 300 ms</span>
             </div>
             <iframe
+              key={previewDocument}
               title="Sandboxed code preview"
               sandbox="allow-scripts"
               referrerPolicy="no-referrer"

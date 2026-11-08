@@ -33,11 +33,6 @@ export class AppErrorBoundary extends Component<
     if (!this.state.error) return this.props.children;
     return (
       <main className="app-error-fallback" role="alert">
-        <span
-          hidden
-          data-app-error={this.state.error.message}
-          data-app-error-stack={this.state.error.stack ?? ""}
-        />
         <CircleAlert size={22} />
         <h1>ProtoFlow hit a problem</h1>
         <p>Your project is still stored locally. Restart the app to continue.</p>
