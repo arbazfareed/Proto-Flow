@@ -4,14 +4,19 @@ import { expect } from "@wdio/globals";
 
 describe("PF-T803 Windows desktop HTML canvas rendering", () => {
   it("previews code in a sandbox and imports editable elements onto the canvas", async () => {
+    const longSections = Array.from({ length: 6 }, (_, index) =>
+      `<section class="long-section"><h2>Milestone ${index + 1}</h2><p>Imported section content ${index + 1}</p></section>`,
+    ).join("");
     const fullDocument = `<!doctype html><html><head><title>Desktop child care test</title><style>
       body { color: #333; font-family: Arial, sans-serif; }
       .hero { display: flex; padding: 24px; gap: 20px; background: linear-gradient(90deg, #e4f8ee, #fff); }
       .cards { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
       .card { padding: 16px; border: 1px solid #ddd; border-radius: 12px; }
+      .long-section { min-height: 220px; padding: 24px; }
     </style></head><body>
       <main class="hero"><h1>Desktop full document</h1><p>Embedded styles imported</p></main>
       <section class="cards"><article class="card"><h2>First</h2></article><article class="card"><h2>Second</h2></article><article class="card"><h2>Third</h2></article></section>
+      ${longSections}
       <script>document.body.dataset.ready = "yes";</script></body></html>`;
     const privacyDialog = await $('[aria-labelledby="privacy-settings-title"]');
     await privacyDialog.waitForDisplayed({ timeout: 60_000 });
@@ -88,6 +93,14 @@ describe("PF-T803 Windows desktop HTML canvas rendering", () => {
     for (const heading of ["h2 First", "h2 Second", "h2 Third"]) {
       await layerSearch.setValue(heading);
       await expectLayerVisible(heading);
+    }
+    const activeBreakpoint = await $('[aria-label="Active breakpoint"]');
+    const selectedBreakpoint = await activeBreakpoint.$("option:checked");
+    const desktopHeight = Number((await selectedBreakpoint.getText()).match(/×\s*(\d+)/)?.[1] ?? 0);
+    expect(desktopHeight).toBeGreaterThan(900);
+    for (let index = 1; index <= 6; index += 1) {
+      await layerSearch.setValue(`h2 Milestone ${index}`);
+      await expectLayerVisible(`h2 Milestone ${index}`);
     }
     await browser.saveScreenshot(path.join(evidenceDirectory, "pf-t803-imported-canvas.png"));
 

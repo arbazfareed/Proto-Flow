@@ -46,7 +46,11 @@ import { commandRegistry, createCoreCommands } from "./commands/registry";
 import { handleGlobalShortcut } from "./commands/shortcuts";
 import { formatProjectValidationError, SchemaValidationError } from "./project/schema";
 import type { Screen } from "./project/schema";
-import { createDefaultBreakpoints, getScreenBreakpoints } from "./project/responsive";
+import {
+  createDefaultBreakpoints,
+  expandBreakpointsForWidgets,
+  getScreenBreakpoints,
+} from "./project/responsive";
 import { inferScreenInputMode } from "./project/inputModes";
 import { DEFAULT_DEVICE_PRESET, DEVICE_PRESETS, toScreenDevice } from "./devices/catalog";
 import { fitWindowSizeToMonitor, getPreviewWindowSize } from "./preview/windowSizing";
@@ -859,6 +863,11 @@ function AppShell() {
       firstZIndex,
       getScreenBreakpoints(screen),
     );
+    const screenWidgets = [...screen.widgets, ...importedWidgets];
+    const breakpoints = expandBreakpointsForWidgets(
+      getScreenBreakpoints(screen),
+      screenWidgets,
+    );
     if (state.activePanelEdit) state.setActivePanelEdit(null);
     if (state.activeRepeaterEdit) state.setActiveRepeaterEdit(null);
     state.setProject({
@@ -868,8 +877,8 @@ function AppShell() {
         item.id === screenId
           ? {
               ...item,
-              breakpoints: item.breakpoints ?? [...getScreenBreakpoints(item)],
-              widgets: [...item.widgets, ...importedWidgets],
+              breakpoints,
+              widgets: screenWidgets,
             }
           : item,
       ),
