@@ -2,7 +2,11 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { findRequiredIcons, importHtmlToWidgets, parseHtmlToAst } from "./htmlImport";
 import { extractImportedCode } from "./importedCode";
-import { createDefaultBreakpoints, resolveWidgetsForBreakpoint } from "./responsive";
+import {
+  createDefaultBreakpoints,
+  expandBreakpointsForWidgets,
+  resolveWidgetsForBreakpoint,
+} from "./responsive";
 
 describe("importHtmlToWidgets", () => {
   beforeEach(() => {
@@ -172,6 +176,43 @@ describe("importHtmlToWidgets", () => {
     expect(heading.height).toBeGreaterThanOrEqual(48);
     expect(paragraph.height).toBeGreaterThanOrEqual(25);
     expect(paragraph.props.lineHeight).toBe(1.6);
+  });
+
+  it("keeps long responsive pages in document flow instead of compressing them into one viewport", () => {
+    const html = `<main class="page">
+      ${Array.from({ length: 8 }, (_, index) =>
+        `<section class="section"><h2>Section ${index + 1}</h2><p>Content for section ${index + 1}</p></section>`,
+      ).join("")}
+    </main>`;
+    const breakpoints = createDefaultBreakpoints(1440, 900);
+    const widgets = importHtmlToWidgets(
+      html,
+      `.section { min-height: 220px; padding: 24px; }
+       @media (max-width: 767px) { .section { min-height: 180px; } }`,
+      1440,
+      0,
+      breakpoints,
+    );
+    const expandedBreakpoints = expandBreakpointsForWidgets(breakpoints, widgets);
+    const desktop = expandedBreakpoints.find(({ id }) => id === "desktop")!;
+    const mobile = expandedBreakpoints.find(({ id }) => id === "mobile")!;
+    const desktopWidgets = resolveWidgetsForBreakpoint(widgets, desktop, 1440);
+    const mobileWidgets = resolveWidgetsForBreakpoint(widgets, mobile, 1440);
+
+    expect(desktop.height).toBeGreaterThan(900);
+    expect(mobile.height).toBeGreaterThan(844);
+    const headings = desktopWidgets.filter(({ name }) => name?.startsWith("h2 Section "));
+    expect(headings).toHaveLength(8);
+    expect(headings[7].y).toBeGreaterThan(900);
+    expect(headings.every((heading, index) =>
+      index === 0 || heading.y > headings[index - 1].y,
+    )).toBe(true);
+
+    const mobileHeadings = mobileWidgets.filter(({ name }) => name?.startsWith("h2 Section "));
+    expect(mobileHeadings).toHaveLength(8);
+    expect(mobileHeadings.every((heading, index) =>
+      index === 0 || heading.y > mobileHeadings[index - 1].y,
+    )).toBe(true);
   });
 
   it("maps SVG paths and scales their viewBox onto the canvas", () => {

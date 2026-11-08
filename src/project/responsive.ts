@@ -6,6 +6,8 @@ import type {
   WidgetOverride,
 } from "./schema";
 
+const MAX_BREAKPOINT_HEIGHT = 16_384;
+
 export const BREAKPOINT_PRESETS = [
   { id: "mobile", name: "Mobile", minWidth: 0, maxWidth: 767, width: 390, height: 844 },
   { id: "tablet", name: "Tablet", minWidth: 768, maxWidth: 1023, width: 768, height: 1024 },
@@ -30,6 +32,29 @@ export function getScreenBreakpoints(screen: Screen): readonly Breakpoint[] {
         screen.device?.width ?? 1440,
         screen.device?.height ?? 900,
       );
+}
+
+export function expandBreakpointsForWidgets(
+  breakpoints: readonly Breakpoint[],
+  widgets: readonly Widget[],
+): Breakpoint[] {
+  return breakpoints.map((breakpoint) => {
+    const contentBottom = widgets.reduce((bottom, widget) => {
+      const override = widget.overrides?.[breakpoint.id];
+      if ((override?.visible ?? widget.visible) === false) return bottom;
+      return Math.max(
+        bottom,
+        (override?.y ?? widget.y) + (override?.height ?? widget.height),
+      );
+    }, 24);
+    return {
+      ...breakpoint,
+      height: Math.max(
+        breakpoint.height,
+        Math.min(MAX_BREAKPOINT_HEIGHT, Math.ceil(contentBottom + 24)),
+      ),
+    };
+  });
 }
 
 export function resolveActiveBreakpoint(

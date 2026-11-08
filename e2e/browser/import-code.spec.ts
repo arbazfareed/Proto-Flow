@@ -105,11 +105,26 @@ test("PF-T803 imports nested HTML and SVG as editable Konva canvas elements", as
   await expect(page.locator(".layer-row").filter({
     has: page.locator(".layer-name", { hasText: "article card" }),
   })).toHaveCount(3);
+  const activeBreakpoint = page.getByLabel("Active breakpoint");
+  const desktopBreakpoint = activeBreakpoint.locator("option:checked");
+  const desktopHeight = await desktopBreakpoint.evaluate((option) =>
+    Number(option.textContent?.match(/×\s*(\d+)/)?.[1] ?? 0),
+  );
+  expect(desktopHeight).toBeGreaterThan(900);
   await expect(page.locator(".save-state-label")).toHaveText("Unsaved changes");
   await testInfo.attach("PF-T801-imported-canvas-elements", {
     body: await page.screenshot({ path: testInfo.outputPath("pf-t803-imported-canvas.png") }),
     contentType: "image/png",
   });
+
+  const mobileOption = activeBreakpoint.locator("option", { hasText: "Mobile" });
+  await activeBreakpoint.selectOption(await mobileOption.getAttribute("value") ?? "");
+  const mobileHeight = await activeBreakpoint.locator("option:checked").evaluate((option) =>
+    Number(option.textContent?.match(/×\s*(\d+)/)?.[1] ?? 0),
+  );
+  expect(mobileHeight).toBeGreaterThan(844);
+  const desktopOption = activeBreakpoint.locator("option", { hasText: "Desktop" });
+  await activeBreakpoint.selectOption(await desktopOption.getAttribute("value") ?? "");
 
   await page.getByRole("button", { name: "Import Code" }).click();
   const reopenedHtml = page.getByRole("textbox", { name: "HTML code" });
