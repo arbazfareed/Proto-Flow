@@ -37,6 +37,7 @@ section { padding: 80px 8%; }
 <section class="hero" id="home"><div class="hero-content"><h1>A Happy Place Where Little Minds Grow</h1><p>A safe, loving and fun environment where children learn, explore and grow.</p><a href="#contact">Book a Free Tour</a></div><img src="https://images.unsplash.com/photo-1503454537195-1dcabb73ffb9?w=900" alt="Happy child playing"></section>
 <section class="cards" id="programs"><article class="card"><img src="https://images.unsplash.com/photo-1516627145497-ae6968895b74?w=600" alt="Infant care"><h2>Infant Care</h2><p>Gentle, loving care for babies.</p></article><article class="card"><img src="https://images.unsplash.com/photo-1471286174890-9c112ffca5b4?w=600" alt="Toddler learning"><h2>Toddler Program</h2><p>Activities that encourage exploration.</p></article><article class="card"><img src="https://images.unsplash.com/photo-1503919005314-30d93d07d823?w=600" alt="Preschool children"><h2>Preschool</h2><p>Early education through creative play.</p></article></section>
 <section><div class="faq-item"><div class="faq-question">What ages do you accept?<span>+</span></div><div class="faq-answer">Infant, toddler and preschool programs.</div></div></section>
+<section class="library-examples"><h2>Program tools</h2><table><thead><tr><th>Age group</th></tr></thead><tbody><tr><td>Preschool</td></tr></tbody></table><video aria-label="Program introduction"></video><input type="date" aria-label="Start date"></section>
 <script>
 document.querySelector(".faq-question").addEventListener("click", event => {
   const item = event.currentTarget.parentElement;
@@ -94,9 +95,21 @@ test("PF-T803 imports nested HTML and SVG as editable Konva canvas elements", as
 
   await page.getByRole("tab", { name: "HTML" }).click();
   await page.getByRole("button", { name: "Render on Canvas" }).click();
+  await expect(page.locator(".toast")).toContainText(/Unlocked \d+ new icons from imported code/);
   await expect(dialog).not.toBeVisible();
-  await expect(page.getByText(/Rendered \d+ elements on the canvas\./)).toBeVisible();
+  const importedTools = page.getByRole("region", { name: "Detected in imported code" });
+  const importedTable = importedTools.getByRole("button", { name: "Add Table" });
+  await expect(importedTable).toBeVisible();
+  await expect(importedTools.getByRole("group", { name: "Forms" })
+    .getByRole("button", { name: "Add Date picker" })).toBeVisible();
+  await expect(importedTools.getByRole("group", { name: "Display" })
+    .getByRole("button", { name: "Add Video" })).toBeVisible();
+  await importedTable.dragTo(page.locator(".canvas-stage-surface"));
   const layerSearch = page.getByRole("searchbox", { name: "Search layers" });
+  await layerSearch.fill("Table");
+  await expect(page.locator(".layer-row").filter({
+    has: page.locator(".layer-name", { hasText: "Table" }),
+  }).first()).toBeVisible();
   await layerSearch.fill("h1 A Happy Place");
   await expect(page.locator(".layer-row").filter({
     has: page.locator(".layer-name", { hasText: "h1 A Happy Place" }),
@@ -123,6 +136,10 @@ test("PF-T803 imports nested HTML and SVG as editable Konva canvas elements", as
     Number(option.textContent?.match(/×\s*(\d+)/)?.[1] ?? 0),
   );
   expect(mobileHeight).toBeGreaterThan(844);
+  await expect(importedTable).toBeVisible();
+  const datePicker = importedTools.getByRole("button", { name: "Add Date picker" });
+  await datePicker.click();
+  await expect(datePicker).toHaveAttribute("aria-pressed", "true");
   const desktopOption = activeBreakpoint.locator("option", { hasText: "Desktop" });
   await activeBreakpoint.selectOption(await desktopOption.getAttribute("value") ?? "");
 

@@ -555,6 +555,7 @@ interface LeftSidebarProps {
   onOpenParityDocumentation: () => void;
   onOpenTutorial: () => void;
   activeTool: ShapeTool | null;
+  unlockedTools: readonly ShapeTool[];
   onSelectTool: (tool: ShapeTool) => void;
   onAddScreen: (category: DeviceCategory) => void;
 }
@@ -569,6 +570,7 @@ export function LeftSidebar({
   onOpenParityDocumentation,
   onOpenTutorial,
   activeTool,
+  unlockedTools,
   onSelectTool,
   onAddScreen,
 }: LeftSidebarProps) {
@@ -622,6 +624,7 @@ export function LeftSidebar({
         <>
           <ElementLibrary
             activeTool={activeTool}
+            unlockedTools={unlockedTools}
             mode="sidebar"
             onSelectTool={onSelectTool}
             onAddScreen={onAddScreen}
