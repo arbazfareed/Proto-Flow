@@ -4,7 +4,7 @@ on:
   pull_request:
     branches: [main]
   push:
-    branches: [main, feature/pf-t704-windows-e2e, feature/pf-t706-accessibility, feature/pf-t707-security-audit, feature/pf-t708-cross-browser-qa, feature/pf-t709-axure-parity-tests, feature/pf-t710-device-responsive-tests, feature/pf-t711-multi-device-preview-export-tests, feature/pf-t713-onboarding-tutorial-docs-tests, feature/pf-t716-axure-workflow-regressions, feature/pf-t801-import-modal-sandbox]
+    branches: [main, feature/pf-t704-windows-e2e, feature/pf-t706-accessibility, feature/pf-t707-security-audit, feature/pf-t708-cross-browser-qa, feature/pf-t709-axure-parity-tests, feature/pf-t710-device-responsive-tests, feature/pf-t711-multi-device-preview-export-tests, feature/pf-t713-onboarding-tutorial-docs-tests, feature/pf-t716-axure-workflow-regressions, feature/pf-t801-import-modal-sandbox, feature/pf-t802-smart-parser-icon-matcher]
 
 permissions:
   contents: read
