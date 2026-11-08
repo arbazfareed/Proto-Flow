@@ -46,8 +46,8 @@ describe("Windows desktop first launch", () => {
     await $('//button[@role="radio" and .//strong[normalize-space(.)="Light"]]').click();
     await $('//button[normalize-space(.)="Continue"]').click();
 
-    const blankTemplate = await $(
-      '//button[contains(@class,"onboarding-template-card") and .//strong[normalize-space(.)="Blank project"]]',
+    const blankTemplate = await (
+      '//button[contains(@class,"onboarding-template-card") and .//strong[normalize-space(.)="Blank project"]]'
     );
     await blankTemplate.click();
     await $('//button[normalize-space(.)="Continue"]').click();
@@ -81,10 +81,18 @@ describe("Windows desktop first launch", () => {
     expect(focusRemainedInOnboarding).toBe(true);
 
     await $('//button[normalize-space(.)="Continue"]').click();
+    await expect(restartedWelcome.$("h1")).toHaveText("Pick a starting point");
     await $('//button[normalize-space(.)="Continue"]').click();
+    await expect(restartedWelcome.$("h1")).toHaveText("Design for desktop, tablet, and mobile.");
     await $('//button[normalize-space(.)="Got it"]').click();
-    await $('//button[normalize-space(.)="Skip tour"]').click();
-    await $('//button[normalize-space(.)="Take the tour"]').click();
+    await expect(restartedWelcome.$("h1")).toHaveText("Your project and screens");
+    const skipTour = await restartedWelcome.$('//button[normalize-space(.)="Skip tour"]');
+    await skipTour.waitForDisplayed({ timeout: 30_000 });
+    await skipTour.click();
+    await expect(restartedWelcome.$("h1")).toHaveText("You’ve got 50 credits.");
+    const takeTour = await restartedWelcome.$('//button[normalize-space(.)="Take the tour"]');
+    await takeTour.waitForDisplayed({ timeout: 30_000 });
+    await takeTour.click();
     const tutorial = await $('[data-testid="tutorial-guide"]');
     await tutorial.waitForDisplayed();
     await expect(tutorial.$(".tutorial-guide-content h2")).toHaveText("Select a shape");
