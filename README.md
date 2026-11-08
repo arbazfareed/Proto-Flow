@@ -31,6 +31,19 @@ The application is built with React, TypeScript, Vite, Konva, and Tauri 2. Proje
 
 Imported code conversion supports a useful subset of common HTML and CSS rather than a complete browser layout engine. Complex layouts, unsupported CSS, and JavaScript behavior may need manual adjustment after conversion. See [the code-import guide](./docs/code-import.md).
 
+## Project phases at a glance
+
+The phases below summarize how ProtoFlow has grown, from its local editing foundation to import and quality work. They are broad development stages, not promises that every platform, cloud integration, or acceptance check is complete. For verification details and known limitations, see the linked guides.
+
+1. **Phase 1 — Desktop and project foundations:** Established the React/Tauri desktop shell, portable project model, native project open/save, local autosave and recovery, keyboard commands, and updater foundations.
+2. **Phase 2 — Visual canvas and responsive screens:** Built the Konva editing surface, widget library, screen and layer management, selection and geometry tools, symbols, device presets, breakpoints, and responsive overrides.
+3. **Phase 3 — Optional cloud services:** Added the Cloudflare Worker service layer for wallet and account flows, metered actions, AI-assisted interactions, published previews, and generated-code export. These cloud-backed features require separately configured infrastructure and credentials; the local editor and local HTML export do not.
+4. **Phase 4 — Interactive prototyping:** Expanded prototypes with variables, conditional interactions, a local preview runtime, dynamic panels, repeaters, expressions, flow diagrams, annotations, rich text, version history, multi-device preview, touch input, and richer interface components. Axure-style workflow examples and evidence are documented in [AXURE-PARITY.md](./AXURE-PARITY.md); they distinguish automated checks from real-user comparison.
+5. **Phase 5 — Performance and release foundations:** Added canvas performance work, benchmarks, platform build workflows, signing and updater safeguards, and Windows smoke verification. Build configuration is not the same as a completed release or verified native experience on every operating system.
+6. **Phase 6 — Scope not recorded:** The available repository documentation and commit history do not identify a distinct Phase 6 feature scope. No features or completion claims are assigned to this phase here.
+7. **Phase 7 — Quality and compatibility verification:** Added unit and backend coverage, performance and accessibility checks, security hardening, cross-browser export QA, responsive/device verification, onboarding and documentation tests, and Axure-style workflow regression coverage. See [the compatibility matrix](./docs/cross-browser-export-qa.md) and [the Axure parity evidence](./AXURE-PARITY.md) for what has and has not been verified.
+8. **Phase 8 — HTML/CSS import:** Added a sandboxed code editor and preview, HTML/CSS parsing, semantic icon suggestions, and conversion of supported markup into editable canvas widgets. This is a bounded translation rather than a full browser rendering engine; JavaScript behavior stays in the isolated preview and does not become canvas interactions. See [the import guide](./docs/code-import.md).
+
 ## Privacy and cloud services
 
 Core design, project files, local previews, and standalone HTML exports work on the user's device. Crash reporting and anonymous feature telemetry are separate, opt-in settings. The import preview runs in a sandbox and should still be treated as untrusted code.
