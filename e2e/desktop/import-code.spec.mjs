@@ -66,6 +66,10 @@ describe("PF-T803 Windows desktop HTML canvas rendering", () => {
 
     await htmlEditor.setValue(fullDocument);
     await browser.saveScreenshot(path.join(evidenceDirectory, "pf-t803-full-document-preview.png"));
+    const appError = await $('[data-app-error]');
+    if (await appError.isExisting()) {
+      throw new Error(`App crashed during full-document preview: ${await appError.getAttribute("data-app-error")}`);
+    }
     await browser.waitUntil(async () =>
       (await getPreviewSource())?.includes("Desktop full document") ?? false,
     );
