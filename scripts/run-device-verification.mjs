@@ -12,7 +12,8 @@ const fullRun = process.env.PF_DEVICE_FULL === "1";
 const updateBaselines = process.env.PF_DEVICE_UPDATE_BASELINES === "1";
 const screenshotDirectory = new URL("../reports/device-verification/screenshots/", import.meta.url);
 const baselineDirectory = new URL("../reports/device-verification/baselines/", import.meta.url);
-const updatePreviewBaselines = process.env.PF_DEVICE_UPDATE_PREVIEW_BASELINES === "1";
+const updatePreviewBaselines = process.env.PF_DEVICE_UPDATE_PREVIEW_BASELINES === "1" ||
+  process.argv.includes("--update-preview-baselines");
 const server = spawn(
   process.execPath,
   [fileURLToPath(new URL("../node_modules/vite/bin/vite.js", import.meta.url)), "--host", "127.0.0.1", "--port", "1421", "--strictPort"],
@@ -449,7 +450,11 @@ async function compareDeviceScreenshot(page, name, screenshotUrl, update = updat
   const changedPixelRatio = changedPixels / (actualImage.width * actualImage.height);
   assert.ok(
     changedPixelRatio <= 0.01,
-    `${name} screenshot changed ${(changedPixelRatio * 100).toFixed(2)}% of pixels`,
+    `${name} screenshot changed ${(changedPixelRatio * 100).toFixed(2)}% of pixels. ` +
+      `Review reports/device-verification/screenshots/${name}.png against ` +
+      `reports/device-verification/baselines/${name}.png. If the visual change is intentional, ` +
+      "run npm run verify:devices:update-preview-baselines, review the baseline diffs, then " +
+      "rerun npm run verify:devices.",
   );
   return { initialized: false, changedPixelRatio };
 }
