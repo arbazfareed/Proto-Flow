@@ -68,12 +68,14 @@ describe("PF-T803 Windows desktop HTML canvas rendering", () => {
     await browser.waitUntil(async () =>
       (await getPreviewSource())?.includes('aria-label="Intro"') ?? false,
     );
+    await browser.pause(500);
     await browser.saveScreenshot(path.join(evidenceDirectory, "pf-t802-required-icons.png"));
 
     await htmlEditor.setValue(fullDocument);
     await browser.waitUntil(async () =>
       (await getPreviewSource())?.includes("Desktop full document") ?? false,
     );
+    await browser.pause(500);
     await browser.saveScreenshot(path.join(evidenceDirectory, "pf-t803-full-document-preview.png"));
     const sandboxSource = await getPreviewSource();
     expect(sandboxSource).toContain(".hero { display: flex;");
@@ -85,6 +87,25 @@ describe("PF-T803 Windows desktop HTML canvas rendering", () => {
     await $(".toast").waitForDisplayed();
     await expect($(".toast")).toHaveText("Unlocked Calendar element from imported code.");
     await expect($(".toast")).toHaveStyle({ "pointer-events": "none" });
+    const importedTokens = await $('[aria-label="Imported Tokens"]');
+    await importedTokens.waitForDisplayed();
+    await importedTokens.scrollIntoView();
+    await browser.saveScreenshot(path.join(evidenceDirectory, "pf-t806-imported-tokens.png"));
+    const importedTextColor = (await $$('button[aria-label^="Apply text #"]'))[0];
+    await importedTextColor.waitForDisplayed();
+    expect(await importedTextColor.isEnabled()).toBe(true);
+    await importedTextColor.click();
+    await browser.waitUntil(async () =>
+      (await $(".toast").getText()).includes("Applied text token"),
+    );
+    const importedTextStyle = (await $$('button[aria-label^="Apply Arial"]'))[0];
+    await importedTextStyle.waitForDisplayed();
+    expect(await importedTextStyle.isEnabled()).toBe(true);
+    const importedFontWeight = (await importedTextStyle.getAttribute("aria-label")).split(" ").at(-1);
+    await importedTextStyle.click();
+    await browser.waitUntil(async () =>
+      await $('[aria-label="Font weight"]').getValue() === importedFontWeight,
+    );
     const importedTools = await $('[aria-label="Detected in imported code"]');
     const importedTable = await importedTools.$('[aria-label="Add Table"]');
     const importedDatePicker = await importedTools.$('[aria-label="Add Date picker"]');

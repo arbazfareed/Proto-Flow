@@ -96,6 +96,18 @@ test("PF-T803 imports nested HTML and SVG as editable Konva canvas elements", as
   await page.getByRole("tab", { name: "HTML" }).click();
   await page.getByRole("button", { name: "Render on Canvas" }).click();
   await expect(dialog).not.toBeVisible();
+  const importedTokens = page.getByRole("region", { name: "Imported Tokens" });
+  await expect(importedTokens).toBeVisible();
+  const importedTextColor = importedTokens.getByRole("button", { name: /^Apply text #/ }).first();
+  await expect(importedTextColor).toBeVisible();
+  await importedTextColor.click();
+  await expect(page.locator(".toast")).toContainText("Applied text token");
+  const importedTextStyle = importedTokens.getByRole("button", { name: /^Apply .*px/ }).first();
+  await expect(importedTextStyle).toBeVisible();
+  const importedFontWeight = (await importedTextStyle.getAttribute("aria-label"))?.split(" ").at(-1);
+  expect(importedFontWeight).toBeTruthy();
+  await importedTextStyle.click();
+  await expect(page.getByLabel("Font weight")).toHaveValue(importedFontWeight!);
   const importedTools = page.getByRole("region", { name: "Detected in imported code" });
   const importedTable = importedTools.getByRole("button", { name: "Add Table" });
   await expect(importedTable).toBeVisible();

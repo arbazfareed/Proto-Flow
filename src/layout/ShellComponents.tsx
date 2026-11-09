@@ -11,6 +11,7 @@ import {
   Code2,
   CloudUpload,
   Coins,
+  Paintbrush,
   FilePlus2,
   FileText,
   FolderOpen,
@@ -44,6 +45,11 @@ import {
 import { isTauri } from "@tauri-apps/api/core";
 import { useStore } from "../store";
 import type { Project, Screen, Widget, WidgetStyle } from "../project/schema";
+import type {
+  ImportedColorToken,
+  ImportedDesignTokens,
+  ImportedTextStyleToken,
+} from "../project/importedDesignTokens";
 import {
   getActivePanelState,
   getPanelStates,
@@ -558,6 +564,9 @@ interface LeftSidebarProps {
   unlockedTools: readonly ShapeTool[];
   onSelectTool: (tool: ShapeTool) => void;
   onAddScreen: (category: DeviceCategory) => void;
+  importedDesignTokens: ImportedDesignTokens;
+  onApplyImportedColor: (token: ImportedColorToken, usage: "background" | "text" | "border") => void;
+  onApplyImportedTextStyle: (token: ImportedTextStyleToken) => void;
 }
 
 export function LeftSidebar({
@@ -573,6 +582,9 @@ export function LeftSidebar({
   unlockedTools,
   onSelectTool,
   onAddScreen,
+  importedDesignTokens,
+  onApplyImportedColor,
+  onApplyImportedTextStyle,
 }: LeftSidebarProps) {
   const project = useStore((state) => state.project);
   const isDirty = useStore((state) => state.isDirty);
@@ -629,6 +641,11 @@ export function LeftSidebar({
             onSelectTool={onSelectTool}
             onAddScreen={onAddScreen}
           />
+          <ImportedTokensSection
+            tokens={importedDesignTokens}
+            onApplyColor={onApplyImportedColor}
+            onApplyTextStyle={onApplyImportedTextStyle}
+          />
           <SymbolLibrary />
         </>
       ) : <VariablesPanel />}
@@ -641,6 +658,99 @@ export function LeftSidebar({
         <div className="sidebar-version"><span className="version-pulse" /> Phase 1 · Local workspace</div>
       </div>
     </aside>
+  );
+}
+
+function ImportedTokensSection({
+  tokens,
+  onApplyColor,
+  onApplyTextStyle,
+}: {
+  tokens: ImportedDesignTokens;
+  onApplyColor: (token: ImportedColorToken, usage: "background" | "text" | "border") => void;
+  onApplyTextStyle: (token: ImportedTextStyleToken) => void;
+}) {
+  const hasSelection = useStore((state) => {
+    const activeScreenId = state.getActiveScreenId();
+    const selectedIds = new Set(state.selectedIds);
+    return state.project.screens.some((screen) =>
+      screen.id === activeScreenId &&
+      screen.widgets.some((widget) => selectedIds.has(widget.id) && !widget.locked),
+    );
+  });
+  const hasTextSelection = useStore((state) => {
+    const activeScreenId = state.getActiveScreenId();
+    const selectedIds = new Set(state.selectedIds);
+    return state.project.screens.some((screen) =>
+      screen.id === activeScreenId &&
+      screen.widgets.some((widget) =>
+        selectedIds.has(widget.id) && !widget.locked && isTextStyleWidget(widget),
+      ),
+    );
+  });
+  if (tokens.colors.length === 0 && tokens.textStyles.length === 0) return null;
+
+  return (
+    <section className="imported-tokens" aria-label="Imported Tokens">
+      <div className="section-label"><span>IMPORTED TOKENS</span><Paintbrush size={13} /></div>
+      {tokens.colors.length > 0 && (
+        <div className="imported-token-group" aria-label="Imported colors">
+          <span className="imported-token-heading">COLORS</span>
+          {tokens.colors.map((token) => (
+            <div className="imported-color-token" key={`${token.color}-${token.opacity}`}>
+              <span
+                className="imported-color-swatch"
+                aria-hidden="true"
+                style={{ backgroundColor: token.color, opacity: token.opacity }}
+              />
+              <span className="imported-color-value">{token.color}</span>
+              <div className="imported-token-actions">
+                {token.usages.map((usage) => (
+                  <button
+                    key={usage}
+                    type="button"
+                    disabled={!hasSelection}
+                    aria-label={`Apply ${usage} ${token.color}`}
+                    title={`Apply as ${usage}`}
+                    onClick={() => onApplyColor(token, usage)}
+                  >
+                    {usage === "background" ? "Fill" : usage === "text" ? "Text" : "Border"}
+                  </button>
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+      {tokens.textStyles.length > 0 && (
+        <div className="imported-token-group" aria-label="Imported text styles">
+          <span className="imported-token-heading">TEXT STYLES</span>
+          {tokens.textStyles.map((token) => (
+            <button
+              className="imported-text-token"
+              key={`${token.fontFamily}-${token.fontSize}-${token.fontWeight}`}
+              type="button"
+              disabled={!hasTextSelection}
+              aria-label={`Apply ${token.fontFamily} ${token.fontSize}px ${token.fontWeight}`}
+              onClick={() => onApplyTextStyle(token)}
+            >
+              <span style={{
+                fontFamily: token.fontFamily,
+                fontSize: `${Math.min(16, Math.max(9, token.fontSize))}px`,
+                fontWeight: token.fontWeight,
+              }}>Aa</span>
+              <span>{token.fontFamily}, {token.fontSize}px · {token.fontWeight}</span>
+              <small>{token.count}</small>
+            </button>
+          ))}
+        </div>
+      )}
+      {!hasSelection
+        ? <p className="imported-token-hint">Select a canvas element to apply a token.</p>
+        : !hasTextSelection
+          ? <p className="imported-token-hint">Select a text element to apply a text style.</p>
+          : null}
+    </section>
   );
 }
 
@@ -1509,8 +1619,8 @@ function StyleSection({ widgets }: { widgets: Widget[] }) {
           />
         </label>}
         <div className="style-control-grid">
-          <label className="style-control"><span>Font family</span><select aria-label="Font family" value={String(textValue("fontFamily", "Arial"))} onChange={(event) => applyText({ fontFamily: event.currentTarget.value })}>{textMixed("fontFamily") && <option value="Mixed" disabled>Mixed</option>}{["Arial", "Inter", "Georgia", "Times New Roman", "Verdana", "Trebuchet MS", "Courier New", "system-ui"].map((family) => <option key={family}>{family}</option>)}</select></label>
-          <label className="style-control"><span>Weight</span><select aria-label="Font weight" value={String(textValue("fontWeight", "normal"))} onChange={(event) => applyText({ fontWeight: event.currentTarget.value })}>{textMixed("fontWeight") && <option value="Mixed" disabled>Mixed</option>}<option value="normal">Regular</option><option value="bold">Bold</option></select></label>
+          <label className="style-control"><span>Font family</span><select aria-label="Font family" value={String(textValue("fontFamily", "Arial"))} onChange={(event) => applyText({ fontFamily: event.currentTarget.value })}>{textMixed("fontFamily") && <option value="Mixed" disabled>Mixed</option>}{!textMixed("fontFamily") && !["Arial", "Inter", "Georgia", "Times New Roman", "Verdana", "Trebuchet MS", "Courier New", "system-ui"].includes(String(textValue("fontFamily", "Arial"))) && <option>{String(textValue("fontFamily", "Arial"))}</option>}{["Arial", "Inter", "Georgia", "Times New Roman", "Verdana", "Trebuchet MS", "Courier New", "system-ui"].map((family) => <option key={family}>{family}</option>)}</select></label>
+          <label className="style-control"><span>Weight</span><select aria-label="Font weight" value={String(textValue("fontWeight", "normal"))} onChange={(event) => applyText({ fontWeight: event.currentTarget.value })}>{textMixed("fontWeight") && <option value="Mixed" disabled>Mixed</option>}{!textMixed("fontWeight") && !["normal", "bold"].includes(String(textValue("fontWeight", "normal"))) && <option>{String(textValue("fontWeight", "normal"))}</option>}<option value="normal">Regular</option><option value="bold">Bold</option></select></label>
           <label className="style-control"><span>Style</span><select aria-label="Font style" value={String(textValue("fontStyle", "normal"))} onChange={(event) => applyText({ fontStyle: event.currentTarget.value })}>{textMixed("fontStyle") && <option value="Mixed" disabled>Mixed</option>}<option value="normal">Normal</option><option value="italic">Italic</option></select></label>
           <label className="style-control"><span>Underline {textMixed("underline") ? "(Mixed)" : ""}</span><input type="checkbox" aria-label="Underline text" checked={textValue("underline", false) === true} onChange={(event) => applyText({ underline: event.currentTarget.checked })} /></label>
           <label className="style-control"><span>Line height</span><input type="number" min="0.5" max="5" step="0.1" aria-label="Text line height" value={textMixed("lineHeight") ? "" : String(textValue("lineHeight", 1.2))} placeholder={textMixed("lineHeight") ? "Mixed" : undefined} onChange={(event) => applyText({ lineHeight: Math.min(5, Math.max(0.5, Number(event.currentTarget.value))) })} onBlur={finishEditSession} /></label>

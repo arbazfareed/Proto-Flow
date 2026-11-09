@@ -87,6 +87,22 @@
 .page-thumb span { width:9px; height:7px; border:1px solid #777285; border-radius:2px; }
 .page-count { color:#73737d; font-size:9px; }
 .sidebar-footer { margin-top:12px; }
+.imported-tokens { margin:13px 2px 0; padding:9px 7px; border:1px solid #34313e; border-radius:7px; background:#1b1a20; }
+.imported-tokens>.section-label { padding:0; color:#c0b0ed; }
+.imported-token-group { display:flex; flex-direction:column; gap:5px; margin-top:9px; }
+.imported-token-heading { color:#85838f; font-size:8px; font-weight:700; letter-spacing:.08em; }
+.imported-color-token { display:grid; min-width:0; grid-template-columns:13px minmax(0,1fr) auto; align-items:center; gap:6px; }
+.imported-color-swatch { width:12px; height:12px; border:1px solid #ffffff44; border-radius:3px; }
+.imported-color-value { overflow:hidden; color:#c8c6cf; font:9px ui-monospace,SFMono-Regular,Consolas,monospace; text-overflow:ellipsis; }
+.imported-token-actions { display:flex; gap:2px; }
+.imported-token-actions button,.imported-text-token { border:1px solid #373640; border-radius:4px; color:#b9b6c3; background:#25242b; cursor:pointer; font:inherit; font-size:8px; }
+.imported-token-actions button { padding:3px 4px; }
+.imported-token-actions button:hover:not(:disabled),.imported-text-token:hover:not(:disabled) { border-color:#7662a9; color:#eee8ff; background:#302a3b; }
+.imported-token-actions button:disabled,.imported-text-token:disabled { opacity:.45; cursor:default; }
+.imported-text-token { display:flex; min-width:0; align-items:center; gap:6px; padding:5px; text-align:left; }
+.imported-text-token>span:nth-child(2) { min-width:0; flex:1; overflow:hidden; font-size:8px; text-overflow:ellipsis; white-space:nowrap; }
+.imported-text-token>small { color:#898692; font-size:8px; }
+.imported-token-hint { margin:8px 0 0; color:#8d8a97; font-size:8px; line-height:1.4; }
 .sidebar-version { display:flex; align-items:center; gap:7px; margin:12px 7px 1px; padding-top:11px; border-top:1px solid var(--border-subtle); color:#74747e; font-size:9px; }
 .version-pulse { width:5px; height:5px; background:#9c82ec; }
 .layers-section { padding-top:2px; border-top:1px solid var(--border-subtle); }

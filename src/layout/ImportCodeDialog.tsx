@@ -8,6 +8,11 @@ import {
 } from "lucide-react";
 import { findRequiredIcons } from "../project/htmlImport";
 import { extractImportedCode } from "../project/importedCode";
+import {
+  createDesignTokenCollectorScript,
+  parseImportedDesignTokenMessage,
+} from "../project/importedDesignTokens";
+import type { ImportedDesignTokens } from "../project/importedDesignTokens";
 import { IMPORTED_HTML_ICON_REGISTRY } from "./widgetIcons";
 
 export interface ImportedCode {
@@ -20,7 +25,10 @@ interface ImportCodeDialogProps {
   initialCode?: ImportedCode | null;
   onClose: () => void;
   onDraftChange?: (code: ImportedCode) => void;
-  onRenderOnCanvas: (code: Pick<ImportedCode, "html" | "css">) => void;
+  onRenderOnCanvas: (
+    code: Pick<ImportedCode, "html" | "css">,
+    tokens: ImportedDesignTokens,
+  ) => void;
 }
 
 const INITIAL_HTML = `<main class="card">
@@ -69,7 +77,12 @@ const CONTENT_SECURITY_POLICY = [
   "object-src 'none'",
 ].join("; ");
 
-export function compileSandboxDocument(html: string, css: string, javascript: string): string {
+export function compileSandboxDocument(
+  html: string,
+  css: string,
+  javascript: string,
+  tokenNonce = "preview",
+): string {
   const extracted = extractImportedCode(html, css, javascript);
   if (extracted.html.length + extracted.css.length + extracted.javascript.length > 300_000) {
     throw new Error("Imported HTML, CSS, and JavaScript are limited to 300 KB.");
@@ -86,6 +99,7 @@ export function compileSandboxDocument(html: string, css: string, javascript: st
 </head>
 <body>
 ${extracted.html}
+<script>${createDesignTokenCollectorScript(tokenNonce)}</script>
 <script>${safeJavascript}</script>
 </body>
 </html>`;
@@ -118,6 +132,11 @@ export function ImportCodeDialog({
   const [javascript, setJavascript] = useState(initialCode?.javascript ?? INITIAL_JS);
   const [previewDocument, setPreviewDocument] = useState("");
   const [error, setError] = useState("");
+  const previewNonce = useMemo(() => crypto.randomUUID(), []);
+  const [designTokens, setDesignTokens] = useState<ImportedDesignTokens>({
+    colors: [],
+    textStyles: [],
+  });
   const dialogRef = useRef<HTMLElement>(null);
   const activeEditorRef = useRef<HTMLTextAreaElement>(null);
   const iconAnalysis = useMemo(() => {
@@ -138,10 +157,23 @@ export function ImportCodeDialog({
   useEffect(() => {
     const timeout = window.setTimeout(() => {
       const externalCode = getExternalCode(html, css, javascript);
-      setPreviewDocument(compileSandboxDocument(html, externalCode.css, externalCode.javascript));
+      setDesignTokens({ colors: [], textStyles: [] });
+      setPreviewDocument(compileSandboxDocument(html, externalCode.css, externalCode.javascript, previewNonce));
     }, 300);
     return () => window.clearTimeout(timeout);
-  }, [css, html, javascript]);
+  }, [css, html, javascript, previewNonce]);
+
+  useEffect(() => {
+    const handlePreviewMessage = (event: MessageEvent<unknown>) => {
+      if (event.source !== document.querySelector<HTMLIFrameElement>(
+        'iframe[title="Sandboxed code preview"]',
+      )?.contentWindow) return;
+      const tokens = parseImportedDesignTokenMessage(event.data, previewNonce);
+      if (tokens) setDesignTokens(tokens);
+    };
+    window.addEventListener("message", handlePreviewMessage);
+    return () => window.removeEventListener("message", handlePreviewMessage);
+  }, [previewNonce]);
 
   const handleKeyDown = (event: KeyboardEvent<HTMLElement>) => {
     if (event.key === "Escape") {
@@ -168,7 +200,10 @@ export function ImportCodeDialog({
   const handleRender = () => {
     setError("");
     try {
-      onRenderOnCanvas({ html, css: getExternalCode(html, css, javascript).css });
+      onRenderOnCanvas(
+        { html, css: getExternalCode(html, css, javascript).css },
+        designTokens,
+      );
       onClose();
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "The code could not be rendered on the canvas.");
@@ -177,6 +212,7 @@ export function ImportCodeDialog({
 
   const currentValue = activeTab === "html" ? html : activeTab === "css" ? css : javascript;
   const updateCurrentValue = (value: string) => {
+    setDesignTokens({ colors: [], textStyles: [] });
     const hasEmbeddedCode = /<!doctype\b|<html(?:\s|>)|<style\b|<script\b/i.test(value);
     const nextCss = activeTab === "html" && hasEmbeddedCode && css === INITIAL_CSS ? "" : css;
     const nextJavascript = activeTab === "html" && hasEmbeddedCode && javascript === INITIAL_JS

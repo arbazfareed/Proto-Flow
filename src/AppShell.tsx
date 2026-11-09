@@ -69,6 +69,17 @@ import { getHelpArticle, parseHelpDeepLink } from "./help/docs";
 import type { DeviceCategory } from "./devices/types";
 import { getShapeToolDefinition, type ShapeTool } from "./canvas/shapeTools";
 import {
+  isTextStyleWidget,
+  parseStyleColor,
+  styleColorToRgba,
+} from "./canvas/styleInspector";
+import {
+  EMPTY_IMPORTED_DESIGN_TOKENS,
+  type ImportedColorToken,
+  type ImportedDesignTokens,
+  type ImportedTextStyleToken,
+} from "./project/importedDesignTokens";
+import {
   CanvasArea,
   LeftSidebar,
   RightInspector,
@@ -103,6 +114,9 @@ function AppShell() {
   const [htmlExportOpen, setHtmlExportOpen] = useState(false);
   const [importCodeOpen, setImportCodeOpen] = useState(false);
   const [importCodeDraft, setImportCodeDraft] = useState<ImportedCode | null>(null);
+  const [importedDesignTokens, setImportedDesignTokens] = useState<ImportedDesignTokens>(
+    EMPTY_IMPORTED_DESIGN_TOKENS,
+  );
   const [pluginManagerOpen, setPluginManagerOpen] = useState(false);
   const [collaborationMounted, setCollaborationMounted] = useState(false);
   const [collaborationOpen, setCollaborationOpen] = useState(false);
@@ -125,6 +139,10 @@ function AppShell() {
   const tutorialAutosave = useRef<string | null>(null);
   const syncWallet = useWalletStore((state) => state.sync);
   const initializeWallet = useWalletStore((state) => state.initialize);
+
+  useEffect(() => {
+    setImportedDesignTokens(EMPTY_IMPORTED_DESIGN_TOKENS);
+  }, [currentProject.id]);
 
   const notify = useCallback((message: string, isError = false) => {
     if (noticeTimeoutRef.current !== null) {
@@ -859,7 +877,10 @@ function AppShell() {
     void openTutorialProject();
   }, [completeOnboarding, onboardingState.selectedTemplate, openTutorialProject]);
 
-  const renderImportedCode = useCallback(({ html, css }: Pick<ImportedCode, "html" | "css">) => {
+  const renderImportedCode = useCallback((
+    { html, css }: Pick<ImportedCode, "html" | "css">,
+    tokens: ImportedDesignTokens,
+  ) => {
     const state = useStore.getState();
     const screenId = state.getActiveScreenId();
     const screen = state.project.screens.find((item) => item.id === screenId);
@@ -904,6 +925,7 @@ function AppShell() {
       ),
     });
     state.select(importedWidgets.map((widget) => widget.id));
+    setImportedDesignTokens(tokens);
     if (newlyUnlockedTools.includes("date-picker")) {
       notify("Unlocked Calendar element from imported code.");
     } else if (newlyUnlockedTools.length > 0) {
@@ -917,6 +939,129 @@ function AppShell() {
       notify(`Rendered ${importedWidgets.length} elements on the canvas.`);
     }
   }, [notify, unlockedElementTools]);
+
+  const applyImportedColor = useCallback((
+    token: ImportedColorToken,
+    usage: "background" | "text" | "border",
+  ) => {
+    const state = useStore.getState();
+    const screenId = state.getActiveScreenId();
+    const screen = state.project.screens.find((item) => item.id === screenId);
+    if (!screen) {
+      notify("Select a screen before applying an imported token.", true);
+      return;
+    }
+    const selectedIds = new Set(state.selectedIds);
+    const selectedWidgets = screen.widgets.filter((widget) => selectedIds.has(widget.id) && !widget.locked);
+    if (selectedWidgets.length === 0) {
+      notify("Select an unlocked canvas element before applying an imported token.", true);
+      return;
+    }
+
+    const activeOverrideId = state.activeBreakpointId &&
+      (screen.breakpoints ?? []).some((breakpoint) => breakpoint.id === state.activeBreakpointId)
+      ? state.activeBreakpointId
+      : null;
+    const parsedColor = parseStyleColor(token.color);
+    if (!parsedColor) {
+      notify("This imported color token is invalid.", true);
+      return;
+    }
+    const opacity = Math.min(1, Math.max(0, token.opacity * parsedColor.opacity));
+    const color = parsedColor.hex;
+    const textColor = styleColorToRgba(color, opacity);
+    const stylePatch = usage === "background"
+      ? { fill: color, fillOpacity: opacity }
+      : usage === "border"
+        ? { stroke: color, strokeOpacity: opacity }
+        : null;
+    const propsPatch = usage === "text" ? { color: textColor } : null;
+
+    state.setProject({
+      ...state.project,
+      updatedAt: new Date().toISOString(),
+      screens: state.project.screens.map((item) => item.id !== screenId ? item : {
+        ...item,
+        widgets: item.widgets.map((widget) => {
+          if (!selectedIds.has(widget.id) || widget.locked) return widget;
+          const currentOverride = activeOverrideId ? widget.overrides?.[activeOverrideId] : undefined;
+          if (activeOverrideId && currentOverride) {
+            return {
+              ...widget,
+              overrides: {
+                ...widget.overrides,
+                [activeOverrideId]: {
+                  ...currentOverride,
+                  ...(stylePatch ? { style: { ...currentOverride.style, ...stylePatch } } : {}),
+                  ...(propsPatch ? { props: { ...currentOverride.props, ...propsPatch } } : {}),
+                },
+              },
+            };
+          }
+          return {
+            ...widget,
+            ...(stylePatch ? { style: { ...widget.style, ...stylePatch } } : {}),
+            ...(propsPatch ? { props: { ...widget.props, ...propsPatch } } : {}),
+          };
+        }),
+      }),
+    });
+    notify(`Applied ${usage} token ${token.color}.`);
+  }, [notify]);
+
+  const applyImportedTextStyle = useCallback((token: ImportedTextStyleToken) => {
+    const state = useStore.getState();
+    const screenId = state.getActiveScreenId();
+    const screen = state.project.screens.find((item) => item.id === screenId);
+    if (!screen) {
+      notify("Select a screen before applying an imported text style.", true);
+      return;
+    }
+    const selectedIds = new Set(state.selectedIds);
+    const selectedWidgets = screen.widgets.filter((widget) => (
+      selectedIds.has(widget.id) && !widget.locked && isTextStyleWidget(widget)
+    ));
+    if (selectedWidgets.length === 0) {
+      notify("Select an unlocked text element before applying an imported text style.", true);
+      return;
+    }
+    const selectedTextIds = new Set(selectedWidgets.map((widget) => widget.id));
+
+    const activeOverrideId = state.activeBreakpointId &&
+      (screen.breakpoints ?? []).some((breakpoint) => breakpoint.id === state.activeBreakpointId)
+      ? state.activeBreakpointId
+      : null;
+    const propsPatch = {
+      fontFamily: token.fontFamily,
+      fontSize: token.fontSize,
+      fontWeight: token.fontWeight,
+    };
+    state.setProject({
+      ...state.project,
+      updatedAt: new Date().toISOString(),
+      screens: state.project.screens.map((item) => item.id !== screenId ? item : {
+        ...item,
+        widgets: item.widgets.map((widget) => {
+          if (!selectedTextIds.has(widget.id)) return widget;
+          const currentOverride = activeOverrideId ? widget.overrides?.[activeOverrideId] : undefined;
+          if (activeOverrideId && currentOverride) {
+            return {
+              ...widget,
+              overrides: {
+                ...widget.overrides,
+                [activeOverrideId]: {
+                  ...currentOverride,
+                  props: { ...currentOverride.props, ...propsPatch },
+                },
+              },
+            };
+          }
+          return { ...widget, props: { ...widget.props, ...propsPatch } };
+        }),
+      }),
+    });
+    notify(`Applied ${token.fontFamily} ${token.fontSize}px text style.`);
+  }, [notify]);
 
   return (
     <div className="app-shell">
@@ -961,6 +1106,9 @@ function AppShell() {
           unlockedTools={unlockedElementTools}
           onSelectTool={setActiveTool}
           onAddScreen={addLibraryScreen}
+          importedDesignTokens={importedDesignTokens}
+          onApplyImportedColor={applyImportedColor}
+          onApplyImportedTextStyle={applyImportedTextStyle}
         />
         <CanvasArea
           onToggleLeft={toggleLeftPanel}

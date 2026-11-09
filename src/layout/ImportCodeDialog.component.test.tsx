@@ -43,6 +43,9 @@ describe("ImportCodeDialog", () => {
     expect(onRenderOnCanvas).toHaveBeenCalledWith({
       html: "<h1>Canvas import</h1>",
       css: "h1 { color: red; }",
+    }, {
+      colors: [],
+      textStyles: [],
     });
     expect(onClose).toHaveBeenCalledOnce();
   });
@@ -136,5 +139,7 @@ describe("compileSandboxDocument", () => {
     expect(srcdoc).toContain("connect-src 'none'");
     expect(srcdoc).toContain("<\\/style");
     expect(srcdoc).toContain("<\\/script");
+    expect(srcdoc).toContain('type: "protoflow-design-tokens"');
+    expect(srcdoc).toContain('nonce: "preview"');
   });
 });
