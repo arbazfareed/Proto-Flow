@@ -99,7 +99,7 @@ describe("PF-T803 Windows desktop HTML canvas rendering", () => {
     await layerSearch.setValue("start-date");
     const dateLayer = await findLayerRow("start-date");
     await expect(dateLayer.$(".layer-select svg")).toHaveElementClass("lucide-calendar");
-    await dateLayer.$(".layer-name").click();
+    await dateLayer.$(".layer-select").click();
     await expect(dateLayer).toHaveAttribute("aria-selected", "true");
     await layerSearch.setValue("document-title");
     const expectLayerVisible = async (name) => {
@@ -114,7 +114,7 @@ describe("PF-T803 Windows desktop HTML canvas rendering", () => {
     await expectLayerVisible("document-title");
     const titleLayer = await findLayerRow("document-title");
     const titleSelect = await titleLayer.$(".layer-select");
-    await titleLayer.$(".layer-name").click();
+    await titleSelect.click();
     await expect(titleSelect).toHaveAttribute("aria-pressed", "true");
     await expect(titleLayer).toHaveAttribute("aria-selected", "true");
     for (const heading of ["first-card", "second-card", "third-card"]) {
