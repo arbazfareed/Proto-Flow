@@ -28,11 +28,14 @@ npm run benchmark:performance
 npm run test:e2e:browser
 npm run build:e2e:desktop
 npm run test:e2e:desktop
+npm run verify:branch
 ```
 
 The component suite uses React Testing Library, jsdom, and shared Tauri/MSW setup. Its coverage gate applies to the selected, behavior-tested UI modules in `vite.components.config.ts`; component tests are excluded from the default non-DOM Vitest suite.
 
 PF-T704 E2E coverage runs browser journeys with Playwright and Windows desktop smoke journeys with WebdriverIO/Tauri WebDriver. Browser tests use isolated contexts and stub cloud requests; desktop tests use a unique temporary WebView2 data directory. Run `npm run test:e2e` on Windows after installing the Node, Rust, MSVC, and WebView2 prerequisites.
+
+Before pushing a feature branch, run `npm run verify:branch`. It builds the app and runs unit, component, browser E2E, and device/responsive verification locally. Run `npm run test:e2e:desktop` on Windows when the Tauri/WebView2 desktop test prerequisites are available; the pull-request workflows also run the desktop checks. Device screenshot mismatches are intentional-change gates: review the generated screenshots under `reports/device-verification/screenshots/`; only for an intentional visual update, run `npm run verify:devices:update-preview-baselines`, review the changed files under `reports/device-verification/baselines/`, then rerun `npm run verify:devices`.
 
 PF-T705 performance benchmarks cover canvas workloads, store operations, feature timings, bundle size, startup, and heap growth. See [benchmarks/README.md](./benchmarks/README.md) for thresholds and local commands.
 
