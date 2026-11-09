@@ -43,6 +43,30 @@ describe("Windows desktop Axure-parity workflows", () => {
       await expect(layout).toHaveValue("single");
       await layout.selectByAttribute("value", "columns");
       await browser.waitUntil(async () => (await $$(".preview-frame-card")).length === 3);
+      const deviceGeometry = await browser.execute(() =>
+        [...document.querySelectorAll(".preview-frame-card")].map((card) => {
+          const viewport = card.querySelector(".preview-frame-viewport").getBoundingClientRect();
+          const stage = card.querySelector(".preview-frame-stage").getBoundingClientRect();
+          const frame = card.getBoundingClientRect();
+          return {
+            left: frame.left,
+            top: frame.top,
+            stageTop: stage.top,
+            stageBottom: stage.bottom,
+            viewportTop: viewport.top,
+            viewportBottom: viewport.bottom,
+          };
+        }),
+      );
+      expect(deviceGeometry).toHaveLength(3);
+      expect(deviceGeometry[0].top).toBe(deviceGeometry[1].top);
+      expect(deviceGeometry[1].top).toBe(deviceGeometry[2].top);
+      expect(deviceGeometry[0].left).toBeLessThan(deviceGeometry[1].left);
+      expect(deviceGeometry[1].left).toBeLessThan(deviceGeometry[2].left);
+      for (const frame of deviceGeometry) {
+        expect(frame.stageTop).toBeGreaterThanOrEqual(frame.viewportTop - 1);
+        expect(frame.stageBottom).toBeLessThanOrEqual(frame.viewportBottom + 1);
+      }
       await layout.selectByAttribute("value", "grid");
       await browser.waitUntil(async () => (await $$(".preview-frame-card")).length === 4);
 
