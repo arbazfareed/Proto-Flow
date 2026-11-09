@@ -1,5 +1,9 @@
 import type { Widget } from "../project/schema";
 import { isWidgetContainer } from "../project/layers";
+import {
+  WIDGET_ICON_REGISTRY,
+  type WidgetCategory,
+} from "./widgetIcons";
 
 export const LAYER_VIEW_MODES = ["category", "z-order", "type"] as const;
 export type LayerViewMode = (typeof LAYER_VIEW_MODES)[number];
@@ -74,125 +78,35 @@ export const LAYER_CATEGORY_DEFINITIONS: Record<LayerCategoryId, LayerCategoryDe
   },
 };
 
-const CATEGORY_TYPES: Record<Exclude<LayerCategoryId, "other">, ReadonlySet<string>> = {
-  shapes: new Set([
-    "rectangle",
-    "ellipse",
-    "circle",
-    "polygon",
-    "star",
-    "text",
-    "heading",
-    "paragraph",
-    "link",
-    "label",
-    "line",
-    "arrow",
-    "divider",
-    "vector",
-    "path",
-    "icon",
-    "custom-icon",
-    "spacer",
-    "code-block",
-  ]),
-  widgets: new Set([
-    "button",
-    "icon-button",
-    "input",
-    "textarea",
-    "select",
-    "checkbox",
-    "radio",
-    "toggle",
-    "slider",
-    "stepper",
-    "date-picker",
-    "file-upload",
-    "search",
-    "image",
-    "avatar",
-    "video",
-    "audio",
-    "image-gallery",
-    "fab",
-    "pull-to-refresh",
-    "mobile-app",
-    "web-app",
-    "badge",
-    "chip",
-    "tag",
-    "tooltip",
-    "popover",
-    "alert",
-    "banner",
-    "progress-bar",
-    "spinner",
-    "skeleton",
-    "rating",
-    "breadcrumb",
-    "pagination",
-    "table",
-    "list",
-    "grid",
-    "chart",
-    "stat",
-    "timeline",
-    "calendar",
-    "toast",
-    "notification",
-    "metric-card",
-    "profile-card",
-    "avatar-group",
-    "testimonial-card",
-    "feature-card",
-    "empty-state",
-    "segmented-control",
-    "step-indicator",
-    "bottom-nav",
-    "pricing-card",
-  ]),
-  advanced: new Set([
-    "panel",
-    "dynamic-panel",
-    "dynamicPanel",
-    "repeater",
-    "accordion",
-    "carousel",
-    "tabs-container",
-    "tabsContainer",
-    "swipe-gesture",
-    "api-request",
-    "database",
-    "cloud-sync",
-    "websocket",
-    "auth-state",
-    "settings",
-    "theme",
-    "responsive-switch",
-  ]),
-  symbols: new Set(["symbol", "symbol-instance", "symbolInstance", "component-master", "componentMaster"]),
-  containers: new Set([
-    "container",
-    "flex-row",
-    "flex-column",
-    "group",
-    "frame",
-    "card",
-    "modal",
-    "overlay",
-    "drawer",
-    "section",
-    "form",
-    "navbar",
-    "sidebar",
-    "tabs",
-    "menu",
-    "dropdown-menu",
-    "dropdownMenu",
-    "footer",
-    "app-bar",
-  ]),
+const LAYER_CATEGORY_BY_WIDGET_CATEGORY: Record<WidgetCategory, LayerCategoryId> = {
+  shape: "shapes",
+  text: "shapes",
+  layout: "containers",
+  container: "containers",
+  widget: "widgets",
+  form: "widgets",
+  display: "widgets",
+  navigation: "widgets",
+  data: "widgets",
+  media: "widgets",
+  advanced: "advanced",
+  symbol: "symbols",
+};
+
+const LAYER_CATEGORY_OVERRIDES: Partial<
+  Record<string, Exclude<LayerCategoryId, "other">>
+> = {
+  spacer: "shapes",
+  form: "containers",
+  navbar: "containers",
+  sidebar: "containers",
+  tabs: "containers",
+  menu: "containers",
+  "dropdown-menu": "containers",
+  dropdownMenu: "containers",
+  footer: "containers",
+  "app-bar": "containers",
+  database: "advanced",
 };
 
 const LAYER_ACCENT_COLORS: Record<LayerCategoryId, string> = {
@@ -219,11 +133,12 @@ export function getLayerCategory(
   categoryOverride?: LayerCategoryId,
 ): LayerCategoryId {
   if (categoryOverride) return categoryOverride;
-  for (const category of LAYER_CATEGORIES) {
-    if (category === "other") continue;
-    if (CATEGORY_TYPES[category].has(type)) return category;
-  }
-  return "other";
+  const override = LAYER_CATEGORY_OVERRIDES[type];
+  if (override) return override;
+  const definition = WIDGET_ICON_REGISTRY[type];
+  return definition
+    ? LAYER_CATEGORY_BY_WIDGET_CATEGORY[definition.category]
+    : "other";
 }
 
 function defaultCategoryOrder(order: string[]): string[] {
