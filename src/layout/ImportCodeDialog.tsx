@@ -1,30 +1,14 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { KeyboardEvent } from "react";
 import {
-  Calendar,
-  Check,
-  ChevronDown,
   Code2,
-  Compass,
   FileText,
-  Image,
-  Layout,
-  Link2,
-  List,
-  ListOrdered,
-  Mail,
-  MousePointer2,
-  Music,
-  Search,
   ShieldCheck,
-  Table,
-  Type,
-  Video,
   X,
 } from "lucide-react";
-import type { LucideIcon } from "lucide-react";
 import { findRequiredIcons } from "../project/htmlImport";
 import { extractImportedCode } from "../project/importedCode";
+import { IMPORTED_HTML_ICON_REGISTRY } from "./widgetIcons";
 
 export interface ImportedCode {
   html: string;
@@ -84,27 +68,6 @@ const CONTENT_SECURITY_POLICY = [
   "frame-src 'none'",
   "object-src 'none'",
 ].join("; ");
-
-const REQUIRED_ICON_COMPONENTS: Record<string, LucideIcon> = {
-  Calendar,
-  Check,
-  ChevronDown,
-  Code2,
-  Compass,
-  FileText,
-  Image,
-  Layout,
-  Link: Link2,
-  List,
-  ListOrdered,
-  Mail,
-  MousePointer2,
-  Music,
-  Search,
-  Table,
-  Type,
-  Video,
-};
 
 export function compileSandboxDocument(html: string, css: string, javascript: string): string {
   const extracted = extractImportedCode(html, css, javascript);
@@ -324,7 +287,7 @@ export function ImportCodeDialog({
               <div>
                 {iconAnalysis.requiredIcons.length
                   ? iconAnalysis.requiredIcons.map((name) => {
-                    const Icon = REQUIRED_ICON_COMPONENTS[name] ?? FileText;
+                    const Icon = IMPORTED_HTML_ICON_REGISTRY[name] ?? FileText;
                     return (
                       <span className="import-code-icon-chip" key={name}>
                         <Icon size={12} aria-hidden="true" />

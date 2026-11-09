@@ -904,12 +904,14 @@ function AppShell() {
       ),
     });
     state.select(importedWidgets.map((widget) => widget.id));
-    if (newlyUnlockedTools.length > 0) {
+    if (newlyUnlockedTools.includes("date-picker")) {
+      notify("Unlocked Calendar element from imported code.");
+    } else if (newlyUnlockedTools.length > 0) {
       const labels = newlyUnlockedTools.map(
         (tool) => getShapeToolDefinition(tool)?.label ?? tool,
       );
       notify(
-        `Unlocked ${newlyUnlockedTools.length} new icons from imported code (${labels.join(", ")}).`,
+        `Unlocked ${labels.join(", ")} ${labels.length === 1 ? "element" : "elements"} from imported code.`,
       );
     } else {
       notify(`Rendered ${importedWidgets.length} elements on the canvas.`);

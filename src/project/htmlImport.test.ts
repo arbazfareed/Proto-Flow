@@ -57,7 +57,7 @@ describe("importHtmlToWidgets", () => {
     ]);
     expect(widgets.map(({ zIndex }) => zIndex)).toEqual([4, 5, 6, 7, 8]);
     expect(widgets[1]).toMatchObject({
-      name: "h1 Dashboard",
+      name: "h1",
       props: { text: "Dashboard", fontSize: 32 },
       style: { fill: "#123456" },
     });
@@ -110,10 +110,10 @@ describe("importHtmlToWidgets", () => {
       { id: "desktop", width: 1200 },
       { id: "mobile", width: 390 },
     ]);
-    const hero = widgets.find(({ name }) => name === "main hero");
-    const heroHeading = widgets.find(({ name }) => name === "h1 Welcome");
-    const heroImage = widgets.find(({ name }) => name?.includes("img"));
-    const cards = widgets.filter(({ name }) => name === "article card");
+    const hero = widgets.find(({ name }) => name === "hero");
+    const heroHeading = widgets.find(({ name }) => name === "h1");
+    const heroImage = widgets.find(({ name }) => name === "img");
+    const cards = widgets.filter(({ name }) => name === "card");
 
     expect(hero?.style.fill).toBe("#e4f8ee");
     expect(heroHeading?.props.fontFamily).toBe("Arial");
@@ -129,8 +129,8 @@ describe("importHtmlToWidgets", () => {
     expect(mobileCardLayouts[1].x).toBe(mobileCardLayouts[2].x);
     expect(mobileCardLayouts[0].y).toBeLessThan(mobileCardLayouts[1].y);
     expect(mobileCardLayouts[1].y).toBeLessThan(mobileCardLayouts[2].y);
-    const mobileOnly = widgets.find(({ name }) => name === "div mobile-only");
-    const mobileOnlyText = widgets.find(({ name }) => name === "p Mobile only");
+    const mobileOnly = widgets.find(({ name }) => name === "mobile-only");
+    const mobileOnlyText = widgets.find(({ name }) => name === "p");
     expect(mobileOnly).toMatchObject({
       visible: false,
       overrides: { mobile: { visible: true }, desktop: { visible: false } },
@@ -158,7 +158,7 @@ describe("importHtmlToWidgets", () => {
     expect(cards[0].style.shadow).toMatchObject({ offsetY: 4, blur: 15 });
 
     const mobileWidgets = importHtmlToWidgets(html, "", 390);
-    const mobileCards = mobileWidgets.filter(({ name }) => name === "article card");
+    const mobileCards = mobileWidgets.filter(({ name }) => name === "card");
     expect(mobileCards[0].x).toBe(mobileCards[1].x);
     expect(mobileCards[0].y).toBeLessThan(mobileCards[1].y);
   });
@@ -181,7 +181,7 @@ describe("importHtmlToWidgets", () => {
   it("keeps long responsive pages in document flow instead of compressing them into one viewport", () => {
     const html = `<main class="page">
       ${Array.from({ length: 8 }, (_, index) =>
-        `<section class="section"><h2>Section ${index + 1}</h2><p>Content for section ${index + 1}</p></section>`,
+        `<section class="section"><h2 id="section-${index + 1}">Section ${index + 1}</h2><p>Content for section ${index + 1}</p></section>`,
       ).join("")}
     </main>`;
     const breakpoints = createDefaultBreakpoints(1440, 900);
@@ -201,14 +201,14 @@ describe("importHtmlToWidgets", () => {
 
     expect(desktop.height).toBeGreaterThan(900);
     expect(mobile.height).toBeGreaterThan(844);
-    const headings = desktopWidgets.filter(({ name }) => name?.startsWith("h2 Section "));
+    const headings = desktopWidgets.filter(({ name }) => name?.startsWith("section-"));
     expect(headings).toHaveLength(8);
     expect(headings[7].y).toBeGreaterThan(900);
     expect(headings.every((heading, index) =>
       index === 0 || heading.y > headings[index - 1].y,
     )).toBe(true);
 
-    const mobileHeadings = mobileWidgets.filter(({ name }) => name?.startsWith("h2 Section "));
+    const mobileHeadings = mobileWidgets.filter(({ name }) => name?.startsWith("section-"));
     expect(mobileHeadings).toHaveLength(8);
     expect(mobileHeadings.every((heading, index) =>
       index === 0 || heading.y > mobileHeadings[index - 1].y,
@@ -273,6 +273,8 @@ describe("importHtmlToWidgets", () => {
     ]);
     expect(ast.nodes[0]).toMatchObject({
       id: "node-1",
+      sourceKey: "body.0",
+      elementName: "p-4",
       parentId: null,
       computedStyles: { padding: "16px", "background-color": "rgb(59, 130, 246)" },
     });
@@ -289,7 +291,51 @@ describe("importHtmlToWidgets", () => {
       tagName: "input",
       suggestedIcon: "Calendar",
     });
-    expect(ast.requiredIcons).toEqual(["Layout", "Video", "Table", "Calendar"]);
+    expect(ast.requiredIcons).toEqual([
+      "Layout", "PanelTop", "Video", "Table", "Calendar",
+    ]);
+  });
+
+  it("uses DOM names, icons, and parent links for imported layer nodes", () => {
+    const widgets = importHtmlToWidgets(
+      `<main id="page-root"><div class="card"><section class="content"><h1 id="page-title">Title</h1><button id="submit">Save</button></section><input type="date" aria-label="Start date"></div></main><footer class="site-footer"></footer>`,
+      "",
+      900,
+    );
+    const namedWidgets = new Map(widgets.map((widget) => [widget.name, widget]));
+
+    expect(widgets.map(({ name }) => name)).toEqual([
+      "page-root", "card", "content", "page-title", "submit", "input", "site-footer",
+    ]);
+    expect(widgets[0].groupId).toBeUndefined();
+    expect(widgets[1].groupId).toBe(widgets[0].id);
+    expect(widgets[2].groupId).toBe(widgets[1].id);
+    expect(widgets[3].groupId).toBe(widgets[2].id);
+    expect(widgets[4].groupId).toBe(widgets[2].id);
+    expect(widgets[6].groupId).toBeUndefined();
+    expect(namedWidgets.get("card")?.props).toMatchObject({
+      importedNodeId: "node-2",
+      importedTagName: "div",
+      importedSuggestedIcon: "SquareStack",
+    });
+    expect(namedWidgets.get("page-title")?.props.importedSuggestedIcon).toBe("Heading1");
+    expect(namedWidgets.get("submit")?.props.importedSuggestedIcon)
+      .toBe("RectangleHorizontal");
+    expect(namedWidgets.get("input")?.props.importedSuggestedIcon).toBe("Calendar");
+  });
+
+  it("suggests accurate icons for common HTML elements and input types", () => {
+    const ast = parseHtmlToAst(
+      `<header></header><footer></footer><nav></nav><section></section><article></article><div class="card"></div><p></p><span></span><a></a><button></button><input type="email"><textarea></textarea><select></select><form></form><table></table><ul></ul><ol></ol><img alt="Photo"><video></video><audio></audio><iframe></iframe>`,
+      "",
+    );
+
+    expect(ast.nodes.map(({ suggestedIcon }) => suggestedIcon)).toEqual([
+      "PanelTop", "PanelBottom", "Menu", "PanelTop", "PanelTop", "SquareStack",
+      "AlignLeft", "Type", "Link", "RectangleHorizontal", "Mail", "AlignLeft",
+      "ChevronDownSquare", "FileText", "Table", "List", "ListOrdered", "Image",
+      "Video", "Music", "AppWindow",
+    ]);
   });
 
   it("maps common Tailwind and Bootstrap utility classes", () => {

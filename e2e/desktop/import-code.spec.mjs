@@ -5,7 +5,7 @@ import { expect } from "@wdio/globals";
 describe("PF-T803 Windows desktop HTML canvas rendering", () => {
   it("previews code in a sandbox and imports editable elements onto the canvas", async () => {
     const longSections = Array.from({ length: 6 }, (_, index) =>
-      `<section class="long-section"><h2>Milestone ${index + 1}</h2><p>Imported section content ${index + 1}</p></section>`,
+      `<section class="long-section"><h2 id="milestone-${index + 1}">Milestone ${index + 1}</h2><p>Imported section content ${index + 1}</p></section>`,
     ).join("");
     const fullDocument = `<!doctype html><html><head><title>Desktop child care test</title><style>
       body { color: #333; font-family: Arial, sans-serif; }
@@ -14,9 +14,9 @@ describe("PF-T803 Windows desktop HTML canvas rendering", () => {
       .card { padding: 16px; border: 1px solid #ddd; border-radius: 12px; }
       .long-section { min-height: 220px; padding: 24px; }
     </style></head><body>
-      <main class="hero"><h1>Desktop full document</h1><p>Embedded styles imported</p></main>
-      <section class="cards"><article class="card"><h2>First</h2></article><article class="card"><h2>Second</h2></article><article class="card"><h2>Third</h2></article></section>
-      <section><table><thead><tr><th>Age group</th></tr></thead><tbody><tr><td>Preschool</td></tr></tbody></table><video aria-label="Program introduction"></video><input type="date" aria-label="Start date"></section>
+      <main class="hero"><h1 id="document-title">Desktop full document</h1><p>Embedded styles imported</p></main>
+      <section class="cards"><article class="card"><h2 id="first-card">First</h2></article><article class="card"><h2 id="second-card">Second</h2></article><article class="card"><h2 id="third-card">Third</h2></article></section>
+      <section><table><thead><tr><th>Age group</th></tr></thead><tbody><tr><td>Preschool</td></tr></tbody></table><video aria-label="Program introduction"></video><input id="start-date" type="date" aria-label="Start date"></section>
       ${longSections}
       <script>document.body.dataset.ready = "yes";</script></body></html>`;
     const privacyDialog = await $('[aria-labelledby="privacy-settings-title"]');
@@ -71,7 +71,6 @@ describe("PF-T803 Windows desktop HTML canvas rendering", () => {
     await browser.saveScreenshot(path.join(evidenceDirectory, "pf-t802-required-icons.png"));
 
     await htmlEditor.setValue(fullDocument);
-    await browser.waitUntil(async () => (await htmlEditor.getValue()) === fullDocument);
     await browser.waitUntil(async () =>
       (await getPreviewSource())?.includes("Desktop full document") ?? false,
     );
@@ -84,7 +83,7 @@ describe("PF-T803 Windows desktop HTML canvas rendering", () => {
     await dialog.waitForDisplayed({ reverse: true });
     await expect($(".document-name")).toHaveText("Untitled project");
     await $(".toast").waitForDisplayed();
-    await expect($(".toast")).toHaveText(/Unlocked \d+ new icons from imported code/);
+    await expect($(".toast")).toHaveText("Unlocked Calendar element from imported code.");
     const importedTools = await $('[aria-label="Detected in imported code"]');
     const importedTable = await importedTools.$('[aria-label="Add Table"]');
     const importedDatePicker = await importedTools.$('[aria-label="Add Date picker"]');
@@ -95,7 +94,14 @@ describe("PF-T803 Windows desktop HTML canvas rendering", () => {
     await importedTable.click();
     await expect(importedTable).toHaveAttribute("aria-pressed", "true");
     const layerSearch = await $('[aria-label="Search layers"]');
-    await layerSearch.setValue("h1 Desktop full document");
+    const findLayerRow = (name) =>
+      $(`//div[contains(@class,"layer-row")][.//span[contains(@class,"layer-name") and normalize-space(.)="${name}"]]`);
+    await layerSearch.setValue("start-date");
+    const dateLayer = await findLayerRow("start-date");
+    await expect(dateLayer.$(".layer-select svg")).toHaveElementClass("lucide-calendar");
+    await dateLayer.$(".layer-name").click();
+    await expect(dateLayer).toHaveAttribute("aria-selected", "true");
+    await layerSearch.setValue("document-title");
     const expectLayerVisible = async (name) => {
       const selector = `//*[contains(@class,"layer-name") and normalize-space(.)="${name}"]`;
       await browser.waitUntil(async () => (await $$(selector)).length > 0, {
@@ -105,8 +111,13 @@ describe("PF-T803 Windows desktop HTML canvas rendering", () => {
       const matches = await $$(selector);
       await expect(matches[0]).toBeDisplayed();
     };
-    await expectLayerVisible("h1 Desktop full document");
-    for (const heading of ["h2 First", "h2 Second", "h2 Third"]) {
+    await expectLayerVisible("document-title");
+    const titleLayer = await findLayerRow("document-title");
+    const titleSelect = await titleLayer.$(".layer-select");
+    await titleLayer.$(".layer-name").click();
+    await expect(titleSelect).toHaveAttribute("aria-pressed", "true");
+    await expect(titleLayer).toHaveAttribute("aria-selected", "true");
+    for (const heading of ["first-card", "second-card", "third-card"]) {
       await layerSearch.setValue(heading);
       await expectLayerVisible(heading);
     }
@@ -121,8 +132,8 @@ describe("PF-T803 Windows desktop HTML canvas rendering", () => {
     const desktopOption = await activeBreakpoint.$("option*=Desktop");
     await activeBreakpoint.selectByAttribute("value", await desktopOption.getAttribute("value"));
     for (let index = 1; index <= 6; index += 1) {
-      await layerSearch.setValue(`h2 Milestone ${index}`);
-      await expectLayerVisible(`h2 Milestone ${index}`);
+      await layerSearch.setValue(`milestone-${index}`);
+      await expectLayerVisible(`milestone-${index}`);
     }
     await browser.saveScreenshot(path.join(evidenceDirectory, "pf-t803-imported-canvas.png"));
 

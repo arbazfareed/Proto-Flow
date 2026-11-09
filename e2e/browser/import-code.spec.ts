@@ -34,7 +34,7 @@ section { padding: 80px 8%; }
 </head>
 <body>
 <header><div class="logo">Little Stars</div><nav><a href="#home">Home</a><a href="#programs">Programs</a><a href="#contact">Contact</a></nav></header>
-<section class="hero" id="home"><div class="hero-content"><h1>A Happy Place Where Little Minds Grow</h1><p>A safe, loving and fun environment where children learn, explore and grow.</p><a href="#contact">Book a Free Tour</a></div><img src="https://images.unsplash.com/photo-1503454537195-1dcabb73ffb9?w=900" alt="Happy child playing"></section>
+<section class="hero" id="home"><div class="hero-content"><h1 id="page-title">A Happy Place Where Little Minds Grow</h1><p>A safe, loving and fun environment where children learn, explore and grow.</p><a href="#contact">Book a Free Tour</a></div><img src="https://images.unsplash.com/photo-1503454537195-1dcabb73ffb9?w=900" alt="Happy child playing"></section>
 <section class="cards" id="programs"><article class="card"><img src="https://images.unsplash.com/photo-1516627145497-ae6968895b74?w=600" alt="Infant care"><h2>Infant Care</h2><p>Gentle, loving care for babies.</p></article><article class="card"><img src="https://images.unsplash.com/photo-1471286174890-9c112ffca5b4?w=600" alt="Toddler learning"><h2>Toddler Program</h2><p>Activities that encourage exploration.</p></article><article class="card"><img src="https://images.unsplash.com/photo-1503919005314-30d93d07d823?w=600" alt="Preschool children"><h2>Preschool</h2><p>Early education through creative play.</p></article></section>
 <section><div class="faq-item"><div class="faq-question">What ages do you accept?<span>+</span></div><div class="faq-answer">Infant, toddler and preschool programs.</div></div></section>
 <section class="library-examples"><h2>Program tools</h2><table><thead><tr><th>Age group</th></tr></thead><tbody><tr><td>Preschool</td></tr></tbody></table><video aria-label="Program introduction"></video><input type="date" aria-label="Start date"></section>
@@ -95,7 +95,6 @@ test("PF-T803 imports nested HTML and SVG as editable Konva canvas elements", as
 
   await page.getByRole("tab", { name: "HTML" }).click();
   await page.getByRole("button", { name: "Render on Canvas" }).click();
-  await expect(page.locator(".toast")).toContainText(/Unlocked \d+ new icons from imported code/);
   await expect(dialog).not.toBeVisible();
   const importedTools = page.getByRole("region", { name: "Detected in imported code" });
   const importedTable = importedTools.getByRole("button", { name: "Add Table" });
@@ -106,18 +105,25 @@ test("PF-T803 imports nested HTML and SVG as editable Konva canvas elements", as
     .getByRole("button", { name: "Add Video" })).toBeVisible();
   await importedTable.dragTo(page.locator(".canvas-stage-surface"));
   const layerSearch = page.getByRole("searchbox", { name: "Search layers" });
-  await layerSearch.fill("Table");
+  await layerSearch.fill("table");
   await expect(page.locator(".layer-row").filter({
-    has: page.locator(".layer-name", { hasText: "Table" }),
+    has: page.locator(".layer-name", { hasText: "table" }),
   }).first()).toBeVisible();
-  await layerSearch.fill("h1 A Happy Place");
+  await layerSearch.fill("page-title");
+  const titleRow = page.locator(".layer-row").filter({
+    has: page.locator(".layer-name", { hasText: "page-title" }),
+  });
+  await expect(titleRow).toBeVisible();
+  await titleRow.locator(".layer-select").click();
+  await expect(titleRow).toHaveAttribute("aria-selected", "true");
+  await expect(titleRow.locator(".layer-select")).toHaveAttribute("aria-pressed", "true");
+  await layerSearch.fill("card");
   await expect(page.locator(".layer-row").filter({
-    has: page.locator(".layer-name", { hasText: "h1 A Happy Place" }),
-  })).toBeVisible();
-  await layerSearch.fill("article card");
-  await expect(page.locator(".layer-row").filter({
-    has: page.locator(".layer-name", { hasText: "article card" }),
+    has: page.locator(".layer-name", { hasText: "card" }),
   })).toHaveCount(3);
+  await expect(page.locator(".layer-row").filter({
+    has: page.locator(".layer-name", { hasText: "card" }),
+  }).first().locator(".layer-select svg")).toHaveClass(/lucide-square-stack/);
   const activeBreakpoint = page.getByLabel("Active breakpoint");
   const desktopBreakpoint = activeBreakpoint.locator("option:checked");
   const desktopHeight = await desktopBreakpoint.evaluate((option) =>
@@ -149,4 +155,39 @@ test("PF-T803 imports nested HTML and SVG as editable Konva canvas elements", as
   await page.getByRole("tab", { name: "JS" }).click();
   await expect(page.getByRole("textbox", { name: "JS code" })).toHaveValue("");
   await expect(page.getByTitle("Sandboxed code preview")).toHaveAttribute("srcdoc", /faq-question/);
+});
+
+test("PF-T805 maps a date input to Calendar and selects its imported layer", async ({ page }) => {
+  await startWorkspace(page, "Blank project");
+  await page.getByRole("button", { name: "Import Code" }).click();
+
+  const dialog = page.getByRole("dialog", { name: "Import code" });
+  await page.getByRole("textbox", { name: "HTML code" }).fill(
+    '<main><input id="start-date" type="date" aria-label="Start date"></main>',
+  );
+  await page.getByRole("button", { name: "Render on Canvas" }).click();
+
+  await expect(dialog).not.toBeVisible();
+  await expect(page.locator(".toast")).toHaveText(
+    "Unlocked Calendar element from imported code.",
+  );
+  const calendarTool = page.getByRole("region", { name: "Detected in imported code" })
+    .getByRole("button", { name: "Add Date picker" });
+  await expect(calendarTool).toBeVisible();
+
+  const layerSearch = page.getByRole("searchbox", { name: "Search layers" });
+  await layerSearch.fill("start-date");
+  const dateRow = page.locator(".layer-row").filter({
+    has: page.locator(".layer-name", { hasText: "start-date" }),
+  });
+  const importedRoot = page.locator(".layer-row").filter({
+    has: page.locator(".layer-name", { hasText: /^main$/ }),
+  });
+  await expect(importedRoot).toHaveAttribute("aria-level", "2");
+  await expect(dateRow).toHaveAttribute("aria-level", "3");
+  await expect(dateRow).toBeVisible();
+  await expect(dateRow.locator(".layer-select svg")).toHaveClass(/lucide-calendar/);
+  await dateRow.locator(".layer-select").click();
+  await expect(dateRow).toHaveAttribute("aria-selected", "true");
+  await expect(dateRow.locator(".layer-select")).toHaveAttribute("aria-pressed", "true");
 });

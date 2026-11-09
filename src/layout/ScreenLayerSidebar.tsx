@@ -1695,6 +1695,9 @@ export function ScreenLayerSidebar({ tutorialProjectId }: { tutorialProjectId: s
   ) => {
     const selected = selectedIds.includes(widget.id);
     const label = widgetLabel(widget);
+    const importedIcon = typeof widget.props.importedSuggestedIcon === "string"
+      ? widget.props.importedSuggestedIcon
+      : undefined;
     const hasChildren = entry.node.children.length > 0;
     const container = isLayerContainer(widget) || hasChildren;
     const parentLabel = hierarchyParentLabels.get(widget.id) ?? "Screen";
@@ -1883,7 +1886,7 @@ export function ScreenLayerSidebar({ tutorialProjectId }: { tutorialProjectId: s
               >
                 {container && hasChildren ? "Parent" : entry.depth === 0 ? "Screen child" : "Child"}
               </span>
-              <WidgetIcon type={widget.type} />
+              <WidgetIcon type={widget.type} iconName={importedIcon} />
               <span className="layer-name">{label}</span>
               {overflowPixels && (
                 <AlertTriangle
