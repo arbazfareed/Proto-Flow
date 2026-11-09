@@ -84,6 +84,7 @@ describe("PF-T803 Windows desktop HTML canvas rendering", () => {
     await expect($(".document-name")).toHaveText("Untitled project");
     await $(".toast").waitForDisplayed();
     await expect($(".toast")).toHaveText("Unlocked Calendar element from imported code.");
+    await expect($(".toast")).toHaveStyle({ "pointer-events": "none" });
     const importedTools = await $('[aria-label="Detected in imported code"]');
     const importedTable = await importedTools.$('[aria-label="Add Table"]');
     const importedDatePicker = await importedTools.$('[aria-label="Add Date picker"]');

@@ -1084,7 +1084,7 @@
 .app-statusbar .status-spacer { flex:1; }
 .app-statusbar .network-status-online { color:var(--success); }
 .app-statusbar .network-status-offline { color:var(--warning); }
-.toast { position:fixed; z-index:10; right:22px; bottom:21px; display:flex; align-items:center; gap:8px; padding:10px 13px; border:1px solid #34363b; border-radius:7px; color:#e5e5ea; background:#202125; box-shadow:0 8px 25px #0006; font-size:11px; animation:toast-in .18s ease-out; }
+.toast { position:fixed; z-index:10; right:22px; bottom:21px; display:flex; align-items:center; gap:8px; padding:10px 13px; border:1px solid #34363b; border-radius:7px; color:#e5e5ea; background:#202125; box-shadow:0 8px 25px #0006; font-size:11px; pointer-events:none; animation:toast-in .18s ease-out; }
 .toast svg { color:var(--success); }
 .toast-error { border-color:#684044; }
 .toast-error svg { color:var(--danger); }

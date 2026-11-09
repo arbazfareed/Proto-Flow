@@ -171,6 +171,7 @@ test("PF-T805 maps a date input to Calendar and selects its imported layer", asy
   await expect(page.locator(".toast")).toHaveText(
     "Unlocked Calendar element from imported code.",
   );
+  await expect(page.locator(".toast")).toHaveCSS("pointer-events", "none");
   const calendarTool = page.getByRole("region", { name: "Detected in imported code" })
     .getByRole("button", { name: "Add Date picker" });
   await expect(calendarTool).toBeVisible();
