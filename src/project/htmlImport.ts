@@ -10,7 +10,7 @@ const MAX_AST_NODES = 2_000;
 const SKIPPED_TAGS = new Set(["HEAD", "SCRIPT", "STYLE", "TEMPLATE", "NOSCRIPT", "SVG"]);
 const SEMANTIC_TAGS = new Set([
   "H1", "H2", "H3", "H4", "H5", "H6", "P", "BUTTON", "A", "INPUT",
-  "TEXTAREA", "SELECT", "LI", "BLOCKQUOTE", "PRE", "CODE", "IMG",
+  "TEXTAREA", "SELECT", "LI", "BLOCKQUOTE", "PRE", "CODE", "IMG", "AUDIO", "VIDEO", "IFRAME",
 ]);
 const LAYOUT_TAGS = new Set([
   "BODY", "MAIN", "DIV", "SECTION", "ARTICLE", "HEADER", "FOOTER", "NAV",
@@ -29,7 +29,9 @@ type CssDeclarations = Record<string, string>;
 
 export interface ImportedHtmlNode {
   id: string;
+  sourceKey: string;
   tagName: string;
+  elementName: string;
   computedStyles: CssDeclarations;
   parentId: string | null;
   suggestedIcon: string;
@@ -215,29 +217,37 @@ const LENGTH_STYLE_PROPERTIES = new Set([
 const SEMANTIC_ICONS: Record<string, string> = {
   A: "Link",
   AUDIO: "Music",
-  BLOCKQUOTE: "FileText",
-  BUTTON: "MousePointer2",
-  CODE: "Code2",
+  ARTICLE: "PanelTop",
+  ASIDE: "PanelLeft",
+  BLOCKQUOTE: "Quote",
+  BUTTON: "RectangleHorizontal",
+  CODE: "CodeXml",
   DETAILS: "ChevronDown",
-  H1: "Type",
-  H2: "Type",
-  H3: "Type",
-  H4: "Type",
-  H5: "Type",
-  H6: "Type",
+  DIV: "Square",
+  FOOTER: "PanelBottom",
+  FORM: "FileText",
+  H1: "Heading1",
+  H2: "Heading2",
+  H3: "Heading2",
+  H4: "Heading2",
+  H5: "Heading2",
+  H6: "Heading2",
+  HEADER: "PanelTop",
+  IFRAME: "AppWindow",
   IMG: "Image",
   LABEL: "Type",
   MAIN: "Layout",
-  NAV: "Compass",
+  NAV: "Menu",
   OL: "ListOrdered",
-  P: "FileText",
-  PRE: "Code2",
-  FORM: "FileText",
+  P: "AlignLeft",
+  PRE: "CodeXml",
   FIGURE: "Image",
   LI: "List",
-  SELECT: "List",
+  SECTION: "PanelTop",
+  SELECT: "ChevronDownSquare",
+  SPAN: "Type",
   TABLE: "Table",
-  TEXTAREA: "Type",
+  TEXTAREA: "AlignLeft",
   UL: "List",
   VIDEO: "Video",
 };
@@ -253,12 +263,27 @@ function iconForElement(element: Element): string | undefined {
       case "search":
         return "Search";
       case "checkbox":
-        return "Check";
+        return "CheckSquare";
+      case "radio":
+        return "CircleDot";
+      case "password":
+        return "Lock";
       default:
-        return "FileText";
+        return "TextCursorInput";
     }
   }
+  if (element.classList.contains("card")) {
+    return "SquareStack";
+  }
   return SEMANTIC_ICONS[element.tagName];
+}
+
+function importedElementName(element: Element): string {
+  return (
+    element.id.trim() ||
+    element.classList.item(0) ||
+    element.tagName.toLowerCase()
+  ).slice(0, 120);
 }
 
 function utilityDeclarations(element: Element): CssDeclarations {
@@ -563,6 +588,8 @@ function mapTagToTool(tagName: string): ShapeTool {
   if (tagName === "IMG") return "image";
   if (tagName === "PATH") return "path";
   if (tagName === "VIDEO") return "video";
+  if (tagName === "AUDIO") return "audio";
+  if (tagName === "IFRAME") return "web-app";
   if (tagName === "TABLE") return "rectangle";
   if (LAYOUT_TAGS.has(tagName)) return "rectangle";
   if (tagName === "LI" || tagName === "BLOCKQUOTE" || tagName === "PRE" || tagName === "CODE") return "paragraph";
@@ -685,6 +712,7 @@ function createHtmlWidget(
   box: HtmlLayoutBox,
   zIndex: number,
   parentId: string | null,
+  importedNode?: ImportedHtmlNode,
   pathViewBox?: { x: number; y: number; width: number; height: number },
 ): Widget | undefined {
   const tag = element.tagName.toUpperCase();
@@ -723,6 +751,11 @@ function createHtmlWidget(
     };
   } else if (tool === "image") {
     props = { ...safeImageSource(element), fileName: "", alt: element.getAttribute("alt") ?? "" };
+  } else if (tool === "video" || tool === "audio" || tool === "web-app") {
+    props = {
+      label: element.getAttribute("aria-label") ?? element.getAttribute("title") ?? text ?? "",
+      src: element.getAttribute("src") ?? "",
+    };
   } else if (tool === "path") {
     props = {
       label: "SVG path",
@@ -746,9 +779,13 @@ function createHtmlWidget(
     };
   }
 
+  if (importedNode) {
+    props.importedNodeId = importedNode.id;
+    props.importedTagName = importedNode.tagName;
+    props.importedSuggestedIcon = importedNode.suggestedIcon;
+  }
   const widget = createShapeWidget(tool, box.x, box.y, box.width, box.height, props);
-  const classLabel = Array.from(element.classList).slice(0, 2).join(" ");
-  widget.name = `${tag.toLowerCase()} ${text || classLabel}`.trim().slice(0, 120) || tag.toLowerCase();
+  widget.name = importedNode?.elementName ?? importedElementName(element);
   widget.zIndex = zIndex;
   if (parentId) widget.groupId = parentId;
   setWidgetStyles(widget, styles, isContainer);
@@ -764,7 +801,12 @@ function renderElementTree(
   parentId: string | null,
   depth: number,
   rules: ReturnType<typeof parseCssRules>,
-  state: { widgets: Widget[]; sourceKeys: string[]; nextZIndex: number },
+  state: {
+    widgets: Widget[];
+    sourceKeys: string[];
+    nextZIndex: number;
+    astNodesBySourceKey: ReadonlyMap<string, ImportedHtmlNode>;
+  },
   allocatedWidth?: number,
   sourceKey = "root",
 ): number {
@@ -825,6 +867,7 @@ function renderElementTree(
         { x, y, width: svgWidth, height: svgHeight },
         state.nextZIndex++,
         parentId,
+        undefined,
         { x: viewBoxX, y: viewBoxY, width: viewBoxWidth, height: viewBoxHeight },
       );
       if (pathWidget) {
@@ -908,7 +951,14 @@ function renderElementTree(
     height: Math.max(1, Math.min(16_384, widgetHeight)),
   };
   const widget = willRender && tag !== "BODY" && state.widgets.length < MAX_IMPORTED_WIDGETS
-    ? createHtmlWidget(element, styles, box, state.nextZIndex++, parentId)
+    ? createHtmlWidget(
+      element,
+      styles,
+      box,
+      state.nextZIndex++,
+      parentId,
+      state.astNodesBySourceKey.get(sourceKey),
+    )
     : undefined;
   if (widget) {
     state.widgets.push(widget);
@@ -925,6 +975,9 @@ function renderElementTree(
         child.tagName.toUpperCase() === "SVG"
       ) && !child.hasAttribute("hidden"))
     : [];
+  const childIndexes = new Map(
+    Array.from(element.children, (child, index) => [child, index] as const),
+  );
   let childBottom = childStartY;
   const display = styles.display;
   const flexRow = (display === "flex" || display === "inline-flex") && styles["flex-direction"] !== "column";
@@ -990,7 +1043,7 @@ function renderElementTree(
         rules,
         state,
         widths[index],
-        `${sourceKey}.${index}`,
+        `${sourceKey}.${childIndexes.get(child) ?? index}`,
       );
       rowChildren.push({ startIndex, endIndex: state.widgets.length, nextY });
       cursorX += widths[index] + justifyGap;
@@ -1024,7 +1077,7 @@ function renderElementTree(
           rules,
           state,
           undefined,
-          `${sourceKey}.${offset + column}`,
+          `${sourceKey}.${childIndexes.get(child) ?? offset + column}`,
         );
         rowBottom = Math.max(rowBottom, nextY);
       }
@@ -1045,7 +1098,7 @@ function renderElementTree(
         rules,
         state,
         undefined,
-        `${sourceKey}.${children.indexOf(child)}`,
+        `${sourceKey}.${childIndexes.get(child) ?? children.indexOf(child)}`,
       );
       childBottom = nextY + gap;
     }
@@ -1072,7 +1125,7 @@ export function parseHtmlToAst(html: string, css: string): ImportedHtmlAst {
   const requiredIcons = new Set<string>();
   let truncated = false;
 
-  const collect = (element: Element, parentId: string | null) => {
+  const collect = (element: Element, parentId: string | null, sourceKey: string) => {
     if (SKIPPED_TAGS.has(element.tagName.toUpperCase()) || element.hasAttribute("hidden")) return;
     if (nodes.length >= MAX_AST_NODES) {
       truncated = true;
@@ -1080,20 +1133,26 @@ export function parseHtmlToAst(html: string, css: string): ImportedHtmlAst {
     }
 
     const id = `node-${nodes.length + 1}`;
-    const icon = iconForElement(element);
+    const icon = iconForElement(element) ?? "Layout";
     nodes.push({
       id,
+      sourceKey,
       tagName: element.tagName.toLowerCase(),
+      elementName: importedElementName(element),
       computedStyles: computedStylesFor(element, rules),
       parentId,
-      suggestedIcon: icon ?? "Layout",
+      suggestedIcon: icon,
       textContent: normalizedText(element),
     });
-    if (icon) requiredIcons.add(icon);
-    for (const child of Array.from(element.children)) collect(child, id);
+    requiredIcons.add(icon);
+    for (const [index, child] of Array.from(element.children).entries()) {
+      collect(child, id, `${sourceKey}.${index}`);
+    }
   };
 
-  for (const child of Array.from(body.children)) collect(child, null);
+  for (const [index, child] of Array.from(body.children).entries()) {
+    collect(child, null, `body.${index}`);
+  }
   return { nodes, requiredIcons: [...requiredIcons], truncated };
 }
 
@@ -1112,8 +1171,7 @@ export function findRequiredIcons(html: string): Pick<ImportedHtmlAst, "required
       return;
     }
     nodeCount += 1;
-    const icon = iconForElement(element);
-    if (icon) requiredIcons.add(icon);
+    requiredIcons.add(iconForElement(element) ?? "Layout");
     for (const child of Array.from(element.children)) collect(child);
   };
 
@@ -1133,6 +1191,9 @@ export function importHtmlToWidgets(
 
   const extracted = extractImportedCode(html, css);
   if (extracted.css.length > MAX_CSS_LENGTH) throw new Error("CSS import is limited to 100 KB.");
+  const astNodesBySourceKey = new Map(
+    parseHtmlToAst(html, css).nodes.map((node) => [node.sourceKey, node]),
+  );
   const renderAtWidth = (width: number) => {
     const { document, body } = parseImportedHtmlDocument(extracted.html);
     const rules = parseCssRules(extracted.css, width);
@@ -1150,6 +1211,7 @@ export function importHtmlToWidgets(
       widgets: [] as Widget[],
       sourceKeys: [] as string[],
       nextZIndex: firstZIndex,
+      astNodesBySourceKey,
     };
     let cursorY = rootY;
 

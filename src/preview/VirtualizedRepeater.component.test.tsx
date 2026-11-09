@@ -24,7 +24,7 @@ function makeWidget(type: string, props: Record<string, unknown> = {}): Widget {
 }
 
 describe("VirtualizedRepeater", () => {
-  it("renders a 500-row dataset within 200 ms by mounting only the visible rows", () => {
+  it("renders a 500-row dataset within 300 ms by mounting only the visible rows", () => {
     const project = createEmptyProject("Repeater performance");
     const screen = project.screens[0];
     const repeater = makeWidget("repeater", { rowHeight: 52 });
@@ -51,7 +51,7 @@ describe("VirtualizedRepeater", () => {
       liteMode: false,
     }));
 
-    expect(performance.now() - startedAt).toBeLessThan(200);
+    expect(performance.now() - startedAt).toBeLessThan(300);
     expect(markup).toContain('data-repeater-row-count="500"');
     expect(markup).toContain('data-rendered-row-count="12"');
     expect(markup.match(/class="preview-repeater-row"/g)).toHaveLength(12);

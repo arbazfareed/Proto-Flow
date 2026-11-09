@@ -9,6 +9,7 @@ import {
   Container,
   Image,
   MousePointer2,
+  Music,
   Radio,
   Rows3,
   Shapes,
@@ -83,6 +84,7 @@ export const GENERIC_ELEMENT_TOOL_LABELS = {
   form: "Form",
   avatar: "Avatar",
   video: "Video",
+  audio: "Audio player",
   badge: "Badge",
   chip: "Chip",
   tag: "Tag",
@@ -124,6 +126,19 @@ export const GENERIC_ELEMENT_TOOL_LABELS = {
   "step-indicator": "Step indicator",
   "bottom-nav": "Bottom navigation",
   "pricing-card": "Pricing card",
+  "image-gallery": "Image gallery",
+  "app-bar": "App bar",
+  fab: "Floating action button",
+  "pull-to-refresh": "Pull to refresh",
+  "swipe-gesture": "Swipe gesture",
+  "api-request": "API request",
+  database: "Database",
+  "cloud-sync": "Cloud sync",
+  websocket: "WebSocket",
+  "auth-state": "Auth state",
+  settings: "Settings",
+  theme: "Theme",
+  "responsive-switch": "Responsive device switch",
 } as const;
 
 export type GenericElementTool = keyof typeof GENERIC_ELEMENT_TOOL_LABELS;
@@ -296,6 +311,8 @@ const CONTAINER_ELEMENT_TOOLS = new Set<GenericElementTool>([
   "footer",
   "bottom-nav",
   "pricing-card",
+  "app-bar",
+  "fab",
 ]);
 
 function genericElementDimensions(type: GenericElementTool): [number, number] {
@@ -305,6 +322,7 @@ function genericElementDimensions(type: GenericElementTool): [number, number] {
   if (type === "card") return [260, 196];
   if (type === "chart") return [240, 160];
   if (type === "video") return [240, 150];
+  if (type === "audio") return [240, 64];
   if (type === "icon-button") return [40, 40];
   if (type === "custom-icon") return [32, 32];
   if (type === "badge") return [88, 28];
@@ -322,6 +340,17 @@ function genericElementDimensions(type: GenericElementTool): [number, number] {
   if (type === "segmented-control") return [220, 40];
   if (type === "step-indicator") return [240, 48];
   if (type === "bottom-nav") return [240, 64];
+  if (type === "image-gallery") return [240, 160];
+  if (type === "app-bar") return [240, 56];
+  if (type === "fab") return [56, 56];
+  if (type === "pull-to-refresh" || type === "swipe-gesture") return [180, 48];
+  if (type === "api-request" || type === "websocket") return [200, 72];
+  if (type === "database" || type === "cloud-sync" || type === "auth-state") {
+    return [180, 80];
+  }
+  if (type === "settings" || type === "theme" || type === "responsive-switch") {
+    return [180, 64];
+  }
   if (CONTAINER_ELEMENT_TOOLS.has(type)) return [240, 140];
   if (type === "avatar") return [56, 56];
   if (type === "table" || type === "grid") {
@@ -438,6 +467,8 @@ function genericElementDefinition(
             }
           : type === "video"
             ? { label: "Product overview", src: "", poster: "" }
+            : type === "audio"
+              ? { label: "Audio player", src: "" }
             : type === "mobile-app"
               ? { label: "Mobile app", iconName: "Smartphone" }
               : type === "web-app"
@@ -496,6 +527,8 @@ function genericElementDefinition(
             ? Space
             : type === "video"
               ? Video
+              : type === "audio"
+                ? Music
               : type === "mobile-app"
                 ? Smartphone
                 : type === "web-app"

@@ -10,28 +10,47 @@ describe("getImportedElementTools", () => {
       "video",
       "image",
     ]);
+    expect(getImportedElementTools(["Music"])).toEqual(["audio"]);
   });
 
   it("maps every recognized semantic icon to an existing element-library tool", () => {
     const requiredIcons = [
       "Calendar",
       "Check",
+      "CheckSquare",
       "ChevronDown",
+      "ChevronDownSquare",
+      "CircleDot",
       "Code2",
+      "CodeXml",
       "Compass",
       "FileText",
+      "Heading1",
+      "Heading2",
       "Image",
       "Layout",
       "Link",
       "List",
       "ListOrdered",
+      "Lock",
       "Mail",
+      "Menu",
       "MousePointer2",
       "Music",
+      "PanelBottom",
+      "PanelLeft",
+      "PanelTop",
+      "Quote",
+      "RectangleHorizontal",
       "Search",
+      "Square",
+      "SquareStack",
       "Table",
+      "TextCursorInput",
       "Type",
       "Video",
+      "AppWindow",
+      "AlignLeft",
     ];
 
     expect(getImportedElementTools(requiredIcons)).not.toHaveLength(0);
