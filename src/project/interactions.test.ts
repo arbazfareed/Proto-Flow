@@ -45,6 +45,17 @@ describe("interaction rules", () => {
     expect(rule.actions[0].type).toBe("navigate");
   });
 
+  it("preserves the imported DOM node ID on its interaction rule", () => {
+    const widget = createWidget();
+    widget.props.importedNodeId = "node-3";
+
+    expect(createInteractionRule(widget)).toMatchObject({
+      widgetId: widget.id,
+      importedNodeId: "node-3",
+      event: "onClick",
+    });
+  });
+
   it("tests all and any conditions against initial variable values", () => {
     const project = createEmptyProject();
     const screen = project.screens[0];

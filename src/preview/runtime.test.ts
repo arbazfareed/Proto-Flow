@@ -98,6 +98,31 @@ describe("PreviewRuntime", () => {
     expect(runtime.currentScreenId).toBe(screen.id);
   });
 
+  it("fires imported DOM interactions only for the linked canvas widget", () => {
+    const project = createProject();
+    const screen = project.screens[0];
+    const trigger = screen.widgets[0];
+    trigger.props.importedNodeId = "node-2";
+    screen.interactionRules = [{
+      id: crypto.randomUUID(),
+      widgetId: trigger.id,
+      importedNodeId: "node-2",
+      event: "onClick",
+      conditionMode: "all",
+      conditions: [],
+      actions: [{ type: "navigate", target: project.screens[1].id }],
+    }];
+    const runtime = new PreviewRuntime(project);
+
+    expect(runtime.runEvent({ ...trigger, props: { ...trigger.props, importedNodeId: "node-3" } }, "onClick"))
+      .toEqual([]);
+    expect(runtime.lastRunRuleCount).toBe(0);
+    expect(runtime.currentScreenId).toBe(screen.id);
+    expect(runtime.runEvent(trigger, "onClick")).toEqual([]);
+    expect(runtime.lastRunRuleCount).toBe(1);
+    expect(runtime.currentScreenId).toBe(project.screens[1].id);
+  });
+
   it("evaluates any-condition matching and reports invalid actions without throwing", () => {
     const project = createProject();
     const screen = project.screens[0];

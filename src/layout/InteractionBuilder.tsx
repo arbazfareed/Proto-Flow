@@ -217,8 +217,13 @@ export function InteractionBuilder({
   const aiGenerator = useMeteredAction<InteractionRule>("ai_interaction_generator", aiPayload);
 
   const relevantRules = useMemo(
-    () => rules.filter((rule) => rule.widgetId === widget.id || !rule.widgetId),
-    [rules, widget.id],
+    () => rules.filter((rule) =>
+      rule.widgetId === widget.id ||
+      (typeof widget.props.importedNodeId === "string" &&
+        rule.importedNodeId === widget.props.importedNodeId) ||
+      !rule.widgetId,
+    ),
+    [rules, widget.id, widget.props.importedNodeId],
   );
   const availableEvents = useMemo(
     () => new Map(rules.map((rule) => [rule.id, getEventsForInputMode(screen.inputMode, rule.event)])),
@@ -343,6 +348,9 @@ export function InteractionBuilder({
         <div>
           <strong>TRIGGERS</strong>
           <p>Rules for {widget.name ?? widget.type}</p>
+          {typeof widget.props.importedNodeId === "string" && (
+            <p className="interaction-dom-binding">Linked DOM node: {widget.props.importedNodeId}</p>
+          )}
         </div>
         <HelpLink article="rule-builder" label="interaction rules" />
         <div className="interaction-builder-actions">
