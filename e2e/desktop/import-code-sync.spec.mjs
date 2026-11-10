@@ -58,6 +58,8 @@ describe("PF-T808 Windows desktop JavaScript and code synchronization", () => {
 
     const xPosition = await $('[aria-label="X"]');
     await xPosition.waitForEnabled();
+    await xPosition.scrollIntoView();
+    await xPosition.click();
     await xPosition.clearValue();
     await xPosition.addValue("130");
     await browser.keys(["ENTER"]);
