@@ -37,7 +37,10 @@ import { CloudPreviewDialog } from "./layout/CloudPreviewDialog";
 import { ReactCodeExportDialog } from "./layout/ReactCodeExportDialog";
 import { ImportCodeDialog, type ImportedCode } from "./layout/ImportCodeDialog";
 import { findRequiredIcons, importHtmlToWidgets } from "./project/htmlImport";
-import { updateImportedHtmlGeometry } from "./project/importedCodeSync";
+import {
+  getImportedHtmlGeometryUpdates,
+  updateImportedHtmlGeometry,
+} from "./project/importedCodeSync";
 import { getImportedElementTools } from "./project/importedElementTools";
 import { HtmlExportDialog } from "./layout/HtmlExportDialog";
 import { PluginManagerDialog } from "./layout/PluginManagerDialog";
@@ -159,25 +162,12 @@ function AppShell() {
         item.id === importCodeGroup.screenId,
       );
       if (!screen || !previousScreen) return;
-      const previousWidgets = new Map(previousScreen.widgets.map((widget) => [widget.id, widget]));
-      const geometryUpdates = screen.widgets.flatMap((widget) => {
-        if (widget.props.importedCodeId !== importCodeGroup.id ||
-          typeof widget.props.importedNodeId !== "string") return [];
-        const oldWidget = previousWidgets.get(widget.id);
-        if (!oldWidget || (
-          oldWidget.x === widget.x &&
-          oldWidget.y === widget.y &&
-          oldWidget.width === widget.width &&
-          oldWidget.height === widget.height
-        )) return [];
-        return [{
-          nodeId: widget.props.importedNodeId,
-          x: widget.x,
-          y: widget.y,
-          width: widget.width,
-          height: widget.height,
-        }];
-      });
+      const geometryUpdates = getImportedHtmlGeometryUpdates(
+        previousScreen,
+        screen,
+        importCodeGroup.id,
+        state.activeBreakpointId,
+      );
       if (geometryUpdates.length === 0) return;
       setImportCodeDraft((draft) => draft
         ? { ...draft, html: updateImportedHtmlGeometry(draft.html, geometryUpdates) }

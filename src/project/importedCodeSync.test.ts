@@ -1,9 +1,49 @@
 // @vitest-environment jsdom
 import { describe, expect, it } from "vitest";
 import { importHtmlToWidgets } from "./htmlImport";
-import { updateImportedHtmlGeometry } from "./importedCodeSync";
+import {
+  getImportedHtmlGeometryUpdates,
+  updateImportedHtmlGeometry,
+} from "./importedCodeSync";
+import { createEmptyProject } from "./schema";
 
-describe("updateImportedHtmlGeometry", () => {
+describe("imported code geometry synchronization", () => {
+  it("syncs geometry changed through an active breakpoint override", () => {
+    const screen = createEmptyProject().screens[0];
+    const [widget] = importHtmlToWidgets('<button id="submit">Submit</button>', "", 1440);
+    const importedWidget = {
+      ...widget,
+      props: {
+        ...widget.props,
+        importedCodeId: "import-1",
+        importedNodeId: "node-1",
+      },
+    };
+    const previousScreen = {
+      ...screen,
+      widgets: [{
+        ...importedWidget,
+        overrides: { mobile: { x: 20 } },
+      }],
+    };
+    const nextScreen = {
+      ...screen,
+      widgets: [{
+        ...importedWidget,
+        overrides: { mobile: { x: 130 } },
+      }],
+    };
+
+    expect(getImportedHtmlGeometryUpdates(previousScreen, nextScreen, "import-1", "mobile"))
+      .toEqual([{
+        nodeId: "node-1",
+        x: 130,
+        y: widget.y,
+        width: widget.width,
+        height: widget.height,
+      }]);
+  });
+
   it("writes canvas geometry into the matching source element as inline styles", () => {
     const source = '<button id="submit" style="color: red">Submit</button>';
     const updated = updateImportedHtmlGeometry(source, [{
