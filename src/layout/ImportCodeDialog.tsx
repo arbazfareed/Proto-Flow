@@ -10,6 +10,10 @@ import {
 import { findRequiredIcons } from "../project/htmlImport";
 import { extractImportedCode } from "../project/importedCode";
 import {
+  analyzeImportedJsListeners,
+} from "../project/importedJsEvents";
+import type { ImportedJsListenerSuggestion } from "../project/importedJsEvents";
+import {
   createImportedDomInspectorScript,
   parseImportedDomSelectionMessage,
 } from "../project/importedDomInspector";
@@ -40,6 +44,8 @@ interface ImportCodeDialogProps {
     code: Pick<ImportedCode, "html" | "css">,
     tokens: ImportedDesignTokens,
     interactionBinding: ImportedDomInteractionBinding | null,
+    javascriptListeners: ImportedJsListenerSuggestion[],
+    sourceCode: ImportedCode,
   ) => void;
 }
 
@@ -156,6 +162,7 @@ export function ImportCodeDialog({
   const [selectedDomNode, setSelectedDomNode] = useState<ImportedDomSelection | null>(null);
   const [interactionBinding, setInteractionBinding] =
     useState<ImportedDomInteractionBinding | null>(null);
+  const [convertedListenerIds, setConvertedListenerIds] = useState<string[]>([]);
   const [targetScreenId, setTargetScreenId] = useState(
     () => screens.find((screen) => screen.id !== sourceScreenId)?.id ?? "",
   );
@@ -168,6 +175,14 @@ export function ImportCodeDialog({
     }
     return { ...findRequiredIcons(html), unavailable: false };
   }, [html]);
+  const javascriptListenerAnalysis = useMemo(
+    () => {
+      const externalCode = getExternalCode(html, css, javascript);
+      const source = extractImportedCode(html, externalCode.css, externalCode.javascript);
+      return analyzeImportedJsListeners(source.javascript, source.html);
+    },
+    [css, html, javascript],
+  );
 
   useEffect(() => {
     const previousFocus = document.activeElement instanceof HTMLElement
@@ -235,10 +250,16 @@ export function ImportCodeDialog({
   const handleRender = () => {
     setError("");
     try {
+      const sourceCode = { html, css, javascript };
+      onDraftChange?.(sourceCode);
       onRenderOnCanvas(
         { html, css: getExternalCode(html, css, javascript).css },
         designTokens,
         interactionBinding,
+        javascriptListenerAnalysis.listeners.filter((listener) =>
+          convertedListenerIds.includes(listener.id),
+        ),
+        sourceCode,
       );
       onClose();
     } catch (cause) {
@@ -253,6 +274,7 @@ export function ImportCodeDialog({
     sendInspectorMode(false);
     setSelectedDomNode(null);
     setInteractionBinding(null);
+    setConvertedListenerIds([]);
     const hasEmbeddedCode = /<!doctype\b|<html(?:\s|>)|<style\b|<script\b/i.test(value);
     const nextCss = activeTab === "html" && hasEmbeddedCode && css === INITIAL_CSS ? "" : css;
     const nextJavascript = activeTab === "html" && hasEmbeddedCode && javascript === INITIAL_JS
@@ -426,6 +448,51 @@ export function ImportCodeDialog({
               )}
               {screens.filter((screen) => screen.id !== sourceScreenId).length === 0 && (
                 <p className="import-code-binding-status">Add another screen before binding navigation.</p>
+              )}
+            </section>
+            <section className="import-code-js-suggestions" aria-label="JavaScript event suggestions">
+              <div className="import-code-dom-inspector-title">
+                <strong>JAVASCRIPT EVENTS</strong>
+                <span>{javascriptListenerAnalysis.listeners.length} detected</span>
+              </div>
+              {javascriptListenerAnalysis.error ? (
+                <p className="import-code-binding-status" role="status">
+                  {javascriptListenerAnalysis.error}
+                </p>
+              ) : javascriptListenerAnalysis.listeners.length > 0 ? (
+                <ul>
+                  {javascriptListenerAnalysis.listeners.map((listener) => {
+                    const converted = convertedListenerIds.includes(listener.id);
+                    return (
+                      <li key={listener.id}>
+                        <div>
+                          <strong>{listener.eventName} on {listener.selector}</strong>
+                          <span>
+                            {listener.textValue === undefined
+                              ? "This handler has no supported text update to convert."
+                              : `${listener.protoFlowEvent} sets text to "${listener.textValue}"`}
+                          </span>
+                        </div>
+                        <button
+                          type="button"
+                          className="button button-secondary"
+                          aria-label={`Convert ${listener.eventName} listener on ${listener.selector} to ProtoFlow rule`}
+                          aria-pressed={converted}
+                          disabled={listener.textValue === undefined}
+                          onClick={() => setConvertedListenerIds((current) =>
+                            converted
+                              ? current.filter((id) => id !== listener.id)
+                              : [...current, listener.id],
+                          )}
+                        >
+                          {converted ? "Rule selected" : "Convert to rule"}
+                        </button>
+                      </li>
+                    );
+                  })}
+                </ul>
+              ) : (
+                <p>No supported addEventListener calls were found in the JavaScript.</p>
               )}
             </section>
             <div className="import-code-required-icons" aria-label="Required icons">

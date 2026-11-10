@@ -1433,6 +1433,15 @@
 .import-code-binding-controls select { min-width:0; flex:1; padding:6px 8px; border:1px solid var(--border); border-radius:5px; color:var(--text-primary); background:var(--surface-panel); font:11px system-ui,sans-serif; }
 .import-code-binding-controls .button { flex:0 0 auto; padding:6px 9px; font-size:10px; }
 .import-code-binding-status { color:#a99acb; }
+.import-code-js-suggestions { display:grid; max-height:130px; gap:7px; overflow:auto; padding:9px 12px; border-top:1px solid var(--border); color:var(--text-secondary); background:var(--surface-panel); font-size:10px; }
+.import-code-js-suggestions ul { display:grid; gap:6px; margin:0; padding:0; list-style:none; }
+.import-code-js-suggestions li { display:flex; align-items:center; justify-content:space-between; gap:8px; }
+.import-code-js-suggestions li>div { display:grid; min-width:0; gap:2px; }
+.import-code-js-suggestions li strong { overflow-wrap:anywhere; color:var(--text-primary); }
+.import-code-js-suggestions li span { overflow-wrap:anywhere; color:var(--text-muted); }
+.import-code-js-suggestions .button { flex:0 0 auto; padding:5px 8px; font-size:10px; }
+.import-code-js-suggestions .button:disabled { opacity:.55; cursor:not-allowed; }
+.import-code-js-suggestions>p { margin:0; line-height:1.4; }
 .import-code-required-icons { display:flex; min-height:40px; align-items:center; gap:10px; padding:6px 12px; border-top:1px solid var(--border); }
 .import-code-required-icons>span { flex:0 0 auto; color:var(--text-muted); font-size:9px; font-weight:700; letter-spacing:.06em; }
 .import-code-required-icons>div { display:flex; min-width:0; flex-wrap:wrap; gap:5px; }

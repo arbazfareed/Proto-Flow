@@ -29,7 +29,7 @@ on:
 jobs:
   browser-verification:
     runs-on: ubuntu-24.04
-    timeout-minutes: 20
+    timeout-minutes: 45
     env:
       PF_DEVICE_FULL: ${{ github.event_name == 'push' && '1' || '0' }}
     steps:

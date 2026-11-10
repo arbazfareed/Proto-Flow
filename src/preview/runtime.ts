@@ -86,6 +86,7 @@ export interface PreviewRuntimeSnapshot {
   panelStates: Record<string, string>;
   panelTransitions: Record<string, { transition: PanelTransition; duration: number }>;
   repeaterData: Record<string, unknown>;
+  widgetTexts: Record<string, string>;
   variables: Array<{ variable: VariableDefinition; value: RuntimeVariableValue }>;
 }
 
@@ -126,6 +127,7 @@ export class PreviewRuntime {
   private panelStates: Record<string, string> = {};
   private panelTransitions: Record<string, { transition: PanelTransition; duration: number }> = {};
   private repeaterData: Record<string, unknown> = {};
+  private widgetTexts: Record<string, string> = {};
   lastRunRuleCount = 0;
   lastAddedRepeaterRows = 0;
   lastPanelStateChanges = 0;
@@ -174,6 +176,9 @@ export class PreviewRuntime {
     this.repeaterData = Object.fromEntries(
       Object.entries(this.repeaterData).filter(([widgetId]) => widgetIds.has(widgetId)),
     );
+    this.widgetTexts = Object.fromEntries(
+      Object.entries(this.widgetTexts).filter(([widgetId]) => widgetIds.has(widgetId)),
+    );
     const screenIds = new Set(project.screens.map((screen) => screen.id));
     this.backStack = this.backStack.filter((id) => screenIds.has(id));
     if (!screenIds.has(this.screenId)) {
@@ -196,6 +201,7 @@ export class PreviewRuntime {
     this.panelStates = {};
     this.panelTransitions = {};
     this.repeaterData = {};
+    this.widgetTexts = {};
   }
 
   navigate(screenId: string): void {
@@ -254,6 +260,7 @@ export class PreviewRuntime {
       panelStates: { ...this.panelStates },
       panelTransitions: { ...this.panelTransitions },
       repeaterData: structuredClone(this.repeaterData),
+      widgetTexts: { ...this.widgetTexts },
       variables: this.variables.entries(this.screenId),
     };
   }
@@ -370,6 +377,16 @@ export class PreviewRuntime {
           }
           this.visibility[action.target] = action.type === "show";
           break;
+        case "setWidgetText":
+          {
+          const target = collectWidgetsDeep(screen.widgets).find((item) => item.id === action.target);
+          if (!target) throw new Error(`Text action target "${action.target}" is missing.`);
+          if (typeof actionValue !== "string") {
+            throw new Error("Set-text action requires a string value.");
+          }
+          this.widgetTexts[target.id] = actionValue;
+          break;
+          }
         case "setVariable":
           {
           const localVariable = rule.localVariables?.find((entry) => entry.name === action.target);
