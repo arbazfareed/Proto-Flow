@@ -26,6 +26,7 @@ import {
   parseImportedDesignTokenMessage,
 } from "../project/importedDesignTokens";
 import type { ImportedDesignTokens } from "../project/importedDesignTokens";
+import { resolveExternalAssets } from "../project/externalAssets";
 import { IMPORTED_HTML_ICON_REGISTRY } from "./widgetIcons";
 
 export interface ImportedCode {
@@ -163,6 +164,9 @@ export function ImportCodeDialog({
   const [interactionBinding, setInteractionBinding] =
     useState<ImportedDomInteractionBinding | null>(null);
   const [convertedListenerIds, setConvertedListenerIds] = useState<string[]>([]);
+  const [assetBaseUrl, setAssetBaseUrl] = useState("");
+  const [assetWarnings, setAssetWarnings] = useState<string[]>([]);
+  const [resolvingAssets, setResolvingAssets] = useState(false);
   const [targetScreenId, setTargetScreenId] = useState(
     () => screens.find((screen) => screen.id !== sourceScreenId)?.id ?? "",
   );
@@ -233,7 +237,7 @@ export function ImportCodeDialog({
     }
     if (event.key !== "Tab") return;
     const focusable = dialogRef.current?.querySelectorAll<HTMLElement>(
-      'button:not(:disabled), textarea, select:not(:disabled), iframe',
+      'button:not(:disabled), input:not(:disabled), textarea, select:not(:disabled), iframe',
     );
     if (!focusable?.length) return;
     const first = focusable[0];
@@ -267,8 +271,45 @@ export function ImportCodeDialog({
     }
   };
 
+  const handleResolveExternalAssets = async () => {
+    setResolvingAssets(true);
+    setError("");
+    setAssetWarnings([]);
+    try {
+      const result = await resolveExternalAssets(html, css, javascript, {
+        baseUrl: assetBaseUrl,
+      });
+      setHtml(result.html);
+      setCss(result.css);
+      setJavascript(result.javascript);
+      setAssetWarnings(result.warnings.length > 0
+        ? result.warnings
+        : result.resolvedCount > 0
+          ? [`Resolved ${result.resolvedCount} external asset${result.resolvedCount === 1 ? "" : "s"}.`]
+          : ["No external assets were found."]);
+      setDesignTokens({ colors: [], textStyles: [] });
+      setInspectorMode(false);
+      sendInspectorMode(false);
+      setSelectedDomNode(null);
+      setInteractionBinding(null);
+      setConvertedListenerIds([]);
+      onDraftChange?.({
+        html: result.html,
+        css: result.css,
+        javascript: result.javascript,
+      });
+    } catch (cause) {
+      setError(cause instanceof Error
+        ? cause.message
+        : "External assets could not be resolved.");
+    } finally {
+      setResolvingAssets(false);
+    }
+  };
+
   const currentValue = activeTab === "html" ? html : activeTab === "css" ? css : javascript;
   const updateCurrentValue = (value: string) => {
+    setAssetWarnings([]);
     setDesignTokens({ colors: [], textStyles: [] });
     setInspectorMode(false);
     sendInspectorMode(false);
@@ -366,6 +407,31 @@ export function ImportCodeDialog({
             <p className="import-code-hint">
               Embedded styles/scripts are extracted automatically. CSS is mapped to canvas elements; JavaScript runs only in the isolated preview.
             </p>
+            <section className="import-code-assets" aria-label="External asset resolver">
+              <label htmlFor="import-code-asset-base">Asset base URL (optional)</label>
+              <input
+                id="import-code-asset-base"
+                type="url"
+                aria-label="Asset base URL"
+                placeholder="https://example.com/page/"
+                value={assetBaseUrl}
+                onChange={(event) => setAssetBaseUrl(event.currentTarget.value)}
+              />
+              <button
+                type="button"
+                className="button button-secondary"
+                aria-label="Resolve external assets"
+                onClick={() => void handleResolveExternalAssets()}
+                disabled={resolvingAssets}
+              >
+                {resolvingAssets ? "Resolving assets…" : "Resolve external assets"}
+              </button>
+              {assetWarnings.length > 0 && (
+                <ul aria-label="External asset warnings" role="status" aria-live="polite">
+                  {assetWarnings.map((warning, index) => <li key={`${index}:${warning}`}>{warning}</li>)}
+                </ul>
+              )}
+            </section>
           </section>
 
           <section className="import-code-preview" aria-label="Live code preview">

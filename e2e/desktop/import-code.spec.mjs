@@ -51,13 +51,22 @@ describe("PF-T803 Windows desktop HTML canvas rendering", () => {
     expect(previewSource).toContain("connect-src 'none'");
     expect(previewSource).toContain("Welcome to ProtoFlow");
 
+    const assetResolver = await $('[aria-label="External asset resolver"]');
+    const htmlEditor = await $('[aria-label="HTML code"]');
+    await htmlEditor.setValue('<img src="http://assets.example.test/photo.png" alt="Photo">');
+    await assetResolver.scrollIntoView();
+    await $('[aria-label="Resolve external assets"]').click();
+    const assetWarnings = await $('[aria-label="External asset warnings"]');
+    await assetWarnings.waitForDisplayed();
+    expect(await assetWarnings.getText()).toContain("Use a public HTTPS URL");
+    expect(await htmlEditor.getValue()).toContain("http://assets.example.test/photo.png");
+
     const evidenceDirectory = path.join("test-results", "desktop");
     mkdirSync(evidenceDirectory, { recursive: true });
     await browser.saveScreenshot(path.join(evidenceDirectory, "pf-t801-import-modal.png"));
 
     const htmlTab = await dialog.$("#import-code-tab-html");
     await htmlTab.click();
-    const htmlEditor = await $('[aria-label="HTML code"]');
     await htmlEditor.setValue(
       '<video aria-label="Intro"></video><table><tr><td>Report</td></tr></table><input type="date" aria-label="Start date">',
     );
