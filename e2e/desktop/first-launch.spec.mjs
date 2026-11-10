@@ -53,7 +53,9 @@ describe("Windows desktop first launch", () => {
     await blankTemplate.click();
     await $('//button[normalize-space(.)="Continue"]').click();
     await $('//button[normalize-space(.)="Got it"]').click();
-    await $('//button[normalize-space(.)="Skip tour"]').click();
+    const skipTourOnFirstLaunch = await $('//button[normalize-space(.)="Skip tour"]');
+    await skipTourOnFirstLaunch.waitForDisplayed({ timeout: 30_000 });
+    await skipTourOnFirstLaunch.click();
     await $('//button[normalize-space(.)="Finish"]').click();
 
     await expect($('[aria-label="Quick actions"]')).toBeDisplayed();
