@@ -2,12 +2,21 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import type { KeyboardEvent } from "react";
 import {
   Code2,
+  Crosshair,
   FileText,
   ShieldCheck,
   X,
 } from "lucide-react";
 import { findRequiredIcons } from "../project/htmlImport";
 import { extractImportedCode } from "../project/importedCode";
+import {
+  createImportedDomInspectorScript,
+  parseImportedDomSelectionMessage,
+} from "../project/importedDomInspector";
+import type {
+  ImportedDomInteractionBinding,
+  ImportedDomSelection,
+} from "../project/importedDomInspector";
 import {
   createDesignTokenCollectorScript,
   parseImportedDesignTokenMessage,
@@ -23,11 +32,14 @@ export interface ImportedCode {
 
 interface ImportCodeDialogProps {
   initialCode?: ImportedCode | null;
+  screens: Array<{ id: string; name: string }>;
+  sourceScreenId: string;
   onClose: () => void;
   onDraftChange?: (code: ImportedCode) => void;
   onRenderOnCanvas: (
     code: Pick<ImportedCode, "html" | "css">,
     tokens: ImportedDesignTokens,
+    interactionBinding: ImportedDomInteractionBinding | null,
   ) => void;
 }
 
@@ -99,6 +111,7 @@ export function compileSandboxDocument(
 </head>
 <body>
 ${extracted.html}
+<script>${createImportedDomInspectorScript(tokenNonce)}</script>
 <script>${createDesignTokenCollectorScript(tokenNonce)}</script>
 <script>${safeJavascript}</script>
 </body>
@@ -122,6 +135,8 @@ return {
 
 export function ImportCodeDialog({
   initialCode,
+  screens,
+  sourceScreenId,
   onClose,
   onDraftChange,
   onRenderOnCanvas,
@@ -137,6 +152,14 @@ export function ImportCodeDialog({
     colors: [],
     textStyles: [],
   });
+  const [inspectorMode, setInspectorMode] = useState(false);
+  const [selectedDomNode, setSelectedDomNode] = useState<ImportedDomSelection | null>(null);
+  const [interactionBinding, setInteractionBinding] =
+    useState<ImportedDomInteractionBinding | null>(null);
+  const [targetScreenId, setTargetScreenId] = useState(
+    () => screens.find((screen) => screen.id !== sourceScreenId)?.id ?? "",
+  );
+  const previewFrameRef = useRef<HTMLIFrameElement>(null);
   const dialogRef = useRef<HTMLElement>(null);
   const activeEditorRef = useRef<HTMLTextAreaElement>(null);
   const iconAnalysis = useMemo(() => {
@@ -158,6 +181,8 @@ export function ImportCodeDialog({
     const timeout = window.setTimeout(() => {
       const externalCode = getExternalCode(html, css, javascript);
       setDesignTokens({ colors: [], textStyles: [] });
+      setSelectedDomNode(null);
+      setInteractionBinding(null);
       setPreviewDocument(compileSandboxDocument(html, externalCode.css, externalCode.javascript, previewNonce));
     }, 300);
     return () => window.clearTimeout(timeout);
@@ -170,10 +195,20 @@ export function ImportCodeDialog({
       )?.contentWindow) return;
       const tokens = parseImportedDesignTokenMessage(event.data, previewNonce);
       if (tokens) setDesignTokens(tokens);
+      const selectedNode = parseImportedDomSelectionMessage(event.data, previewNonce);
+      if (selectedNode) setSelectedDomNode(selectedNode);
     };
     window.addEventListener("message", handlePreviewMessage);
     return () => window.removeEventListener("message", handlePreviewMessage);
   }, [previewNonce]);
+
+  const sendInspectorMode = (enabled: boolean) => {
+    previewFrameRef.current?.contentWindow?.postMessage({
+      type: "protoflow-dom-inspector-mode",
+      nonce: previewNonce,
+      enabled,
+    }, "*");
+  };
 
   const handleKeyDown = (event: KeyboardEvent<HTMLElement>) => {
     if (event.key === "Escape") {
@@ -183,7 +218,7 @@ export function ImportCodeDialog({
     }
     if (event.key !== "Tab") return;
     const focusable = dialogRef.current?.querySelectorAll<HTMLElement>(
-      'button:not(:disabled), textarea, iframe',
+      'button:not(:disabled), textarea, select:not(:disabled), iframe',
     );
     if (!focusable?.length) return;
     const first = focusable[0];
@@ -203,6 +238,7 @@ export function ImportCodeDialog({
       onRenderOnCanvas(
         { html, css: getExternalCode(html, css, javascript).css },
         designTokens,
+        interactionBinding,
       );
       onClose();
     } catch (cause) {
@@ -213,6 +249,10 @@ export function ImportCodeDialog({
   const currentValue = activeTab === "html" ? html : activeTab === "css" ? css : javascript;
   const updateCurrentValue = (value: string) => {
     setDesignTokens({ colors: [], textStyles: [] });
+    setInspectorMode(false);
+    sendInspectorMode(false);
+    setSelectedDomNode(null);
+    setInteractionBinding(null);
     const hasEmbeddedCode = /<!doctype\b|<html(?:\s|>)|<style\b|<script\b/i.test(value);
     const nextCss = activeTab === "html" && hasEmbeddedCode && css === INITIAL_CSS ? "" : css;
     const nextJavascript = activeTab === "html" && hasEmbeddedCode && javascript === INITIAL_JS
@@ -309,15 +349,85 @@ export function ImportCodeDialog({
           <section className="import-code-preview" aria-label="Live code preview">
             <div className="import-code-preview-heading">
               <span>LIVE PREVIEW</span>
-              <span>Updates after 300 ms</span>
+              <button
+                type="button"
+                className={`import-code-inspector-toggle${inspectorMode ? " is-active" : ""}`}
+                aria-pressed={inspectorMode}
+                onClick={() => {
+                  const enabled = !inspectorMode;
+                  setInspectorMode(enabled);
+                  sendInspectorMode(enabled);
+                }}
+              >
+                <Crosshair size={12} /> {inspectorMode ? "Stop inspecting" : "Inspect elements"}
+              </button>
             </div>
             <iframe
               key={previewDocument}
+              ref={previewFrameRef}
               title="Sandboxed code preview"
               sandbox="allow-scripts"
               referrerPolicy="no-referrer"
               srcDoc={previewDocument}
+              onLoad={() => sendInspectorMode(inspectorMode)}
             />
+            <section className="import-code-dom-inspector" aria-label="DOM inspector">
+              <div className="import-code-dom-inspector-title">
+                <strong>DOM INSPECTOR</strong>
+                <span>{selectedDomNode ? selectedDomNode.nodeId : "Click an element in the preview"}</span>
+              </div>
+              {selectedDomNode ? (
+                <>
+                  <p>
+                    <code>&lt;{selectedDomNode.tagName}&gt;</code> {selectedDomNode.label}
+                    {selectedDomNode.textContent && ` · ${selectedDomNode.textContent}`}
+                  </p>
+                  {interactionBinding?.nodeId === selectedDomNode.nodeId ? (
+                    <p className="import-code-binding-status" role="status">
+                      onClick navigates to {screens.find((screen) =>
+                        screen.id === interactionBinding.targetScreenId,
+                      )?.name ?? "the selected screen"}
+                    </p>
+                  ) : (
+                    <div className="import-code-binding-controls">
+                      <select
+                        aria-label="Interaction destination"
+                        value={targetScreenId}
+                        onChange={(event) => setTargetScreenId(event.currentTarget.value)}
+                      >
+                        <option value="">Choose destination</option>
+                        {screens.filter((screen) => screen.id !== sourceScreenId).map((screen) => (
+                          <option key={screen.id} value={screen.id}>{screen.name}</option>
+                        ))}
+                      </select>
+                      <button
+                        type="button"
+                        className="button button-secondary"
+                        disabled={!targetScreenId || !screens.some((screen) =>
+                          screen.id === targetScreenId && screen.id !== sourceScreenId,
+                        )}
+                        onClick={() => setInteractionBinding({
+                          nodeId: selectedDomNode.nodeId,
+                          targetScreenId,
+                        })}
+                      >
+                        Bind onClick navigation
+                      </button>
+                    </div>
+                  )}
+                  {interactionBinding && interactionBinding.nodeId !== selectedDomNode.nodeId && (
+                    <p className="import-code-binding-status">
+                      Another element is already bound. Binding this element will replace it.
+                    </p>
+                  )}
+                </>
+              ) : (
+                <p>Enable Inspect elements, then click an HTML element to bind a ProtoFlow action.</p>
+              )}
+              {screens.filter((screen) => screen.id !== sourceScreenId).length === 0 && (
+                <p className="import-code-binding-status">Add another screen before binding navigation.</p>
+              )}
+            </section>
             <div className="import-code-required-icons" aria-label="Required icons">
               <span>REQUIRED ICONS</span>
               <div>

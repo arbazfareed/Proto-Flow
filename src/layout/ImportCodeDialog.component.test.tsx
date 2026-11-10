@@ -5,7 +5,7 @@ import { ImportCodeDialog, compileSandboxDocument } from "./ImportCodeDialog";
 
 describe("ImportCodeDialog", () => {
   it("debounces live updates into a script-only sandbox with a restrictive CSP", async () => {
-    renderWithProviders(<ImportCodeDialog onClose={vi.fn()} onRenderOnCanvas={vi.fn()} />);
+    renderWithProviders(<ImportCodeDialog screens={[]} sourceScreenId="source" onClose={vi.fn()} onRenderOnCanvas={vi.fn()} />);
     const preview = screen.getByTitle("Sandboxed code preview");
 
     expect(preview.getAttribute("sandbox")).toBe("allow-scripts");
@@ -27,7 +27,7 @@ describe("ImportCodeDialog", () => {
   it("switches between HTML, CSS, and JavaScript editors and invokes canvas import", () => {
     const onClose = vi.fn();
     const onRenderOnCanvas = vi.fn();
-    renderWithProviders(<ImportCodeDialog onClose={onClose} onRenderOnCanvas={onRenderOnCanvas} />);
+    renderWithProviders(<ImportCodeDialog screens={[]} sourceScreenId="source" onClose={onClose} onRenderOnCanvas={onRenderOnCanvas} />);
 
     fireEvent.click(screen.getByRole("tab", { name: "CSS" }));
     fireEvent.change(screen.getByRole("textbox", { name: "CSS code" }), {
@@ -46,12 +46,12 @@ describe("ImportCodeDialog", () => {
     }, {
       colors: [],
       textStyles: [],
-    });
+    }, null);
     expect(onClose).toHaveBeenCalledOnce();
   });
 
   it("extracts embedded document CSS and JavaScript for the sandbox preview", async () => {
-    renderWithProviders(<ImportCodeDialog onClose={vi.fn()} onRenderOnCanvas={vi.fn()} />);
+    renderWithProviders(<ImportCodeDialog screens={[]} sourceScreenId="source" onClose={vi.fn()} onRenderOnCanvas={vi.fn()} />);
     const html = `<!doctype html><html><head><style>.hero { color: #123456; }</style></head>
       <body><main class="hero"><h1>Full document</h1></main>
       <script>document.querySelector("h1").dataset.ready = "true";</script></body></html>`;
@@ -79,6 +79,8 @@ describe("ImportCodeDialog", () => {
     const first = renderWithProviders(
       <ImportCodeDialog
         onClose={vi.fn()}
+        screens={[]}
+        sourceScreenId="source"
         onDraftChange={onDraftChange}
         onRenderOnCanvas={vi.fn()}
       />,
@@ -93,6 +95,8 @@ describe("ImportCodeDialog", () => {
     renderWithProviders(
       <ImportCodeDialog
         initialCode={draft}
+        screens={[]}
+        sourceScreenId="source"
         onClose={vi.fn()}
         onDraftChange={onDraftChange}
         onRenderOnCanvas={vi.fn()}
@@ -104,7 +108,7 @@ describe("ImportCodeDialog", () => {
   });
 
   it("shows relevant code icons for semantic markup", () => {
-    renderWithProviders(<ImportCodeDialog onClose={vi.fn()} onRenderOnCanvas={vi.fn()} />);
+    renderWithProviders(<ImportCodeDialog screens={[]} sourceScreenId="source" onClose={vi.fn()} onRenderOnCanvas={vi.fn()} />);
     fireEvent.change(screen.getByRole("textbox", { name: "HTML code" }), {
       target: {
         value: `<video aria-label="Intro"></video><table><tr><td>Report</td></tr></table><input type="date" aria-label="Start date">`,
@@ -120,7 +124,7 @@ describe("ImportCodeDialog", () => {
     const onRenderOnCanvas = vi.fn(() => {
       throw new Error("Nothing importable.");
     });
-    renderWithProviders(<ImportCodeDialog onClose={vi.fn()} onRenderOnCanvas={onRenderOnCanvas} />);
+    renderWithProviders(<ImportCodeDialog screens={[]} sourceScreenId="source" onClose={vi.fn()} onRenderOnCanvas={onRenderOnCanvas} />);
 
     fireEvent.click(screen.getByRole("button", { name: "Render on Canvas" }));
     expect(screen.getByRole("alert")).toHaveTextContent("Nothing importable.");

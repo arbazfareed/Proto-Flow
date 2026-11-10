@@ -73,6 +73,7 @@ export const InteractionRuleSchema = z
   .object({
     id: z.string().uuid(),
     widgetId: z.string().uuid().optional(),
+    importedNodeId: z.string().trim().min(1).max(120).optional(),
     event: z.enum([
       "onClick",
       "onDoubleClick",

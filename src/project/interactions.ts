@@ -219,11 +219,25 @@ export function validateInteractionRules(project: Project, screen: Screen): Inte
   for (const ownerScreen of project.screens) {
     for (const rule of ownerScreen.interactionRules) {
       if (ownerScreen.id === screen.id) {
-        if (rule.widgetId && !collectWidgetsDeep(screen.widgets).some((widget) => widget.id === rule.widgetId)) {
+        const widgets = collectWidgetsDeep(screen.widgets);
+        const trigger = rule.widgetId
+          ? widgets.find((widget) => widget.id === rule.widgetId)
+          : rule.importedNodeId
+            ? widgets.find((widget) => widget.props.importedNodeId === rule.importedNodeId)
+            : undefined;
+        if (rule.widgetId && !trigger) {
           issues.push({
             severity: "error",
             code: "unknown-target",
             message: "Trigger must reference a widget on this screen.",
+            ruleId: rule.id,
+          });
+        }
+        if (rule.importedNodeId && trigger?.props.importedNodeId !== rule.importedNodeId) {
+          issues.push({
+            severity: "error",
+            code: "unknown-target",
+            message: "Imported DOM trigger must reference its matching imported element.",
             ruleId: rule.id,
           });
         }
@@ -469,6 +483,9 @@ export function createInteractionRule(widget: Widget): InteractionRule {
   return {
     id: crypto.randomUUID(),
     widgetId: widget.id,
+    ...(typeof widget.props.importedNodeId === "string"
+      ? { importedNodeId: widget.props.importedNodeId }
+      : {}),
     event: "onClick",
     conditionMode: "all",
     conditions: [],

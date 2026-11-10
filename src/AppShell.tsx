@@ -79,6 +79,8 @@ import {
   type ImportedDesignTokens,
   type ImportedTextStyleToken,
 } from "./project/importedDesignTokens";
+import { createInteractionRule } from "./project/interactions";
+import type { ImportedDomInteractionBinding } from "./project/importedDomInspector";
 import {
   CanvasArea,
   LeftSidebar,
@@ -880,6 +882,7 @@ function AppShell() {
   const renderImportedCode = useCallback((
     { html, css }: Pick<ImportedCode, "html" | "css">,
     tokens: ImportedDesignTokens,
+    interactionBinding: ImportedDomInteractionBinding | null,
   ) => {
     const state = useStore.getState();
     const screenId = state.getActiveScreenId();
@@ -897,6 +900,22 @@ function AppShell() {
       firstZIndex,
       getScreenBreakpoints(screen),
     );
+    let importedRule: ReturnType<typeof createInteractionRule> | null = null;
+    if (interactionBinding) {
+      const widget = importedWidgets.find(
+        (candidate) => candidate.props.importedNodeId === interactionBinding.nodeId,
+      );
+      if (!widget) throw new Error("The inspected DOM element could not be matched to an imported canvas element.");
+      if (!state.project.screens.some((item) =>
+        item.id === interactionBinding.targetScreenId && item.id !== screenId,
+      )) throw new Error("Choose an existing destination screen for the imported interaction.");
+      importedRule = createInteractionRule(widget);
+      importedRule.importedNodeId = interactionBinding.nodeId;
+      importedRule.actions[0] = {
+        type: "navigate",
+        target: interactionBinding.targetScreenId,
+      };
+    }
     const importedElementTools = getImportedElementTools(findRequiredIcons(html).requiredIcons);
     const newlyUnlockedTools = importedElementTools.filter(
       (tool) => !unlockedElementTools.includes(tool),
@@ -920,21 +939,36 @@ function AppShell() {
               ...item,
               breakpoints,
               widgets: screenWidgets,
+              ...(importedRule ? { interactionRules: [...item.interactionRules, importedRule] } : {}),
             }
           : item,
       ),
     });
     state.select(importedWidgets.map((widget) => widget.id));
     setImportedDesignTokens(tokens);
+    const bindingMessage = interactionBinding
+      ? (() => {
+          const destination = state.project.screens.find((item) =>
+            item.id === interactionBinding.targetScreenId,
+          );
+          return `Bound ${interactionBinding.nodeId} onClick to navigate to ${destination?.name ?? "the selected screen"}.`;
+        })()
+      : "";
     if (newlyUnlockedTools.includes("date-picker")) {
-      notify("Unlocked Calendar element from imported code.");
+      notify([
+        bindingMessage,
+        "Unlocked Calendar element from imported code.",
+      ].filter(Boolean).join(" "));
     } else if (newlyUnlockedTools.length > 0) {
       const labels = newlyUnlockedTools.map(
         (tool) => getShapeToolDefinition(tool)?.label ?? tool,
       );
-      notify(
+      notify([
+        bindingMessage,
         `Unlocked ${labels.join(", ")} ${labels.length === 1 ? "element" : "elements"} from imported code.`,
-      );
+      ].filter(Boolean).join(" "));
+    } else if (interactionBinding) {
+      notify(bindingMessage);
     } else {
       notify(`Rendered ${importedWidgets.length} elements on the canvas.`);
     }
@@ -1134,6 +1168,8 @@ function AppShell() {
       {importCodeOpen && (
         <ImportCodeDialog
           initialCode={importCodeDraft}
+          screens={currentProject.screens.map(({ id, name }) => ({ id, name }))}
+          sourceScreenId={useStore.getState().getActiveScreenId()}
           onDraftChange={setImportCodeDraft}
           onClose={() => setImportCodeOpen(false)}
           onRenderOnCanvas={renderImportedCode}

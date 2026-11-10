@@ -265,7 +265,9 @@ export class PreviewRuntime {
     const screen = this.currentScreen;
     const errors: string[] = [];
     const rules = screen.interactionRules.filter((rule) =>
-      rule.event === event && (!rule.widgetId || rule.widgetId === widget.id),
+      rule.event === event &&
+      (!rule.widgetId || rule.widgetId === widget.id) &&
+      (!rule.importedNodeId || rule.importedNodeId === widget.props.importedNodeId),
     );
     for (const rule of rules) {
       const localVariables = this.initializeLocalVariables(rule.localVariables);
