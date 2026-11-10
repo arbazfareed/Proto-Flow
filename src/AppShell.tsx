@@ -37,6 +37,7 @@ import { CloudPreviewDialog } from "./layout/CloudPreviewDialog";
 import { ReactCodeExportDialog } from "./layout/ReactCodeExportDialog";
 import { ImportCodeDialog, type ImportedCode } from "./layout/ImportCodeDialog";
 import { findRequiredIcons, importHtmlToWidgets } from "./project/htmlImport";
+import { updateImportedHtmlGeometry } from "./project/importedCodeSync";
 import { getImportedElementTools } from "./project/importedElementTools";
 import { HtmlExportDialog } from "./layout/HtmlExportDialog";
 import { PluginManagerDialog } from "./layout/PluginManagerDialog";
@@ -46,7 +47,7 @@ import { VersionHistoryDialog } from "./layout/VersionHistoryDialog";
 import { commandRegistry, createCoreCommands } from "./commands/registry";
 import { handleGlobalShortcut } from "./commands/shortcuts";
 import { formatProjectValidationError, SchemaValidationError } from "./project/schema";
-import type { Screen } from "./project/schema";
+import type { Screen, Widget } from "./project/schema";
 import {
   createDefaultBreakpoints,
   expandBreakpointsForWidgets,
@@ -81,6 +82,7 @@ import {
 } from "./project/importedDesignTokens";
 import { createInteractionRule } from "./project/interactions";
 import type { ImportedDomInteractionBinding } from "./project/importedDomInspector";
+import type { ImportedJsListenerSuggestion } from "./project/importedJsEvents";
 import {
   CanvasArea,
   LeftSidebar,
@@ -116,6 +118,8 @@ function AppShell() {
   const [htmlExportOpen, setHtmlExportOpen] = useState(false);
   const [importCodeOpen, setImportCodeOpen] = useState(false);
   const [importCodeDraft, setImportCodeDraft] = useState<ImportedCode | null>(null);
+  const [importCodeGroup, setImportCodeGroup] = useState<{ id: string; screenId: string } | null>(null);
+  const syncingImportedCodeRef = useRef(false);
   const [importedDesignTokens, setImportedDesignTokens] = useState<ImportedDesignTokens>(
     EMPTY_IMPORTED_DESIGN_TOKENS,
   );
@@ -145,6 +149,41 @@ function AppShell() {
   useEffect(() => {
     setImportedDesignTokens(EMPTY_IMPORTED_DESIGN_TOKENS);
   }, [currentProject.id]);
+
+  useEffect(() => {
+    if (!importCodeGroup) return;
+    return useStore.subscribe((state, previous) => {
+      if (syncingImportedCodeRef.current || state.project === previous.project) return;
+      const screen = state.project.screens.find((item) => item.id === importCodeGroup.screenId);
+      const previousScreen = previous.project.screens.find((item) =>
+        item.id === importCodeGroup.screenId,
+      );
+      if (!screen || !previousScreen) return;
+      const previousWidgets = new Map(previousScreen.widgets.map((widget) => [widget.id, widget]));
+      const geometryUpdates = screen.widgets.flatMap((widget) => {
+        if (widget.props.importedCodeId !== importCodeGroup.id ||
+          typeof widget.props.importedNodeId !== "string") return [];
+        const oldWidget = previousWidgets.get(widget.id);
+        if (!oldWidget || (
+          oldWidget.x === widget.x &&
+          oldWidget.y === widget.y &&
+          oldWidget.width === widget.width &&
+          oldWidget.height === widget.height
+        )) return [];
+        return [{
+          nodeId: widget.props.importedNodeId,
+          x: widget.x,
+          y: widget.y,
+          width: widget.width,
+          height: widget.height,
+        }];
+      });
+      if (geometryUpdates.length === 0) return;
+      setImportCodeDraft((draft) => draft
+        ? { ...draft, html: updateImportedHtmlGeometry(draft.html, geometryUpdates) }
+        : draft);
+    });
+  }, [importCodeGroup]);
 
   const notify = useCallback((message: string, isError = false) => {
     if (noticeTimeoutRef.current !== null) {
@@ -883,24 +922,49 @@ function AppShell() {
     { html, css }: Pick<ImportedCode, "html" | "css">,
     tokens: ImportedDesignTokens,
     interactionBinding: ImportedDomInteractionBinding | null,
+    javascriptListeners: ImportedJsListenerSuggestion[],
+    sourceCode: ImportedCode,
   ) => {
     const state = useStore.getState();
     const screenId = state.getActiveScreenId();
     const screen = state.project.screens.find((item) => item.id === screenId);
     if (!screen) throw new Error("Select a screen before rendering imported code.");
 
-    const firstZIndex = screen.widgets.reduce(
-      (highest, widget) => Math.max(highest, widget.zIndex),
-      -1,
-    ) + 1;
-    const importedWidgets = importHtmlToWidgets(
+    const groupId = importCodeGroup?.screenId === screenId
+      ? importCodeGroup.id
+      : crypto.randomUUID();
+    const previousImportedWidgets = screen.widgets.filter(
+      (widget) => widget.props.importedCodeId === groupId,
+    );
+    const firstZIndex = previousImportedWidgets.length > 0
+      ? Math.min(...previousImportedWidgets.map((widget) => widget.zIndex))
+      : screen.widgets.reduce((highest, widget) => Math.max(highest, widget.zIndex), -1) + 1;
+    const parsedWidgets = importHtmlToWidgets(
       html,
       css,
       screen.device?.width ?? DEFAULT_DEVICE_PRESET.viewport.width,
       firstZIndex,
       getScreenBreakpoints(screen),
     );
-    let importedRule: ReturnType<typeof createInteractionRule> | null = null;
+    const previousByNodeId = new Map(previousImportedWidgets.flatMap((widget) =>
+      typeof widget.props.importedNodeId === "string"
+        ? [[widget.props.importedNodeId, widget] as const]
+        : [],
+    ));
+    const mappedIds = new Map(parsedWidgets.map((widget) => [
+      widget.id,
+      previousByNodeId.get(String(widget.props.importedNodeId))?.id ?? widget.id,
+    ]));
+    const importedWidgets: Widget[] = parsedWidgets.map((widget) => {
+      const existing = previousByNodeId.get(String(widget.props.importedNodeId));
+      return {
+        ...widget,
+        id: existing?.id ?? widget.id,
+        groupId: widget.groupId ? mappedIds.get(widget.groupId) ?? widget.groupId : undefined,
+        props: { ...widget.props, importedCodeId: groupId },
+      };
+    });
+    const importedRules: ReturnType<typeof createInteractionRule>[] = [];
     if (interactionBinding) {
       const widget = importedWidgets.find(
         (candidate) => candidate.props.importedNodeId === interactionBinding.nodeId,
@@ -909,12 +973,35 @@ function AppShell() {
       if (!state.project.screens.some((item) =>
         item.id === interactionBinding.targetScreenId && item.id !== screenId,
       )) throw new Error("Choose an existing destination screen for the imported interaction.");
-      importedRule = createInteractionRule(widget);
-      importedRule.importedNodeId = interactionBinding.nodeId;
-      importedRule.actions[0] = {
+      const rule = createInteractionRule(widget);
+      rule.importedCodeId = groupId;
+      rule.importedNodeId = interactionBinding.nodeId;
+      rule.actions[0] = {
         type: "navigate",
         target: interactionBinding.targetScreenId,
       };
+      importedRules.push(rule);
+    }
+    for (const listener of javascriptListeners) {
+      const widget = importedWidgets.find(
+        (candidate) => candidate.props.importedNodeId === listener.nodeId,
+      );
+      if (!widget) {
+        throw new Error(`JavaScript listener target ${listener.selector} could not be matched to an imported canvas element.`);
+      }
+      if (listener.textValue === undefined) {
+        throw new Error(`JavaScript listener on ${listener.selector} has no supported text update to convert.`);
+      }
+      const rule = createInteractionRule(widget);
+      rule.importedCodeId = groupId;
+      rule.importedNodeId = listener.nodeId;
+      rule.event = listener.protoFlowEvent;
+      rule.actions[0] = {
+        type: "setWidgetText",
+        target: widget.id,
+        value: listener.textValue,
+      };
+      importedRules.push(rule);
     }
     const importedElementTools = getImportedElementTools(findRequiredIcons(html).requiredIcons);
     const newlyUnlockedTools = importedElementTools.filter(
@@ -923,27 +1010,47 @@ function AppShell() {
     if (newlyUnlockedTools.length > 0) {
       setUnlockedElementTools((current) => [...current, ...newlyUnlockedTools]);
     }
-    const screenWidgets = [...screen.widgets, ...importedWidgets];
+    const screenWidgets = [
+      ...screen.widgets.filter((widget) => widget.props.importedCodeId !== groupId),
+      ...importedWidgets,
+    ];
+    const importedWidgetIds = new Set(importedWidgets.map((widget) => widget.id));
+    const previousImportedWidgetIds = new Set(previousImportedWidgets.map((widget) => widget.id));
+    const interactionRules = [
+      ...screen.interactionRules.filter((rule) =>
+        rule.importedCodeId !== groupId &&
+        (!rule.widgetId || !previousImportedWidgetIds.has(rule.widgetId) ||
+          importedWidgetIds.has(rule.widgetId)),
+      ),
+      ...importedRules,
+    ];
     const breakpoints = expandBreakpointsForWidgets(
       getScreenBreakpoints(screen),
       screenWidgets,
     );
     if (state.activePanelEdit) state.setActivePanelEdit(null);
     if (state.activeRepeaterEdit) state.setActiveRepeaterEdit(null);
-    state.setProject({
-      ...state.project,
-      updatedAt: new Date().toISOString(),
-      screens: state.project.screens.map((item) =>
-        item.id === screenId
-          ? {
-              ...item,
-              breakpoints,
-              widgets: screenWidgets,
-              ...(importedRule ? { interactionRules: [...item.interactionRules, importedRule] } : {}),
-            }
-          : item,
-      ),
-    });
+    syncingImportedCodeRef.current = true;
+    try {
+      state.setProject({
+        ...state.project,
+        updatedAt: new Date().toISOString(),
+        screens: state.project.screens.map((item) =>
+          item.id === screenId
+            ? {
+                ...item,
+                breakpoints,
+                widgets: screenWidgets,
+                interactionRules,
+              }
+            : item,
+        ),
+      });
+    } finally {
+      syncingImportedCodeRef.current = false;
+    }
+    setImportCodeGroup({ id: groupId, screenId });
+    setImportCodeDraft(sourceCode);
     state.select(importedWidgets.map((widget) => widget.id));
     setImportedDesignTokens(tokens);
     const bindingMessage = interactionBinding
@@ -954,25 +1061,39 @@ function AppShell() {
           return `Bound ${interactionBinding.nodeId} onClick to navigate to ${destination?.name ?? "the selected screen"}.`;
         })()
       : "";
+    const javascriptMessage = javascriptListeners.length > 0
+        ? `Converted ${javascriptListeners.length} JavaScript event ${javascriptListeners.length === 1 ? "listener" : "listeners"} into ProtoFlow rules.`
+        : "";
     if (newlyUnlockedTools.includes("date-picker")) {
-      notify([
-        bindingMessage,
-        "Unlocked Calendar element from imported code.",
-      ].filter(Boolean).join(" "));
+        notify([
+          bindingMessage,
+          javascriptMessage,
+          "Unlocked Calendar element from imported code.",
+        ].filter(Boolean).join(" "));
     } else if (newlyUnlockedTools.length > 0) {
       const labels = newlyUnlockedTools.map(
         (tool) => getShapeToolDefinition(tool)?.label ?? tool,
       );
       notify([
         bindingMessage,
+        javascriptMessage,
         `Unlocked ${labels.join(", ")} ${labels.length === 1 ? "element" : "elements"} from imported code.`,
       ].filter(Boolean).join(" "));
-    } else if (interactionBinding) {
-      notify(bindingMessage);
+    } else if (interactionBinding || javascriptListeners.length > 0) {
+      notify([bindingMessage, javascriptMessage].filter(Boolean).join(" "));
     } else {
       notify(`Rendered ${importedWidgets.length} elements on the canvas.`);
     }
-  }, [notify, unlockedElementTools]);
+  }, [importCodeGroup, notify, unlockedElementTools]);
+
+  const openImportCode = useCallback(() => {
+    const screenId = useStore.getState().getActiveScreenId();
+    if (importCodeGroup && importCodeGroup.screenId !== screenId) {
+      setImportCodeGroup(null);
+      setImportCodeDraft(null);
+    }
+    setImportCodeOpen(true);
+  }, [importCodeGroup]);
 
   const applyImportedColor = useCallback((
     token: ImportedColorToken,
@@ -1108,7 +1229,7 @@ function AppShell() {
         onRedo={redo}
         onOpenPalette={() => setPaletteOpen(true)}
         onOpenPreview={() => void openPreview()}
-        onImportCode={() => setImportCodeOpen(true)}
+        onImportCode={openImportCode}
         onPublishCloudPreview={() => setCloudPreviewOpen(true)}
         onOpenCollaboration={openCollaboration}
         onExportReactCode={() => setReactExportOpen(true)}

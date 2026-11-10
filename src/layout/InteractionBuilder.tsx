@@ -39,6 +39,7 @@ const ACTIONS = [
   ["navigate", "Navigate"],
   ["show", "Show"],
   ["hide", "Hide"],
+  ["setWidgetText", "Set widget text"],
   ["setVariable", "Set variable"],
   ["setPanelState", "Set panel state"],
   ["setRepeaterData", "Set repeater data"],
@@ -67,6 +68,12 @@ function initialAction(type: string, screen: Screen): InteractionAction {
       return { type, target: "" };
     case "setVariable":
       return { type, target: "", value: "" };
+    case "setWidgetText":
+      return {
+        type,
+        target: collectWidgetsDeep(screen.widgets)[0]?.id ?? "",
+        value: "",
+      };
     case "setPanelState":
     case "setRepeaterData":
     case "addRepeaterRow":

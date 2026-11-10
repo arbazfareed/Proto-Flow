@@ -123,6 +123,27 @@ describe("PreviewRuntime", () => {
     expect(runtime.currentScreenId).toBe(project.screens[1].id);
   });
 
+  it("applies imported JavaScript text listeners through ProtoFlow event rules", () => {
+    const project = createProject();
+    const screen = project.screens[0];
+    const trigger = screen.widgets[0];
+    trigger.props.importedNodeId = "node-1";
+    screen.interactionRules = [{
+      id: crypto.randomUUID(),
+      widgetId: trigger.id,
+      importedNodeId: "node-1",
+      importedCodeId: crypto.randomUUID(),
+      event: "onClick",
+      conditionMode: "all",
+      conditions: [],
+      actions: [{ type: "setWidgetText", target: trigger.id, value: "Saved" }],
+    }];
+
+    const runtime = new PreviewRuntime(project);
+    expect(runtime.runEvent(trigger, "onClick")).toEqual([]);
+    expect(runtime.snapshot().widgetTexts[trigger.id]).toBe("Saved");
+  });
+
   it("evaluates any-condition matching and reports invalid actions without throwing", () => {
     const project = createProject();
     const screen = project.screens[0];

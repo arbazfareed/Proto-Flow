@@ -173,6 +173,8 @@ const COMPUTED_STYLE_PROPERTIES = [
   "margin-right",
   "margin-bottom",
   "margin-left",
+  "left",
+  "top",
   "border-radius",
   "border-width",
   "border-style",
@@ -203,6 +205,8 @@ const LENGTH_STYLE_PROPERTIES = new Set([
   "margin-right",
   "margin-bottom",
   "margin-left",
+  "left",
+  "top",
   "font-size",
   "border-radius",
   "border-width",
@@ -452,7 +456,7 @@ function parseCssDeclarations(source: string): CssDeclarations {
     const separator = declaration.indexOf(":");
     if (separator < 0) continue;
     const property = declaration.slice(0, separator).trim().toLowerCase();
-    const value = declaration.slice(separator + 1).trim();
+    const value = declaration.slice(separator + 1).replace(/\s*!important\s*$/i, "").trim();
     if (property && value) declarations[property] = value;
   }
   return declarations;
@@ -910,8 +914,13 @@ function renderElementTree(
     availableWidth,
     Math.max(minWidth, Math.min(maxWidth, naturalWidth)),
   ));
-  const left = x + marginLeft;
-  const top = y + marginTop;
+  const isPositioned = styles.position === "absolute" || styles.position === "fixed";
+  const left = isPositioned
+    ? cssLength(styles.left, availableWidth, x)
+    : x + marginLeft;
+  const top = isPositioned
+    ? cssLength(styles.top, availableWidth, y)
+    : y + marginTop;
   const padding = cssLength(styles.padding, width, 0);
   const paddingLeft = cssLength(styles["padding-left"], width, padding);
   const paddingRight = cssLength(styles["padding-right"], width, padding);
@@ -1110,7 +1119,7 @@ function renderElementTree(
       ? Math.max(minHeight, 32, childBottom - top + paddingBottom - (children.length ? gap : 0))
       : desiredHeight;
   if (widget) widget.height = Math.max(1, Math.min(16_384, measuredHeight));
-  return top + measuredHeight + marginBottom;
+  return isPositioned ? y : top + measuredHeight + marginBottom;
 }
 
 export function parseHtmlToAst(html: string, css: string): ImportedHtmlAst {

@@ -46,7 +46,10 @@ describe("ImportCodeDialog", () => {
     }, {
       colors: [],
       textStyles: [],
-    }, null);
+    }, null, [], expect.objectContaining({
+      html: "<h1>Canvas import</h1>",
+      css: "h1 { color: red; }",
+    }));
     expect(onClose).toHaveBeenCalledOnce();
   });
 
@@ -67,6 +70,76 @@ describe("ImportCodeDialog", () => {
     const preview = screen.getByTitle("Sandboxed code preview");
     expect(preview.getAttribute("srcdoc")).not.toContain("#f3f0fa");
     expect(preview.getAttribute("srcdoc")).not.toContain("<html lang=\"en\"><head");
+  });
+
+  it("offers a ProtoFlow rule for supported JavaScript text listeners", () => {
+    const onRenderOnCanvas = vi.fn();
+    renderWithProviders(
+      <ImportCodeDialog
+        screens={[]}
+        sourceScreenId="source"
+        onClose={vi.fn()}
+        onRenderOnCanvas={onRenderOnCanvas}
+      />,
+    );
+    fireEvent.change(screen.getByRole("textbox", { name: "HTML code" }), {
+      target: { value: '<button id="save">Save</button>' },
+    });
+
+    fireEvent.click(screen.getByRole("tab", { name: "JS" }));
+    fireEvent.change(screen.getByRole("textbox", { name: "JS code" }), {
+      target: {
+        value: `document.querySelector("#save").addEventListener("click", (event) => {
+          event.currentTarget.textContent = "Saved";
+        });`,
+      },
+    });
+
+    const convert = screen.getByRole("button", {
+      name: "Convert click listener on #save to ProtoFlow rule",
+    });
+    expect(convert).toBeEnabled();
+    fireEvent.click(convert);
+    fireEvent.click(screen.getByRole("button", { name: "Render on Canvas" }));
+
+    expect(onRenderOnCanvas).toHaveBeenCalledWith(
+      expect.objectContaining({ html: '<button id="save">Save</button>' }),
+      expect.any(Object),
+      null,
+      [expect.objectContaining({
+        nodeId: "node-1",
+        protoFlowEvent: "onClick",
+        textValue: "Saved",
+      })],
+      expect.objectContaining({
+        javascript: `document.querySelector("#save").addEventListener("click", (event) => {
+          event.currentTarget.textContent = "Saved";
+        });`,
+      }),
+    );
+  });
+
+  it("detects listeners embedded in a full HTML document", () => {
+    renderWithProviders(
+      <ImportCodeDialog
+        screens={[]}
+        sourceScreenId="source"
+        onClose={vi.fn()}
+        onRenderOnCanvas={vi.fn()}
+      />,
+    );
+    fireEvent.change(screen.getByRole("textbox", { name: "HTML code" }), {
+      target: {
+        value: `<!doctype html><html><body><button id="save">Save</button>
+          <script>document.querySelector("#save").addEventListener("click", (event) => {
+            event.currentTarget.textContent = "Saved";
+          });</script></body></html>`,
+      },
+    });
+
+    expect(screen.getByRole("button", {
+      name: "Convert click listener on #save to ProtoFlow rule",
+    })).toBeEnabled();
   });
 
   it("restores the latest HTML, CSS, and JavaScript after closing and reopening", () => {
