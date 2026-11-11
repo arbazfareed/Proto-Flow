@@ -6,12 +6,19 @@ import { startAutosave } from "./project/autosave";
 import { AppErrorBoundary } from "./diagnostics/AppErrorBoundary";
 import "./styles.css";
 
-startAutosave();
+async function startApplication() {
+  if (import.meta.env.VITE_WDIO === "true") {
+    await import("@wdio/tauri-plugin");
+  }
+  startAutosave();
 
-ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
-  <React.StrictMode>
-    <AppErrorBoundary>
-      <App />
-    </AppErrorBoundary>
-  </React.StrictMode>,
-);
+  ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
+    <React.StrictMode>
+      <AppErrorBoundary>
+        <App />
+      </AppErrorBoundary>
+    </React.StrictMode>,
+  );
+}
+
+void startApplication();

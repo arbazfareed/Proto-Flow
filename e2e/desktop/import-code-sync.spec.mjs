@@ -1,3 +1,11 @@
+import { expect } from "@wdio/globals";
+
+async function replaceEditorValue(editor, value) {
+  await editor.click();
+  await browser.keys(["\uE009", "a"]);
+  await editor.addValue(value);
+}
+
 describe("PF-T808 Windows desktop JavaScript and code synchronization", () => {
   it("converts a listener and synchronizes canvas geometry with imported HTML", async () => {
     const privacyDialog = await $('[aria-labelledby="privacy-settings-title"]');
@@ -16,9 +24,11 @@ describe("PF-T808 Windows desktop JavaScript and code synchronization", () => {
 
     await $('[aria-label="Import Code"]').click();
     let htmlEditor = await $('[aria-label="HTML code"]');
-    await htmlEditor.setValue('<button id="save">Save</button>');
+    await replaceEditorValue(htmlEditor, '<button id="save">Save</button>');
+    expect(await htmlEditor.getValue()).toBe('<button id="save">Save</button>');
     await $("#import-code-tab-js").click();
-    await $('[aria-label="JS code"]').setValue(
+    await replaceEditorValue(
+      await $('[aria-label="JS code"]'),
       `document.querySelector("#save").addEventListener("click", (event) => {
         event.currentTarget.textContent = "Saved";
       });`,
@@ -33,6 +43,7 @@ describe("PF-T808 Windows desktop JavaScript and code synchronization", () => {
     );
     await $('//button[normalize-space(.)="Render on Canvas"]').click();
     await $('[role="dialog"][aria-labelledby="import-code-title"]').waitForDisplayed({ reverse: true });
+    await expect($(".inspector-top h2")).toHaveText("Save");
 
     const editorWindow = await browser.getWindowHandle();
     await $('[aria-label="Open preview"]').click();
@@ -59,24 +70,34 @@ describe("PF-T808 Windows desktop JavaScript and code synchronization", () => {
     const xPosition = await $('[aria-label="X"]');
     await xPosition.waitForEnabled();
     await xPosition.scrollIntoView({ block: "center" });
-    await xPosition.click();
-    await xPosition.setValue("130");
+    await replaceEditorValue(xPosition, "130");
     await browser.waitUntil(async () => (await xPosition.getValue()) === "130");
     await $('[aria-label="Import Code"]').click();
     htmlEditor = await $('[aria-label="HTML code"]');
     await browser.waitUntil(async () =>
       (await htmlEditor.getValue()).includes("left: 130px !important"),
     );
-    await htmlEditor.setValue(
+    await replaceEditorValue(
+      htmlEditor,
       '<button id="save" style="position:absolute;left:180px;top:200px;width:210px;height:55px">Edited by HTML</button>',
     );
+    expect(await htmlEditor.getValue()).toContain(
+      'style="position:absolute;left:180px;top:200px;width:210px;height:55px"',
+    );
     await $("#import-code-tab-js").click();
+    await replaceEditorValue(
+      await $('[aria-label="JS code"]'),
+      `document.querySelector("#save").addEventListener("click", (event) => {
+        event.currentTarget.textContent = "Saved";
+      });`,
+    );
     await $('[aria-label="Convert click listener on #save to ProtoFlow rule"]').click();
     await $('//button[normalize-space(.)="Render on Canvas"]').click();
     await $('[role="dialog"][aria-labelledby="import-code-title"]').waitForDisplayed({ reverse: true });
 
     const updatedXPosition = await $('[aria-label="X"]');
     await updatedXPosition.waitForEnabled();
+    await expect($(".inspector-top h2")).toHaveText("Edited by HTML");
     await browser.waitUntil(async () =>
       (await updatedXPosition.getValue()) === "180",
     );

@@ -1,7 +1,11 @@
 import { fireEvent, screen, waitFor } from "@testing-library/react";
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { renderWithProviders } from "../test/render";
 import { ImportCodeDialog, compileSandboxDocument } from "./ImportCodeDialog";
+
+afterEach(() => {
+  vi.unstubAllGlobals();
+});
 
 describe("ImportCodeDialog", () => {
   it("debounces live updates into a script-only sandbox with a restrictive CSP", async () => {
@@ -140,6 +144,85 @@ describe("ImportCodeDialog", () => {
     expect(screen.getByRole("button", {
       name: "Convert click listener on #save to ProtoFlow rule",
     })).toBeEnabled();
+  });
+
+  it("resolves external styles, scripts, and images into the editable sources", async () => {
+    const fetcher = vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.endsWith("/theme.css")) {
+        return new Response("h1 { color: #123456; }", {
+          headers: { "content-type": "text/css" },
+        });
+      }
+      if (url.endsWith("/app.js")) {
+        return new Response(
+          `document.querySelector("#save").addEventListener("click", (event) => {
+            event.currentTarget.textContent = "Saved";
+          });`,
+          { headers: { "content-type": "text/javascript" } },
+        );
+      }
+      return new Response(Uint8Array.from([1, 2, 3]), {
+        headers: { "content-type": "image/png" },
+      });
+    });
+    vi.stubGlobal("fetch", fetcher);
+    renderWithProviders(
+      <ImportCodeDialog
+        screens={[]}
+        sourceScreenId="source"
+        onClose={vi.fn()}
+        onRenderOnCanvas={vi.fn()}
+      />,
+    );
+    fireEvent.change(screen.getByRole("textbox", { name: "HTML code" }), {
+      target: {
+        value: '<link rel="stylesheet" href="/theme.css"><button id="save">Save</button>' +
+          '<script src="/app.js"></script><img src="/photo.png" alt="Photo">',
+      },
+    });
+    fireEvent.change(screen.getByRole("textbox", { name: "Asset base URL" }), {
+      target: { value: "https://assets.example.test/pages/demo.html" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Resolve external assets" }));
+
+    await screen.findByText("Resolved 3 external assets.");
+    const resolvedHtml = screen.getByRole("textbox", {
+      name: "HTML code",
+    }) as HTMLTextAreaElement;
+    expect(resolvedHtml.value).toContain('src="data:image/png;base64,AQID"');
+    expect(resolvedHtml.value).toContain('currentTarget.textContent = "Saved"');
+    fireEvent.click(screen.getByRole("tab", { name: "CSS" }));
+    expect((screen.getByRole("textbox", {
+      name: "CSS code",
+    }) as HTMLTextAreaElement).value).toContain("color: #123456");
+    expect(screen.getByRole("button", {
+      name: "Convert click listener on #save to ProtoFlow rule",
+    })).toBeEnabled();
+    expect(fetcher).toHaveBeenCalledTimes(3);
+  });
+
+  it("shows a clear warning when external assets are blocked by CORS", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => {
+      throw new TypeError("Failed to fetch");
+    }));
+    renderWithProviders(
+      <ImportCodeDialog
+        screens={[]}
+        sourceScreenId="source"
+        onClose={vi.fn()}
+        onRenderOnCanvas={vi.fn()}
+      />,
+    );
+    fireEvent.change(screen.getByRole("textbox", { name: "HTML code" }), {
+      target: {
+        value: '<img src="https://assets.example.test/photo.png">',
+      },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Resolve external assets" }));
+
+    expect(await screen.findByRole("status", { name: "External asset warnings" }))
+      .toHaveTextContent("CORS or network policy");
   });
 
   it("restores the latest HTML, CSS, and JavaScript after closing and reopening", () => {

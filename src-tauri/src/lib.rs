@@ -5,6 +5,8 @@ pub fn run() {
     let builder = tauri::Builder::default();
     #[cfg(desktop)]
     let builder = builder.plugin(tauri_plugin_single_instance::init(|_, _, _| {}));
+    #[cfg(feature = "wdio")]
+    let builder = builder.plugin(tauri_plugin_wdio::init());
 
     builder
         .plugin(tauri_plugin_dialog::init())
