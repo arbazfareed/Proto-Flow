@@ -315,6 +315,11 @@ function commitWidgetGeometry(
   }
 }
 
+/** Canvas shortcuts must not act on the canvas hidden behind a modal dialog. */
+function isModalDialogOpen(): boolean {
+  return document.querySelector('[aria-modal="true"]') !== null;
+}
+
 function isEditingTarget(target: EventTarget | null): boolean {
   if (!(target instanceof HTMLElement)) return false;
   return Boolean(
@@ -743,6 +748,13 @@ function getEditableWidgetText(widget: Widget): EditableWidgetText | null {
   return { key, value: typeof value === "string" ? value : "" };
 }
 
+const TEXT_FIRST_WIDGET_TYPES = new Set(["text", "heading", "paragraph", "link", "label"]);
+
+/** A single printable key (not Space, which pans the canvas) that should start typing. */
+function isTypingKey(event: KeyboardEvent): boolean {
+  return event.key.length === 1 && event.key !== " " && !event.ctrlKey && !event.metaKey && !event.altKey;
+}
+
 function updateWidgetProps(
   widgetId: string,
   patch: Record<string, unknown>,
@@ -817,6 +829,10 @@ export function CanvasStage({
   const transformerRef = useRef<Konva.Transformer>(null);
   const imageInputRef = useRef<HTMLInputElement>(null);
   const textEditorRef = useRef<HTMLTextAreaElement>(null);
+  // How the inline editor places the caret when it opens: select everything so typing
+  // replaces the placeholder, or put the caret at the end after a typed first letter.
+  const editorOpenSelectionRef = useRef<"all" | "end">("all");
+  const pendingNewTextEditRef = useRef<string | null>(null);
   const imageTargetRef = useRef<string | null>(null);
   const cancelEditRef = useRef(false);
   const panGestureRef = useRef<{ pointerId: number; x: number; y: number } | null>(
@@ -1397,14 +1413,15 @@ export function CanvasStage({
   }, []);
 
   const beginWidgetTextEdit = useCallback(
-    (widget: Widget) => {
+    (widget: Widget, typedText?: string) => {
       if (widget.type === "image") {
-        openImagePicker(widget.id);
+        if (typedText === undefined) openImagePicker(widget.id);
         return;
       }
       const editable = getEditableWidgetText(widget);
       if (!editable) return;
-      const initialValue = editable.value.slice(0, MAX_WIDGET_TEXT_LENGTH);
+      const initialValue = (typedText ?? editable.value).slice(0, MAX_WIDGET_TEXT_LENGTH);
+      editorOpenSelectionRef.current = typedText === undefined ? "all" : "end";
       setEditing({ widgetId: widget.id, ...editable });
       setEditValue(initialValue);
       setEditCursor(initialValue.length);
@@ -1446,6 +1463,37 @@ export function CanvasStage({
   const cancelWidgetTextEdit = useCallback(() => {
     cancelEditRef.current = true;
     setEditing(null);
+  }, []);
+
+  const editingWidgetId = editing?.widgetId ?? null;
+  useEffect(() => {
+    if (!editingWidgetId) return;
+    const frame = requestAnimationFrame(() => {
+      const editor = textEditorRef.current;
+      if (!editor) return;
+      editor.focus();
+      if (editorOpenSelectionRef.current === "all") {
+        editor.select();
+      } else {
+        editor.setSelectionRange(editor.value.length, editor.value.length);
+      }
+      setEditCursor(editor.selectionStart);
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [editingWidgetId]);
+
+  // A text widget that was just drawn opens straight into editing, once it is on screen.
+  useEffect(() => {
+    const pendingId = pendingNewTextEditRef.current;
+    if (!pendingId) return;
+    const widget = screenWidgets.find((item) => item.id === pendingId);
+    if (!widget) return;
+    pendingNewTextEditRef.current = null;
+    beginWidgetTextEdit(widget);
+  }, [beginWidgetTextEdit, screenWidgets]);
+
+  const editNewTextWidget = useCallback((tool: string, widgetId: string | null) => {
+    if (widgetId && TEXT_FIRST_WIDGET_TYPES.has(tool)) pendingNewTextEditRef.current = widgetId;
   }, []);
 
   const getWorldPositionFromClient = useCallback(
@@ -1609,18 +1657,19 @@ export function CanvasStage({
     if (!tool) return true;
     const position = getWorldPositionFromClient(event.clientX, event.clientY);
     lastPointerWorldRef.current = position;
-    createWidgetAt(
+    editNewTextWidget(tool, createWidgetAt(
       tool,
       position,
       undefined,
       event.altKey,
       getCanvasDropTarget(event.clientX, event.clientY),
-    );
+    ));
     onToolChange(null);
     return true;
   }, [
     clearCanvasDropFeedback,
     createWidgetAt,
+    editNewTextWidget,
     getCanvasDropTarget,
     getWorldPositionFromClient,
     onToolChange,
@@ -1744,11 +1793,11 @@ export function CanvasStage({
         }
       }
 
-      createWidgetAt(draft.tool, position, bounds, draft.altKey);
+      editNewTextWidget(draft.tool, createWidgetAt(draft.tool, position, bounds, draft.altKey));
       setShapeDraft(null);
       onToolChange(null);
     },
-    [createWidgetAt, onToolChange],
+    [createWidgetAt, editNewTextWidget, onToolChange],
   );
 
   const handleShapePointerDown = useCallback(
@@ -2222,7 +2271,7 @@ export function CanvasStage({
       c: "checkbox",
     };
     const onKeyDown = (event: KeyboardEvent) => {
-      if (isEditingTarget(event.target)) {
+      if (isEditingTarget(event.target) || isModalDialogOpen()) {
         return;
       }
       if (
@@ -2314,6 +2363,30 @@ export function CanvasStage({
         event.preventDefault();
         return;
       }
+      if (!activeToolRef.current && (event.key === "Enter" || isTypingKey(event))) {
+        const current = useStore.getState();
+        const screen = current.project.screens.find(
+          (item) => item.id === current.getActiveScreenId(),
+        );
+        const selected = current.selectedIds.length === 1 && screen
+          ? getEffectiveScreenWidgets(screen, current.activeBreakpointId, current.activeRepeaterEdit)
+              .find((widget) => widget.id === current.selectedIds[0] && !widget.locked)
+          : undefined;
+        const editable = selected ? getEditableWidgetText(selected) : null;
+        if (selected && editable) {
+          if (event.key === "Enter") {
+            event.preventDefault();
+            beginWidgetTextEdit(selected);
+            return;
+          }
+          if (editable.key !== "items" && !event.repeat) {
+            // Typing on a selected text widget replaces its text instead of running a tool shortcut.
+            event.preventDefault();
+            beginWidgetTextEdit(selected, event.key);
+            return;
+          }
+        }
+      }
       const key = event.key.toLowerCase();
       const tool = event.shiftKey
         ? key === "r"
@@ -2324,15 +2397,17 @@ export function CanvasStage({
         : shortcuts[key];
       if (!tool) return;
       event.preventDefault();
-      createWidgetAt(tool, lastPointerWorldRef.current);
+      editNewTextWidget(tool, createWidgetAt(tool, lastPointerWorldRef.current));
     };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [
+    beginWidgetTextEdit,
     canvasContextMenu,
     copySelection,
     copyStyleSelection,
     createWidgetAt,
+    editNewTextWidget,
     requestCreateSymbolFromSelection,
     deleteSelection,
     duplicateSelection,
