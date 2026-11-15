@@ -60,7 +60,7 @@ describe("Windows desktop accessibility", () => {
     await browser.execute(() => {
       document.querySelector('[aria-label="Quick actions"]')?.focus();
     });
-    await browser.keys(["TAB"]);
+    await browser.keys(["Tab"]);
     const focusStyle = await browser.execute(() => {
       const element = document.activeElement;
       if (!(element instanceof HTMLElement)) return null;

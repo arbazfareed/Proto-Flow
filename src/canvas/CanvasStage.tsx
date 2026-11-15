@@ -315,6 +315,11 @@ function commitWidgetGeometry(
   }
 }
 
+/** Canvas shortcuts must not act on the canvas hidden behind a modal dialog. */
+function isModalDialogOpen(): boolean {
+  return document.querySelector('[aria-modal="true"]') !== null;
+}
+
 function isEditingTarget(target: EventTarget | null): boolean {
   if (!(target instanceof HTMLElement)) return false;
   return Boolean(
@@ -2266,7 +2271,7 @@ export function CanvasStage({
       c: "checkbox",
     };
     const onKeyDown = (event: KeyboardEvent) => {
-      if (isEditingTarget(event.target)) {
+      if (isEditingTarget(event.target) || isModalDialogOpen()) {
         return;
       }
       if (

@@ -76,7 +76,7 @@ describe("Windows desktop first launch", () => {
     await settings.$('//button[normalize-space(.)="Show onboarding again"]').click();
     const restartedWelcome = await $('[aria-labelledby="onboarding-title"]');
     await restartedWelcome.waitForDisplayed();
-    await browser.keys(["TAB"]);
+    await browser.keys(["Tab"]);
     const focusRemainedInOnboarding = await browser.execute(() =>
       document.querySelector('[aria-labelledby="onboarding-title"]')
         ?.contains(document.activeElement) ?? false,
