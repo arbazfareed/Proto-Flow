@@ -31,6 +31,7 @@ import { AUTOSAVE_KEY, clearAutosave, subscribeAutosaveErrors, writeAutosave } f
 import { openProjectFile, saveProjectFile } from "./project/files";
 import { useStore } from "./store";
 import { RestoreModal } from "./layout/RestoreModal";
+import { UnsavedChangesDialog } from "./layout/UnsavedChangesDialog";
 import { UpdateToast } from "./layout/UpdateToast";
 import { WalletDialog } from "./layout/WalletDialog";
 import { CloudPreviewDialog } from "./layout/CloudPreviewDialog";
@@ -140,6 +141,9 @@ function AppShell() {
   const [tutorialOpen, setTutorialOpen] = useState(false);
   const [tutorialSession, setTutorialSession] = useState(0);
   const [helpOpen, setHelpOpen] = useState(false);
+  const [closePromptOpen, setClosePromptOpen] = useState(false);
+  const [closeSaving, setCloseSaving] = useState(false);
+  const allowWindowCloseRef = useRef(false);
   const [helpArticleSlug, setHelpArticleSlug] = useState<string | undefined>();
   const walletInitializationStarted = useRef(false);
   const previewConnected = useRef(false);
@@ -671,6 +675,77 @@ function AppShell() {
     togglePalette,
     undo,
   ]);
+
+  // Closing with unsaved work: keep a recovery copy immediately (autosave only runs every
+  // 30 seconds), then ask on desktop or show the browser's own leave warning.
+  useEffect(() => {
+    if (isTauri()) {
+      const appWindow = getCurrentWindow();
+      if (appWindow.label !== "main") return;
+      let disposed = false;
+      let unlisten: (() => void) | undefined;
+      void appWindow.onCloseRequested((event) => {
+        if (allowWindowCloseRef.current) return;
+        const { isDirty, project, filePath } = useStore.getState();
+        if (!isDirty) return;
+        event.preventDefault();
+        writeAutosave(project, filePath);
+        setClosePromptOpen(true);
+      }).then((stop) => {
+        if (disposed) stop();
+        else unlisten = stop;
+      }).catch((error: unknown) => {
+        console.error("Could not watch for window close requests.", error);
+      });
+      return () => {
+        disposed = true;
+        unlisten?.();
+      };
+    }
+
+    const onBeforeUnload = (event: BeforeUnloadEvent) => {
+      const { isDirty, project, filePath } = useStore.getState();
+      if (!isDirty) return;
+      writeAutosave(project, filePath);
+      event.preventDefault();
+      event.returnValue = "";
+    };
+    window.addEventListener("beforeunload", onBeforeUnload);
+    return () => window.removeEventListener("beforeunload", onBeforeUnload);
+  }, []);
+
+  const closeWindowNow = useCallback(() => {
+    allowWindowCloseRef.current = true;
+    void getCurrentWindow().destroy().catch((error: unknown) => {
+      allowWindowCloseRef.current = false;
+      notify(error instanceof Error ? error.message : "Could not close the app window.", true);
+    });
+  }, [notify]);
+
+  const saveThenClose = useCallback(async () => {
+    setCloseSaving(true);
+    try {
+      await save(false);
+    } finally {
+      setCloseSaving(false);
+    }
+    // save() reports its own errors and leaves the project dirty if it was cancelled or failed.
+    if (useStore.getState().isDirty) return;
+    setClosePromptOpen(false);
+    closeWindowNow();
+  }, [closeWindowNow, save]);
+
+  const discardThenClose = useCallback(() => {
+    setClosePromptOpen(false);
+    try {
+      clearAutosave();
+    } catch (error) {
+      console.error("Could not clear the autosave snapshot.", error);
+    }
+    closeWindowNow();
+  }, [closeWindowNow]);
+
+  const cancelClose = useCallback(() => setClosePromptOpen(false), []);
 
   const runWindowAction = (action: "minimize" | "maximize" | "close") => {
     if (!isTauri()) return;
@@ -1281,6 +1356,15 @@ function AppShell() {
       </div>
       <StatusBar />
       <RestoreModal />
+      {closePromptOpen && (
+        <UnsavedChangesDialog
+          projectName={useStore.getState().project.name}
+          saving={closeSaving}
+          onSave={() => { void saveThenClose(); }}
+          onDiscard={discardThenClose}
+          onCancel={cancelClose}
+        />
+      )}
       <UpdateToast requestId={updateCheckRequest} />
       <CommandPalette />
       {importCodeOpen && (
