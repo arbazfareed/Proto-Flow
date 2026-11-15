@@ -215,9 +215,21 @@ pub fn append_diagnostic_log(app: AppHandle, line: String) -> Result<(), String>
 }
 
 #[tauri::command]
-pub fn export_diagnostic_logs(
+pub async fn export_diagnostic_logs(
     app: AppHandle,
     recent_lines: Vec<String>,
+) -> Result<Option<String>, String> {
+    // The save dialog blocks until answered, so run it off the main thread (see file_io.rs).
+    tauri::async_runtime::spawn_blocking(move || {
+        export_diagnostic_logs_blocking(&app, &recent_lines)
+    })
+    .await
+    .map_err(|error| format!("The file dialog task stopped unexpectedly: {error}"))?
+}
+
+fn export_diagnostic_logs_blocking(
+    app: &AppHandle,
+    recent_lines: &[String],
 ) -> Result<Option<String>, String> {
     let selected = app
         .dialog()
@@ -232,10 +244,10 @@ pub fn export_diagnostic_logs(
         .into_path()
         .map_err(|error| format!("Could not resolve the selected log path: {error}"))?;
     let mut contents = Vec::new();
-    if let Ok(rotated) = fs::read(log_file(&app)?.with_extension("log.1")) {
+    if let Ok(rotated) = fs::read(log_file(app)?.with_extension("log.1")) {
         contents.extend_from_slice(&rotated);
     }
-    if let Ok(current) = fs::read(log_file(&app)?) {
+    if let Ok(current) = fs::read(log_file(app)?) {
         contents.extend_from_slice(&current);
     }
     for line in recent_lines.iter().take(20) {

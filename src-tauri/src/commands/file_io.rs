@@ -73,6 +73,19 @@ fn with_project_extension(path: PathBuf) -> PathBuf {
     }
 }
 
+/// Native file dialogs block until the user answers. A synchronous Tauri command runs on the
+/// main thread, so calling a blocking dialog there froze the whole window (seen on Linux:
+/// Save hung with no dialog). Commands that open a dialog are async and run it here instead.
+async fn run_dialog_task<T, F>(task: F) -> Result<T, String>
+where
+    T: Send + 'static,
+    F: FnOnce() -> Result<T, String> + Send + 'static,
+{
+    tauri::async_runtime::spawn_blocking(task)
+        .await
+        .map_err(|error| format!("The file dialog task stopped unexpectedly: {error}"))?
+}
+
 fn save_dialog(app: &AppHandle, default_filename: &str) -> Result<Option<PathBuf>, String> {
     let selected = app
         .dialog()
@@ -440,49 +453,66 @@ fn project_default_filename(content: &str) -> String {
 }
 
 #[tauri::command]
-pub fn save_project(
+pub async fn save_project(
     app: AppHandle,
     path: Option<String>,
     content: String,
 ) -> Result<Option<String>, String> {
-    save_project_with_dialog(path.map(PathBuf::from), &content, |filename| {
-        save_dialog(&app, filename)
+    run_dialog_task(move || {
+        save_project_with_dialog(path.map(PathBuf::from), &content, |filename| {
+            save_dialog(&app, filename)
+        })
     })
+    .await
 }
 
 #[tauri::command]
-pub fn open_project(app: AppHandle) -> Result<Option<OpenedProject>, String> {
-    open_project_with_dialog(|| open_dialog(&app))
+pub async fn open_project(app: AppHandle) -> Result<Option<OpenedProject>, String> {
+    run_dialog_task(move || open_project_with_dialog(|| open_dialog(&app))).await
 }
 
 #[tauri::command]
-pub fn save_project_as(
+pub async fn save_project_as(
     app: AppHandle,
     default_filename: String,
     content: String,
 ) -> Result<Option<String>, String> {
-    save_project_as_with_dialog(
-        &safe_default_filename(&default_filename),
-        &content,
-        |filename| save_dialog(&app, filename),
-    )
+    run_dialog_task(move || {
+        save_project_as_with_dialog(
+            &safe_default_filename(&default_filename),
+            &content,
+            |filename| save_dialog(&app, filename),
+        )
+    })
+    .await
 }
 
 #[tauri::command]
-pub fn pick_project_save_path(
+pub async fn pick_project_save_path(
     app: AppHandle,
     default_filename: String,
 ) -> Result<Option<String>, String> {
-    let Some(path) = save_dialog(&app, &safe_default_filename(&default_filename))? else {
-        return Ok(None);
-    };
-    path_to_string(&with_project_extension(path)).map(Some)
+    run_dialog_task(move || {
+        let Some(path) = save_dialog(&app, &safe_default_filename(&default_filename))? else {
+            return Ok(None);
+        };
+        path_to_string(&with_project_extension(path)).map(Some)
+    })
+    .await
 }
 
 #[tauri::command]
-pub fn save_html_export(
+pub async fn save_html_export(
     app: AppHandle,
     default_filename: String,
+    base64: String,
+) -> Result<Option<String>, String> {
+    run_dialog_task(move || save_html_export_blocking(&app, &default_filename, base64)).await
+}
+
+fn save_html_export_blocking(
+    app: &AppHandle,
+    default_filename: &str,
     base64: String,
 ) -> Result<Option<String>, String> {
     if base64.len() > MAX_HTML_EXPORT_FILE_BYTES.div_ceil(3) * 4 {
@@ -494,7 +524,7 @@ pub fn save_html_export(
     if bytes.len() > MAX_HTML_EXPORT_FILE_BYTES {
         return Err("The generated HTML bundle exceeds the 100 MiB export limit.".into());
     }
-    let Some(path) = html_export_save_dialog(&app, &safe_html_export_filename(&default_filename))?
+    let Some(path) = html_export_save_dialog(app, &safe_html_export_filename(default_filename))?
     else {
         return Ok(None);
     };
