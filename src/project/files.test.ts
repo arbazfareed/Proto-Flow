@@ -1,19 +1,32 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
-import { invoke, isTauri } from "@tauri-apps/api/core";
-import {
-  createEmptyProject,
-  SchemaValidationError,
-  serializeProject,
-} from "./schema";
-import { openProjectFile, saveProjectFile } from "./files";
+import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("@tauri-apps/api/core", () => ({
   invoke: vi.fn(),
   isTauri: vi.fn(),
 }));
 
-const invokeMock = vi.mocked(invoke);
-const isTauriMock = vi.mocked(isTauri);
+// Unit tests run with `isolate: false`, so another test file (versionHistory, for example)
+// may already have loaded ./files with the real Tauri runtime. Reload the modules here so
+// ./files always sees the mocked `invoke` and `isTauri`.
+type Core = typeof import("@tauri-apps/api/core");
+type Schema = typeof import("./schema");
+type Files = typeof import("./files");
+let invokeMock: ReturnType<typeof vi.mocked<Core["invoke"]>>;
+let isTauriMock: ReturnType<typeof vi.mocked<Core["isTauri"]>>;
+let createEmptyProject: Schema["createEmptyProject"];
+let SchemaValidationError: Schema["SchemaValidationError"];
+let serializeProject: Schema["serializeProject"];
+let openProjectFile: Files["openProjectFile"];
+let saveProjectFile: Files["saveProjectFile"];
+
+beforeAll(async () => {
+  vi.resetModules();
+  const core = await import("@tauri-apps/api/core");
+  invokeMock = vi.mocked(core.invoke);
+  isTauriMock = vi.mocked(core.isTauri);
+  ({ createEmptyProject, SchemaValidationError, serializeProject } = await import("./schema"));
+  ({ openProjectFile, saveProjectFile } = await import("./files"));
+});
 
 describe("project file commands", () => {
   beforeEach(() => {
