@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { useStore } from "../store";
-import { parseProject, ProjectSchema, serializeProject } from "./schema";
+import { parseProject, ProjectSchema, serializeProject, type Project } from "./schema";
 
 export const AUTOSAVE_KEY = "proto-flow:autosave:v1";
 const LEGACY_RECOVERY_KEY = "proto-flow:crash-recovery:v1";
@@ -109,6 +109,27 @@ export function readAutosave(): AutosaveSnapshot | null {
     return null;
   }
   return snapshot;
+}
+
+/**
+ * Write a recovery snapshot right away, outside the 30-second interval.
+ * Used after restoring a recovered project and after a browser download,
+ * so there is never a window in which the only copy of the work is in memory.
+ */
+export function writeAutosave(project: Project, filePath: string | null = null): boolean {
+  const snapshot: AutosaveSnapshot = {
+    project: parseProject(serializeProject(project)),
+    ts: Date.now(),
+    ...(filePath ? { filePath } : {}),
+  };
+  try {
+    localStorage.setItem(AUTOSAVE_KEY, JSON.stringify(snapshot));
+    clearedProjectPayload = null;
+    return true;
+  } catch (error) {
+    reportAutosaveWriteError(error);
+    return false;
+  }
 }
 
 export function clearAutosave(): void {

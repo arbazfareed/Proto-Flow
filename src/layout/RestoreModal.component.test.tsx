@@ -8,7 +8,7 @@ import { renderWithProviders } from "../test/render";
 import { RestoreModal } from "./RestoreModal";
 
 describe("RestoreModal", () => {
-  it("restores a valid autosave and removes the recovery snapshot", async () => {
+  it("restores a valid autosave and keeps a fresh recovery snapshot", async () => {
     const user = userEvent.setup();
     const project = createEmptyProject("Recovered project");
     localStorage.setItem(AUTOSAVE_KEY, JSON.stringify({
@@ -23,7 +23,10 @@ describe("RestoreModal", () => {
     expect(useStore.getState().project.name).toBe("Recovered project");
     expect(useStore.getState().filePath).toBe("C:\\designs\\recovered.pflow");
     expect(useStore.getState().isDirty).toBe(true);
-    expect(localStorage.getItem(AUTOSAVE_KEY)).toBeNull();
+    // Closing the app straight after restoring must not lose the project.
+    const kept = JSON.parse(localStorage.getItem(AUTOSAVE_KEY) ?? "null");
+    expect(kept?.project.name).toBe("Recovered project");
+    expect(kept?.filePath).toBe("C:\\designs\\recovered.pflow");
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
   });
 
