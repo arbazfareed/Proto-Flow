@@ -7,6 +7,7 @@ import {
   readAutosave,
   startAutosave,
   subscribeAutosaveErrors,
+  writeAutosave,
 } from "./autosave";
 import { createEmptyProject } from "./schema";
 import { useStore } from "../store";
@@ -198,5 +199,30 @@ describe("local project autosave", () => {
 
     expect(storage.getItem(AUTOSAVE_KEY)).toBeNull();
     expect(storage.getItem("proto-flow:crash-recovery:v1")).toBeNull();
+  });
+
+  it("writes a recovery snapshot immediately with writeAutosave", () => {
+    const project = createEmptyProject("Written now");
+    expect(writeAutosave(project, "C:\\designs\\now.pflow")).toBe(true);
+    const snapshot = readAutosave();
+    expect(snapshot?.project.name).toBe("Written now");
+    expect(snapshot?.filePath).toBe("C:\\designs\\now.pflow");
+  });
+
+  it("reports a failed immediate write instead of throwing", () => {
+    const consoleError = vi.spyOn(console, "error").mockImplementation(() => {});
+    const setItem = vi.spyOn(storage, "setItem").mockImplementation(() => {
+      throw new DOMException("Quota exceeded", "QuotaExceededError");
+    });
+    const listener = vi.fn();
+    const unsubscribe = subscribeAutosaveErrors(listener);
+    try {
+      expect(writeAutosave(createEmptyProject("Too big"))).toBe(false);
+      expect(listener).toHaveBeenCalledOnce();
+    } finally {
+      unsubscribe();
+      setItem.mockRestore();
+      consoleError.mockRestore();
+    }
   });
 });

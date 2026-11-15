@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { ArrowRight, Clock3, X } from "lucide-react";
-import { clearAutosave, readAutosave, type AutosaveSnapshot } from "../project/autosave";
+import { clearAutosave, readAutosave, writeAutosave, type AutosaveSnapshot } from "../project/autosave";
 import { parseProject } from "../project/schema";
 import { useStore } from "../store";
 
@@ -33,7 +33,10 @@ export function RestoreModal() {
     }
 
     restoreProject(project, snapshot.filePath ?? null);
-    discard();
+    // Keep a recovery copy on disk. Deleting it here meant that closing the app
+    // within the next autosave interval lost the restored project for good.
+    writeAutosave(project, snapshot.filePath ?? null);
+    setSnapshot(null);
   };
 
   if (!snapshot) return null;

@@ -27,7 +27,7 @@ import {
   startObservability,
   trackEvent,
 } from "./diagnostics/observability";
-import { AUTOSAVE_KEY, clearAutosave, subscribeAutosaveErrors } from "./project/autosave";
+import { AUTOSAVE_KEY, clearAutosave, subscribeAutosaveErrors, writeAutosave } from "./project/autosave";
 import { openProjectFile, saveProjectFile } from "./project/files";
 import { useStore } from "./store";
 import { RestoreModal } from "./layout/RestoreModal";
@@ -548,10 +548,17 @@ function AppShell() {
       useStore.getState().markSaved(result.path);
       useStore.getState().markClean();
       trackEvent("project_saved");
-      try {
-        clearAutosave();
-      } catch (error) {
-        console.error("Could not clear the saved autosave snapshot.", error);
+      if (isTauri()) {
+        try {
+          clearAutosave();
+        } catch (error) {
+          console.error("Could not clear the saved autosave snapshot.", error);
+        }
+      } else {
+        // The browser cannot reopen a downloaded .pflow file, so the local
+        // recovery copy is the only way back into this project. Refresh it
+        // instead of deleting it.
+        writeAutosave(result.project, null);
       }
       notify(isTauri() ? "Project saved" : `Project downloaded as ${result.path}`);
     } catch (error) {
