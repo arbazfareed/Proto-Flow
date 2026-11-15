@@ -135,7 +135,7 @@ test("PF-T803 imports nested HTML and SVG as editable Konva canvas elements", as
   })).toHaveCount(3);
   await expect(page.locator(".layer-row").filter({
     has: page.locator(".layer-name", { hasText: "card" }),
-  }).first().locator(".layer-select svg")).toHaveClass(/lucide-square-stack/);
+  }).first().locator(".layer-select svg:not(.layer-new-icon)")).toHaveClass(/lucide-square-stack/);
   const activeBreakpoint = page.getByLabel("Active breakpoint");
   const desktopBreakpoint = activeBreakpoint.locator("option:checked");
   const desktopHeight = await desktopBreakpoint.evaluate((option) =>
@@ -199,7 +199,7 @@ test("PF-T805 maps a date input to Calendar and selects its imported layer", asy
   await expect(importedRoot).toHaveAttribute("aria-level", "2");
   await expect(dateRow).toHaveAttribute("aria-level", "3");
   await expect(dateRow).toBeVisible();
-  await expect(dateRow.locator(".layer-select svg")).toHaveClass(/lucide-calendar/);
+  await expect(dateRow.locator(".layer-select svg:not(.layer-new-icon)")).toHaveClass(/lucide-calendar/);
   await dateRow.locator(".layer-select").click();
   await expect(dateRow).toHaveAttribute("aria-selected", "true");
   await expect(dateRow.locator(".layer-select")).toHaveAttribute("aria-pressed", "true");

@@ -129,7 +129,7 @@ describe("PF-T803 Windows desktop HTML canvas rendering", () => {
       $(`//div[contains(@class,"layer-row")][.//span[contains(@class,"layer-name") and normalize-space(.)="${name}"]]`);
     await layerSearch.setValue("start-date");
     const dateLayer = await findLayerRow("start-date");
-    await expect(dateLayer.$(".layer-select svg")).toHaveElementClass("lucide-calendar");
+    await expect(dateLayer.$(".layer-select svg:not(.layer-new-icon)")).toHaveElementClass("lucide-calendar");
     await dateLayer.$(".layer-select").click();
     await expect(dateLayer).toHaveAttribute("aria-selected", "true");
     await layerSearch.setValue("document-title");
