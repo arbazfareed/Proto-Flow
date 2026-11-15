@@ -33,6 +33,33 @@ jobs:
       - run: npx playwright install chromium
       - run: npm run test:e2e:browser -- --workers=1
       - run: npm run build:e2e:desktop
+      - name: Install Edge WebDriver matching the WebView2 runtime
+        # Tauri renders with WebView2, which can lag far behind the runner's Edge browser
+        # (WebView2 131 vs Edge 157 on windows-2022). The driver on PATH matches Edge, and
+        # @wdio/tauri-service's own download fails on Windows PowerShell 5.1, so fetch the
+        # matching driver here and put it first on PATH, where the service finds and reuses it.
+        shell: pwsh
+        run: |
+          $keys = @(
+            'HKLM:\SOFTWARE\WOW6432Node\Microsoft\EdgeUpdate\Clients\{F3017226-FE2A-4295-8BDF-00C3A9A7E4C5}',
+            'HKLM:\SOFTWARE\Microsoft\EdgeUpdate\Clients\{F3017226-FE2A-4295-8BDF-00C3A9A7E4C5}'
+          )
+          $version = $null
+          foreach ($key in $keys) {
+            if (Test-Path $key) {
+              $version = (Get-ItemProperty -Path $key).pv
+              if ($version) { break }
+            }
+          }
+          if (-not $version) { throw 'Could not read the WebView2 runtime version from the registry.' }
+          Write-Output "WebView2 runtime version: $version"
+          $dir = Join-Path $env:RUNNER_TEMP "msedgedriver-$version"
+          New-Item -ItemType Directory -Force -Path $dir | Out-Null
+          $zip = Join-Path $dir 'edgedriver_win64.zip'
+          Invoke-WebRequest -Uri "https://msedgedriver.microsoft.com/$version/edgedriver_win64.zip" -OutFile $zip
+          Expand-Archive -Path $zip -DestinationPath $dir -Force
+          & (Join-Path $dir 'msedgedriver.exe') --version
+          Add-Content -Path $env:GITHUB_PATH -Value $dir
       - name: Run desktop E2E tests
         shell: pwsh
         run: |
