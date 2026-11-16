@@ -102,7 +102,7 @@ export function getGeometryUpdates(
   if (field === "width" || field === "height") {
     return editable.map((widget) => ({
       id: widget.id,
-      [field]: Math.max(4, value),
+      [field]: Math.max(1, value),
     }));
   }
 

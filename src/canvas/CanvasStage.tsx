@@ -110,6 +110,7 @@ import {
   type ShapeTool,
 } from "./shapes";
 import { RichTextEditor } from "./RichTextEditor";
+import { roundGeometry } from "./roundGeometry";
 import { richTextRunsToPlainText } from "../project/richText";
 import { normalizeListItems } from "./styleInspector";
 import { getShapeToolDefinition } from "./shapeTools";
@@ -163,6 +164,9 @@ interface SelectionDraft {
   start: CanvasPoint;
   current: CanvasPoint;
 }
+
+/** Smallest click area, in screen pixels, for thin widgets. */
+const THIN_HIT_TARGET = 10;
 
 type WidgetGeometryUpdate = Partial<
   Pick<Widget, "x" | "y" | "width" | "height" | "rotation">
@@ -240,7 +244,8 @@ function commitWidgetGeometry(
   historySnapshot?: Project,
 ): void {
   if (updates.length === 0) return;
-  const updateById = new Map(updates.map((update) => [update.id, update]));
+  // Moves and resizes land on whole pixels, so the inspector never shows X = 134.24 (B78).
+  const updateById = new Map(updates.map((update) => [update.id, roundGeometry(update)]));
   const current = useStore.getState();
   const screenId = current.getActiveScreenId();
   const activeScreen = current.project.screens.find((screen) => screen.id === screenId);
@@ -651,6 +656,18 @@ function WidgetNode({
           </Group>
         </>
       ) : renderWidgetShape(widget, selected)}
+      {(widget.width * zoom < THIN_HIT_TARGET || widget.height * zoom < THIN_HIT_TARGET) && (
+        // Thin lines and 1 px shapes get an invisible, finger-sized click area (B90).
+        <Rect
+          x={Math.min(0, (widget.width - THIN_HIT_TARGET / zoom) / 2)}
+          y={Math.min(0, (widget.height - THIN_HIT_TARGET / zoom) / 2)}
+          width={Math.max(widget.width, THIN_HIT_TARGET / zoom)}
+          height={Math.max(widget.height, THIN_HIT_TARGET / zoom)}
+          fill="#000000"
+          opacity={0.001}
+          perfectDrawEnabled={false}
+        />
+      )}
       {(selected || hovered || parentHighlighted) && (
         <Rect
           x={-2 / zoom}
@@ -1024,9 +1041,11 @@ export function CanvasStage({
     const transformer = transformerRef.current;
     const stage = stageRef.current;
     if (!transformer || !stage) return;
+    // Resize handles go on the selection only. They used to wrap every visible widget, even with
+    // nothing selected, and their invisible handles swallowed clicks on thin shapes (B90).
     transformer.nodes(
       renderableWidgets
-        .filter((widget) => !widget.locked && widget.visible)
+        .filter((widget) => selectedIds.includes(widget.id) && !widget.locked && widget.visible)
         .map((widget) => stage.findOne(`#${widget.id}`))
         .filter((node): node is Konva.Node => node !== undefined),
     );
@@ -3191,8 +3210,8 @@ export function CanvasStage({
                   preview[item.id] = {
                     x: node.x(),
                     y: node.y(),
-                    width: Math.max(4, item.width * Math.abs(node.scaleX())),
-                    height: Math.max(4, item.height * Math.abs(node.scaleY())),
+                    width: Math.max(1, item.width * Math.abs(node.scaleX())),
+                    height: Math.max(1, item.height * Math.abs(node.scaleY())),
                     rotation: node.rotation(),
                   };
                 }
@@ -3219,8 +3238,8 @@ export function CanvasStage({
                     id: item.id,
                     x: node.x(),
                     y: node.y(),
-                    width: Math.max(4, item.width * Math.abs(scaleX)),
-                    height: Math.max(4, item.height * Math.abs(scaleY)),
+                    width: Math.max(1, item.width * Math.abs(scaleX)),
+                    height: Math.max(1, item.height * Math.abs(scaleY)),
                     rotation: node.rotation(),
                   });
                   node.scale({ x: 1, y: 1 });

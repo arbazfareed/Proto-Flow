@@ -2759,10 +2759,11 @@ export function createShapeWidget(
   return {
     id: crypto.randomUUID(),
     type,
-    x,
-    y,
-    width: Math.max(1, width),
-    height: Math.max(1, height),
+    // New widgets start on whole pixels (B78).
+    x: Math.round(x),
+    y: Math.round(y),
+    width: Math.max(1, Math.round(width)),
+    height: Math.max(1, Math.round(height)),
     rotation: 0,
     opacity: 1,
     visible: true,

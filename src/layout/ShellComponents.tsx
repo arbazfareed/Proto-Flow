@@ -1826,7 +1826,7 @@ function GeometrySection({ widgets }: { widgets: Widget[] }) {
         value = displayValue / 100;
       }
 
-      if (field === "width" || field === "height") value = Math.max(4, value);
+      if (field === "width" || field === "height") value = Math.max(1, value);
       if (field === "opacity") value = Math.min(1, Math.max(0, value));
 
       const updates = getGeometryUpdates(session.widgets, field, value);

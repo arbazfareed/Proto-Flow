@@ -60,8 +60,11 @@ describe("selection geometry", () => {
     const oldBox = { x: 0, y: 0, width: 20, height: 20 };
     expect(constrainTransformerBounds(oldBox, { x: 10, y: 10, width: -2, height: 20 }))
       .toBe(oldBox);
-    expect(constrainTransformerBounds(oldBox, { x: 10, y: 10, width: 3, height: 20 }))
+    expect(constrainTransformerBounds(oldBox, { x: 10, y: 10, width: 0.5, height: 20 }))
       .toBe(oldBox);
+    // 1 px is a valid size (B90).
+    expect(constrainTransformerBounds(oldBox, { x: 10, y: 10, width: 1, height: 20 }))
+      .toEqual({ x: 10, y: 10, width: 1, height: 20 });
     expect(constrainTransformerBounds(oldBox, { x: 1, y: 2, width: 4, height: 5 }))
       .toEqual({ x: 1, y: 2, width: 4, height: 5 });
   });

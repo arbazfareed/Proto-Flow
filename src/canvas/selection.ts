@@ -33,7 +33,7 @@ export function getSelectedParentWidgetIds(
 export function constrainTransformerBounds(
   oldBox: SelectionBounds,
   newBox: SelectionBounds,
-  minimumSize = 4,
+  minimumSize = 1,
 ): SelectionBounds {
   if (
     ![newBox.x, newBox.y, newBox.width, newBox.height].every(Number.isFinite) ||

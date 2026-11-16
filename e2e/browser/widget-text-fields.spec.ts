@@ -7,12 +7,11 @@ async function clickCanvas(page: Page, dx = 0, dy = 0) {
   await page.mouse.click(box.x + box.width / 2 + dx, box.y + box.height / 2 + dy);
 }
 
-/** Adds a widget (it lands in the middle of the screen, on top) and selects it. */
-async function addAndSelect(page: Page, name: string) {
-  await clickCanvas(page, 0, 330);
+/** Arms the widget tool and places it with a click on an empty spot (it is then selected). */
+async function addAndSelect(page: Page, name: string, dx: number) {
   await page.keyboard.press("Escape");
   await page.getByRole("button", { name: `Add ${name}`, exact: true }).first().click();
-  await clickCanvas(page);
+  await clickCanvas(page, dx, -120);
   await expect(page.getByText("1 selected")).toBeVisible();
 }
 
@@ -24,13 +23,13 @@ test("B70 + B71 + B73: text colour on any widget, a Content field for visible te
   const properties = page.getByRole("region", { name: "Widget properties" });
 
   // B70: a Button's label colour can be set.
-  await addAndSelect(page, "Button");
+  await addAndSelect(page, "Button", -200);
   await page.getByLabel("Text colour", { exact: true }).fill("#d1242f");
   await expect(page.getByText("#d1242f")).toBeVisible();
   await properties.getByLabel("Text shown").fill("Pay now");
 
   // B73: an Avatar shows the initials of its name, or the initials typed.
-  await addAndSelect(page, "Avatar");
+  await addAndSelect(page, "Avatar", 150);
   await properties.getByLabel("Person's name").fill("Sara Khan");
   await properties.getByLabel("Initials (shown)").fill("");
 
@@ -44,7 +43,7 @@ test("B70 + B71 + B73: text colour on any widget, a Content field for visible te
   await page.mouse.move(box.x + 320, box.y + 160, { steps: 4 });
   await page.mouse.up();
   await page.keyboard.press("Escape");
-  await page.mouse.click(box.x + 220, box.y + 140);
+  await page.getByRole("button", { name: "Screen child Text", exact: true }).first().click();
   await expect(page.getByText("1 selected")).toBeVisible();
   await expect(properties.getByLabel("Content")).toBeVisible();
   await properties.getByLabel("Content").fill("Welcome back");
@@ -62,7 +61,9 @@ test("B70 + B71 + B73: text colour on any widget, a Content field for visible te
   await preview.close();
 
   // Typed initials win over the name.
-  await clickCanvas(page);
+  await page.keyboard.press("Escape");
+  // The avatar was placed with its top-left corner at the click; aim for its middle.
+  await clickCanvas(page, 150 + 12, -120 + 12);
   await expect(properties.getByLabel("Initials (shown)")).toBeVisible();
   await properties.getByLabel("Initials (shown)").fill("ZA");
   await page.waitForTimeout(600);
