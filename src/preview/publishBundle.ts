@@ -302,6 +302,11 @@ function firePointer(widget, events, item, x, y, origin) {
   }
   return false;
 }
+const NATIVE_KEY_TARGETS = ["BUTTON", "INPUT", "TEXTAREA", "SELECT", "A"];
+function hasClickRule(widget) {
+  return screen().interactionRules.some((rule) =>
+    (rule.event === "onClick" || rule.event === "onTap") && (!rule.widgetId || rule.widgetId === widget.id));
+}
 function bindWidgetEvents(element, widget, item) {
   const mode = screen().inputMode || "both";
   const mouseEnabled = mode !== "touch";
@@ -335,7 +340,14 @@ function bindWidgetEvents(element, widget, item) {
   element.addEventListener("focusout", () => fire(widget, "onBlur", item));
   element.addEventListener("keydown", (event) => {
     fire(widget, "onKeyDown", item);
-    if (mode === "touch" && (event.key === "Enter" || event.key === " ")) fire(widget, "onClick", item);
+    // On every screen, Enter or Space on a clickable widget acts as a click (B2, WCAG 2.1.1).
+    // Real buttons and form fields already do this themselves.
+    if ((event.key === "Enter" || event.key === " ") && event.target === element && !NATIVE_KEY_TARGETS.includes(element.tagName)) {
+      if (hasClickRule(widget)) {
+        event.preventDefault();
+        if (!fire(widget, "onClick", item)) fire(widget, "onTap", item);
+      }
+    }
   });
   if (mode === "both") {
     element.addEventListener("click", (event) => {
@@ -742,6 +754,12 @@ function renderWidget(widget, activeScreen, item, localVariables = {}) {
     element.textContent = shownText || (shapeOrText ? "" : widget.type.replaceAll("-", " "));
   }
   if (widget.type !== "repeater") bindWidgetEvents(element, widget, item);
+  // A clickable card, container or shape can be reached with Tab and is announced as a button.
+  if (widget.type !== "repeater" && !NATIVE_KEY_TARGETS.includes(element.tagName) && screen().interactionRules.some((rule) =>
+    (rule.event === "onClick" || rule.event === "onTap") && rule.widgetId === widget.id)) {
+    element.tabIndex = 0;
+    if (!element.getAttribute("role")) element.setAttribute("role", "button");
+  }
   if (element.tagName === "DIV") {
     element.tabIndex = 0;
     element.setAttribute("aria-label", String(widget.props.label || widget.props.text || widget.type));

@@ -79,6 +79,7 @@ import { ScreenIcon, WidgetIcon } from "./widgetIcons";
 import { ScreenThumbnail } from "./ScreenThumbnail";
 import { SymbolNameDialog } from "./SymbolNameDialog";
 import { DeleteScreenDialog } from "./DeleteScreenDialog";
+import { widgetLabel } from "./widgetLabel";
 import { findLinksToScreen, repointScreenLinks } from "../project/screenLinks";
 import {
   buildLayerHierarchy,
@@ -150,18 +151,6 @@ function readCollapsedGroups(projectId: string): Record<string, string[]> {
     console.error("Could not read the saved layer-tree collapse state.", error);
     return {};
   }
-}
-
-function widgetLabel(widget: Widget): string {
-  if (widget.name) return widget.name;
-  const values = widget.type === "image"
-    ? [widget.props.fileName, widget.props.alt, widget.props.text]
-    : [widget.props.label, widget.props.text, widget.props.fileName];
-  for (const value of values) {
-    if (typeof value === "string" && value.trim()) return value.trim();
-  }
-  if (widget.type === "image") return "Untitled asset";
-  return getShapeToolDefinition(widget.type)?.label ?? widget.type;
 }
 
 function screenIconCategory(device: ScreenDevice | undefined): DeviceCategory {

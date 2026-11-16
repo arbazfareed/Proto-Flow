@@ -1,3 +1,4 @@
+import { widgetPickerLabels } from "./widgetLabel";
 import { useCallback, useEffect, useMemo, useRef, useState, type SetStateAction } from "react";
 import { ArrowDown, ArrowUp, Plus, Play, Sparkles, ThumbsDown, ThumbsUp, Trash2 } from "lucide-react";
 import type {
@@ -152,6 +153,16 @@ function ActionTarget({
   localVariables: InteractionLocalVariable[];
   onChange: (target: string) => void;
 }) {
+  const widgetTargets = collectWidgetsDeep(screen.widgets).filter((item) =>
+    action.type === "setPanelState"
+      ? ["panel", "dynamic-panel", "dynamicPanel"].includes(item.type)
+      : ["setRepeaterData", "addRepeaterRow", "removeRepeaterRow", "sortRepeater", "filterRepeater"]
+          .includes(action.type)
+        ? item.type === "repeater"
+        : true,
+  );
+  // Layer names, not "rectangle" (B93).
+  const widgetLabels = widgetPickerLabels(widgetTargets);
   const targets = action.type === "navigate" || action.type === "navigateTo"
     ? project.screens.map((item) => ({ id: item.id, label: item.name }))
     : action.type === "setVariable"
@@ -162,17 +173,7 @@ function ActionTarget({
           )
           .map((item) => ({ id: item.name, label: item.name }))
           .concat(localVariables.map((item) => ({ id: item.name, label: `${item.name} (local)` })))
-      : collectWidgetsDeep(screen.widgets).filter((item) =>
-          action.type === "setPanelState"
-            ? ["panel", "dynamic-panel", "dynamicPanel"].includes(item.type)
-            : ["setRepeaterData", "addRepeaterRow", "removeRepeaterRow", "sortRepeater", "filterRepeater"]
-                .includes(action.type)
-              ? item.type === "repeater"
-              : true,
-        ).map((item) => ({
-            id: item.id,
-            label: item.name ?? item.type,
-          }));
+      : widgetTargets.map((item) => ({ id: item.id, label: widgetLabels.get(item.id) ?? item.type }));
   return (
     <select aria-label="Action target" value={action.target} onChange={(event) => onChange(event.currentTarget.value)}>
       <option value="">Choose target</option>
@@ -758,7 +759,7 @@ export function InteractionBuilder({
           ))}
           <div className="interaction-subheading">
             <span>Actions</span>
-            <button type="button" onClick={() => updateRule(rule.id, (item) => ({
+            <button type="button" aria-label="Add action" onClick={() => updateRule(rule.id, (item) => ({
               ...item,
               actions: [...item.actions, initialAction("navigate", screen)],
             }))}><Plus size={11} /> Add</button>

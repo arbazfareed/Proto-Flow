@@ -1,6 +1,6 @@
 import { avatarInitials } from "../project/avatarInitials";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import type { CSSProperties, ChangeEvent, HTMLAttributes, MouseEvent, ReactNode, TouchEvent } from "react";
+import type { CSSProperties, ChangeEvent, HTMLAttributes, KeyboardEvent, MouseEvent, ReactNode, TouchEvent } from "react";
 import { ArrowLeft, Camera, RotateCcw, RotateCw, SlidersHorizontal, X } from "lucide-react";
 import { toPng } from "html-to-image";
 import { emit, listen } from "@tauri-apps/api/event";
@@ -54,6 +54,8 @@ function stringProp(widget: Widget, key: string, fallback = ""): string {
   const value = widget.props[key];
   return typeof value === "string" ? value : fallback;
 }
+
+const NATIVE_KEY_TARGETS = new Set(["BUTTON", "INPUT", "TEXTAREA", "SELECT", "A"]);
 
 function isTouchPointerEvent(event: MouseEvent<HTMLElement>): boolean {
   return "pointerType" in event.nativeEvent && event.nativeEvent.pointerType === "touch";
@@ -391,6 +393,8 @@ export function PreviewWidget({
     return 0;
   };
   const clickEvents: readonly PreviewEvent[] = inputMode === "touch" ? ["onTap", "onClick"] : ["onClick"];
+  const clickable = runtime.currentScreen.interactionRules.some((rule) =>
+    (rule.event === "onClick" || rule.event === "onTap") && rule.widgetId === widget.id);
   const tapEvents: readonly PreviewEvent[] = ["onTap", "onClick"];
   const fireTouch = (event: PreviewEvent, x: number, y: number, origin: Element | null = null) => {
     if (event === "onTap") firePointer(tapEvents, { x, y }, origin);
@@ -400,6 +404,8 @@ export function PreviewWidget({
   };
   const commonHandlers = {
     "data-widget-id": widget.id,
+    // Clickable widgets (cards and containers too) can be reached with Tab (B2).
+    ...(clickable ? { tabIndex: 0 } : {}),
     onClick: (event: MouseEvent<HTMLElement>) => {
       if (event.detail === 0) {
         suppressCompatibilityClick.current = false;
@@ -451,8 +457,15 @@ export function PreviewWidget({
     },
     onFocus: () => runEvent(widget, "onFocus", item),
     onBlur: () => runEvent(widget, "onBlur", item),
-    onKeyDown: () => {
+    onKeyDown: (event: KeyboardEvent<HTMLElement>) => {
       runEvent(widget, "onKeyDown", item);
+      // On every screen, Enter or Space on a clickable widget acts as a click (B2, WCAG 2.1.1).
+      // Real buttons and form fields already do this themselves.
+      if ((event.key === "Enter" || event.key === " ") && event.target === event.currentTarget &&
+        !NATIVE_KEY_TARGETS.has(event.currentTarget.tagName) && clickable) {
+        event.preventDefault();
+        firePointer(["onClick", "onTap"], null, null);
+      }
     },
     onTouchStart: (event: TouchEvent<HTMLElement>) => {
       if (inputMode === "mouse") return;

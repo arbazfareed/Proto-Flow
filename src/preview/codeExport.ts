@@ -233,10 +233,15 @@ ${EXPRESSION_RUNTIME_SOURCE}
     const handlers = {
       onFocus: () => runInteractions(widget, "onFocus", item),
       onBlur: () => runInteractions(widget, "onBlur", item),
-      onKeyDown: (event: { key: string }) => {
+      onKeyDown: (event: { key: string; target: unknown; currentTarget: { tagName: string }; preventDefault: () => void }) => {
         runInteractions(widget, "onKeyDown", item);
-        if (mode === "touch" && (event.key === "Enter" || event.key === " ")) {
-          runInteractions(widget, "onClick", item);
+        // On every screen, Enter or Space on a clickable widget acts as a click (B2). Real
+        // buttons and form fields already do this themselves.
+        if ((event.key === "Enter" || event.key === " ") && event.target === event.currentTarget &&
+          !["BUTTON", "INPUT", "TEXTAREA", "SELECT", "A"].includes(event.currentTarget.tagName) &&
+          (hasInteractions(widget, "onClick") || hasInteractions(widget, "onTap"))) {
+          event.preventDefault();
+          runFirstInteraction(widget, ["onClick", "onTap"], item);
         }
       },
       onChange: () => runInteractions(widget, "onChange", item),
