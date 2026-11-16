@@ -1,0 +1,164 @@
+name: Linux packages
+
+# Builds the Linux .deb, .rpm and AppImage, installs and launches each one on clean
+# containers of the main distro families, and attaches them to the release for v* tags.
+
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/linux-packages.yml"
+      - "scripts/install-linux.sh"
+      - "src-tauri/**"
+      - "src/**"
+      - "package.json"
+      - "package-lock.json"
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    # Built on the oldest supported Ubuntu so the packages run on newer distros too.
+    runs-on: ubuntu-22.04
+    timeout-minutes: 45
+    env:
+      # .cargo/config.toml builds outside the checkout; keep CI output where the cache and collect step look.
+      CARGO_TARGET_DIR: ${{ github.workspace }}/src-tauri/target
+      TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+      TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+      - name: Install Linux build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libgtk-3-dev libayatana-appindicator3-dev librsvg2-dev patchelf file
+      - run: npm ci
+      - name: Build .deb, .rpm and AppImage
+        run: |
+          if [ "${GITHUB_REF_TYPE}" = "tag" ] && [ -n "${TAURI_SIGNING_PRIVATE_KEY}" ]; then
+            npx tauri build --bundles deb,rpm,appimage
+          else
+            # Pull requests have no signing key, so skip the updater signatures.
+            npx tauri build --bundles deb,rpm,appimage --config '{"bundle":{"createUpdaterArtifacts":false}}'
+          fi
+      - name: Collect packages
+        run: |
+          mkdir -p linux-packages
+          find src-tauri/target/release/bundle \( -name '*.deb' -o -name '*.rpm' -o -name '*.AppImage' -o -name '*.AppImage.sig' -o -name '*.AppImage.tar.gz' -o -name '*.AppImage.tar.gz.sig' \) -exec cp {} linux-packages/ \;
+          ls -la linux-packages
+          test -n "$(ls linux-packages/*.deb)" && test -n "$(ls linux-packages/*.rpm)" && test -n "$(ls linux-packages/*.AppImage)"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: linux-packages
+          path: linux-packages/
+          if-no-files-found: error
+
+  install-test:
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { distro: "Ubuntu 22.04", image: "ubuntu:22.04", family: deb }
+          - { distro: "Ubuntu 24.04", image: "ubuntu:24.04", family: deb }
+          - { distro: "Debian 12", image: "debian:12", family: deb }
+          - { distro: "Kali Linux", image: "kalilinux/kali-rolling", family: deb }
+          - { distro: "Fedora", image: "fedora:41", family: rpm }
+          - { distro: "openSUSE Tumbleweed", image: "opensuse/tumbleweed", family: rpm }
+          - { distro: "Arch Linux (AppImage)", image: "archlinux:latest", family: appimage }
+    name: install on ${{ matrix.distro }}
+    container: ${{ matrix.image }}
+    steps:
+      - name: Install test tools
+        run: |
+          case "${{ matrix.family }}" in
+            deb) apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y xvfb dbus ;;
+            rpm)
+              if command -v dnf >/dev/null; then dnf install -y xorg-x11-server-Xvfb dbus-daemon findutils procps-ng
+              else zypper --non-interactive install xvfb-run dbus-1 findutils procps; fi ;;
+            appimage) pacman -Syu --noconfirm xorg-server-xvfb dbus gtk3 nss alsa-lib ;;
+          esac
+      - uses: actions/checkout@v4
+        with:
+          sparse-checkout: scripts/install-linux.sh
+          sparse-checkout-cone-mode: false
+      - uses: actions/download-artifact@v4
+        with:
+          name: linux-packages
+          path: packages
+      - name: Install with scripts/install-linux.sh
+        run: |
+          case "${{ matrix.family }}" in
+            deb) package="$(ls packages/*.deb)" ;;
+            rpm) package="$(ls packages/*.rpm)" ;;
+            appimage) package="$(ls packages/*.AppImage)" ;;
+          esac
+          bash scripts/install-linux.sh --file "$package"
+      - name: Check the installed app
+        run: |
+          export PATH="$HOME/.local/bin:$PATH"
+          binary="$(command -v proto-flow)"
+          echo "Installed at $binary"
+          if [ "${{ matrix.family }}" != "appimage" ]; then
+            if ldd "$binary" | grep "not found"; then echo "Missing libraries"; exit 1; fi
+            ls /usr/share/applications/ProtoFlow.desktop
+          else
+            ls "$HOME/.local/share/applications/protoflow.desktop"
+          fi
+      - name: Launch the app
+        run: |
+          export PATH="$HOME/.local/bin:$PATH"
+          Xvfb :99 -screen 0 1440x900x24 >/dev/null 2>&1 &
+          sleep 2
+          set +e
+          if command -v dbus-run-session >/dev/null; then session="dbus-run-session --"; else session=""; fi
+          DISPLAY=:99 $session timeout 25 proto-flow > launch.log 2>&1
+          status=$?
+          set -e
+          tail -n 20 launch.log
+          # 124 means it was still running when the timeout stopped it.
+          if [ "$status" -ne 124 ]; then echo "ProtoFlow exited early with status $status"; exit 1; fi
+      - name: Uninstall
+        run: bash scripts/install-linux.sh --uninstall && ! command -v proto-flow
+
+  release:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: [build, install-test]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: linux-packages
+          path: linux-packages
+      - name: Write checksums
+        working-directory: linux-packages
+        run: sha256sum * > SHA256SUMS-linux.txt && cat SHA256SUMS-linux.txt
+      - name: Add the Linux packages to the GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          # The Windows release workflow may create the release first; add to it if so.
+          if gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
+            gh release upload "$GITHUB_REF_NAME" linux-packages/* --clobber
+          else
+            gh release create "$GITHUB_REF_NAME" linux-packages/* \
+              --title "ProtoFlow $GITHUB_REF_NAME" \
+              --notes "Linux: .deb (Debian, Ubuntu, Kali, Mint), .rpm (Fedora, openSUSE) and AppImage (any distro). Install with: curl -fsSL https://raw.githubusercontent.com/${GITHUB_REPOSITORY}/main/scripts/install-linux.sh | bash"
+          fi

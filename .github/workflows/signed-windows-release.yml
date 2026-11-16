@@ -206,6 +206,12 @@ jobs:
         shell: pwsh
         run: |
           $releaseFiles = Get-ChildItem (Join-Path $env:RUNNER_TEMP "protoflow-release") -File
-          gh release create $env:GITHUB_REF_NAME @($releaseFiles.FullName) `
-            --title "ProtoFlow $env:GITHUB_REF_NAME" `
-            --notes "Signed Windows installers, Tauri updater signatures, SHA-256 checksums, and CycloneDX SBOM."
+          # The Linux packages workflow may create the release first; add to it if so.
+          gh release view $env:GITHUB_REF_NAME *> $null
+          if ($LASTEXITCODE -eq 0) {
+            gh release upload $env:GITHUB_REF_NAME @($releaseFiles.FullName) --clobber
+          } else {
+            gh release create $env:GITHUB_REF_NAME @($releaseFiles.FullName) `
+              --title "ProtoFlow $env:GITHUB_REF_NAME" `
+              --notes "Signed Windows installers, Tauri updater signatures, SHA-256 checksums, and CycloneDX SBOM."
+          }

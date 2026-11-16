@@ -42,7 +42,15 @@
   "bundle": {
     "active": true,
     "createUpdaterArtifacts": true,
-    "targets": ["msi", "nsis", "deb", "appimage"],
+    "targets": ["msi", "nsis", "deb", "rpm", "appimage"],
+    "category": "GraphicsAndDesign",
+    "shortDescription": "Free, local-first prototyping for apps and websites",
+    "longDescription": "ProtoFlow is a free, local-first prototyping tool: design screens, link them into clickable prototypes, preview them on any device and export HTML, all on your own computer.",
+    "linux": {
+      "deb": { "section": "graphics", "priority": "optional" },
+      "rpm": { "release": "1" },
+      "appimage": { "bundleMediaFramework": false }
+    },
     "fileAssociations": [
       {
         "ext": ["pflow"],
