@@ -151,6 +151,11 @@ function applyConstraints(
   return next;
 }
 
+/** True when the widget lies wholly to the left, to the right of, or above the screen. */
+export function isOutsideScreen(widget: Pick<Widget, "x" | "y" | "width" | "height">, screenWidth: number): boolean {
+  return widget.x >= screenWidth || widget.x + widget.width <= 0 || widget.y + widget.height <= 0;
+}
+
 function fitWidgetToBreakpoint(widget: Widget, breakpoint: Breakpoint): Widget {
   const radians = (widget.rotation * Math.PI) / 180;
   const getRotatedSize = (width: number, height: number) => ({
@@ -255,6 +260,13 @@ export function resolveWidgetsForBreakpoint(
         height: Math.max(1, resolved.height * verticalScale),
         props: compactProps,
       };
+    }
+    // A widget the designer placed entirely outside the screen (beside or above it) stays
+    // there, clipped like on the canvas, instead of being pulled into view (B87).
+    // A position set for this breakpoint is judged against it; otherwise the base design is.
+    const placedHere = breakpointOverride?.x !== undefined || breakpointOverride?.y !== undefined;
+    if (placedHere ? isOutsideScreen(resolved, breakpoint.width) : isOutsideScreen(widget, baseWidth)) {
+      return fitted;
     }
     return fitWidgetToBreakpoint(fitted, breakpoint);
   });
