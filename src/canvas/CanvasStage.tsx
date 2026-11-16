@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { readableTextColour } from "./readableText";
 import type { DragEvent as ReactDragEvent, FormEvent } from "react";
 import { Circle, Group, Layer, Line, Rect, Stage, Text, Transformer } from "react-konva";
 import type Konva from "konva";
@@ -1211,6 +1212,15 @@ export function CanvasStage({
         (highest, item) => Math.max(highest, item.zIndex),
         -1,
       ) + 1;
+      if (TEXT_FIRST_WIDGET_TYPES.has(widget.type) && widget.type !== "link") {
+        // New text reads on whatever it is drawn over: dark on the white screen or a pale
+        // container, white on a dark rectangle.
+        widget.style = {
+          ...widget.style,
+          fill: readableTextColour(visibleWidgets, widget),
+          fillOpacity: 1,
+        };
+      }
       const activePanelEdit = current.activePanelEdit;
       const activeRepeaterEdit = current.activeRepeaterEdit;
       const editStateId = activePanelEdit?.stateId;
