@@ -91,3 +91,27 @@ test("fast typing keeps letters in order even when animation frames are slow", a
   await page.keyboard.press("Enter");
   await expect(textLayer(page, "tool")).toBeVisible();
 });
+
+test("letters typed right after drawing a text widget go into it, not into shortcuts", async ({ page }) => {
+  await startWorkspace(page, "Blank project");
+  // A selected rectangle under the new text is what let the first letter reach the shortcuts.
+  await page.getByRole("button", { name: "Add Rectangle" }).first().click();
+  const box = (await page.locator(".canvas-stage-surface").boundingBox())!;
+  await page.mouse.move(box.x + 120, box.y + 120);
+  await page.mouse.down();
+  await page.mouse.move(box.x + 440, box.y + 320, { steps: 6 });
+  await page.mouse.up();
+  const layersBefore = await page.locator(".layer-row").count();
+
+  await page.getByRole("button", { name: "Add Text" }).first().click();
+  await page.mouse.move(box.x + 160, box.y + 180);
+  await page.mouse.down();
+  await page.mouse.move(box.x + 360, box.y + 220, { steps: 6 });
+  await page.mouse.up();
+  // No wait for the editor: "O", "R" and "T" are shape shortcuts and used to add shapes.
+  await page.keyboard.type("Order total");
+  await expect(textEditor(page)).toHaveValue("Order total");
+  await page.keyboard.press("Enter");
+  await expect(textLayer(page, "Order total")).toBeVisible();
+  await expect(page.locator(".layer-row")).toHaveCount(layersBefore + 1);
+});
