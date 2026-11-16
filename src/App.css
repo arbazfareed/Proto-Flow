@@ -843,12 +843,15 @@
 .interaction-rule-card label,.interaction-template { display:grid; gap:4px; color:#93939e; font-size:9px; }
 .interaction-rule-card select,.interaction-rule-card input,.interaction-template select { min-width:0; width:100%; height:26px; padding:3px 5px; border:1px solid #373840; border-radius:4px; color:#d9d7e0; background:#202126; font-size:9px; }
 .interaction-subheading { margin-top:2px; color:#bcbac5; font-size:9px; }
-.interaction-condition,.interaction-action { display:grid; grid-template-columns:minmax(30px,.4fr) minmax(45px,1fr) minmax(39px,.8fr) minmax(42px,.8fr) 62px; align-items:center; gap:3px; }
-.interaction-action { grid-template-columns:minmax(55px,.9fr) minmax(55px,1fr) minmax(48px,.8fr) 62px; }
-.interaction-row-controls { display:flex; min-width:0; justify-content:flex-end; }
+/* Two fields per line so menu labels ("Navigate", a screen name) are never cut off;
+   the move/delete buttons sit on their own line underneath. */
+.interaction-condition,.interaction-action { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); align-items:center; gap:4px; padding-bottom:4px; border-bottom:1px solid #2a2b31; }
+.interaction-row-controls { display:flex; min-width:0; justify-content:flex-end; grid-column:1 / -1; }
 .interaction-row-controls button { width:19px; height:21px; flex:0 0 19px; }
 .interaction-row-controls button:disabled { opacity:.35; cursor:default; }
-.interaction-condition select,.interaction-condition input,.interaction-action select,.interaction-action input { min-width:0; width:100%; height:25px; padding:2px 3px; border:1px solid #373840; border-radius:4px; color:#d9d7e0; background:#202126; font-size:8px; }
+.interaction-condition select,.interaction-condition input,.interaction-action select,.interaction-action input { min-width:0; width:100%; height:26px; padding:2px 4px; border:1px solid #373840; border-radius:4px; color:#d9d7e0; background:#202126; font-size:9px; text-overflow:ellipsis; }
+.interaction-autosave-note { margin:0; color:#8d8b96; font-size:9px; line-height:1.4; }
+.interaction-pending-note { margin:0; color:#d9b56a; font-size:9px; line-height:1.4; }
 .interaction-condition-and { overflow:hidden; color:#9992a8; font-size:8px; text-align:center; }
 .interaction-issue,.interaction-test-result { margin:0; padding:5px; border-radius:4px; font-size:9px; line-height:1.45; }
 .interaction-issue.is-error { color:#f0a0a0; background:#352527; }

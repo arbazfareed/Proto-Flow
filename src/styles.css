@@ -515,3 +515,8 @@ html[data-theme="light"] .flow-viewport { background-color: #f3f3f7; background-
 
 /* Thin, quiet scrollbars. */
 html[data-theme="light"] * { scrollbar-color: #d2d2dc transparent; }
+
+/* Interaction builder rows and notes (light theme) */
+html[data-theme="light"] .interaction-condition, html[data-theme="light"] .interaction-action { border-bottom-color: #e7e5ee; }
+html[data-theme="light"] .interaction-autosave-note { color: #6b6878; }
+html[data-theme="light"] .interaction-pending-note { color: #8a5a00; }
