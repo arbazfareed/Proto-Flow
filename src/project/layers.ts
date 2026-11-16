@@ -30,9 +30,10 @@ export const LAYER_CONTAINER_TYPES = new Set([
   "component-master",
   "componentMaster",
   "calendar",
-  "rectangle",
-  "ellipse",
 ]);
+// Plain shapes (rectangle, ellipse) are deliberately not containers: anything drawn on top of
+// a background shape used to be adopted by it silently, so clicks and double-clicks hit the
+// shape instead of what is on it. A shape keeps children only if a child already names it.
 
 const LAYER_CONTAINMENT_TOLERANCE = 8; // Keep near-edge canvas alignment in the same hierarchy.
 
@@ -61,17 +62,10 @@ export function getWidgetParentIdMap(
   widgets: readonly WidgetParentCandidate[],
 ): Map<string, string> {
   const widgetsById = new Map(widgets.map((widget) => [widget.id, widget]));
-  const candidateParentIds = new Set(
-    widgets.filter(isWidgetContainer).map((widget) => widget.id),
-  );
-
-  for (const widget of widgets) {
-    const parent = widget.groupId ? widgetsById.get(widget.groupId) : undefined;
-    if (parent && parent.id !== widget.id && isWidgetContainedBy(widget, parent)) {
-      candidateParentIds.add(parent.id);
-    }
-  }
-  const candidateParents = widgets.filter((widget) => candidateParentIds.has(widget.id));
+  // Only containers adopt widgets by position. A shape that a widget explicitly names as its
+  // parent keeps that one child (handled below), but does not start adopting everything else
+  // drawn over it.
+  const candidateParents = widgets.filter(isWidgetContainer);
 
   const parents = new Map<string, string>();
   for (const widget of widgets) {
@@ -150,6 +144,7 @@ export function getSelectedContainingParentId(
   return parent &&
     parent.id !== child.id &&
     !parentByWidgetId.has(parent.id) &&
+    isWidgetContainer(parent) &&
     !isWidgetContainer(child) &&
     isWidgetContainedBy(child, parent)
     ? nearestContainingParentId ?? parent.id

@@ -33,12 +33,22 @@ describe("layer and screen ordering", () => {
     expect(isWidgetContainer({ type: "calendar" })).toBe(true);
   });
 
-  it("recognizes Rectangle as a visual container", () => {
-    expect(isWidgetContainer({ type: "rectangle" })).toBe(true);
+  it("treats plain shapes as artwork, not containers (B74)", () => {
+    expect(isWidgetContainer({ type: "rectangle" })).toBe(false);
+    expect(isWidgetContainer({ type: "ellipse" })).toBe(false);
+    expect(isWidgetContainer({ type: "container" })).toBe(true);
+  });
+
+  it("does not adopt widgets drawn on top of a rectangle, but keeps explicit links (B74)", () => {
+    const rectangle = { ...widget("rectangle", 0), x: 10, y: 10, width: 100, height: 80 };
+    const text = { ...widget("text", 1), type: "text", x: 20, y: 20, width: 30, height: 20 };
+    expect(syncWidgetGroupIdsToContainment([rectangle, text])[1].groupId).toBeUndefined();
+    const linked = { ...text, groupId: "rectangle" };
+    expect(syncWidgetGroupIdsToContainment([rectangle, linked])[1].groupId).toBe("rectangle");
   });
 
   it("syncs persisted group IDs when widgets move into or out of a container", () => {
-    const rectangle = { ...widget("rectangle", 0), x: 10, y: 10, width: 100, height: 80 };
+    const rectangle = { ...widget("rectangle", 0), type: "container", x: 10, y: 10, width: 100, height: 80 };
     const text = { ...widget("text", 1), type: "text", x: 20, y: 20, width: 30, height: 20 };
     const inside = syncWidgetGroupIdsToContainment([rectangle, text]);
     expect(inside.find((item) => item.id === "text")?.groupId).toBe("rectangle");
@@ -63,7 +73,7 @@ describe("layer and screen ordering", () => {
   });
 
   it("nests a new widget only when it is placed inside the single selected parent", () => {
-    const parent = { ...widget("parent", 1), x: 10, y: 10, width: 100, height: 60 };
+    const parent = { ...widget("parent", 1), type: "container", x: 10, y: 10, width: 100, height: 60 };
     const inside = { ...widget("inside", 2), type: "text", x: 20, y: 20 };
     const outside = { ...widget("outside", 3), type: "text", x: 200, y: 20 };
 
@@ -75,6 +85,7 @@ describe("layer and screen ordering", () => {
   it("chooses the nearest containing container when the outer parent is selected", () => {
     const rectangle = {
       ...widget("rectangle", 1),
+      type: "container",
       x: 10,
       y: 10,
       width: 500,
@@ -82,7 +93,7 @@ describe("layer and screen ordering", () => {
     };
     const ellipse = {
       ...widget("ellipse", 2),
-      type: "ellipse",
+      type: "card",
       groupId: rectangle.id,
       x: 50,
       y: 40,
@@ -104,6 +115,12 @@ describe("layer and screen ordering", () => {
       [rectangle.id],
       icon,
     )).toBe(ellipse.id);
+  });
+
+  it("does not nest a new widget inside a selected rectangle (B7)", () => {
+    const shape = { ...widget("shape", 1), x: 10, y: 10, width: 100, height: 60 };
+    const inside = { ...widget("inside", 2), type: "text", x: 20, y: 20 };
+    expect(getSelectedContainingParentId([shape], ["shape"], inside)).toBeUndefined();
   });
 
   it("keeps new widgets at screen level when the selected widget is already nested", () => {
