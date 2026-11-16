@@ -362,6 +362,16 @@ function genericElementDimensions(type: GenericElementTool): [number, number] {
   return [160, 48];
 }
 
+const SOLID_DEFAULTS: Partial<Record<string, Pick<WidgetStyle, "fill" | "stroke">>> = {
+  "app-bar": { fill: "#ffffff", stroke: "#e4e2ea" },
+  "bottom-nav": { fill: "#ffffff", stroke: "#e4e2ea" },
+  search: { fill: "#ffffff", stroke: "#d9d6e2" },
+  chip: { fill: "#ede9fe", stroke: null },
+  badge: { fill: "#2563eb", stroke: null },
+  fab: { fill: "#7c5cff", stroke: null },
+  "icon-button": { fill: "#f3f1f8", stroke: "#dedbe6" },
+};
+
 function genericElementDefinition(
   type: GenericElementTool,
   label: string,
@@ -380,6 +390,9 @@ function genericElementDefinition(
     style.fillOpacity = 1;
     style.stroke = null;
   }
+  // Solid, readable defaults instead of a 10% tint with pale text (B72).
+  const solid = SOLID_DEFAULTS[type];
+  if (solid) Object.assign(style, { fillOpacity: 1, strokeWidth: solid.stroke ? 1 : 0, ...solid });
   if (PLAIN_BOX_TYPES.has(type)) {
     // A plain, neutral box: white with a light hairline border, no tint.
     style.fill = "#ffffff";

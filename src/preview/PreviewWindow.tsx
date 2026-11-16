@@ -811,7 +811,7 @@ export function PreviewWidget({
         <Icon
           width="56%"
           height="56%"
-          color={stringProp(widget, "iconColor", "#e9e4f5")}
+          color={stringProp(widget, "iconColor", readableTextOnFill(widget.style.fill ?? null, widget.style.fillOpacity ?? 1))}
           strokeWidth={2}
           aria-hidden="true"
           focusable="false"

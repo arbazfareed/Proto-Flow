@@ -43,6 +43,11 @@ function KonvaText(props: ComponentProps<typeof BaseKonvaText>) {
   return <BaseKonvaText {...props} fill={textColour ?? props.fill} />;
 }
 
+/** A label colour that reads well on the widget's own fill (dark on light, white on dark). */
+function readableLabel(widget: Widget): string {
+  return readableTextOnFill(widget.style.fill ?? null, widget.style.fillOpacity ?? 1);
+}
+
 /** Widget types whose Fill already is the text colour. */
 const FILL_IS_TEXT_TYPES = new Set(["text", "heading", "paragraph", "label", "link", "code"]);
 export { measureTextBounds } from "./textMeasurement";
@@ -895,7 +900,7 @@ function IconButtonShape({ widget, fill, stroke, strokeWidth }: ShapeComponentPr
       />
       <CanvasIcon
         name={getWidgetProp(widget, "iconName", "Plus")}
-        color={getWidgetProp(widget, "iconColor", "#e9e4f5")}
+        color={getWidgetProp(widget, "iconColor", readableLabel(widget))}
         strokeWidth={2}
         x={(widget.width - iconSize) / 2}
         y={(widget.height - iconSize) / 2}
@@ -923,7 +928,7 @@ function PillShape({ widget, fill, stroke, strokeWidth }: ShapeComponentProps) {
           x={Math.max(8, widget.height * 0.42)}
           y={widget.height / 2}
           radius={Math.max(2, widget.height * 0.09)}
-          fill={stroke ?? "#60a5fa"}
+          fill={stroke ?? readableLabel(widget)}
           perfectDrawEnabled={false}
         />
       )}
@@ -935,7 +940,7 @@ function PillShape({ widget, fill, stroke, strokeWidth }: ShapeComponentProps) {
         fontFamily="Arial"
         fontSize={Math.max(10, Math.min(14, widget.height * 0.42))}
         fontStyle="bold"
-        fill="#e5e7eb"
+        fill={readableLabel(widget)}
         align="center"
         verticalAlign="middle"
         ellipsis
@@ -1964,7 +1969,7 @@ function FormPreviewShape({ widget, fill, stroke, strokeWidth }: ShapeComponentP
           {iconName && (
             <CanvasIcon
               name={iconName}
-              color="#aab4c4"
+              color={readableLabel(widget)}
               strokeWidth={1.8}
               x={10}
               y={(widget.height - iconSize) / 2}
@@ -1979,7 +1984,8 @@ function FormPreviewShape({ widget, fill, stroke, strokeWidth }: ShapeComponentP
             text={placeholder}
             fontFamily="Arial"
             fontSize={11}
-            fill="#aab4c4"
+            fill={readableLabel(widget)}
+            opacity={0.66}
             verticalAlign="middle"
             ellipsis
             perfectDrawEnabled={false}
@@ -2106,7 +2112,7 @@ function SegmentedControlShape({ widget, fill, stroke, strokeWidth }: ShapeCompo
               y={3}
               width={Math.max(1, segmentWidth - 6)}
               height={widget.height - 6}
-              fill="#484052"
+              fill={readableLabel(widget) === "#ffffff" ? "#ffffff2e" : "#2421301a"}
               cornerRadius={widget.height / 2}
               perfectDrawEnabled={false}
             />
@@ -2117,7 +2123,9 @@ function SegmentedControlShape({ widget, fill, stroke, strokeWidth }: ShapeCompo
             text={segment}
             fontFamily="Arial"
             fontSize={Math.max(9, Math.min(12, widget.height * 0.32))}
-            fill={index === selected ? "#f3f4f6" : "#aab4c4"}
+            fill={readableLabel(widget)}
+            opacity={index === selected ? 1 : 0.66}
+            fontStyle={index === selected ? "bold" : "normal"}
             align="center"
             verticalAlign="middle"
             ellipsis
@@ -2675,7 +2683,7 @@ function GenericElementShape({
         <Group>
           <CanvasIcon
             name={GENERIC_ICON_NAMES[widget.type] ?? "Sparkles"}
-            color={stroke ?? "#a78bfa"}
+            color={readableLabel(widget)}
             strokeWidth={1.8}
             x={10}
             y={Math.max(6, (widget.height - 20) / 2)}
@@ -2690,7 +2698,7 @@ function GenericElementShape({
             text={label}
             fontSize={Math.min(14, Math.max(10, widget.height * 0.32))}
             fontFamily="Arial"
-            fill="#e5e7eb"
+            fill={readableLabel(widget)}
             align="left"
             verticalAlign="middle"
             ellipsis

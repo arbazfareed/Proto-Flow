@@ -1580,12 +1580,12 @@ function StyleSection({ widgets }: { widgets: Widget[] }) {
                 type="color"
                 aria-label="Icon colour"
                 className="style-color-picker"
-                value={iconButtonColour ?? "#e9e4f5"}
+                value={iconButtonColour ?? "#24212b"}
                 onPointerDown={beginStyleEdit}
                 onChange={(event) => applyProps({ iconColor: event.currentTarget.value })}
                 onBlur={finishEditSession}
               />
-              <span className="text-colour-value">{iconButtonColour ?? "Default"}</span>
+              <span className="text-colour-value">{iconButtonColour ?? "Automatic"}</span>
             </div>
           </div>
         )}
@@ -3004,7 +3004,7 @@ function WidgetPropertiesSection({
                 {selectField("alignItems", "Align items", ["flex-start", "center", "flex-end", "stretch"], "center")}
                 {selectField("justifyContent", "Justify content", ["flex-start", "center", "flex-end", "space-between"], "flex-start")}
               </>
-            : widget.type === "mobile-app" || widget.type === "web-app" || widget.type === "icon"
+            : widget.type === "mobile-app" || widget.type === "web-app" || widget.type === "icon" || widget.type === "icon-button"
               ? <>
                   {textField("label", "Accessible label")}
                   <label className="field-label widget-property-field">
