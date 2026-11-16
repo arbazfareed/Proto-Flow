@@ -101,7 +101,13 @@ describe("responsive Relay messaging suite", () => {
     expect(nav).toBeDefined();
     expect(responsiveLayoutStyles(project)).toContain(`data-widget-id="${nav?.id}"`);
     expect(responsiveLayoutStyles(project)).toContain("@media (max-width:767px)");
-    expect(responsiveLayoutStyles(project)).not.toContain("display:none!important");
+    // The mobile navigation stays visible; desktop-only widgets hidden on mobile are hidden (B89).
+    const css = responsiveLayoutStyles(project);
+    const mobileCss = css.slice(css.indexOf("@media (max-width:767px)"), css.indexOf("@media", css.indexOf("@media (max-width:767px)") + 1));
+    const navRule = mobileCss.split("}")
+      .filter((rule) => rule.includes(`data-widget-id="${nav?.id}"`));
+    expect(navRule.length).toBeGreaterThan(0);
+    for (const rule of navRule) expect(rule).not.toContain("display:none");
   });
 
   it("composes and sends typed messages in the responsive conversation", () => {

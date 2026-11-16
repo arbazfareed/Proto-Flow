@@ -37,6 +37,8 @@ function widgetVisible(widget, activeScreen) {
     width >= item.minWidth && (item.maxWidth === undefined || width <= item.maxWidth),
   );
   const override = breakpoint ? widget.overrides?.[breakpoint.id] : undefined;
+  // "Hide on Mobile" and similar are a cascade mode, as in Preview.
+  if ((override?.cascadeMode ?? widget.cascadeMode) === "hide") return false;
   return typeof override?.visible === "boolean" ? override.visible : widget.visible !== false;
 }
 function autoLayoutPosition(widget, activeScreen) {
@@ -483,15 +485,22 @@ function renderWidget(widget, activeScreen, item, localVariables = {}) {
   element.style.backgroundColor = textWidget || !widget.style.fill
     ? "transparent"
     : withOpacity(widget.style.fill, widget.style.fillOpacity);
-  element.style.border = widget.style.stroke
-    ? (widget.style.strokeWidth || 1) + "px solid " + withOpacity(widget.style.stroke, widget.style.strokeOpacity)
+  // Stroke width 0 means no outline (as in Preview), not a 1 px one.
+  const strokeWidth = typeof widget.style.strokeWidth === "number" ? widget.style.strokeWidth : 1;
+  element.style.border = widget.style.stroke && strokeWidth > 0
+    ? strokeWidth + "px solid " + withOpacity(widget.style.stroke, widget.style.strokeOpacity)
     : "none";
   element.style.borderRadius = typeof widget.style.cornerRadius === "number" ? widget.style.cornerRadius + "px" : "";
   element.style.fontFamily = typeof widget.props.fontFamily === "string" ? widget.props.fontFamily : "Arial, sans-serif";
   element.style.fontSize = (typeof widget.props.fontSize === "number" ? widget.props.fontSize : 16) + "px";
   element.style.fontWeight = typeof widget.props.fontWeight === "string" ? widget.props.fontWeight : "normal";
   element.style.textAlign = typeof widget.props.align === "string" ? widget.props.align : "left";
-  element.style.padding = (typeof widget.props.padding === "number" ? widget.props.padding : 8) + "px";
+  element.style.fontStyle = typeof widget.props.fontStyle === "string" ? widget.props.fontStyle : "normal";
+  element.style.lineHeight = typeof widget.props.lineHeight === "number" ? String(widget.props.lineHeight) : "";
+  element.style.letterSpacing = typeof widget.props.letterSpacing === "number" ? widget.props.letterSpacing + "px" : "";
+  element.style.textDecoration = widget.props.underline === true ? "underline" : "";
+  // Text has no inner padding (as on the canvas and in Preview), so its letters are not cut off.
+  element.style.padding = (typeof widget.props.padding === "number" ? widget.props.padding : textWidget ? 0 : 8) + "px";
   element.style.whiteSpace = "pre-wrap";
   const rawText = widget.props.text ?? widget.props.label ?? widget.props.title ?? "";
   const shownText = text(rawText, activeScreen.id, item, widget);

@@ -119,6 +119,7 @@ export function responsiveLayoutStyles(project: Project): string {
       );
       const screenSelector = `#stage[data-screen-id=${JSON.stringify(screen.id)}]`;
       const stageRule = `${screenSelector}{width:${breakpoint.width}px!important;height:${breakpoint.height}px!important}`;
+      const baseVisible = new Map(screen.widgets.map((widget) => [widget.id, widget.visible !== false]));
       const widgetRules = widgets.map((widget) => {
         const selector = `${screenSelector} [data-widget-id=${JSON.stringify(widget.id)}]`;
         const geometry = [
@@ -127,6 +128,9 @@ export function responsiveLayoutStyles(project: Project): string {
           `width:${widget.width}px!important`,
           `height:${widget.height}px!important`,
           `transform:rotate(${widget.rotation}deg)!important`,
+          // Hidden only at this size ("Hide on Mobile"): hide it here too. Widgets hidden in the
+          // base design stay under the runtime's control, so "Show" interactions still work.
+          ...(widget.visible === false && baseVisible.get(widget.id) ? ["display:none!important"] : []),
         ];
         return `${selector}{${geometry.join(";")}}`;
       }).join("\n");
