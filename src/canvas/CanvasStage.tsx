@@ -747,6 +747,16 @@ type EditableWidgetText = {
   value: string;
 };
 
+/**
+ * Widgets whose visible words are their label, edited in place by double-clicking (B72). Item
+ * widgets keep their "A | B | C" form while editing.
+ */
+const DOUBLE_CLICK_LABEL_TYPES = new Set([
+  "app-bar", "bottom-nav", "segmented-control", "chip", "badge", "tag", "fab",
+  "navbar", "tabs", "breadcrumb", "step-indicator", "alert", "toast", "notification",
+  "tooltip", "banner", "empty-state", "metric-card", "feature-card", "pricing-card",
+]);
+
 function getEditableWidgetText(widget: Widget): EditableWidgetText | null {
   const keys = widget.type === "list"
     ? ["items"]
@@ -754,9 +764,12 @@ function getEditableWidgetText(widget: Widget): EditableWidgetText | null {
       ? ["text"]
       : widget.type === "input"
         ? [widget.props.value ? "value" : "placeholder"]
-        : ["button", "checkbox", "radio", "toggle"].includes(widget.type)
+        : ["button", "checkbox", "radio", "toggle"].includes(widget.type) ||
+            DOUBLE_CLICK_LABEL_TYPES.has(widget.type)
           ? ["label"]
-          : [];
+          : widget.type === "search" || widget.type === "search-bar"
+            ? ["placeholder"]
+            : [];
   const key = keys[0] as EditableWidgetText["key"] | undefined;
   if (!key) return null;
   if (key === "items") {
