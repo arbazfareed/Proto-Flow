@@ -219,3 +219,63 @@ describe("PreviewWidget input-mode interactions", () => {
     }
   });
 });
+
+describe("PreviewWidget colours", () => {
+  it("applies fill and stroke opacity like the canvas, so a 10% container stays pale", () => {
+    const project = createEmptyProject("Colour preview");
+    const runtime = new PreviewRuntime(project);
+    const widget: Widget = {
+      ...makeWidget(),
+      type: "container",
+      style: { fill: "#f59e0b", fillOpacity: 0.1, stroke: "#f59e0b", strokeOpacity: 0.5, strokeWidth: 1 },
+      props: { label: "Box" },
+    };
+    const { container } = render(
+      <PreviewWidget
+        widget={widget}
+        runtime={runtime}
+        screenId={project.screens[0].id}
+        snapshot={runtime.snapshot()}
+        runEvent={vi.fn()}
+        onError={vi.fn()}
+        controlValues={{}}
+        onControlValueChange={vi.fn()}
+        onGestureFeedback={vi.fn()}
+        liteMode={false}
+      />,
+    );
+    const element = container.querySelector<HTMLElement>('section[aria-label="Box"]');
+    expect(element?.style.backgroundColor).toBe("rgba(245, 158, 11, 0.1)");
+    expect(element?.style.border).toContain("rgba(245, 158, 11, 0.5)");
+    cleanup();
+  });
+
+  it("applies fill opacity to text colour", () => {
+    const project = createEmptyProject("Text colour preview");
+    const runtime = new PreviewRuntime(project);
+    const widget: Widget = {
+      ...makeWidget(),
+      type: "text",
+      style: { fill: "#24212b", fillOpacity: 0.5 },
+      props: { text: "Hello" },
+    };
+    const { container } = render(
+      <PreviewWidget
+        widget={widget}
+        runtime={runtime}
+        screenId={project.screens[0].id}
+        snapshot={runtime.snapshot()}
+        runEvent={vi.fn()}
+        onError={vi.fn()}
+        controlValues={{}}
+        onControlValueChange={vi.fn()}
+        onGestureFeedback={vi.fn()}
+        liteMode={false}
+      />,
+    );
+    const element = container.querySelector<HTMLElement>('[data-widget-type="text"]');
+    expect(element?.style.color).toBe("rgba(36, 33, 43, 0.5)");
+    expect(element?.style.backgroundColor).toBe("transparent");
+    cleanup();
+  });
+});
