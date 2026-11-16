@@ -209,6 +209,23 @@ describe("responsive breakpoints", () => {
     expect(resolveActiveBreakpoint(screen, "missing").id).toBe("desktop");
   });
 
+  it("shows a phone or tablet screen at its own device size when no viewport is chosen", () => {
+    const base = createEmptyProject().screens[0];
+    const phone = {
+      ...base,
+      device: { ...base.device!, width: 393, height: 852 },
+      breakpoints: createDefaultBreakpoints(393, 852),
+    };
+    expect(resolveActiveBreakpoint(phone, null)).toMatchObject({ id: "mobile", width: 393, height: 852 });
+    expect(resolveActiveBreakpoint(phone, "desktop")).toMatchObject({ id: "desktop", width: 1024 });
+
+    const tablet = { ...base, device: { ...base.device!, width: 820, height: 1180 } };
+    expect(resolveActiveBreakpoint(tablet, null).id).toBe("tablet");
+    expect(createDefaultBreakpoints(820, 1180).find((item) => item.id === "tablet"))
+      .toMatchObject({ width: 820, height: 1180 });
+    expect(resolveActiveBreakpoint(base, null).id).toBe("desktop");
+  });
+
   it("reports only visible widgets whose bounds exceed the active viewport", () => {
     const visible = makeWidget({ x: 380, width: 20 });
     const hidden = makeWidget({ x: -10, visible: false });
