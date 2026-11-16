@@ -78,6 +78,8 @@ import type { LayerTreePreferences } from "./layerTreePreferences";
 import { ScreenIcon, WidgetIcon } from "./widgetIcons";
 import { ScreenThumbnail } from "./ScreenThumbnail";
 import { SymbolNameDialog } from "./SymbolNameDialog";
+import { DeleteScreenDialog } from "./DeleteScreenDialog";
+import { findLinksToScreen, repointScreenLinks } from "../project/screenLinks";
 import {
   buildLayerHierarchy,
   filterLayerHierarchy,
@@ -406,6 +408,7 @@ export function ScreenLayerSidebar({ tutorialProjectId }: { tutorialProjectId: s
     return overflows;
   }, [activeBreakpoint, hierarchyWidgets]);
   const [menu, setMenu] = useState<MenuState>(null);
+  const [pendingScreenDelete, setPendingScreenDelete] = useState<{ screenId: string; linkCount: number } | null>(null);
   const [symbolNameDialog, setSymbolNameDialog] = useState<{
     widgetId: string;
     defaultName: string;
@@ -991,16 +994,31 @@ export function ScreenLayerSidebar({ tutorialProjectId }: { tutorialProjectId: s
 
   const deleteScreen = (screenId: string) => {
     if (project.screens.length <= 1) return;
+    // Links from other screens would silently lead nowhere (B84): ask where they should go.
+    const linkCount = findLinksToScreen(project, screenId).length;
+    if (linkCount > 0) {
+      setPendingScreenDelete({ screenId, linkCount });
+      setMenu(null);
+      return;
+    }
+    removeScreen(screenId, null);
+  };
+
+  const removeScreen = (screenId: string, redirectTo: string | null) => {
+    if (project.screens.length <= 1) return;
     const remaining = project.screens.filter((screen) => screen.id !== screenId);
     const deletedStartScreen = project.startScreenId === screenId;
-    editProject((current) => ({
-      ...current,
-      screens: remaining,
-      variables: current.variables.filter(
-        (variable) => variable.scope !== "screen" || variable.screenId !== screenId,
-      ),
-      startScreenId: deletedStartScreen ? remaining[0].id : current.startScreenId,
-    }));
+    editProject((current) => {
+      const relinked = repointScreenLinks(current, screenId, redirectTo);
+      return {
+        ...relinked,
+        screens: relinked.screens.filter((screen) => screen.id !== screenId),
+        variables: current.variables.filter(
+          (variable) => variable.scope !== "screen" || variable.screenId !== screenId,
+        ),
+        startScreenId: deletedStartScreen ? remaining[0].id : current.startScreenId,
+      };
+    });
     if (activeScreenId === screenId) {
       useStore.getState().setActiveScreen(remaining[0].id);
     }
@@ -3007,6 +3025,19 @@ export function ScreenLayerSidebar({ tutorialProjectId }: { tutorialProjectId: s
             </div>
           </section>
         </div>
+      )}
+
+      {pendingScreenDelete && (
+        <DeleteScreenDialog
+          screenName={project.screens.find((screen) => screen.id === pendingScreenDelete.screenId)?.name ?? "this screen"}
+          linkCount={pendingScreenDelete.linkCount}
+          otherScreens={project.screens.filter((screen) => screen.id !== pendingScreenDelete.screenId)}
+          onCancel={() => setPendingScreenDelete(null)}
+          onConfirm={(redirectTo) => {
+            removeScreen(pendingScreenDelete.screenId, redirectTo);
+            setPendingScreenDelete(null);
+          }}
+        />
       )}
 
       {symbolNameDialog && (
