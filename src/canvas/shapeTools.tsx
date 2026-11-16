@@ -183,7 +183,7 @@ const CORE_SHAPE_TOOL_DEFINITIONS: Record<
     shortcut: "T",
     width: 64,
     height: 32,
-    style: { fill: "#e9e9ec", stroke: null, strokeWidth: 0 },
+    style: { fill: "#24212b", stroke: null, strokeWidth: 0 },
     props: {
       text: "Text",
       fontFamily: "Arial",
