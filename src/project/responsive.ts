@@ -14,15 +14,24 @@ export const BREAKPOINT_PRESETS = [
   { id: "desktop", name: "Desktop", minWidth: 1024, width: 1440, height: 900 },
 ] as const satisfies readonly Breakpoint[];
 
+function containsWidth(breakpoint: Breakpoint, width: number): boolean {
+  return width >= breakpoint.minWidth && (breakpoint.maxWidth === undefined || width <= breakpoint.maxWidth);
+}
+
 export function createDefaultBreakpoints(
   baseWidth = 1440,
   baseHeight = 900,
 ): Breakpoint[] {
-  return BREAKPOINT_PRESETS.map((breakpoint) =>
-    breakpoint.id === "desktop"
-      ? { ...breakpoint, width: Math.max(1024, baseWidth), height: baseHeight }
-      : { ...breakpoint },
-  );
+  return BREAKPOINT_PRESETS.map((breakpoint) => {
+    if (breakpoint.id === "desktop") {
+      return { ...breakpoint, width: Math.max(1024, baseWidth), height: baseHeight };
+    }
+    // The breakpoint a screen's own device falls in is drawn at exactly that device's size,
+    // so a new phone or tablet screen opens at the size it was designed for.
+    return containsWidth(breakpoint, baseWidth)
+      ? { ...breakpoint, width: baseWidth, height: baseHeight }
+      : { ...breakpoint };
+  });
 }
 
 export function getScreenBreakpoints(screen: Screen): readonly Breakpoint[] {
@@ -62,8 +71,14 @@ export function resolveActiveBreakpoint(
   breakpointId: string | null,
 ): Breakpoint {
   const breakpoints = getScreenBreakpoints(screen);
+  const deviceWidth = screen.device?.width;
+  // With no viewport chosen, show the screen at its own device size (a phone screen at the
+  // Mobile breakpoint) rather than always at Desktop.
   return (
     breakpoints.find((breakpoint) => breakpoint.id === breakpointId) ??
+    (deviceWidth === undefined
+      ? undefined
+      : breakpoints.find((breakpoint) => containsWidth(breakpoint, deviceWidth))) ??
     breakpoints.find((breakpoint) => breakpoint.id === "desktop") ??
     breakpoints[breakpoints.length - 1]
   );
