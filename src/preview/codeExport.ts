@@ -405,6 +405,9 @@ ${EXPRESSION_RUNTIME_SOURCE}
       : color;
   const style = (widget: Widget): CSSProperties => {
     const position = layoutPosition(widget);
+    // As in Preview: on text, Fill is the text colour; text has no padding; stroke 0 is none.
+    const textWidget = ["text", "heading", "label", "paragraph", "link", "code"].includes(widget.type);
+    const strokeWidth = typeof widget.style.strokeWidth === "number" ? widget.style.strokeWidth : 1;
     return ({
     position: "absolute",
     left: position?.x ?? widget.x,
@@ -417,14 +420,19 @@ ${EXPRESSION_RUNTIME_SOURCE}
       : typeof widget.props.textColor === "string" ? widget.props.textColor
       : (widget.type === "button" || widget.type === "icon-button") && typeof widget.style.fill === "string"
         ? readableOn(widget.style.fill, widget.style.fillOpacity)
-        : "#24212b",
-    background: typeof widget.style.fill === "string" ? withOpacity(widget.style.fill, widget.style.fillOpacity) : "transparent",
-    border: typeof widget.style.stroke === "string" ? \`\${typeof widget.style.strokeWidth === "number" ? widget.style.strokeWidth : 1}px solid \${withOpacity(widget.style.stroke, widget.style.strokeOpacity)}\` : "none",
+        : textWidget && typeof widget.style.fill === "string"
+          ? withOpacity(widget.style.fill, widget.style.fillOpacity)
+          : "#24212b",
+    background: !textWidget && typeof widget.style.fill === "string" ? withOpacity(widget.style.fill, widget.style.fillOpacity) : "transparent",
+    border: typeof widget.style.stroke === "string" && strokeWidth > 0 ? \`\${strokeWidth}px solid \${withOpacity(widget.style.stroke, widget.style.strokeOpacity)}\` : "none",
     borderRadius: typeof widget.style.cornerRadius === "number" ? widget.style.cornerRadius : undefined,
     fontSize: typeof widget.props.fontSize === "number" ? widget.props.fontSize : 16,
     textAlign: typeof widget.props.align === "string" ? widget.props.align as CSSProperties["textAlign"] : "left",
     whiteSpace: "pre-wrap",
-    padding: typeof widget.props.padding === "number" ? widget.props.padding : 8,
+    fontStyle: typeof widget.props.fontStyle === "string" ? widget.props.fontStyle as CSSProperties["fontStyle"] : undefined,
+    lineHeight: typeof widget.props.lineHeight === "number" ? widget.props.lineHeight : undefined,
+    letterSpacing: typeof widget.props.letterSpacing === "number" ? widget.props.letterSpacing : undefined,
+    padding: typeof widget.props.padding === "number" ? widget.props.padding : textWidget ? 0 : 8,
     touchAction: screen.inputMode === "mouse" ? "manipulation" : "none",
     boxSizing: "border-box",
   });

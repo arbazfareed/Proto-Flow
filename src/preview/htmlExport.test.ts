@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import JSZip from "jszip";
+import { createDefaultBreakpoints } from "../project/responsive";
 import { createEmptyProject, type Widget } from "../project/schema";
 import {
   generateDeviceImageArchive,
@@ -226,6 +227,24 @@ describe("local HTML bundle export", () => {
     expect(html).not.toContain("</title><script>alert(1)</script>");
     expect(localHtmlExportFileName("../../My Project")).toBe("my-project-html-export.zip");
     expect(localHtmlExportFileName("")).toBe("prototype-html-export.zip");
+  });
+
+  it("hides widgets set to hide at a breakpoint in the responsive CSS (B89)", () => {
+    const project = createEmptyProject("Hide on mobile");
+    const screen = project.screens[0];
+    screen.breakpoints = createDefaultBreakpoints(1440, 900);
+    const panel: Widget = {
+      id: crypto.randomUUID(), type: "rectangle", x: 1100, y: 0, width: 300, height: 600,
+      rotation: 0, opacity: 1, visible: true, locked: false, zIndex: 1, style: {}, props: {},
+      overrides: { mobile: { cascadeMode: "hide" } },
+    };
+    screen.widgets.push(panel);
+    const css = responsiveLayoutStyles(project);
+    const mobileRules = css.split("\n").find((line) => line.startsWith("@media (max-width:767px)")) ?? "";
+    const desktopRules = css.split("\n").find((line) => line.startsWith("@media (min-width:1024px)")) ?? "";
+    expect(mobileRules).toContain(`[data-widget-id="${panel.id}"]`);
+    expect(mobileRules).toMatch(new RegExp(`${panel.id}"\\]\\{[^}]*display:none!important`));
+    expect(desktopRules).not.toContain("display:none");
   });
 
   it("exports responsive breakpoint rules and per-device HTML variants for free local use", async () => {
