@@ -28,7 +28,7 @@ describe("ImportCodeDialog", () => {
     expect(preview.getAttribute("sandbox")).not.toContain("allow-same-origin");
   });
 
-  it("switches between HTML, CSS, and JavaScript editors and invokes canvas import", () => {
+  it("switches between HTML, CSS, and JavaScript editors and invokes canvas import", async () => {
     const onClose = vi.fn();
     const onRenderOnCanvas = vi.fn();
     renderWithProviders(<ImportCodeDialog screens={[]} sourceScreenId="source" onClose={onClose} onRenderOnCanvas={onRenderOnCanvas} />);
@@ -54,7 +54,7 @@ describe("ImportCodeDialog", () => {
       html: "<h1>Canvas import</h1>",
       css: "h1 { color: red; }",
     }));
-    expect(onClose).toHaveBeenCalledOnce();
+    await waitFor(() => expect(onClose).toHaveBeenCalledOnce());
   });
 
   it("extracts embedded document CSS and JavaScript for the sandbox preview", async () => {
