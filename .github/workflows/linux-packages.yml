@@ -125,7 +125,8 @@ jobs:
           Xvfb :99 -screen 0 1440x900x24 >/dev/null 2>&1 &
           sleep 2
           set +e
-          DISPLAY=:99 dbus-run-session -- timeout 25 proto-flow > launch.log 2>&1
+          if command -v dbus-run-session >/dev/null; then session="dbus-run-session --"; else session=""; fi
+          DISPLAY=:99 $session timeout 25 proto-flow > launch.log 2>&1
           status=$?
           set -e
           tail -n 20 launch.log
