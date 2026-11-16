@@ -374,6 +374,10 @@ ${EXPRESSION_RUNTIME_SOURCE}
       y: parent.y + padding + (horizontal ? crossOffset : cursor),
     };
   };
+  const withOpacity = (color: string, opacity: unknown) =>
+    typeof opacity === "number" && opacity < 1
+      ? \`color-mix(in srgb, \${color} \${Math.max(0, opacity) * 100}%, transparent)\`
+      : color;
   const style = (widget: Widget): CSSProperties => {
     const position = layoutPosition(widget);
     return ({
@@ -385,8 +389,8 @@ ${EXPRESSION_RUNTIME_SOURCE}
     transform: widget.rotation ? \`rotate(\${widget.rotation}deg)\` : undefined,
     opacity: widget.opacity,
     color: typeof widget.props.color === "string" ? widget.props.color : "#24212b",
-    background: typeof widget.style.fill === "string" ? widget.style.fill : "transparent",
-    border: typeof widget.style.stroke === "string" ? \`\${typeof widget.style.strokeWidth === "number" ? widget.style.strokeWidth : 1}px solid \${widget.style.stroke}\` : "none",
+    background: typeof widget.style.fill === "string" ? withOpacity(widget.style.fill, widget.style.fillOpacity) : "transparent",
+    border: typeof widget.style.stroke === "string" ? \`\${typeof widget.style.strokeWidth === "number" ? widget.style.strokeWidth : 1}px solid \${withOpacity(widget.style.stroke, widget.style.strokeOpacity)}\` : "none",
     borderRadius: typeof widget.style.cornerRadius === "number" ? widget.style.cornerRadius : undefined,
     fontSize: typeof widget.props.fontSize === "number" ? widget.props.fontSize : 16,
     textAlign: typeof widget.props.align === "string" ? widget.props.align as CSSProperties["textAlign"] : "left",

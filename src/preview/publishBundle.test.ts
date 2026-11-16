@@ -13,7 +13,7 @@ describe("standalone published preview bundle", () => {
     const html = generatePublishedPreviewHtml(project);
 
     expect(html).toContain('const textWidget = ["text", "heading", "label", "paragraph", "link", "code"].includes(widget.type)');
-    expect(html).toContain('element.style.backgroundColor = textWidget || widget.style.fill === null');
+    expect(html).toContain('element.style.backgroundColor = textWidget || !widget.style.fill');
     expect(html).toContain('input.className = "preview-control"');
     expect(html).toContain("const shapeOrText = [");
     expect(html).toContain('element.textContent = shownText || (shapeOrText ? "" : widget.type.replaceAll("-", " "))');
@@ -23,6 +23,17 @@ describe("standalone published preview bundle", () => {
     expect(html).toContain("if (!widgetVisible(widget, activeScreen)) continue;");
     expect(html).toContain("if (matchedRule && renderAfter) render();");
     expect(() => new Function(PREVIEW_RUNTIME_SCRIPT)).not.toThrow();
+  });
+
+  it("applies fill and stroke opacity to colours like the canvas does", () => {
+    const source = PREVIEW_RUNTIME_SCRIPT.match(/function withOpacity\(color, opacity\) \{[\s\S]*?\n\}/)?.[0];
+    expect(source).toBeDefined();
+    const withOpacity = new Function(`${source}; return withOpacity;`)() as (color: string, opacity?: number) => string;
+    expect(withOpacity("#f59e0b", 0.1)).toBe("color-mix(in srgb, #f59e0b 10%, transparent)");
+    expect(withOpacity("#f59e0b", 1)).toBe("#f59e0b");
+    expect(withOpacity("#f59e0b", undefined)).toBe("#f59e0b");
+    expect(PREVIEW_RUNTIME_SCRIPT).toContain("withOpacity(widget.style.fill, widget.style.fillOpacity)");
+    expect(PREVIEW_RUNTIME_SCRIPT).toContain("withOpacity(widget.style.stroke, widget.style.strokeOpacity)");
   });
 
   it("renders semantic cards, charts, and flex-layout elements", () => {

@@ -43,6 +43,7 @@ import {
   type PreviewEvent,
   type PreviewRuntimeSnapshot,
 } from "./runtime";
+import { styleColorToRgba } from "../canvas/styleInspector";
 
 const PREVIEW_CHANNEL = "protoflow-preview";
 
@@ -85,13 +86,16 @@ function widgetStyle(widget: Widget, position?: WidgetPosition): CSSProperties {
     transform: widget.rotation ? `rotate(${widget.rotation}deg)` : undefined,
     opacity: widget.opacity,
     boxSizing: "border-box",
-    backgroundColor: textWidget || fill === null ? "transparent" : fill,
+    // Match the canvas: fill and stroke opacity apply to the colour, not the whole widget.
+    backgroundColor: textWidget || !fill ? "transparent" : styleColorToRgba(fill, widget.style.fillOpacity),
     color: typeof widget.props.color === "string"
       ? widget.props.color
       : textWidget && fill
-        ? fill
+        ? styleColorToRgba(fill, widget.style.fillOpacity)
         : "#24212b",
-    border: stroke ? `${widget.style.strokeWidth ?? 1}px solid ${stroke}` : "none",
+    border: stroke
+      ? `${widget.style.strokeWidth ?? 1}px solid ${styleColorToRgba(stroke, widget.style.strokeOpacity)}`
+      : "none",
     borderRadius: Array.isArray(radius)
       ? `${radius[0]}px ${radius[1]}px ${radius[2]}px ${radius[3]}px`
       : radius,
