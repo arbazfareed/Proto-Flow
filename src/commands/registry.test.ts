@@ -85,3 +85,23 @@ describe("command registry", () => {
     expect(actions.openHelp).toHaveBeenCalledOnce();
   });
 });
+
+describe("share and export commands (B58)", () => {
+  it("lists Share, Collaborate and the exports when the app provides them", () => {
+    const noop = () => undefined;
+    const share = vi.fn();
+    const commands = createCoreCommands({
+      newProject: noop, openProject: noop, saveProject: noop, undo: noop, redo: noop,
+      toggleGrid: noop, toggleSnap: noop, checkForUpdates: noop, openPlugins: noop,
+      openVersionHistory: noop, createCheckpoint: noop, openHelp: noop,
+      share, collaborate: noop, exportHtml: noop, exportCode: noop,
+    });
+    const byId = new Map(commands.map((command) => [command.id, command]));
+    expect(byId.get("project.share")?.label).toBe("Share Link");
+    expect(byId.has("project.collaborate")).toBe(true);
+    expect(byId.has("project.export-html")).toBe(true);
+    expect(byId.has("project.export-code")).toBe(true);
+    void byId.get("project.share")?.run();
+    expect(share).toHaveBeenCalledOnce();
+  });
+});

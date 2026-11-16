@@ -387,10 +387,11 @@ export function TopBar({
         <button className="button button-secondary import-code-trigger" aria-label="Import Code" title="Import HTML, CSS, and JavaScript into the canvas" onClick={onImportCode}>
           <Code2 size={14} /> Import Code
         </button>
-        <button className="button button-secondary" aria-label="Publish to cloud" title="Publish a shareable cloud preview" onClick={onPublishCloudPreview}>
-          <CloudUpload size={14} /> Publish
+        {/* Always visible at normal window sizes (B58): sharing is a primary action. */}
+        <button className="button button-share" aria-label="Share" title="Share a link to this prototype" onClick={onPublishCloudPreview}>
+          <CloudUpload size={14} /> Share
         </button>
-        <button className="button button-secondary" aria-label="Open collaboration" title="Start or join a real-time collaboration session" onClick={onOpenCollaboration}>
+        <button className="button button-secondary" aria-label="Collaborate" title="Start or join a real-time collaboration session" onClick={onOpenCollaboration}>
           <UsersRound size={14} /> Collaborate
         </button>
         <button className="button button-secondary" aria-label="Export code with React" title="Export a React and Tailwind project" onClick={onExportReactCode}>

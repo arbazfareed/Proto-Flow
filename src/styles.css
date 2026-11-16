@@ -522,3 +522,6 @@ html[data-theme="light"] .interaction-autosave-note { color: #6b6878; }
 html[data-theme="light"] .interaction-pending-note { color: #8a5a00; }
 html[data-theme="light"] .delete-screen-redirect { color: #4b4858; }
 html[data-theme="light"] .text-colour-value { color: #6b6878; }
+
+html[data-theme="light"] .button-share { color: #5b3fc4; border-color: #b7a6f0; background: #f4f0ff; }
+html[data-theme="light"] .button-share:hover { background: #ebe4ff; }
