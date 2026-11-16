@@ -2,6 +2,7 @@ import { createShapeWidget } from "../canvas/shapes";
 import type { ShapeTool } from "../canvas/shapeTools";
 import type { Breakpoint, Widget, WidgetOverride } from "./schema";
 import { extractImportedCode, parseImportedHtmlDocument } from "./importedCode";
+import type { MeasuredLayout } from "./htmlLayoutMeasure";
 
 const MAX_HTML_LENGTH = 200_000;
 const MAX_CSS_LENGTH = 100_000;
@@ -770,7 +771,8 @@ function createHtmlWidget(
       pathViewBoxHeight: pathViewBox?.height ?? box.height,
     };
   } else if (isContainer) {
-    props = { label: tag.toLowerCase(), layout: "freeform", gap: 0, padding: 0 };
+    // The tag lives in the layer name and importedTagName; a label would show as text.
+    props = { label: "", layout: "freeform", gap: 0, padding: 0 };
   } else {
     props = {
       text,
@@ -1194,6 +1196,7 @@ export function importHtmlToWidgets(
   canvasWidth: number,
   firstZIndex = 0,
   responsiveBreakpoints: readonly Pick<Breakpoint, "id" | "width">[] = [],
+  measuredLayouts?: ReadonlyMap<number, MeasuredLayout>,
 ): Widget[] {
   if (html.length > MAX_HTML_LENGTH) throw new Error("HTML import is limited to 200 KB.");
   if (css.length > MAX_CSS_LENGTH) throw new Error("CSS import is limited to 100 KB.");
@@ -1257,6 +1260,36 @@ export function importHtmlToWidgets(
         undefined,
         `body.${index}`,
       );
+    }
+    // Where the real browser engine measured the page, use its boxes: they include flexbox,
+    // grid, centring and media queries exactly, with the page edge at the screen edge.
+    const measured = measuredLayouts?.get(width);
+    if (measured) {
+      for (const [index, widget] of state.widgets.entries()) {
+        const box = measured.get(state.sourceKeys[index]);
+        if (!box) continue;
+        if (box.width === 0 && box.height === 0) {
+          widget.visible = false;
+          continue;
+        }
+        widget.x = box.x;
+        widget.y = box.y;
+        widget.width = Math.max(1, box.width);
+        widget.height = Math.max(1, box.height);
+        const fontSize = widget.props.fontSize;
+        if (typeof fontSize === "number" && fontSize > 0 && typeof widget.props.text === "string") {
+          // Use the line height the browser actually rendered, so wrapped lines all fit the box.
+          if (box.lineHeight) widget.props.lineHeight = Math.round((box.lineHeight / fontSize) * 1000) / 1000;
+          // Canvas text measures a touch wider than browser text; give it room so the last
+          // glyph never wraps away, keeping the text anchored where the page aligned it.
+          if (widget.type === "heading" || widget.type === "paragraph" || widget.type === "link") {
+            const slack = Math.ceil(fontSize * 0.2);
+            const align = widget.props.align;
+            widget.x -= align === "center" ? slack / 2 : align === "right" ? slack : 0;
+            widget.width += slack;
+          }
+        }
+      }
     }
     return state;
   };

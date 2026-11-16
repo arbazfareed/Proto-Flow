@@ -32,6 +32,7 @@ import { openProjectFile, saveProjectFile } from "./project/files";
 import { useStore } from "./store";
 import { RestoreModal } from "./layout/RestoreModal";
 import { UnsavedChangesDialog } from "./layout/UnsavedChangesDialog";
+import { measureImportedLayout } from "./project/htmlLayoutMeasure";
 import { UpdateToast } from "./layout/UpdateToast";
 import { WalletDialog } from "./layout/WalletDialog";
 import { CloudPreviewDialog } from "./layout/CloudPreviewDialog";
@@ -990,13 +991,23 @@ function AppShell() {
     void openTutorialProject();
   }, [completeOnboarding, onboardingState.selectedTemplate, openTutorialProject]);
 
-  const renderImportedCode = useCallback((
+  const renderImportedCode = useCallback(async (
     { html, css }: Pick<ImportedCode, "html" | "css">,
     tokens: ImportedDesignTokens,
     interactionBinding: ImportedDomInteractionBinding | null,
     javascriptListeners: ImportedJsListenerSuggestion[],
     sourceCode: ImportedCode,
   ) => {
+    const screenBefore = useStore.getState().project.screens.find(
+      (item) => item.id === useStore.getState().getActiveScreenId(),
+    );
+    if (!screenBefore) throw new Error("Select a screen before rendering imported code.");
+    // Lay the page out in the real browser engine first, at the screen width and every breakpoint.
+    const canvasWidth = screenBefore.device?.width ?? DEFAULT_DEVICE_PRESET.viewport.width;
+    const measuredLayouts = await measureImportedLayout(html, css, [
+      canvasWidth,
+      ...getScreenBreakpoints(screenBefore).map((breakpoint) => breakpoint.width),
+    ]);
     const state = useStore.getState();
     const screenId = state.getActiveScreenId();
     const screen = state.project.screens.find((item) => item.id === screenId);
@@ -1017,6 +1028,7 @@ function AppShell() {
       screen.device?.width ?? DEFAULT_DEVICE_PRESET.viewport.width,
       firstZIndex,
       getScreenBreakpoints(screen),
+      measuredLayouts,
     );
     const previousByNodeId = new Map(previousImportedWidgets.flatMap((widget) =>
       typeof widget.props.importedNodeId === "string"

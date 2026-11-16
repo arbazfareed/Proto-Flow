@@ -21,6 +21,40 @@ describe("importHtmlToWidgets", () => {
     vi.unstubAllGlobals();
   });
 
+  it("places widgets at the boxes the browser measured and never prints container tag names", () => {
+    const html = '<header class="nav"><div class="logo">Brightly</div><nav class="links"><a href="#">About</a></nav></header>';
+    const measured = new Map([
+      [1440, new Map([
+        ["body.0", { x: 0, y: 0, width: 1440, height: 66 }],
+        ["body.0.0", { x: 40, y: 20, width: 83, height: 25, lineHeight: 25 }],
+        ["body.0.0.text", { x: 40, y: 20, width: 83, height: 25, lineHeight: 25 }],
+        ["body.0.1", { x: 1356, y: 22, width: 44, height: 18 }],
+        ["body.0.1.0", { x: 1356, y: 22, width: 44, height: 18, lineHeight: 18 }],
+      ])],
+      [390, new Map([
+        ["body.0", { x: 0, y: 0, width: 390, height: 58 }],
+        ["body.0.0", { x: 20, y: 16, width: 83, height: 25, lineHeight: 25 }],
+        ["body.0.1", { x: 0, y: 0, width: 0, height: 0 }],
+        ["body.0.1.0", { x: 0, y: 0, width: 0, height: 0 }],
+      ])],
+    ]);
+    const breakpoints = [{ id: "mobile", width: 390 }];
+    const widgets = importHtmlToWidgets(html, ".logo { font-size: 22px; }", 1440, 0, breakpoints, measured);
+    const header = widgets.find((widget) => widget.name === "nav");
+    const logo = widgets.find((widget) => widget.props.text === "Brightly");
+    const links = widgets.find((widget) => widget.name === "links");
+    expect(header).toMatchObject({ x: 0, y: 0, width: 1440, height: 66 });
+    expect(header?.props.label).toBe("");
+    expect(logo).toMatchObject({ x: 40, y: 20, height: 25 });
+    expect(logo?.width).toBeGreaterThanOrEqual(83);
+    expect(logo?.props.lineHeight).toBeCloseTo(25 / 22, 2);
+    expect(links).toMatchObject({ x: 1356, y: 22 });
+    const logoBox = widgets.find((widget) => widget.name === "logo");
+    expect({ x: logoBox?.overrides?.mobile?.x, y: logoBox?.overrides?.mobile?.y }).toEqual({ x: 20, y: 16 });
+    expect(links?.overrides?.mobile?.visible).toBe(false);
+    expect(widgets.find((widget) => widget.name === "logo")?.props.label).toBe("");
+  });
+
   it("extracts and imports documents when the parsed body is unavailable", () => {
     const parse = DOMParser.prototype.parseFromString;
     vi.spyOn(DOMParser.prototype, "parseFromString").mockImplementation((source, type) => {

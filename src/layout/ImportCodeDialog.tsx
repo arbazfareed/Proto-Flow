@@ -47,7 +47,7 @@ interface ImportCodeDialogProps {
     interactionBinding: ImportedDomInteractionBinding | null,
     javascriptListeners: ImportedJsListenerSuggestion[],
     sourceCode: ImportedCode,
-  ) => void;
+  ) => void | Promise<void>;
 }
 
 const INITIAL_HTML = `<main class="card">
@@ -154,6 +154,7 @@ export function ImportCodeDialog({
   const [javascript, setJavascript] = useState(initialCode?.javascript ?? INITIAL_JS);
   const [previewDocument, setPreviewDocument] = useState("");
   const [error, setError] = useState("");
+  const [rendering, setRendering] = useState(false);
   const previewNonce = useMemo(() => crypto.randomUUID(), []);
   const [designTokens, setDesignTokens] = useState<ImportedDesignTokens>({
     colors: [],
@@ -251,12 +252,14 @@ export function ImportCodeDialog({
     }
   };
 
-  const handleRender = () => {
+  const handleRender = async () => {
+    if (rendering) return;
     setError("");
+    setRendering(true);
     try {
       const sourceCode = { html, css, javascript };
       onDraftChange?.(sourceCode);
-      onRenderOnCanvas(
+      await onRenderOnCanvas(
         { html, css: getExternalCode(html, css, javascript).css },
         designTokens,
         interactionBinding,
@@ -268,6 +271,8 @@ export function ImportCodeDialog({
       onClose();
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "The code could not be rendered on the canvas.");
+    } finally {
+      setRendering(false);
     }
   };
 
@@ -591,7 +596,9 @@ export function ImportCodeDialog({
           <p>Scripts cannot access ProtoFlow or make network requests from this preview.</p>
           <div>
             <button className="button button-secondary" onClick={onClose}>Cancel</button>
-            <button className="button button-primary" onClick={handleRender}>Render on Canvas</button>
+            <button className="button button-primary" onClick={() => void handleRender()} disabled={rendering} aria-busy={rendering}>
+              {rendering ? "Rendering…" : "Render on Canvas"}
+            </button>
           </div>
         </footer>
       </section>
