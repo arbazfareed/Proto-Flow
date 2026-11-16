@@ -44,6 +44,7 @@ import {
   type PreviewRuntimeSnapshot,
 } from "./runtime";
 import { styleColorToRgba } from "../canvas/styleInspector";
+import { PLAIN_BOX_TYPES } from "../project/plainBoxes";
 
 const PREVIEW_CHANNEL = "protoflow-preview";
 
@@ -627,14 +628,14 @@ export function PreviewWidget({
     return <div className="preview-widget preview-spacer" aria-hidden="true" style={style} {...commonHandlers} />;
   }
 
-  if (widget.type === "flex-row" || widget.type === "flex-column" || widget.type === "container") {
+  if (widget.type === "flex-row" || widget.type === "flex-column" || PLAIN_BOX_TYPES.has(widget.type)) {
     return (
       <section
         className={`preview-widget preview-layout is-${widget.type}`}
         aria-label={stringProp(widget, "label", widget.type.replaceAll("-", " "))}
         style={{
           ...style,
-          display: widget.type === "container" ? "block" : "flex",
+          display: PLAIN_BOX_TYPES.has(widget.type) ? "block" : "flex",
           flexDirection: widget.type === "flex-row" ? "row" : "column",
           gap: typeof widget.props.gap === "number" ? widget.props.gap : 12,
           padding: typeof widget.props.padding === "number" ? widget.props.padding : 12,
@@ -642,9 +643,7 @@ export function PreviewWidget({
           justifyContent: stringProp(widget, "justifyContent", "flex-start"),
         }}
         {...commonHandlers}
-      >
-        <span className="preview-layout-label">{stringProp(widget, "label", widget.type.replaceAll("-", " "))}</span>
-      </section>
+      />
     );
   }
   const handleChange = (event: ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
