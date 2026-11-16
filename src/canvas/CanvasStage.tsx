@@ -834,6 +834,9 @@ export function CanvasStage({
   // replaces the placeholder, or put the caret at the end after a typed first letter.
   const editorOpenSelectionRef = useRef<"all" | "end">("all");
   const pendingNewTextEditRef = useRef<string | null>(null);
+  // Letters typed between drawing a text widget and its editor opening (one render later).
+  const pendingTypedTextRef = useRef("");
+  const pendingEditRequestedRef = useRef<string | null>(null);
   const imageTargetRef = useRef<string | null>(null);
   const cancelEditRef = useRef(false);
   const panGestureRef = useRef<{ pointerId: number; x: number; y: number } | null>(
@@ -1482,6 +1485,23 @@ export function CanvasStage({
     };
     const editor = textEditorRef.current;
     if (editor) placeCaret(editor);
+    if (pendingNewTextEditRef.current === editingWidgetId) {
+      // Letters typed while the editor was mounting: replace the placeholder or extend
+      // what was already typed.
+      pendingNewTextEditRef.current = null;
+      pendingEditRequestedRef.current = null;
+      const late = pendingTypedTextRef.current;
+      pendingTypedTextRef.current = "";
+      if (late) {
+        const replace = editorOpenSelectionRef.current === "all";
+        editorOpenSelectionRef.current = "end";
+        setEditValue((value) => {
+          const next = (replace ? late : value + late).slice(0, MAX_WIDGET_TEXT_LENGTH);
+          setEditCursor(next.length);
+          return next;
+        });
+      }
+    }
     // A pointer release from drawing can move focus away; take it back only if it was lost,
     // so letters typed in the meantime are never reselected or reordered.
     const frame = requestAnimationFrame(() => {
@@ -1492,17 +1512,31 @@ export function CanvasStage({
   }, [editingWidgetId]);
 
   // A text widget that was just drawn opens straight into editing, once it is on screen.
+  // The edit stays "pending" (and keeps collecting typed letters) until the editor is mounted
+  // and focused, because the editor appears one render after this asks for it.
   useEffect(() => {
     const pendingId = pendingNewTextEditRef.current;
-    if (!pendingId) return;
+    if (!pendingId || pendingEditRequestedRef.current === pendingId) return;
     const widget = screenWidgets.find((item) => item.id === pendingId);
     if (!widget) return;
-    pendingNewTextEditRef.current = null;
-    beginWidgetTextEdit(widget);
+    pendingEditRequestedRef.current = pendingId;
+    const typed = pendingTypedTextRef.current;
+    pendingTypedTextRef.current = "";
+    beginWidgetTextEdit(widget, typed || undefined);
   }, [beginWidgetTextEdit, screenWidgets]);
 
   const editNewTextWidget = useCallback((tool: string, widgetId: string | null) => {
-    if (widgetId && TEXT_FIRST_WIDGET_TYPES.has(tool)) pendingNewTextEditRef.current = widgetId;
+    if (widgetId && TEXT_FIRST_WIDGET_TYPES.has(tool)) {
+      pendingNewTextEditRef.current = widgetId;
+      pendingTypedTextRef.current = "";
+      // Never let a pending edit hold back shortcuts if the widget does not appear.
+      window.setTimeout(() => {
+        if (pendingNewTextEditRef.current === widgetId) {
+          pendingNewTextEditRef.current = null;
+          pendingEditRequestedRef.current = null;
+        }
+      }, 1000);
+    }
   }, []);
 
   const getWorldPositionFromClient = useCallback(
@@ -2281,6 +2315,18 @@ export function CanvasStage({
     };
     const onKeyDown = (event: KeyboardEvent) => {
       if (isEditingTarget(event.target) || isModalDialogOpen()) {
+        return;
+      }
+      if (
+        pendingNewTextEditRef.current &&
+        event.key.length === 1 &&
+        !event.ctrlKey && !event.metaKey && !event.altKey
+      ) {
+        // Spaces count too here: the user is clearly typing into the new text.
+        // A text widget was just drawn and its editor opens on the next render: keep the
+        // letter for it instead of running a tool shortcut ("O" used to add an ellipse).
+        event.preventDefault();
+        pendingTypedTextRef.current += event.key;
         return;
       }
       if (
