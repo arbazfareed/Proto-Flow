@@ -3,6 +3,7 @@ import { Command } from "cmdk";
 import { Keyboard, Search } from "lucide-react";
 import { commandRegistry } from "../commands/registry";
 import { useStore } from "../store";
+import { APP_VERSION } from "../appVersion";
 
 export function CommandPalette() {
   const paletteOpen = useStore((state) => state.paletteOpen);
@@ -103,7 +104,7 @@ export function CommandPalette() {
           </Command.List>
           <div className="palette-footer">
             <span><Keyboard size={13} /> Navigate with your keyboard</span>
-            <span>PROTO FLOW <b>·</b> PHASE 1</span>
+            <span>ProtoFlow {APP_VERSION}</span>
           </div>
         </Command>
       </section>

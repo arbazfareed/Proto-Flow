@@ -122,6 +122,7 @@ import { WidgetNotesManager, WidgetNotesPanel } from "./WidgetNotes";
 import { trackEvent } from "../diagnostics/observability";
 import { emitTutorialAction } from "../tutorial/events";
 import { HelpLink } from "../help/HelpLink";
+import { APP_VERSION } from "../appVersion";
 
 const CanvasStage = lazy(() =>
   import("../canvas/CanvasStage").then((module) => ({
@@ -655,7 +656,7 @@ export function LeftSidebar({
         <button className="nav-item" onClick={onUpdates}><Bell size={16} /><span>Check for updates</span></button>
         <button className="nav-item" onClick={onOpenTutorial}><CircleHelp size={16} /><span>Open tutorial project</span></button>
         <button className="nav-item" onClick={onOpenParityDocumentation}><FileText size={16} /><span>Parity & compatibility</span></button>
-        <div className="sidebar-version"><span className="version-pulse" /> Phase 1 · Local workspace</div>
+        <div className="sidebar-version"><span className="version-pulse" /> ProtoFlow {APP_VERSION} · Local workspace</div>
       </div>
     </aside>
   );
@@ -3146,7 +3147,7 @@ export function StatusBar() {
             ? "Sync paused — reconnect to use cloud features"
             : "Checking cloud"}
       </span>
-      <span>ProtoFlow 0.1.0</span>
+      <span>ProtoFlow {APP_VERSION}</span>
     </footer>
   );
 }
