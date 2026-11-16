@@ -73,3 +73,21 @@ test("canvas shortcuts do nothing while a dialog is open", async ({ page }) => {
   await page.keyboard.press("Escape");
   await expect(page.locator(".layer-row")).toHaveCount(layers);
 });
+
+test("fast typing keeps letters in order even when animation frames are slow", async ({ page }) => {
+  await startWorkspace(page, "Blank project");
+  // CI machines can deliver animation frames late; the caret must not depend on them.
+  await page.evaluate(() => {
+    const nativeFrame = window.requestAnimationFrame.bind(window);
+    window.requestAnimationFrame = (callback) => window.setTimeout(() => nativeFrame(callback), 400);
+  });
+  await drawTextWidget(page);
+  await page.keyboard.type("Hello");
+  await page.keyboard.press("Enter");
+  await expect(textEditor(page)).toHaveCount(0);
+
+  await page.keyboard.type("tool");
+  await expect(textEditor(page)).toHaveValue("tool");
+  await page.keyboard.press("Enter");
+  await expect(textLayer(page, "tool")).toBeVisible();
+});
