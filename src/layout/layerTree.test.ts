@@ -40,7 +40,7 @@ function widget(
 }
 
 describe("layer hierarchy", () => {
-  it("nests children of an Ellipse under it instead of its enclosing Rectangle", () => {
+  it("keeps children linked to a Rectangle and does not hand them to a shape drawn on top (B74)", () => {
     const rectangle = {
       ...widget("rectangle", "rectangle", 0),
       x: 10,
@@ -77,35 +77,21 @@ describe("layer hierarchy", () => {
     ]);
     const roots = buildLayerHierarchy(widgets, (item) => item.id);
 
-    expect(widgets.find((item) => item.id === iconInsideEllipse.id)?.groupId)
-      .toBe(ellipse.id);
-    expect(roots).toHaveLength(1);
-    expect(roots[0].children.map((node) => node.id)).toEqual([
-      ellipse.id,
-      iconOutsideEllipse.id,
-    ]);
-    expect(roots[0].children[0].children.map((node) => node.id))
-      .toEqual([iconInsideEllipse.id]);
-    expect(getContainerBadge(roots[0].widget!, roots[0].children.length))
-      .toBe("2 children");
-    expect(getContainerBadge(
-      roots[0].children[0].widget!,
-      roots[0].children[0].children.length,
-    )).toBe("1 child");
-    expect(flattenLayerHierarchy(roots, new Set()).map(({ node, depth }) => [
-      node.id,
-      depth,
-    ])).toEqual([
-      [rectangle.id, 0],
-      [ellipse.id, 1],
-      [iconInsideEllipse.id, 2],
-      [iconOutsideEllipse.id, 1],
-    ]);
+    // The explicit link to the rectangle is kept; the ellipse is artwork, so it adopts nothing,
+    // and the unlinked icon drawn over the rectangle stays at screen level.
+    expect(widgets.find((item) => item.id === iconInsideEllipse.id)?.groupId).toBe(rectangle.id);
+    expect(widgets.find((item) => item.id === iconOutsideEllipse.id)?.groupId).toBeUndefined();
+    const rectangleNode = roots.find((node) => node.id === rectangle.id)!;
+    expect(rectangleNode.children.map((node) => node.id).sort())
+      .toEqual([ellipse.id, iconInsideEllipse.id].sort());
+    expect(rectangleNode.children.find((node) => node.id === ellipse.id)?.children).toHaveLength(0);
+    expect(roots.map((node) => node.id)).toContain(iconOutsideEllipse.id);
   });
 
   it("uses semantic category accents for layer rows", () => {
     expect(getLayerAccentColor(widget("screen-shape", "star", 0))).toBe("#94A3B8");
-    expect(getLayerAccentColor(widget("container", "rectangle", 0))).toBe("#F59E0B");
+    expect(getLayerAccentColor(widget("shape", "rectangle", 0))).toBe("#94A3B8");
+    expect(getLayerAccentColor(widget("container", "container", 0))).toBe("#F59E0B");
     expect(getLayerAccentColor(widget("frame", "frame", 0))).toBe("#F59E0B");
     expect(getLayerAccentColor(widget("button", "button", 0))).toBe("#3B82F6");
     expect(getLayerAccentColor(widget("panel", "panel", 0))).toBe("#F97316");
@@ -232,9 +218,9 @@ describe("layer hierarchy", () => {
     ]);
   });
 
-  it("lists clicked Text inside a selected Rectangle as its expandable child", () => {
+  it("lists clicked Text inside a selected Container as its expandable child", () => {
     const rectangle = {
-      ...widget("rectangle", "rectangle", 0),
+      ...widget("rectangle", "container", 0),
       x: 100,
       y: 80,
       width: 240,
@@ -270,7 +256,7 @@ describe("layer hierarchy", () => {
     ]);
   });
 
-  it("infers visual children under Rectangle, Card, and Modal containers", () => {
+  it("infers visual children under Card and Modal containers, but not under a plain Rectangle (B74)", () => {
     const widgets = [
       { ...widget("modal", "modal", 0), x: 10, y: 10, width: 120, height: 100 },
       { ...widget("icon", "icon", 1), x: 20, y: 20, width: 20, height: 20 },
@@ -282,38 +268,15 @@ describe("layer hierarchy", () => {
       { ...widget("link", "link", 7), x: 340, y: 70, width: 60, height: 20 },
     ];
     const roots = buildLayerHierarchy(widgets, (item) => item.id);
+    const childrenOf = (id: string) => roots.find((node) => node.id === id)?.children.map((child) => child.id);
+
+    expect(childrenOf("modal")).toEqual(["icon"]);
+    expect(childrenOf("card")).toEqual(["card-text-a", "card-text-b"]);
+    expect(childrenOf("blue-box")).toEqual([]);
+    expect(roots.map((node) => node.id)).toEqual(expect.arrayContaining(["video", "link"]));
     const entries = flattenLayerHierarchy(roots, new Set());
-
-    expect(roots.map((node) => [node.id, node.children.map((child) => child.id)]))
-      .toEqual([
-        ["modal", ["icon"]],
-        ["card", ["card-text-a", "card-text-b"]],
-        ["blue-box", ["video", "link"]],
-      ]);
-    expect(entries.map(({ node, depth }) => [node.id, depth])).toEqual([
-      ["modal", 0],
-      ["icon", 1],
-      ["card", 0],
-      ["card-text-a", 1],
-      ["card-text-b", 1],
-      ["blue-box", 0],
-      ["video", 1],
-      ["link", 1],
-    ]);
-    expect(entries.find(({ node }) => node.id === "icon")?.ancestorAccents)
-      .toEqual(["#EAB308"]);
-    expect(entries.find(({ node }) => node.id === "video")?.ancestorAccents)
-      .toEqual(["#6366F1"]);
-
-    const movedRoots = buildLayerHierarchy(
-      widgets.map((item) =>
-        item.id === "blue-box" ? { ...item, x: 600 } : item,
-      ),
-      (item) => item.id,
-    );
-    expect(movedRoots.find((node) => node.id === "blue-box")?.children).toHaveLength(0);
-    expect(movedRoots.map((node) => node.id)).toContain("video");
-    expect(movedRoots.map((node) => node.id)).toContain("link");
+    expect(entries.find(({ node }) => node.id === "icon")?.ancestorAccents).toEqual(["#EAB308"]);
+    expect(entries.find(({ node }) => node.id === "video")?.depth).toBe(0);
   });
 
   it("updates parentage from containment and keeps outside widgets at the screen root", () => {
