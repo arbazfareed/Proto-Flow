@@ -76,7 +76,40 @@ Open **Help & updates → Open tutorial project** for the 15-step interactive tu
 
 ## Desktop bundles
 
-`src-tauri/tauri.conf.json` targets Windows MSI and Linux DEB/AppImage packages. The `.pflow` file association is declared as `application/x-protoflow+json`.
+`src-tauri/tauri.conf.json` targets Windows MSI/NSIS and Linux DEB, RPM and AppImage packages. The `.pflow` file association is declared as `application/x-protoflow+json`.
+
+## Install on Linux
+
+One command installs ProtoFlow on any 64-bit (x86_64) Linux. It picks the right package for your distro:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/arbazfareed/Proto-Flow/main/scripts/install-linux.sh | bash
+```
+
+| Your system | What gets installed |
+|---|---|
+| Ubuntu 22.04+, Debian 12+, Kali, Linux Mint 21+, Pop!_OS, elementary, Zorin | `.deb` via `apt` (WebKitGTK is installed automatically) |
+| Fedora, RHEL / Rocky / AlmaLinux 9+, openSUSE | `.rpm` via `dnf` or `zypper` |
+| Arch, Manjaro, Void, NixOS and any other distro | AppImage in `~/.local`, with an app-menu entry (no root needed) |
+
+Prefer to do it by hand? Download a package from the [releases page](https://github.com/arbazfareed/Proto-Flow/releases) and run one of:
+
+```bash
+sudo apt install ./ProtoFlow_*_amd64.deb          # Debian, Ubuntu, Kali, Mint
+sudo dnf install ./ProtoFlow-*.x86_64.rpm          # Fedora, RHEL, Rocky, AlmaLinux
+sudo zypper install --allow-unsigned-rpm ./ProtoFlow-*.x86_64.rpm   # openSUSE
+chmod +x ProtoFlow_*_amd64.AppImage && ./ProtoFlow_*_amd64.AppImage   # any distro
+```
+
+Options: `bash -s -- --appimage` (always use the AppImage), `--version v0.2.0`, `--file ./package.deb` (install a file you already downloaded) and `--uninstall`. For example:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/arbazfareed/Proto-Flow/main/scripts/install-linux.sh | bash -s -- --uninstall
+```
+
+Uninstalling never touches your `.pflow` project files. Packages are built on Ubuntu 22.04, so they need glibc 2.35 or newer; older systems such as Ubuntu 20.04 are not supported. The [Linux packages workflow](.github/workflows/linux-packages.yml) installs and launches every package on Ubuntu 22.04 and 24.04, Debian 12, Kali, Fedora, openSUSE and Arch before a release.
+
+To build the packages yourself: install `libwebkit2gtk-4.1-dev libgtk-3-dev libayatana-appindicator3-dev librsvg2-dev patchelf`, then run `npm ci && npx tauri build --bundles deb,rpm,appimage`.
 
 ## Phase 1 status
 
