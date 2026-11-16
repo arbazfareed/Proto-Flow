@@ -72,6 +72,27 @@ function getWidgetText(
   return liteMode ? text : runtime.interpolate(text, screenId, item, widget);
 }
 
+const HORIZONTAL_ALIGNMENT: Record<string, CSSProperties["justifyContent"]> = {
+  left: "flex-start",
+  center: "center",
+  right: "flex-end",
+};
+const VERTICAL_ALIGNMENT: Record<string, CSSProperties["alignItems"]> = {
+  top: "flex-start",
+  middle: "center",
+  bottom: "flex-end",
+};
+
+/** Flexbox placement for a widget's text, from its own align / verticalAlign settings. */
+export function flexAlignment(widget: Widget): Pick<CSSProperties, "justifyContent" | "alignItems"> {
+  const horizontal = typeof widget.props.align === "string" ? HORIZONTAL_ALIGNMENT[widget.props.align] : undefined;
+  const vertical = typeof widget.props.verticalAlign === "string" ? VERTICAL_ALIGNMENT[widget.props.verticalAlign] : undefined;
+  return {
+    ...(horizontal ? { justifyContent: horizontal } : {}),
+    ...(vertical ? { alignItems: vertical } : {}),
+  };
+}
+
 function widgetStyle(widget: Widget, position?: WidgetPosition): CSSProperties {
   const fill = widget.style.fill;
   const stroke = widget.style.stroke;
@@ -107,6 +128,9 @@ function widgetStyle(widget: Widget, position?: WidgetPosition): CSSProperties {
     lineHeight: typeof widget.props.lineHeight === "number" ? widget.props.lineHeight : undefined,
     letterSpacing: typeof widget.props.letterSpacing === "number" ? widget.props.letterSpacing : undefined,
     textAlign: typeof widget.props.align === "string" ? widget.props.align as CSSProperties["textAlign"] : "left",
+    // Widgets are flex boxes, so text-align alone leaves a short line on the left; place the
+    // text block itself like the canvas does.
+    ...flexAlignment(widget),
     textDecoration: widget.props.underline === true ? "underline" : undefined,
     whiteSpace: "pre-wrap",
     overflow: "hidden",
