@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type SetStateAction } from "react";
 import { ArrowDown, ArrowUp, Plus, Play, Sparkles, ThumbsDown, ThumbsUp, Trash2 } from "lucide-react";
 import type {
   InteractionAction,
@@ -181,6 +181,12 @@ function ActionTarget({
   );
 }
 
+const RULE_COMMIT_DELAY_MS = 250;
+
+function isCompleteRule(rule: InteractionRule): boolean {
+  return InteractionRuleSchema.safeParse(rule).success;
+}
+
 export function InteractionBuilder({
   project,
   screen,
@@ -191,8 +197,53 @@ export function InteractionBuilder({
   widget: Widget;
 }) {
   const setProject = useStore((state) => state.setProject);
-  const [rules, setRules] = useState<InteractionRule[]>([]);
-  const [savedRules, setSavedRules] = useState<InteractionRule[]>([]);
+  const [rules, setRulesState] = useState<InteractionRule[]>([]);
+  // Edits apply to the project by themselves (no Save step), batched briefly so typing makes
+  // one undo step per pause instead of one per key.
+  const pendingCommitRef = useRef<{ screenId: string; rules: InteractionRule[] } | null>(null);
+  const commitTimerRef = useRef<number | null>(null);
+  const lastCommittedRef = useRef<string | null>(null);
+  const flushRules = useCallback(() => {
+    if (commitTimerRef.current !== null) {
+      window.clearTimeout(commitTimerRef.current);
+      commitTimerRef.current = null;
+    }
+    const pending = pendingCommitRef.current;
+    pendingCommitRef.current = null;
+    if (!pending) return;
+    const current = useStore.getState().project;
+    const target = current.screens.find((item) => item.id === pending.screenId);
+    // A rule still missing a required choice (e.g. its target) stays a local draft until complete.
+    const completeRules = pending.rules.filter(isCompleteRule);
+    if (!target || JSON.stringify(target.interactionRules) === JSON.stringify(completeRules)) return;
+    let nextProject: Project;
+    try {
+      nextProject = parseProject({
+        ...current,
+        screens: current.screens.map((item) =>
+          item.id === pending.screenId ? { ...item, interactionRules: completeRules } : item,
+        ),
+        updatedAt: new Date().toISOString(),
+      });
+    } catch {
+      return;
+    }
+    lastCommittedRef.current = JSON.stringify(
+      nextProject.screens.find((item) => item.id === pending.screenId)?.interactionRules ?? [],
+    );
+    setProject(nextProject);
+  }, [setProject]);
+  const setRules = useCallback((update: SetStateAction<InteractionRule[]>) => {
+    setRulesState((current) => {
+      const next = typeof update === "function" ? update(current) : update;
+      pendingCommitRef.current = { screenId: screen.id, rules: next };
+      return next;
+    });
+    if (commitTimerRef.current !== null) window.clearTimeout(commitTimerRef.current);
+    commitTimerRef.current = window.setTimeout(flushRules, RULE_COMMIT_DELAY_MS);
+  }, [flushRules, screen.id]);
+  // Never lose an edit: apply anything pending when the panel closes or the screen changes.
+  useEffect(() => () => flushRules(), [flushRules, screen.id]);
   const [testMessage, setTestMessage] = useState("");
   const [aiOpen, setAiOpen] = useState(false);
   const [aiPrompt, setAiPrompt] = useState("");
@@ -242,31 +293,20 @@ export function InteractionBuilder({
     ) }, { ...screen, interactionRules: rules }),
     [project, rules, screen],
   );
-  const unsaved = JSON.stringify(rules) !== JSON.stringify(savedRules);
   const hasBlockingErrors = issues.some((issue) => issue.severity === "error");
 
   useEffect(() => {
-    const screenRules = structuredClone(screen.interactionRules);
-    setRules(screenRules);
-    setSavedRules(screenRules);
+    // Our own edits echo back through the store; keep the local copy (and any newer typing).
+    if (pendingCommitRef.current?.screenId === screen.id) return;
+    if (lastCommittedRef.current === JSON.stringify(screen.interactionRules)) return;
+    lastCommittedRef.current = null;
+    setRulesState(structuredClone(screen.interactionRules));
     setTestMessage("");
   }, [screen.id, screen.interactionRules]);
 
   const updateRule = (id: string, update: (rule: InteractionRule) => InteractionRule) => {
     setRules((current) => current.map((rule) => rule.id === id ? update(rule) : rule));
     setTestMessage("");
-  };
-
-  const save = () => {
-    const nextProject = {
-      ...project,
-      screens: project.screens.map((item) =>
-        item.id === screen.id ? { ...item, interactionRules: rules } : item,
-      ),
-      updatedAt: new Date().toISOString(),
-    };
-    setProject(parseProject(nextProject));
-    setSavedRules(structuredClone(rules));
   };
 
   const addRule = () => {
@@ -332,7 +372,7 @@ export function InteractionBuilder({
     }
     setRules((current) => [...current, parsedRule.data]);
     setGeneratedRuleId(parsedRule.data.id);
-    setFeedbackStatus("AI rule added for review. Save interactions when you're ready.");
+    setFeedbackStatus("AI rule added. Review it here; it is already active in Preview.");
   };
 
   const sendFeedback = async (ruleId: string, feedback: "positive" | "negative") => {
@@ -882,18 +922,21 @@ export function InteractionBuilder({
           {issues.filter((issue) => issue.ruleId === rule.id).map((issue, issueIndex) => (
             <p className={`interaction-issue is-${issue.severity}`} key={`${issue.code}-${issueIndex}`}>{issue.message}</p>
           ))}
+          {!isCompleteRule(rule) && (
+            <p className="interaction-pending-note">Not active yet: finish the highlighted choices to turn this rule on.</p>
+          )}
           <button type="button" className="interaction-test-button" onClick={() => runTest(rule)}><Play size={11} /> Test rule</button>
           {generatedRuleId === rule.id && (
             <div className="interaction-ai-feedback" aria-label="AI generation feedback">
-              <span>AI-generated · review before saving</span>
+              <span>AI-generated · review this rule</span>
               <button type="button" aria-label="AI result was helpful" onClick={() => void sendFeedback(rule.id, "positive")}><ThumbsUp size={12} /></button>
               <button type="button" aria-label="AI result was not helpful" onClick={() => void sendFeedback(rule.id, "negative")}><ThumbsDown size={12} /></button>
             </div>
           )}
         </article>
       ))}
-      {unsaved && hasBlockingErrors && (
-        <p className="interaction-issue is-error" role="alert">Resolve target and variable errors before saving.</p>
+      {hasBlockingErrors && (
+        <p className="interaction-issue is-error" role="alert">Fix the highlighted target and variable errors so these rules can run in Preview.</p>
       )}
       <label className="interaction-template">Add template
         <select value="" onChange={(event) => {
@@ -907,9 +950,7 @@ export function InteractionBuilder({
       </label>
       {testMessage && <p className="interaction-test-result" role="status">{testMessage}</p>}
       {feedbackStatus && <p className="interaction-test-result" role="status">{feedbackStatus}</p>}
-      <button type="button" className="interaction-save-button" disabled={!unsaved || hasBlockingErrors} onClick={save}>
-        {unsaved ? "Save interactions" : "Saved"}
-      </button>
+      <p className="interaction-autosave-note">Changes apply automatically. Undo (Ctrl+Z) reverts them.</p>
     </section>
   );
 }

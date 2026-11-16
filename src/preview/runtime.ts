@@ -205,6 +205,7 @@ export class PreviewRuntime {
   }
 
   navigate(screenId: string): void {
+    if (!screenId) throw new Error("This rule has no target screen yet. Pick one in the Interactions tab.");
     if (!this.project.screens.some((screen) => screen.id === screenId)) {
       throw new Error(`Cannot navigate to unknown screen "${screenId}".`);
     }
