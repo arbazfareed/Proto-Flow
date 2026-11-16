@@ -89,7 +89,8 @@ test("PF-T716 W2 — mobile screens, touch-mode preview, and responsive HTML exp
   await page.getByRole("button", { name: "Open preview" }).click();
   const preview = await previewPromise;
   await expect(preview.getByLabel("Preview screen").locator("option")).toHaveCount(5);
-  await expect(preview.locator('.preview-screen[data-input-mode="touch"]')).toBeVisible();
+  // Phone screens take touch and mouse (B82), so a prototype also works when clicked.
+  await expect(preview.locator('.preview-screen[data-input-mode="both"]')).toBeVisible();
   await expect(preview.getByLabel("Device preset")).toHaveValue("iphone-15");
   const screenPicker = preview.getByLabel("Preview screen", { exact: true });
   const firstScreenId = await screenPicker.inputValue();

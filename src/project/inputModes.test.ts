@@ -4,11 +4,11 @@ import { inferScreenInputMode } from "./inputModes";
 import { toScreenDevice, findDevicePreset } from "../devices/catalog";
 
 describe("screen input modes", () => {
-  it("infers touch, both, and mouse from the device preset category", () => {
+  it("infers both for phones and tablets and mouse for desktops (B82)", () => {
     const phone = findDevicePreset("iphone-15-pro");
     const tablet = findDevicePreset("ipad-pro-12-9");
     const desktop = findDevicePreset("desktop-1440-900");
-    expect(phone && inferScreenInputMode(toScreenDevice(phone))).toBe("touch");
+    expect(phone && inferScreenInputMode(toScreenDevice(phone))).toBe("both");
     expect(tablet && inferScreenInputMode(toScreenDevice(tablet))).toBe("both");
     expect(desktop && inferScreenInputMode(toScreenDevice(desktop))).toBe("mouse");
   });
@@ -26,7 +26,7 @@ describe("screen input modes", () => {
         device: toScreenDevice(phone),
       }],
     });
-    expect(parsed.screens[0].inputMode).toBe("touch");
+    expect(parsed.screens[0].inputMode).toBe("both");
     expect(parseProject(project).screens[0].inputMode).toBe("mouse");
   });
 
@@ -40,7 +40,9 @@ describe("screen input modes", () => {
     });
 
     expect(inferScreenInputMode(undefined)).toBe("mouse");
-    expect(inferScreenInputMode(customDevice(767))).toBe("touch");
+    expect(inferScreenInputMode(customDevice(299))).toBe("touch");
+    expect(inferScreenInputMode(customDevice(390))).toBe("both");
+    expect(inferScreenInputMode(customDevice(767))).toBe("both");
     expect(inferScreenInputMode(customDevice(768))).toBe("both");
     expect(inferScreenInputMode(customDevice(1_023))).toBe("both");
     expect(inferScreenInputMode(customDevice(1_024))).toBe("mouse");

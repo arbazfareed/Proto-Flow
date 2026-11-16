@@ -134,7 +134,7 @@ function createStarterScreen(
     id: crypto.randomUUID(),
     name,
     device: toScreenDevice(device),
-    inputMode: device.category === "phone" || device.category === "tablet" ? "touch" : "mouse",
+    inputMode: device.category === "phone" || device.category === "tablet" ? "both" : "mouse",
     breakpoints: createDefaultBreakpoints(device.viewport.width, device.viewport.height),
     widgets,
   };

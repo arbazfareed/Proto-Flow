@@ -41,7 +41,7 @@ describe("VirtualizedRepeater", () => {
       runtime,
       screenId: screen.id,
       snapshot: { ...runtime.snapshot(), visibility: { [template.id]: true } },
-      runEvent: () => undefined,
+      runEvent: () => 0,
       onError: () => undefined,
       inputMode: screen.inputMode,
       controlValues: {},

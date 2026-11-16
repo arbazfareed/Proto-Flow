@@ -213,6 +213,13 @@ ${EXPRESSION_RUNTIME_SOURCE}
     }
     if (Object.keys(updates).length) setRuntimeVariables((current) => ({ ...current, ...updates }));
   };
+  const hasInteractions = (widget: Widget, eventName: string) => screen.interactionRules.some((entry) =>
+    entry.event === eventName && (!entry.widgetId || entry.widgetId === widget.id));
+  // A tap also counts as a click: run the first of these triggers that has rules.
+  const runFirstInteraction = (widget: Widget, eventNames: string[], item?: Record<string, unknown>) => {
+    const eventName = eventNames.find((name) => hasInteractions(widget, name));
+    if (eventName) runInteractions(widget, eventName, item);
+  };
   const interactionHandlers = (widget: Widget, item?: Record<string, unknown>) => {
     const mode = screen.inputMode ?? "both";
     const stateFor = (element: HTMLElement): TouchGestureState => {
@@ -249,6 +256,12 @@ ${EXPRESSION_RUNTIME_SOURCE}
         onMouseLeave: () => runInteractions(widget, "onHover", item),
         onMouseDown: () => runInteractions(widget, "onMouseDown", item),
         onMouseUp: () => runInteractions(widget, "onMouseUp", item),
+      } : {}),
+      ...(mode === "touch" ? {
+        // Opened on a computer, a mouse click stands in for a tap.
+        onPointerUp: (event: { pointerType: string }) => {
+          if (event.pointerType === "mouse") runFirstInteraction(widget, ["onTap", "onClick"], item);
+        },
       } : {}),
       ...(mode === "both" ? {
         onClick: (event: { detail: number }) => {
@@ -343,7 +356,7 @@ ${EXPRESSION_RUNTIME_SOURCE}
             runInteractions(widget, "onDoubleTap", item);
           } else {
             state.lastTap = now;
-            runInteractions(widget, "onTap", item);
+            runFirstInteraction(widget, ["onTap", "onClick"], item);
           }
         },
       } : {}),

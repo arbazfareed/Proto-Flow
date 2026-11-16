@@ -39,7 +39,7 @@ test("B59: interaction rules work in Preview without a Save click, and their men
   expect(await clippedPixels(actionType)).toBe(0);
   expect(await clippedPixels(actionTarget)).toBe(0);
 
-  const destination = await actionTarget.locator("option").filter({ hasNotText: /Choose/ }).first();
+  const destination = await actionTarget.locator("option").filter({ hasNotText: /Choose|Screen 1/ }).first();
   const destinationId = await destination.getAttribute("value");
   await actionTarget.selectOption(destinationId ?? "");
   expect(await clippedPixels(actionTarget)).toBe(0);
@@ -53,6 +53,7 @@ test("B59: interaction rules work in Preview without a Save click, and their men
   const previewScreen = preview.getByLabel("Preview screen", { exact: true });
   const startId = await previewScreen.locator("option").nth(0).getAttribute("value");
   await previewScreen.selectOption(startId ?? "");
+  expect(startId).not.toBe(destinationId);
   await preview.getByRole("button", { name: "Button" }).first().click();
   await expect(previewScreen).toHaveValue(destinationId ?? "");
   await preview.close();

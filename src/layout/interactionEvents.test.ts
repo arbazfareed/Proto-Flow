@@ -11,7 +11,9 @@ describe("interaction event input-mode filtering", () => {
     expect(events).toContain("onKeyDown");
     expect(events).toContain("onClick");
     expect(events).not.toContain("onMouseDown");
-    expect(isEventAvailableInMode("touch", "onClick")).toBe(false);
+    // A tap also produces a click on the web, so Click stays usable on touch screens (B82).
+    expect(isEventAvailableInMode("touch", "onClick")).toBe(true);
+    expect(isEventAvailableInMode("touch", "onDoubleClick")).toBe(false);
     expect(isEventAvailableInMode("touch", "onKeyDown")).toBe(true);
   });
 
