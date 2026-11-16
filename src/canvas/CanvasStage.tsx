@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { DragEvent as ReactDragEvent, FormEvent } from "react";
 import { Circle, Group, Layer, Line, Rect, Stage, Text, Transformer } from "react-konva";
 import type Konva from "konva";
@@ -1466,11 +1466,11 @@ export function CanvasStage({
   }, []);
 
   const editingWidgetId = editing?.widgetId ?? null;
-  useEffect(() => {
+  // Place the caret as soon as the editor is in the page, before the browser handles the
+  // next key. Waiting a frame let fast typing land before the caret moved ("tool" -> "oolt").
+  useLayoutEffect(() => {
     if (!editingWidgetId) return;
-    const frame = requestAnimationFrame(() => {
-      const editor = textEditorRef.current;
-      if (!editor) return;
+    const placeCaret = (editor: HTMLTextAreaElement) => {
       editor.focus();
       if (editorOpenSelectionRef.current === "all") {
         editor.select();
@@ -1478,6 +1478,14 @@ export function CanvasStage({
         editor.setSelectionRange(editor.value.length, editor.value.length);
       }
       setEditCursor(editor.selectionStart);
+    };
+    const editor = textEditorRef.current;
+    if (editor) placeCaret(editor);
+    // A pointer release from drawing can move focus away; take it back only if it was lost,
+    // so letters typed in the meantime are never reselected or reordered.
+    const frame = requestAnimationFrame(() => {
+      const current = textEditorRef.current;
+      if (current && document.activeElement !== current) placeCaret(current);
     });
     return () => cancelAnimationFrame(frame);
   }, [editingWidgetId]);
