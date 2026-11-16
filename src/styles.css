@@ -525,3 +525,4 @@ html[data-theme="light"] .text-colour-value { color: #6b6878; }
 
 html[data-theme="light"] .button-share { color: #5b3fc4; border-color: #b7a6f0; background: #f4f0ff; }
 html[data-theme="light"] .button-share:hover { background: #ebe4ff; }
+html[data-theme="light"] .responsive-scope { color: #4b4858; }

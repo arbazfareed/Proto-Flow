@@ -3145,7 +3145,7 @@ export function RightInspector({ onToggle, onUpdates, onRename, tutorialProjectI
             aria-controls="inspector-responsive-panel"
             className={inspectorTab === "responsive" ? "inspector-tab is-active" : "inspector-tab"}
             onClick={() => setInspectorTab("responsive")}
-            disabled={!selectedWidget}
+            disabled={selectedWidgets.length === 0}
           >
             Responsive
           </button>
@@ -3189,9 +3189,9 @@ export function RightInspector({ onToggle, onUpdates, onRename, tutorialProjectI
               <RepeaterBindingSection screen={selectedScreen} widget={selectedWidget} />
             )}
           </div>
-        ) : inspectorTab === "responsive" && selectedWidget && selectedScreen ? (
+        ) : inspectorTab === "responsive" && selectedWidgets.length > 0 && selectedScreen ? (
           <div id="inspector-responsive-panel" role="tabpanel" aria-labelledby="inspector-responsive-tab">
-            <ResponsivePanel screen={selectedScreen} widget={selectedWidget} />
+            <ResponsivePanel screen={selectedScreen} widgets={selectedWidgets} />
           </div>
         ) : inspectorTab === "interactions" && selectedWidget && selectedScreen ? (
           <div id="inspector-interactions-panel" role="tabpanel" aria-labelledby="inspector-interactions-tab">
