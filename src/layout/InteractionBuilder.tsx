@@ -176,6 +176,10 @@ function ActionTarget({
   return (
     <select aria-label="Action target" value={action.target} onChange={(event) => onChange(event.currentTarget.value)}>
       <option value="">Choose target</option>
+      {action.target && !targets.some((item) => item.id === action.target) && (
+        // Older projects can hold links to screens deleted before B84; say so and let them be re-pointed.
+        <option value={action.target}>{action.type === "navigate" || action.type === "navigateTo" ? "Deleted screen: pick another" : "Missing: pick another"}</option>
+      )}
       {targets.map((item) => <option key={item.id} value={item.id}>{item.label}</option>)}
     </select>
   );

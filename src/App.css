@@ -1521,3 +1521,9 @@
 @keyframes collaboration-spin { to { transform:rotate(360deg); } }
 @keyframes collaboration-pulse { to { opacity:.35; } }
 @media(max-width:520px) { .collaboration-panel-active { right:8px; bottom:8px; } .collaboration-panel { padding:16px; } }
+
+/* Delete-screen confirmation (B84) */
+.delete-screen-redirect { display:grid; gap:6px; margin:4px 0 2px; color:#b8b5c4; font-size:12px; }
+.delete-screen-redirect select { height:32px; padding:0 8px; border:1px solid #3a3b44; border-radius:6px; color:#eceaf3; background:#1f2025; font-size:12px; }
+.dialog-actions .button-danger { color:#fff; border-color:#c4473b; background:#c4473b; }
+.dialog-actions .button-danger:hover { background:#ad3a30; }
