@@ -135,12 +135,32 @@ describe("PF-T803 Windows desktop HTML canvas rendering", () => {
     await layerSearch.setValue("document-title");
     const expectLayerVisible = async (name) => {
       const selector = `//*[contains(@class,"layer-name") and normalize-space(.)="${name}"]`;
-      await browser.waitUntil(async () => (await $$(selector)).length > 0, {
-        timeout: 10_000,
-        timeoutMsg: `Expected layer "${name}" to appear in the filtered layer list`,
-      });
+      try {
+        await browser.waitUntil(async () => (await $$(selector)).length > 0, { timeout: 10_000 });
+      } catch {
+        // Say what the search box held and what the list showed, so a failure explains itself.
+        const state = await browser.execute(() => ({
+          query: document.querySelector('[aria-label="Search layers"]')?.value,
+          names: [...document.querySelectorAll(".layer-name")].map((node) => node.textContent?.trim()).slice(0, 12),
+        }));
+        throw new Error(`Expected layer "${name}" to appear in the filtered layer list; search box held ${JSON.stringify(state.query)}, list showed ${JSON.stringify(state.names)}`);
+      }
       const matches = await $$(selector);
       await expect(matches[0]).toBeDisplayed();
+    };
+    // Typing into the search box while the editor re-renders can drop a key on slow
+    // WebView2 runners; make sure the box holds exactly the text before checking results.
+    const searchLayers = async (text) => {
+      for (let attempt = 0; attempt < 3; attempt += 1) {
+        await layerSearch.setValue(text);
+        try {
+          await browser.waitUntil(async () => (await layerSearch.getValue()) === text, { timeout: 3_000, interval: 100 });
+          return;
+        } catch {
+          // Retry the whole value.
+        }
+      }
+      throw new Error(`Search layers did not accept "${text}"; it holds ${JSON.stringify(await layerSearch.getValue())}`);
     };
     await expectLayerVisible("document-title");
     const titleLayer = await findLayerRow("document-title");
@@ -149,7 +169,7 @@ describe("PF-T803 Windows desktop HTML canvas rendering", () => {
     await expect(titleSelect).toHaveAttribute("aria-pressed", "true");
     await expect(titleLayer).toHaveAttribute("aria-selected", "true");
     for (const heading of ["first-card", "second-card", "third-card"]) {
-      await layerSearch.setValue(heading);
+      await searchLayers(heading);
       await expectLayerVisible(heading);
     }
     const activeBreakpoint = await $('[aria-label="Active breakpoint"]');
@@ -163,7 +183,7 @@ describe("PF-T803 Windows desktop HTML canvas rendering", () => {
     const desktopOption = await activeBreakpoint.$("option*=Desktop");
     await activeBreakpoint.selectByAttribute("value", await desktopOption.getAttribute("value"));
     for (let index = 1; index <= 6; index += 1) {
-      await layerSearch.setValue(`milestone-${index}`);
+      await searchLayers(`milestone-${index}`);
       await expectLayerVisible(`milestone-${index}`);
     }
     await browser.saveScreenshot(path.join(evidenceDirectory, "pf-t803-imported-canvas.png"));
