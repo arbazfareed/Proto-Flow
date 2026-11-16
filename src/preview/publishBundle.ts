@@ -405,6 +405,12 @@ function bindWidgetEvents(element, widget, item) {
     }
   }, { passive: true });
 }
+function withOpacity(color, opacity) {
+  // Fill and stroke opacity apply to the colour only, as on the canvas.
+  return typeof opacity === "number" && opacity < 1
+    ? "color-mix(in srgb, " + color + " " + Math.max(0, opacity) * 100 + "%, transparent)"
+    : color;
+}
 function renderWidget(widget, activeScreen, item, localVariables = {}) {
   const element = document.createElement(widget.type === "button" || widget.type === "icon-button" ? "button"
     : widget.type === "card" ? "article"
@@ -428,12 +434,14 @@ function renderWidget(widget, activeScreen, item, localVariables = {}) {
     : widget.type === "icon" || widget.type === "custom-icon"
       ? widget.style.stroke || "#24212b"
       : textWidget && widget.style.fill
-        ? widget.style.fill
+        ? withOpacity(widget.style.fill, widget.style.fillOpacity)
         : "#24212b";
-  element.style.backgroundColor = textWidget || widget.style.fill === null
+  element.style.backgroundColor = textWidget || !widget.style.fill
     ? "transparent"
-    : widget.style.fill || "transparent";
-  element.style.border = widget.style.stroke ? (widget.style.strokeWidth || 1) + "px solid " + widget.style.stroke : "none";
+    : withOpacity(widget.style.fill, widget.style.fillOpacity);
+  element.style.border = widget.style.stroke
+    ? (widget.style.strokeWidth || 1) + "px solid " + withOpacity(widget.style.stroke, widget.style.strokeOpacity)
+    : "none";
   element.style.borderRadius = typeof widget.style.cornerRadius === "number" ? widget.style.cornerRadius + "px" : "";
   element.style.fontFamily = typeof widget.props.fontFamily === "string" ? widget.props.fontFamily : "Arial, sans-serif";
   element.style.fontSize = (typeof widget.props.fontSize === "number" ? widget.props.fontSize : 16) + "px";
