@@ -374,6 +374,18 @@ ${EXPRESSION_RUNTIME_SOURCE}
       y: parent.y + padding + (horizontal ? crossOffset : cursor),
     };
   };
+  const readableOn = (color: string, opacity: unknown) => {
+    // Dark or white label for a button, whichever reads better on its fill (as on the canvas).
+    const hex = color.trim().replace(/^#/, "");
+    if (!/^([0-9a-f]{3}|[0-9a-f]{6})$/i.test(hex)) return "#24212b";
+    const full = hex.length === 3 ? hex.replace(/./g, "$&$&") : hex;
+    const alpha = typeof opacity === "number" ? Math.min(1, Math.max(0, opacity)) : 1;
+    const linear = (value: number) => value <= 0.03928 ? value / 12.92 : Math.pow((value + 0.055) / 1.055, 2.4);
+    const channel = (index: number) => linear((255 + (parseInt(full.slice(index, index + 2), 16) - 255) * alpha) / 255);
+    const luminance = 0.2126 * channel(0) + 0.7152 * channel(2) + 0.0722 * channel(4);
+    const dark = 0.2126 * linear(0x24 / 255) + 0.7152 * linear(0x21 / 255) + 0.0722 * linear(0x2b / 255);
+    return (luminance + 0.05) / (dark + 0.05) >= 1.05 / (luminance + 0.05) ? "#24212b" : "#ffffff";
+  };
   const withOpacity = (color: string, opacity: unknown) =>
     typeof opacity === "number" && opacity < 1
       ? \`color-mix(in srgb, \${color} \${Math.max(0, opacity) * 100}%, transparent)\`
@@ -388,7 +400,11 @@ ${EXPRESSION_RUNTIME_SOURCE}
     height: widget.height,
     transform: widget.rotation ? \`rotate(\${widget.rotation}deg)\` : undefined,
     opacity: widget.opacity,
-    color: typeof widget.props.color === "string" ? widget.props.color : "#24212b",
+    color: typeof widget.props.color === "string" ? widget.props.color
+      : typeof widget.props.textColor === "string" ? widget.props.textColor
+      : (widget.type === "button" || widget.type === "icon-button") && typeof widget.style.fill === "string"
+        ? readableOn(widget.style.fill, widget.style.fillOpacity)
+        : "#24212b",
     background: typeof widget.style.fill === "string" ? withOpacity(widget.style.fill, widget.style.fillOpacity) : "transparent",
     border: typeof widget.style.stroke === "string" ? \`\${typeof widget.style.strokeWidth === "number" ? widget.style.strokeWidth : 1}px solid \${withOpacity(widget.style.stroke, widget.style.strokeOpacity)}\` : "none",
     borderRadius: typeof widget.style.cornerRadius === "number" ? widget.style.cornerRadius : undefined,

@@ -29,6 +29,7 @@ import { MAX_WIDGET_TEXT_LENGTH } from "./textMeasurement";
 import { getSafeBlendMode, normalizeListItems, styleColorToRgba } from "./styleInspector";
 import { renderCanvasIconSvg } from "./iconLibrary";
 import { PLAIN_BOX_TYPES } from "../project/plainBoxes";
+import { readableTextOnFill } from "./readableText";
 export { measureTextBounds } from "./textMeasurement";
 export { SHAPE_TOOLS };
 export type { ShapeTool };
@@ -449,7 +450,13 @@ function ButtonShape({ widget, fill: baseFill, stroke, strokeWidth }: ShapeCompo
         lineHeight={typeof widget.props.lineHeight === "number" ? widget.props.lineHeight : 1.2}
         align={typeof widget.props.align === "string" ? widget.props.align : "center"}
         verticalAlign={typeof widget.props.verticalAlign === "string" ? widget.props.verticalAlign : "middle"}
-        fill={getWidgetProp(widget, "textColor", variant === "primary" ? "#191321" : colors.text)}
+        fill={getWidgetProp(
+          widget,
+          "textColor",
+          variant === "primary"
+            ? readableTextOnFill(widget.style.fill === null ? null : baseFill ?? fill ?? colors.fill)
+            : colors.text,
+        )}
         perfectDrawEnabled={false}
       />
     </Group>
