@@ -2002,6 +2002,9 @@ html[data-theme="light"] .update-toast {
     background: #f8f8fb;
     box-shadow: 0 8px 25px rgba(28, 24, 48, 0.16)
 }
+html[data-theme="light"] .update-toast>strong {
+    color: #1f1e27
+}
 html[data-theme="light"] .update-toast>span {
     color: #585764
 }

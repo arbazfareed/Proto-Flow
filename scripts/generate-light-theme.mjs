@@ -84,7 +84,7 @@ const BG = /^(background|background-color|background-image)$/;
 const BORDER = /^(border|border-(top|right|bottom|left)(-color)?|border-color|outline|outline-color|column-rule|border-block.*|border-inline.*)$/;
 const SHADOW = /^(box-shadow|text-shadow|filter)$/;
 const TEXT = /^(color|fill|stroke|caret-color|text-decoration-color|-webkit-text-fill-color|accent-color)$/;
-const KEEP_WHITE = /primary|accent|danger|success|warning|badge|avatar|toast|brand|logo|count|is-selected|is-active|selected|checked|tooltip|kbd-dark/;
+const KEEP_WHITE = /primary|accent|danger|success|warning|badge|avatar|brand|logo|count|is-selected|is-active|selected|checked|kbd-dark/;
 
 const outRoot = postcss.root();
 let rules = 0;
