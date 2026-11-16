@@ -31,6 +31,27 @@ function makeWidget(overrides: Partial<Widget> = {}): Widget {
 }
 
 describe("responsive breakpoints", () => {
+  it("keeps widgets placed entirely off the screen where they are, clipped like the canvas (B87)", () => {
+    const phone = { id: "mobile", name: "Mobile", width: 393, height: 852, minWidth: 0 };
+    const sidePanel = makeWidget({ x: 420, y: 0, width: 300, height: 852 });
+    const above = makeWidget({ x: 20, y: -200, width: 100, height: 120 });
+    const chatList = makeWidget({ x: 0, y: 100, width: 393, height: 500 });
+    const [panel, top, list] = resolveWidgetsForBreakpoint([sidePanel, above, chatList], phone, 393, 852);
+    expect(panel).toMatchObject({ x: 420, width: 300 });
+    expect(top).toMatchObject({ y: -200 });
+    expect(list).toMatchObject({ x: 0, y: 100, width: 393 });
+
+    // Moved off-screen only at this breakpoint (an override): also left where it was placed.
+    const moved = makeWidget({ x: 20, width: 200, overrides: { mobile: { x: 450 } } });
+    expect(resolveWidgetsForBreakpoint([moved], phone, 1440, 900)[0]).toMatchObject({ x: 450 });
+  });
+
+  it("still fits on-screen desktop content into a smaller breakpoint", () => {
+    const mobile = { id: "mobile", name: "Mobile", width: 390, height: 844, minWidth: 0 };
+    const [card] = resolveWidgetsForBreakpoint([makeWidget({ x: 900, y: 80, width: 300 })], mobile, 1440, 900);
+    expect(card.x + card.width).toBeLessThanOrEqual(390);
+  });
+
   it("creates ordered desktop, tablet, and mobile presets", () => {
     const breakpoints = createDefaultBreakpoints(1280, 800);
     expect(breakpoints.map((item) => item.id)).toEqual(["mobile", "tablet", "desktop"]);
