@@ -5,6 +5,7 @@ import {
   DARK_TEXT_COLOUR,
   LIGHT_TEXT_COLOUR,
   readableTextColour,
+  readableTextOnFill,
 } from "./readableText";
 
 function box(type: string, fill: string | null, extra: Partial<Widget> = {}, fillOpacity?: number): Widget {
@@ -41,5 +42,14 @@ describe("readable default text colour", () => {
     const farAway = box("rectangle", "#000000", { x: 900, zIndex: 5 });
     expect(readableTextColour([dark, paleOnTop, hidden, otherText, farAway], textBounds)).toBe(DARK_TEXT_COLOUR);
     expect(readableTextColour([dark, hidden, otherText, farAway], textBounds)).toBe(LIGHT_TEXT_COLOUR);
+  });
+});
+
+describe("readable button label", () => {
+  it("uses white on the default purple and dark on light or pale fills", () => {
+    expect(readableTextOnFill("#694ac3")).toBe(LIGHT_TEXT_COLOUR);
+    expect(readableTextOnFill("#ffffff")).toBe(DARK_TEXT_COLOUR);
+    expect(readableTextOnFill("#694ac3", 0.1)).toBe(DARK_TEXT_COLOUR);
+    expect(readableTextOnFill(null)).toBe(DARK_TEXT_COLOUR);
   });
 });

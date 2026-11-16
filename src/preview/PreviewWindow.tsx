@@ -44,6 +44,7 @@ import {
   type PreviewRuntimeSnapshot,
 } from "./runtime";
 import { styleColorToRgba } from "../canvas/styleInspector";
+import { readableTextOnFill } from "../canvas/readableText";
 import { PLAIN_BOX_TYPES } from "../project/plainBoxes";
 
 const PREVIEW_CHANNEL = "protoflow-preview";
@@ -112,9 +113,13 @@ function widgetStyle(widget: Widget, position?: WidgetPosition): CSSProperties {
     backgroundColor: textWidget || !fill ? "transparent" : styleColorToRgba(fill, widget.style.fillOpacity),
     color: typeof widget.props.color === "string"
       ? widget.props.color
-      : textWidget && fill
-        ? styleColorToRgba(fill, widget.style.fillOpacity)
-        : "#24212b",
+      : typeof widget.props.textColor === "string"
+        ? widget.props.textColor
+        : textWidget && fill
+          ? styleColorToRgba(fill, widget.style.fillOpacity)
+          : (widget.type === "button" || widget.type === "icon-button") && fill
+            ? readableTextOnFill(fill, widget.style.fillOpacity)
+            : "#24212b",
     border: stroke
       ? `${widget.style.strokeWidth ?? 1}px solid ${styleColorToRgba(stroke, widget.style.strokeOpacity)}`
       : "none",

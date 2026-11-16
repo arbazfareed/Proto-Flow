@@ -406,6 +406,20 @@ function bindWidgetEvents(element, widget, item) {
   }, { passive: true });
 }
 const PLAIN_BOX_TYPES = ["container", "frame", "group", "section"];
+function readableOn(color, opacity) {
+  // Dark or white label for a button, whichever reads better on its fill (as on the canvas).
+  const hex = typeof color === "string" ? color.trim().replace(/^#/, "") : "";
+  if (!/^([0-9a-f]{3}|[0-9a-f]{6})$/i.test(hex)) return "#24212b";
+  const full = hex.length === 3 ? hex.replace(/./g, "$&$&") : hex;
+  const alpha = typeof opacity === "number" ? Math.min(1, Math.max(0, opacity)) : 1;
+  const channel = (index) => {
+    const value = (255 + (parseInt(full.slice(index, index + 2), 16) - 255) * alpha) / 255;
+    return value <= 0.03928 ? value / 12.92 : Math.pow((value + 0.055) / 1.055, 2.4);
+  };
+  const luminance = 0.2126 * channel(0) + 0.7152 * channel(2) + 0.0722 * channel(4);
+  const dark = 0.2126 * Math.pow((0x24 / 255 + 0.055) / 1.055, 2.4) + 0.7152 * Math.pow((0x21 / 255 + 0.055) / 1.055, 2.4) + 0.0722 * Math.pow((0x2b / 255 + 0.055) / 1.055, 2.4);
+  return (luminance + 0.05) / (dark + 0.05) >= 1.05 / (luminance + 0.05) ? "#24212b" : "#ffffff";
+}
 function withOpacity(color, opacity) {
   // Fill and stroke opacity apply to the colour only, as on the canvas.
   return typeof opacity === "number" && opacity < 1
@@ -432,6 +446,10 @@ function renderWidget(widget, activeScreen, item, localVariables = {}) {
   const textWidget = ["text", "heading", "label", "paragraph", "link", "code"].includes(widget.type);
   element.style.color = typeof widget.props.color === "string"
     ? widget.props.color
+    : typeof widget.props.textColor === "string"
+      ? widget.props.textColor
+    : (widget.type === "button" || widget.type === "icon-button") && widget.style.fill
+      ? readableOn(widget.style.fill, widget.style.fillOpacity)
     : widget.type === "icon" || widget.type === "custom-icon"
       ? widget.style.stroke || "#24212b"
       : textWidget && widget.style.fill
