@@ -846,6 +846,7 @@
 /* Two fields per line so menu labels ("Navigate", a screen name) are never cut off;
    the move/delete buttons sit on their own line underneath. */
 .interaction-condition,.interaction-action { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); align-items:center; gap:4px; padding-bottom:4px; border-bottom:1px solid #2a2b31; }
+.interaction-action { grid-template-columns:minmax(0,.8fr) minmax(0,1.2fr); }
 .interaction-row-controls { display:flex; min-width:0; justify-content:flex-end; grid-column:1 / -1; }
 .interaction-row-controls button { width:19px; height:21px; flex:0 0 19px; }
 .interaction-row-controls button:disabled { opacity:.35; cursor:default; }

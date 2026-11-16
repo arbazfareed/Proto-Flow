@@ -169,7 +169,7 @@ export function VirtualizedRepeater({
   runtime: PreviewRuntime;
   screenId: string;
   snapshot: PreviewRuntimeSnapshot;
-  runEvent: (widget: Widget, event: PreviewEvent, item?: RepeaterRecord) => void;
+  runEvent: (widget: Widget, event: PreviewEvent, item?: RepeaterRecord) => number;
   onError: (error: unknown) => void;
   inputMode: Project["screens"][number]["inputMode"];
   controlValues: Record<string, string | boolean>;
@@ -252,7 +252,10 @@ export function VirtualizedRepeater({
                   overflow: "hidden",
                 }}
                 onClick={() => {
-                  if (inputMode !== "touch") runEvent(widget, "onClick", record);
+                  // On a touch-only screen a mouse click in Preview stands in for a tap.
+                  for (const event of inputMode === "touch" ? ["onTap", "onClick"] as const : ["onClick"] as const) {
+                    if (runEvent(widget, event, record) > 0) break;
+                  }
                 }}
               >
                 {visibleTemplate
@@ -301,7 +304,7 @@ export function PreviewWidget({
   runtime: PreviewRuntime;
   screenId: string;
   snapshot: PreviewRuntimeSnapshot;
-  runEvent: (widget: Widget, event: PreviewEvent, item?: RepeaterRecord) => void;
+  runEvent: (widget: Widget, event: PreviewEvent, item?: RepeaterRecord) => number;
   onError: (error: unknown) => void;
   transitionStyle?: CSSProperties;
   item?: RepeaterRecord;
@@ -350,11 +353,50 @@ export function PreviewWidget({
       : parseRichTextMarkdown(stringProp(widget, "text"))
     : [];
   const inputMode = runtime.currentScreen.inputMode;
-  const fireTouch = (event: PreviewEvent, x: number, y: number) => {
-    runEvent(widget, event, item);
+  /**
+   * Runs a pointer trigger the way the web does: a tap also counts as a click (and, on a
+   * touch-only screen, a mouse click in Preview counts as a tap), and when nothing on this
+   * widget handles it, the trigger falls through to the widgets underneath the pointer, so
+   * tapping the text on a row runs the row's rule.
+   */
+  const firePointer = (
+    events: readonly PreviewEvent[],
+    point: { x: number; y: number } | null,
+    origin: Element | null,
+  ): number => {
+    const runOn = (target: Widget, targetItem?: RepeaterRecord) => {
+      for (const event of events) {
+        const ran = runEvent(target, event, targetItem);
+        if (ran > 0) return ran;
+      }
+      return 0;
+    };
+    const ran = runOn(widget, item);
+    if (ran > 0 || !point || !origin || origin.closest(".preview-repeater-row")) return ran;
+    if (typeof document.elementsFromPoint !== "function") return ran;
+    const underneath = document.elementsFromPoint(point.x, point.y);
+    const start = underneath.findIndex((element) => element === origin || origin.contains(element));
+    const widgets = flattenActivePanelWidgets(runtime.currentScreen.widgets, snapshot.panelStates);
+    for (const element of underneath.slice(start + 1)) {
+      if (element.contains(origin)) continue;
+      const id = element.getAttribute("data-widget-id");
+      const target = id ? widgets.find((candidate) => candidate.id === id) : undefined;
+      if (!target || target.id === widget.id) continue;
+      const forwarded = runOn(target);
+      if (forwarded > 0) return forwarded;
+    }
+    return 0;
+  };
+  const clickEvents: readonly PreviewEvent[] = inputMode === "touch" ? ["onTap", "onClick"] : ["onClick"];
+  const tapEvents: readonly PreviewEvent[] = ["onTap", "onClick"];
+  const fireTouch = (event: PreviewEvent, x: number, y: number, origin: Element | null = null) => {
+    if (event === "onTap") firePointer(tapEvents, { x, y }, origin);
+    else if (event === "onDoubleTap") firePointer(["onDoubleTap"], { x, y }, origin);
+    else runEvent(widget, event, item);
     onGestureFeedback(event, x, y);
   };
   const commonHandlers = {
+    "data-widget-id": widget.id,
     onClick: (event: MouseEvent<HTMLElement>) => {
       if (event.detail === 0) {
         suppressCompatibilityClick.current = false;
@@ -375,10 +417,17 @@ export function PreviewWidget({
         window.clearTimeout(touchClickTimer.current);
         return;
       }
-      if (inputMode !== "touch" && pointerType !== "touch") runEvent(widget, "onClick", item);
+      if (pointerType !== "touch") {
+        firePointer(clickEvents, { x: event.clientX, y: event.clientY }, event.currentTarget);
+      }
     },
     onDoubleClick: (event: MouseEvent<HTMLElement>) => {
-      if (inputMode !== "touch" && !isTouchPointerEvent(event)) runEvent(widget, "onDoubleClick", item);
+      if (isTouchPointerEvent(event)) return;
+      firePointer(
+        inputMode === "touch" ? ["onDoubleTap", "onDoubleClick"] : ["onDoubleClick"],
+        { x: event.clientX, y: event.clientY },
+        event.currentTarget,
+      );
     },
     onContextMenu: (event: MouseEvent<HTMLElement>) => {
       if (inputMode === "touch" || isTouchPointerEvent(event)) return;
@@ -482,10 +531,10 @@ export function PreviewWidget({
       const now = Date.now();
       if (now - lastTap.current < 320) {
         lastTap.current = 0;
-        fireTouch("onDoubleTap", touch.clientX, touch.clientY);
+        fireTouch("onDoubleTap", touch.clientX, touch.clientY, event.currentTarget);
       } else {
         lastTap.current = now;
-        fireTouch("onTap", touch.clientX, touch.clientY);
+        fireTouch("onTap", touch.clientX, touch.clientY, event.currentTarget);
       }
     },
   };
@@ -1041,9 +1090,10 @@ export function PreviewWindow() {
 
   const runEvent = useCallback((widget: Widget, event: PreviewEvent, item?: RepeaterRecord) => {
     const runtime = runtimeRef.current;
-    if (!runtime) return;
+    if (!runtime) return 0;
     const errors = runtime.runEvent(widget, event, item);
-    if (runtime.lastRunRuleCount > 0) trackEvent("preview_rule_fired");
+    const ranRules = runtime.lastRunRuleCount;
+    if (ranRules > 0) trackEvent("preview_rule_fired");
     if (runtime.lastAddedRepeaterRows > 0) {
       trackEvent("repeater_row_added", { count: runtime.lastAddedRepeaterRows });
     }
@@ -1054,6 +1104,7 @@ export function PreviewWindow() {
       console.error("Preview interaction errors.", errors);
       setToast(errors.join(" "));
     }
+    return ranRules;
   }, []);
 
   useEffect(() => {

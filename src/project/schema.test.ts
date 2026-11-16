@@ -105,7 +105,7 @@ describe("ProtoFlow project schema", () => {
       }],
     });
 
-    expect(migrated.screens[0].inputMode).toBe("touch");
+    expect(migrated.screens[0].inputMode).toBe("both");
     expect(migrated.schemaVersion).toBe("1.9.0");
   });
 

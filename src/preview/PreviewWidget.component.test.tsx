@@ -27,7 +27,7 @@ function renderWidget(mode: "touch" | "mouse" | "both" = "both") {
   project.screens[0].inputMode = mode;
   const runtime = new PreviewRuntime(project);
   const widget = makeWidget();
-  const runEvent = vi.fn();
+  const runEvent = vi.fn((_widget: unknown, _event: unknown, _item?: unknown) => 0);
   const onGestureFeedback = vi.fn();
   const rendered = render(
     <PreviewWidget
@@ -61,19 +61,33 @@ function touchEvent(
 }
 
 describe("PreviewWidget input-mode interactions", () => {
-  it("fires mouse events and blocks pointer interactions in touch mode", () => {
+  it("treats mouse clicks as taps in touch mode and blocks other mouse triggers (B82)", () => {
     const { button, runEvent } = renderWidget("touch");
-    fireEvent.doubleClick(button);
     fireEvent.contextMenu(button);
     fireEvent.mouseOver(button);
     fireEvent.mouseOut(button, { relatedTarget: document.body });
     fireEvent.mouseDown(button);
     fireEvent.mouseUp(button);
-    fireEvent.click(button, { detail: 1 });
     expect(runEvent).not.toHaveBeenCalled();
 
+    // No rule ran for the tap, so the click falls back to Click rules, as a tap does on the web.
+    fireEvent.click(button, { detail: 1 });
+    expect(runEvent.mock.calls.map(([, event]) => event)).toEqual(["onTap", "onClick"]);
+
+    runEvent.mockClear();
+    fireEvent.doubleClick(button);
+    expect(runEvent.mock.calls.map(([, event]) => event)).toEqual(["onDoubleTap", "onDoubleClick"]);
+
+    runEvent.mockClear();
     fireEvent.click(button, { detail: 0 });
     expect(runEvent).toHaveBeenCalledWith(expect.anything(), "onClick", undefined);
+  });
+
+  it("stops at the first trigger that runs a rule", () => {
+    const { button, runEvent } = renderWidget("touch");
+    runEvent.mockImplementation((_widget, event) => (event === "onTap" ? 1 : 0));
+    fireEvent.click(button, { detail: 1 });
+    expect(runEvent.mock.calls.map(([, event]) => event)).toEqual(["onTap"]);
   });
 
   it("fires mouse triggers and ignores touch gestures in mouse mode", () => {
@@ -135,6 +149,7 @@ describe("PreviewWidget input-mode interactions", () => {
       "onTouchStart",
       "onTouchEnd",
       "onTap",
+      "onClick",
     ]);
 
     fireEvent.click(button, { detail: 1 });
@@ -142,6 +157,7 @@ describe("PreviewWidget input-mode interactions", () => {
       "onTouchStart",
       "onTouchEnd",
       "onTap",
+      "onClick",
       "onClick",
     ]);
   });

@@ -144,7 +144,7 @@ describe("standalone published preview bundle", () => {
   it("fires touch-tap rules and evaluates each screen load rule only once", () => {
     const html = generatePublishedPreviewHtml(createEmptyProject("Runtime checks"));
 
-    expect(html).toContain('fire(widget, "onTap", item)');
+    expect(html).toContain('firePointer(widget, ["onTap", "onClick"], item');
     expect(html).toContain('for (const rule of activeScreen.interactionRules.filter((item) => item.event === "onLoad"))');
     expect(html).not.toContain("for (const widget of activeScreen.widgets)");
   });

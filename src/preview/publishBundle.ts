@@ -281,6 +281,24 @@ function fire(widget, event, item, renderAfter = true) {
     actions(rule, activeScreen.id, item, widget, localVariables);
   }
   if (matchedRule && renderAfter) render();
+  return matchedRule;
+}
+// A tap also counts as a click, and a trigger nothing on this widget handles falls through to
+// the widgets underneath the pointer, so tapping the text on a row runs the row's rule.
+function firePointer(widget, events, item, x, y, origin) {
+  for (const event of events) if (fire(widget, event, item)) return true;
+  if (item !== undefined || typeof document.elementsFromPoint !== "function") return false;
+  const underneath = document.elementsFromPoint(x, y);
+  const start = underneath.findIndex((element) => element === origin || origin.contains(element));
+  const widgets = allWidgets(screen().widgets);
+  for (const element of underneath.slice(start + 1)) {
+    if (element.contains(origin)) continue;
+    const id = element.dataset && element.dataset.widgetId;
+    const target = id && id !== widget.id ? widgets.find((entry) => entry.id === id) : undefined;
+    if (!target) continue;
+    for (const event of events) if (fire(target, event)) return true;
+  }
+  return false;
 }
 function bindWidgetEvents(element, widget, item) {
   const mode = screen().inputMode || "both";
@@ -290,7 +308,7 @@ function bindWidgetEvents(element, widget, item) {
     if (mode === "both") {
       element.addEventListener("pointerup", (event) => {
         if (event.pointerType !== "mouse") return;
-        fire(widget, "onClick", item);
+        firePointer(widget, ["onClick"], item, event.clientX, event.clientY, element);
         fire(widget, "onMouseUp", item);
       });
       element.addEventListener("pointerenter", (event) => {
@@ -300,7 +318,7 @@ function bindWidgetEvents(element, widget, item) {
         if (event.pointerType === "mouse") fire(widget, "onMouseDown", item);
       });
     } else {
-      element.addEventListener("click", () => fire(widget, "onClick", item));
+      element.addEventListener("click", (event) => firePointer(widget, ["onClick"], item, event.clientX, event.clientY, element));
       element.addEventListener("mouseenter", () => fire(widget, "onHover", item));
       element.addEventListener("mousedown", () => fire(widget, "onMouseDown", item));
       element.addEventListener("mouseup", () => fire(widget, "onMouseUp", item));
@@ -320,6 +338,12 @@ function bindWidgetEvents(element, widget, item) {
   if (mode === "both") {
     element.addEventListener("click", (event) => {
       if (event.detail === 0) fire(widget, "onClick", item);
+    });
+  }
+  if (mode === "touch") {
+    // Opened on a computer, a mouse click stands in for a tap.
+    element.addEventListener("pointerup", (event) => {
+      if (event.pointerType === "mouse") firePointer(widget, ["onTap", "onClick"], item, event.clientX, event.clientY, element);
     });
   }
   if (!touchEnabled) return;
@@ -401,7 +425,8 @@ function bindWidgetEvents(element, widget, item) {
       fire(widget, "onDoubleTap", item);
     } else {
       lastTap = now;
-      fire(widget, "onTap", item);
+      const touch = event.changedTouches && event.changedTouches[0];
+      firePointer(widget, ["onTap", "onClick"], item, touch ? touch.clientX : 0, touch ? touch.clientY : 0, element);
     }
   }, { passive: true });
 }

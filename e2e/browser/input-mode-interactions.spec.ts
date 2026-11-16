@@ -28,11 +28,11 @@ test("interaction trigger choices follow the screen input mode while keeping key
     "Swipe left",
     "Pinch in",
     "Two-finger pan",
-    "Click (not available in touch mode)",
+    "Click",
     "Focus",
     "Blur",
     "Key down",
-  ], ["Mouse down"]);
+  ], ["Mouse down", "Click (not available in touch mode)"]);
 
   await trigger.selectOption("onTap");
   await inputMode.selectOption("mouse");
