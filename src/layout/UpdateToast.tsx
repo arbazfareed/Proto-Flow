@@ -6,33 +6,50 @@ import { installAvailableUpdate } from "../updater/install";
 import { trackEvent } from "../diagnostics/observability";
 
 type UpdateToastProps = {
+  /** 0 is the automatic check at startup; each "Check for updates" click increases it. */
   requestId: number;
 };
+
+/** How long a check result ("up to date" / "check failed") stays before hiding itself. */
+export const UPDATE_RESULT_VISIBLE_MS = 6_000;
+
+type CheckResult = "failed" | "up-to-date" | null;
 
 export function UpdateToast({ requestId }: UpdateToastProps) {
   const [update, setUpdate] = useState<Update | null>(null);
   const [installing, setInstalling] = useState(false);
   const [installError, setInstallError] = useState(false);
-  const [checkError, setCheckError] = useState(false);
+  const [checkResult, setCheckResult] = useState<CheckResult>(null);
+  // Only a check the user asked for reports "failed" or "up to date". The automatic check at
+  // startup stays silent unless an update is found, so an offline start shows nothing.
+  const userRequested = requestId > 0;
 
   useEffect(() => {
     let active = true;
-    setCheckError(false);
+    setCheckResult(null);
     void checkForUpdate().then((availableUpdate) => {
       if (active && availableUpdate) setUpdate(availableUpdate);
       else if (availableUpdate) {
         void availableUpdate.close().catch((error) => {
           console.error("Could not release the unused Proto Flow update.", error);
         });
+      } else if (active && userRequested) {
+        setCheckResult("up-to-date");
       }
     }).catch((error: unknown) => {
-      if (active) setCheckError(true);
+      if (active && userRequested) setCheckResult("failed");
       console.error("Could not check for a Proto Flow update.", error);
     });
     return () => {
       active = false;
     };
-  }, [requestId]);
+  }, [requestId, userRequested]);
+
+  useEffect(() => {
+    if (!checkResult) return;
+    const timer = window.setTimeout(() => setCheckResult(null), UPDATE_RESULT_VISIBLE_MS);
+    return () => window.clearTimeout(timer);
+  }, [checkResult]);
 
   const installUpdate = async () => {
     if (!update || installing) return;
@@ -50,11 +67,23 @@ export function UpdateToast({ requestId }: UpdateToastProps) {
   };
 
   if (!update) {
-    if (!checkError) return null;
+    if (!checkResult) return null;
+    const failed = checkResult === "failed";
     return (
-      <section className="update-toast" role="alert" aria-live="assertive">
-        <strong>Update check failed</strong>
-        <span>No update was installed. Check your connection and try again.</span>
+      <section className="update-toast" role={failed ? "alert" : "status"} aria-live={failed ? "assertive" : "polite"}>
+        <button
+          className="icon-button update-toast-dismiss"
+          aria-label="Dismiss update message"
+          onClick={() => setCheckResult(null)}
+        >
+          <X size={15} />
+        </button>
+        <strong>{failed ? "Update check failed" : "ProtoFlow is up to date"}</strong>
+        <span>
+          {failed
+            ? "Nothing was changed. Check your internet connection and try again later."
+            : "You already have the latest version."}
+        </span>
       </section>
     );
   }
