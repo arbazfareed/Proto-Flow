@@ -1524,6 +1524,15 @@ function StyleSection({ widgets }: { widgets: Widget[] }) {
   };
 
   if (widgets.length === 0) return null;
+  // On Text, Fill is the text colour: call it that (B70).
+  const fillIsTextColour = editableWidgets.length > 0 &&
+    editableWidgets.every((widget) => TEXT_CONTENT_TYPES.has(widget.type));
+  // Other widgets that show words get their own text colour (props.textColor).
+  const labelWidgets = editableWidgets.filter((widget) =>
+    !TEXT_CONTENT_TYPES.has(widget.type) && isTextStyleWidget(widget));
+  const labelColours = labelWidgets.map((widget) =>
+    typeof widget.props.textColor === "string" ? widget.props.textColor : null);
+  const labelColour = labelColours.length > 0 && !mixed(labelColours) ? labelColours[0] : null;
   const strokeWidth = commonStyleValue("strokeWidth", 0) ?? 0;
   const strokeWidthMixed = mixed(valuesFor("strokeWidth"));
   const lineCapMixed = mixed(valuesFor("lineCap"));
@@ -1554,7 +1563,7 @@ function StyleSection({ widgets }: { widgets: Widget[] }) {
     <section className="style-section" aria-label="Style">
       <div className="section-label style-heading"><span>STYLE</span></div>
       <div className="style-color-grid">
-        {colorInput("fill", "Fill")}
+        {colorInput("fill", fillIsTextColour ? "Text colour" : "Fill")}
         {colorInput("stroke", "Stroke")}
       </div>
       <div className="style-control-grid">
@@ -1619,6 +1628,33 @@ function StyleSection({ widgets }: { widgets: Widget[] }) {
             onChange={(event) => applyProps({ richText: event.currentTarget.checked })}
           />
         </label>}
+        {labelWidgets.length > 0 && labelWidgets.length === editableWidgets.length && (
+          <div className="style-control text-colour-control">
+            <span>Text colour</span>
+            <div className="style-color-row">
+              <input
+                type="color"
+                aria-label="Text colour"
+                className="style-color-picker"
+                value={labelColour ?? "#24212b"}
+                onPointerDown={beginStyleEdit}
+                onChange={(event) => applyProps({ textColor: event.currentTarget.value })}
+                onBlur={finishEditSession}
+              />
+              <span className="text-colour-value">
+                {labelColour ?? (mixed(labelColours) ? "Mixed" : "Automatic")}
+              </span>
+              <button
+                type="button"
+                className="style-none-button"
+                disabled={labelColours.every((colour) => colour === null)}
+                onClick={() => applyProps({ textColor: undefined })}
+              >
+                Automatic
+              </button>
+            </div>
+          </div>
+        )}
         <div className="style-control-grid">
           <label className="style-control"><span>Font family</span><select aria-label="Font family" value={String(textValue("fontFamily", "Arial"))} onChange={(event) => applyText({ fontFamily: event.currentTarget.value })}>{textMixed("fontFamily") && <option value="Mixed" disabled>Mixed</option>}{!textMixed("fontFamily") && !["Arial", "Inter", "Georgia", "Times New Roman", "Verdana", "Trebuchet MS", "Courier New", "system-ui"].includes(String(textValue("fontFamily", "Arial"))) && <option>{String(textValue("fontFamily", "Arial"))}</option>}{["Arial", "Inter", "Georgia", "Times New Roman", "Verdana", "Trebuchet MS", "Courier New", "system-ui"].map((family) => <option key={family}>{family}</option>)}</select></label>
           <label className="style-control"><span>Weight</span><select aria-label="Font weight" value={String(textValue("fontWeight", "normal"))} onChange={(event) => applyText({ fontWeight: event.currentTarget.value })}>{textMixed("fontWeight") && <option value="Mixed" disabled>Mixed</option>}{!textMixed("fontWeight") && !["normal", "bold"].includes(String(textValue("fontWeight", "normal"))) && <option>{String(textValue("fontWeight", "normal"))}</option>}<option value="normal">Regular</option><option value="bold">Bold</option></select></label>
@@ -2762,6 +2798,11 @@ function RepeaterBindingSection({ screen, widget }: { screen: Project["screens"]
   );
 }
 
+/** Widgets whose visible words are props.text. */
+const TEXT_CONTENT_TYPES = new Set(["text", "heading", "paragraph", "label", "link", "code"]);
+/** Widgets that show several labels from one "A | B | C" list. */
+const ITEM_LIST_TYPES = new Set(["bottom-nav", "segmented-control", "tabs", "breadcrumb", "avatar-group", "step-indicator"]);
+
 function WidgetPropertiesSection({
   widget,
   screenId,
@@ -2845,6 +2886,43 @@ function WidgetPropertiesSection({
     </label>
   );
 
+  const textAreaField = (key: string, label: string, fallback = "") => (
+    <label className="field-label widget-property-field" key={key}>
+      {label}
+      <textarea
+        className="text-field widget-content-field"
+        rows={3}
+        value={typeof widget.props[key] === "string" ? widget.props[key] as string : fallback}
+        onChange={(event) => updateProp(key, event.currentTarget.value)}
+        onBlur={finishEdit}
+      />
+    </label>
+  );
+  /**
+   * The visible words of the widget, with a name that says what they are (B71): the canvas,
+   * Preview and exports show these, unlike the layer name in the Layers panel.
+   */
+  const contentFields = () => {
+    if (TEXT_CONTENT_TYPES.has(widget.type)) return textAreaField("text", "Content");
+    if (widget.type === "avatar") {
+      return <>
+        {textField("label", "Person's name", "User")}
+        {textField("initials", "Initials (shown)", "")}
+      </>;
+    }
+    if (ITEM_LIST_TYPES.has(widget.type)) {
+      return textField("label", "Items (separate with |)", String(widget.props.label ?? ""));
+    }
+    if (widget.type === "input" || widget.type === "search" || widget.type === "search-bar" || widget.type === "textarea") {
+      return <>
+        {textField("label", "Label", "")}
+        {textField("placeholder", "Placeholder", "")}
+        {textField("value", "Value", "")}
+      </>;
+    }
+    return textField("label", "Text shown", String(widget.props.label ?? ""));
+  };
+
   const fields = widget.type === "card"
     ? <>
         {textField("title", "Card title", "Product card")}
@@ -2919,7 +2997,7 @@ function WidgetPropertiesSection({
                     </select>
                   </label>
                 </>
-              : textField("label", "Label", String(widget.props.label ?? widget.type));
+              : contentFields();
 
   return (
     <section className="widget-properties-section" aria-label="Widget properties">

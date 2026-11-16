@@ -404,7 +404,8 @@ function genericElementDefinition(
         lineHeight: 1.2,
       }
     : type === "avatar"
-      ? { label: "Alex Morgan", initials: "AM" }
+      // No fixed initials: they follow the name until the user types their own (B73).
+      ? { label: "Alex Morgan" }
       : type === "icon-button"
         ? { label: "", iconName: "Plus" }
         : type === "textarea"

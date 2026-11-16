@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type ComponentType, type ReactNode } from "react";
+import { createContext, useContext, useEffect, useMemo, useRef, useState, type ComponentProps, type ComponentType, type ReactNode } from "react";
 import { invoke, isTauri } from "@tauri-apps/api/core";
 import {
   Arrow,
@@ -11,7 +11,7 @@ import {
   Path as KonvaPath,
   Rect,
   Star as KonvaStar,
-  Text as KonvaText,
+  Text as BaseKonvaText,
 } from "react-konva";
 import type Konva from "konva";
 import type { RichTextMarks, RichTextRun, Widget } from "../project/schema";
@@ -30,6 +30,21 @@ import { getSafeBlendMode, normalizeListItems, styleColorToRgba } from "./styleI
 import { renderCanvasIconSvg } from "./iconLibrary";
 import { PLAIN_BOX_TYPES } from "../project/plainBoxes";
 import { readableTextOnFill } from "./readableText";
+import { avatarInitials } from "../project/avatarInitials";
+
+/**
+ * A widget's own "Text colour" (props.textColor), applied to every label its shape draws, so
+ * Buttons, Inputs, Avatars, Chips, tabs and the rest can all be recoloured (B70).
+ */
+const WidgetTextColourContext = createContext<string | undefined>(undefined);
+
+function KonvaText(props: ComponentProps<typeof BaseKonvaText>) {
+  const textColour = useContext(WidgetTextColourContext);
+  return <BaseKonvaText {...props} fill={textColour ?? props.fill} />;
+}
+
+/** Widget types whose Fill already is the text colour. */
+const FILL_IS_TEXT_TYPES = new Set(["text", "heading", "paragraph", "label", "link", "code"]);
 export { measureTextBounds } from "./textMeasurement";
 export { SHAPE_TOOLS };
 export type { ShapeTool };
@@ -836,16 +851,7 @@ function ImageShape({ widget, stroke, strokeWidth, onThumbnailReady }: ShapeComp
 }
 
 function AvatarShape({ widget, fill, stroke, strokeWidth }: ShapeComponentProps) {
-  const label = getWidgetProp(widget, "initials", "").trim();
-  const initials =
-    label ||
-    getWidgetProp(widget, "label", "User")
-      .split(/\s+/)
-      .filter(Boolean)
-      .slice(0, 2)
-      .map((part) => part[0]?.toUpperCase() ?? "")
-      .join("") ||
-    "U";
+  const initials = avatarInitials({ initials: widget.props.initials, label: getWidgetProp(widget, "label", "User") });
   const radius = Math.min(widget.width, widget.height) / 2;
   return (
     <Group>
@@ -2801,13 +2807,19 @@ export function renderWidgetShape(
       shadowEnabled={Boolean(widget.style.shadow)}
       shadowForStrokeEnabled={Boolean(widget.style.shadow)}
     >
-      <ShapeComponent
-        widget={widget}
-        fill={fill ? styleColorToRgba(fill, widget.style.fillOpacity) : undefined}
-        stroke={stroke ? styleColorToRgba(stroke, widget.style.strokeOpacity) : undefined}
-        strokeWidth={strokeWidth}
-        onThumbnailReady={onThumbnailReady}
-      />
+      <WidgetTextColourContext.Provider
+        value={typeof widget.props.textColor === "string" && !FILL_IS_TEXT_TYPES.has(widget.type)
+          ? widget.props.textColor
+          : undefined}
+      >
+        <ShapeComponent
+          widget={widget}
+          fill={fill ? styleColorToRgba(fill, widget.style.fillOpacity) : undefined}
+          stroke={stroke ? styleColorToRgba(stroke, widget.style.strokeOpacity) : undefined}
+          strokeWidth={strokeWidth}
+          onThumbnailReady={onThumbnailReady}
+        />
+      </WidgetTextColourContext.Provider>
     </Group>
   );
 }

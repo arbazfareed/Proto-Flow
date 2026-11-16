@@ -1527,3 +1527,9 @@
 .delete-screen-redirect select { height:32px; padding:0 8px; border:1px solid #3a3b44; border-radius:6px; color:#eceaf3; background:#1f2025; font-size:12px; }
 .dialog-actions .button-danger { color:#fff; border-color:#c4473b; background:#c4473b; }
 .dialog-actions .button-danger:hover { background:#ad3a30; }
+
+/* Text colour for widgets that show words, and the Content field (B70, B71) */
+.text-colour-control { display:grid; gap:4px; margin:4px 0 8px; }
+.text-colour-control .style-color-row { display:flex; align-items:center; gap:6px; }
+.text-colour-value { flex:1; min-width:0; color:#a9a7b3; font-size:10px; }
+.widget-content-field { min-height:56px; resize:vertical; font:inherit; line-height:1.4; }

@@ -502,7 +502,9 @@ function renderWidget(widget, activeScreen, item, localVariables = {}) {
   // Text has no inner padding (as on the canvas and in Preview), so its letters are not cut off.
   element.style.padding = (typeof widget.props.padding === "number" ? widget.props.padding : textWidget ? 0 : 8) + "px";
   element.style.whiteSpace = "pre-wrap";
-  const rawText = widget.props.text ?? widget.props.label ?? widget.props.title ?? "";
+  const rawText = widget.type === "avatar"
+    ? (String(widget.props.initials || "").trim().slice(0, 3) || String(widget.props.label || "").split(/\s+/).filter(Boolean).slice(0, 2).map((part) => part[0].toUpperCase()).join("") || "U")
+    : widget.props.text ?? widget.props.label ?? widget.props.title ?? "";
   const shownText = text(rawText, activeScreen.id, item, widget);
   if (widget.type === "ellipse" || widget.type === "circle") element.style.borderRadius = "50%";
   if (widget.type === "button" || widget.type === "icon-button") element.textContent = shownText || "Button";
