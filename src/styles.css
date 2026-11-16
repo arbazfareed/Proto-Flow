@@ -384,10 +384,134 @@ html[data-theme="light"] .screen-input-mode,
 html[data-theme="light"] .detail-row { font-size: 10px; }
 html[data-theme="light"] .layer-count { font-size: 9px; }
 html[data-theme="light"] .field-label { font-size: 11px; }
-html[data-theme="light"] .version-history-dialog .field-label { color:#b9b8c2; }
-html[data-theme="light"] .version-history-dialog .button-quiet { color:#d0d0d6; }
+html[data-theme="light"] .version-history-dialog .field-label { color:#53525e; }
+html[data-theme="light"] .version-history-dialog .button-quiet { color:#4a4955; }
 html[data-theme="light"] .version-history-dialog .text-field {
-  color:#e2e2e8;
-  border-color:#35363d;
-  background:#1e1f23;
+  color:#1d1c25;
+  border-color:#dcdce5;
+  background:#fff;
 }
+
+/* ---------------------------------------------------------------------------------------
+ * Light theme polish: calmer surfaces, hairline borders, soft layered shadows and one
+ * consistent field style. Loads after theme-light.css, so these refinements win.
+ * ------------------------------------------------------------------------------------- */
+html[data-theme="light"] {
+  --surface-app: #f6f6f9;
+  --surface-canvas: #f3f3f7;
+  --border: #e3e3ea;
+  --border-subtle: #ececf1;
+  --text-primary: #1d1c25;
+  --text-secondary: #53525e;
+  --text-muted: #6b6a77;
+  --lt-field-border: #dcdce5;
+  --lt-field-border-hover: #c9c9d5;
+  --lt-focus-ring: 0 0 0 3px rgba(105, 74, 195, 0.16);
+  --lt-shadow-sm: 0 1px 2px rgba(28, 24, 48, 0.05);
+  --lt-shadow-md: 0 1px 2px rgba(28, 24, 48, 0.04), 0 4px 12px -2px rgba(28, 24, 48, 0.08);
+  --lt-shadow-lg: 0 2px 6px rgba(28, 24, 48, 0.05), 0 18px 40px -12px rgba(28, 24, 48, 0.22);
+}
+html[data-theme="light"] .topbar { box-shadow: 0 1px 0 var(--border), 0 4px 16px -12px rgba(28, 24, 48, 0.18); border-bottom-color: transparent; }
+html[data-theme="light"] .left-sidebar,
+html[data-theme="light"] .sidebar { border-color: var(--border); }
+html[data-theme="light"] .sidebar-heading,
+html[data-theme="light"] .section-label { color: #6b6a77; letter-spacing: 0.08em; }
+
+/* Library items: white cards that lift gently on hover. */
+html[data-theme="light"] .element-library-item,
+html[data-theme="light"] .symbol-library-item {
+  color: #2c2b35;
+  background: #fff;
+  border-color: #e6e6ed;
+  box-shadow: var(--lt-shadow-sm);
+  transition: border-color 120ms ease, box-shadow 120ms ease, background 120ms ease;
+}
+html[data-theme="light"] .element-library-item:hover,
+html[data-theme="light"] .symbol-library-item:hover {
+  border-color: #d5ccf4;
+  background: #fbfaff;
+  box-shadow: var(--lt-shadow-md);
+}
+
+/* One field style everywhere: white, hairline border, accent focus ring. */
+html[data-theme="light"] .geometry-input-wrap,
+html[data-theme="light"] .element-library-search,
+html[data-theme="light"] .layer-search,
+html[data-theme="light"] .notes-search,
+html[data-theme="light"] .device-picker-search,
+html[data-theme="light"] .right-dock input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="color"]),
+html[data-theme="light"] .right-dock select,
+html[data-theme="light"] .right-dock textarea,
+html[data-theme="light"] .dialog-card select,
+html[data-theme="light"] .dialog-card input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="color"]) {
+  color: var(--text-primary);
+  background-color: #fff;
+  border-color: var(--lt-field-border);
+}
+html[data-theme="light"] .geometry-input-wrap input,
+html[data-theme="light"] .element-library-search input,
+html[data-theme="light"] .layer-search input,
+html[data-theme="light"] .notes-search input,
+html[data-theme="light"] .device-picker-search input { border: 0; background: transparent; box-shadow: none; }
+html[data-theme="light"] .geometry-input-wrap:hover,
+html[data-theme="light"] .element-library-search:hover,
+html[data-theme="light"] .layer-search:hover { border-color: var(--lt-field-border-hover); }
+html[data-theme="light"] .geometry-input-wrap:focus-within,
+html[data-theme="light"] .element-library-search:focus-within,
+html[data-theme="light"] .layer-search:focus-within,
+html[data-theme="light"] .notes-search:focus-within,
+html[data-theme="light"] .device-picker-search:focus-within,
+html[data-theme="light"] .right-dock select:focus,
+html[data-theme="light"] .right-dock textarea:focus,
+html[data-theme="light"] .dialog-card select:focus { border-color: var(--accent); box-shadow: var(--lt-focus-ring); outline: none; }
+html[data-theme="light"] .element-library-search input::placeholder,
+html[data-theme="light"] .layer-search input::placeholder,
+html[data-theme="light"] .right-dock input::placeholder { color: #8d8c98; }
+html[data-theme="light"] .geometry-unit { color: #7a7986; background: transparent; }
+
+/* Command palette: a single search field, no box inside a box. */
+html[data-theme="light"] .palette-search>input,
+html[data-theme="light"] .palette-search>input:focus,
+html[data-theme="light"] .palette-search>input:focus-visible { border: 0; outline: none; box-shadow: none; background: transparent; }
+html[data-theme="light"] .palette-item[data-selected="true"],
+html[data-theme="light"] .palette-item[aria-selected="true"] { color: #2b1d6b; border-color: transparent; background: #f1edfd; }
+
+/* Floating surfaces: rounded, hairline border, soft depth. */
+html[data-theme="light"] .tree-context-menu,
+html[data-theme="light"] .canvas-view-popover,
+html[data-theme="light"] .element-library-popover,
+html[data-theme="light"] .variable-completion-popover,
+html[data-theme="light"] .wallet-balance-menu,
+html[data-theme="light"] .preview-device-menu { border-color: var(--border); border-radius: 10px; background: #fff; box-shadow: var(--lt-shadow-lg); }
+html[data-theme="light"] .tree-context-menu button { color: #2c2b35; }
+html[data-theme="light"] .tree-context-menu button:hover:not(:disabled) { color: #1d1c25; background: #f3f0fd; }
+html[data-theme="light"] .tree-context-menu button:disabled { color: #9d9ca8; opacity: 1; }
+html[data-theme="light"] .dialog-card,
+html[data-theme="light"] .command-palette { border-color: var(--border); border-radius: 14px; box-shadow: var(--lt-shadow-lg); }
+html[data-theme="light"] .overlay { background: rgba(24, 20, 40, 0.26); -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px); }
+html[data-theme="light"] .toast,
+html[data-theme="light"] .update-toast,
+html[data-theme="light"] .metered-toast { color: var(--text-primary); border-color: var(--border); background: #fff; box-shadow: var(--lt-shadow-lg); }
+
+/* Body copy reads as text, not as links. */
+html[data-theme="light"] .dialog-card>p,
+html[data-theme="light"] .privacy-settings-dialog>p,
+html[data-theme="light"] .privacy-setting-option small,
+html[data-theme="light"] .privacy-local-logs small { color: var(--text-secondary); }
+html[data-theme="light"] .dialog-card>p strong { color: var(--text-primary); }
+html[data-theme="light"] .dialog-icon,
+html[data-theme="light"] .workspace-card-icon,
+html[data-theme="light"] .inspector-placeholder-icon,
+html[data-theme="light"] .update-card-icon { color: #5f41c0; background: #f1edfd; border-color: #e3dbfa; }
+
+/* Keys and small badges: crisp, light, legible. */
+html[data-theme="light"] kbd { color: #4a4955; border: 1px solid #dcdce5; background: #fff; box-shadow: inset 0 -1px 0 #e6e6ee; }
+html[data-theme="light"] .start-screen-badge,
+html[data-theme="light"] .layer-hierarchy-badge.is-screen-child { color: #4b3399; background: #efeafd; border-color: #e0d7fa; }
+
+/* Screen cards and thumbnails sit on the light panel instead of in a dark well. */
+html[data-theme="light"] .screen-thumbnail { border-color: #e1e1e9; background: #f6f6f9; }
+html[data-theme="light"] .flow-viewport { background-color: #f3f3f7; background-image: radial-gradient(#d3d3dd 1px, transparent 1px); }
+
+/* Thin, quiet scrollbars. */
+html[data-theme="light"] * { scrollbar-color: #d2d2dc transparent; }
