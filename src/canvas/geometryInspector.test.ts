@@ -51,10 +51,9 @@ describe("geometry inspector helpers | expression-eval", () => {
 
   it("applies dimensions, opacity, and normalized rotation to editable widgets", () => {
     const widgets = [widget(0, 0), widget(40, 50)];
-    expect(getGeometryUpdates(widgets, "width", 2).map(({ width }) => width)).toEqual([
-      4,
-      4,
-    ]);
+    // A typed 1 or 2 px stays as typed (B90); nothing goes below 1 px.
+    expect(getGeometryUpdates(widgets, "width", 2).map(({ width }) => width)).toEqual([2, 2]);
+    expect(getGeometryUpdates(widgets, "width", 0).map(({ width }) => width)).toEqual([1, 1]);
     expect(getGeometryUpdates(widgets, "opacity", 150).map(({ opacity }) => opacity)).toEqual([
       1,
       1,
