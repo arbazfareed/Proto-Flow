@@ -3,6 +3,13 @@ import { Circle, Group, Layer, Line, Rect, Text } from "react-konva";
 import type { DevicePreset, ScreenDevice } from "./types";
 import type { Widget } from "../project/schema";
 import { getSafeAreaBounds, getWidgetsOutsideSafeArea } from "./frame";
+import { useEditorTheme } from "../layout/useEditorTheme";
+
+// The desktop browser bar follows the editor theme; phone and tablet bezels stay dark like hardware.
+const BROWSER_CHROME = {
+  dark: { bar: "#27282d", border: "#595a63", address: "#17181c", addressBorder: "#17181c", text: "#a8a9b1" },
+  light: { bar: "#ededf2", border: "#d4d4dd", address: "#ffffff", addressBorder: "#dcdce5", text: "#6b6a77" },
+} as const;
 
 interface DeviceFrameProps {
   device: ScreenDevice;
@@ -133,6 +140,7 @@ function DeviceChromeLayer({
   const color = statusBarTheme === "light" ? "#f8f8fb" : "#222329";
   const outsideWidgets = getWidgetsOutsideSafeArea(widgets, device);
   const isBrowserFrame = showFrame && notch === "browser";
+  const browserChrome = BROWSER_CHROME[useEditorTheme()];
   const statusTop = Math.min(
     device.height - 18,
     Math.max(6, device.insets.top > 0 ? device.insets.top * 0.2 : 8),
@@ -164,8 +172,8 @@ function DeviceChromeLayer({
             width={device.width}
             height={30}
             cornerRadius={[cornerRadius, cornerRadius, 0, 0]}
-            fill="#27282d"
-            stroke="#595a63"
+            fill={browserChrome.bar}
+            stroke={browserChrome.border}
             strokeWidth={1}
             perfectDrawEnabled={false}
           />
@@ -178,7 +186,9 @@ function DeviceChromeLayer({
             width={device.width * 0.6}
             height={16}
             cornerRadius={5}
-            fill="#17181c"
+            fill={browserChrome.address}
+            stroke={browserChrome.addressBorder}
+            strokeWidth={1}
             perfectDrawEnabled={false}
           />
           <Text
@@ -188,7 +198,7 @@ function DeviceChromeLayer({
             height={12}
             text={preset?.name ?? "Preview"}
             fontSize={9}
-            fill="#a8a9b1"
+            fill={browserChrome.text}
             ellipsis
             perfectDrawEnabled={false}
           />

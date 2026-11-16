@@ -4,6 +4,7 @@ import "@fontsource-variable/inter";
 import App from "./App";
 import { startAutosave } from "./project/autosave";
 import { AppErrorBoundary } from "./diagnostics/AppErrorBoundary";
+import "./theme-light.css";
 import "./styles.css";
 
 async function startApplication() {
