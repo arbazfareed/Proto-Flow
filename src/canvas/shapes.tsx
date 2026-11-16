@@ -895,7 +895,7 @@ function IconButtonShape({ widget, fill, stroke, strokeWidth }: ShapeComponentPr
       />
       <CanvasIcon
         name={getWidgetProp(widget, "iconName", "Plus")}
-        color="#e9e4f5"
+        color={getWidgetProp(widget, "iconColor", "#e9e4f5")}
         strokeWidth={2}
         x={(widget.width - iconSize) / 2}
         y={(widget.height - iconSize) / 2}

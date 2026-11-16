@@ -1524,6 +1524,12 @@ function StyleSection({ widgets }: { widgets: Widget[] }) {
   };
 
   if (widgets.length === 0) return null;
+  const allIcons = editableWidgets.length > 0 &&
+    editableWidgets.every((widget) => widget.type === "icon" || widget.type === "custom-icon");
+  const iconButtons = editableWidgets.filter((widget) => widget.type === "icon-button");
+  const iconButtonColours = iconButtons.map((widget) =>
+    typeof widget.props.iconColor === "string" ? widget.props.iconColor : null);
+  const iconButtonColour = iconButtonColours.length > 0 && !mixed(iconButtonColours) ? iconButtonColours[0] : null;
   // On Text, Fill is the text colour: call it that (B70).
   const fillIsTextColour = editableWidgets.length > 0 &&
     editableWidgets.every((widget) => TEXT_CONTENT_TYPES.has(widget.type));
@@ -1563,8 +1569,26 @@ function StyleSection({ widgets }: { widgets: Widget[] }) {
     <section className="style-section" aria-label="Style">
       <div className="section-label style-heading"><span>STYLE</span></div>
       <div className="style-color-grid">
-        {colorInput("fill", fillIsTextColour ? "Text colour" : "Fill")}
-        {colorInput("stroke", "Stroke")}
+        {/* Icons are drawn with their line colour: call it "Icon colour" and skip the unused Fill (B75). */}
+        {!allIcons && colorInput("fill", fillIsTextColour ? "Text colour" : "Fill")}
+        {colorInput("stroke", allIcons ? "Icon colour" : "Stroke")}
+        {iconButtons.length > 0 && iconButtons.length === editableWidgets.length && (
+          <div className="style-control text-colour-control">
+            <span>Icon colour</span>
+            <div className="style-color-row">
+              <input
+                type="color"
+                aria-label="Icon colour"
+                className="style-color-picker"
+                value={iconButtonColour ?? "#e9e4f5"}
+                onPointerDown={beginStyleEdit}
+                onChange={(event) => applyProps({ iconColor: event.currentTarget.value })}
+                onBlur={finishEditSession}
+              />
+              <span className="text-colour-value">{iconButtonColour ?? "Default"}</span>
+            </div>
+          </div>
+        )}
       </div>
       <div className="style-control-grid">
         {iconWidgets.length > 0 && (

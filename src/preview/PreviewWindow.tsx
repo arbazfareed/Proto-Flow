@@ -797,6 +797,29 @@ export function PreviewWidget({
     );
   }
 
+  if (widget.type === "icon-button") {
+    // An icon button shows its icon, in its own icon colour (B75), not the word "Button".
+    const iconName = stringProp(widget, "iconName", "Plus");
+    const Icon = getPreviewIconComponent(iconName);
+    return (
+      <button
+        className="preview-widget is-button is-icon-button"
+        aria-label={stringProp(widget, "label", "") || widget.name || `${iconName} button`}
+        style={{ ...style, alignItems: "center", justifyContent: "center", padding: 0 }}
+        {...commonHandlers}
+      >
+        <Icon
+          width="56%"
+          height="56%"
+          color={stringProp(widget, "iconColor", "#e9e4f5")}
+          strokeWidth={2}
+          aria-hidden="true"
+          focusable="false"
+        />
+      </button>
+    );
+  }
+
   if (widget.type === "button" || widget.type === "icon-button") {
     return <button className={`preview-widget is-button is-${stringProp(widget, "variant", "primary")}`} style={style} {...commonHandlers}>{text || "Button"}</button>;
   }
