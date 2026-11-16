@@ -28,6 +28,7 @@ import {
 import { MAX_WIDGET_TEXT_LENGTH } from "./textMeasurement";
 import { getSafeBlendMode, normalizeListItems, styleColorToRgba } from "./styleInspector";
 import { renderCanvasIconSvg } from "./iconLibrary";
+import { PLAIN_BOX_TYPES } from "../project/plainBoxes";
 export { measureTextBounds } from "./textMeasurement";
 export { SHAPE_TOOLS };
 export type { ShapeTool };
@@ -2594,6 +2595,20 @@ function GenericElementShape({
   if (widget.type === "chart" || widget.type === "table" || widget.type === "grid" || widget.type === "calendar") {
     return <DataElementShape widget={widget} fill={fill} stroke={stroke} strokeWidth={strokeWidth} />;
   }
+  if (PLAIN_BOX_TYPES.has(widget.type)) {
+    // Layout boxes are just a box: no placeholder title or fake text lines to mistake for content.
+    return (
+      <Rect
+        width={widget.width}
+        height={widget.height}
+        fill={fill}
+        stroke={stroke}
+        strokeWidth={strokeWidth}
+        cornerRadius={widget.style.cornerRadius ?? 8}
+        perfectDrawEnabled={false}
+      />
+    );
+  }
   return (
     <Group>
       <Rect
@@ -2605,7 +2620,7 @@ function GenericElementShape({
         cornerRadius={widget.style.cornerRadius ?? 5}
         perfectDrawEnabled={false}
       />
-      {["container", "frame", "group", "card", "modal", "overlay", "drawer", "section", "panel", "dynamic-panel", "repeater", "accordion", "carousel", "tabs-container", "navbar", "sidebar", "tabs", "menu", "dropdown-menu", "footer", "form"].includes(widget.type) ? (
+      {["card", "modal", "overlay", "drawer", "section", "panel", "dynamic-panel", "repeater", "accordion", "carousel", "tabs-container", "navbar", "sidebar", "tabs", "menu", "dropdown-menu", "footer", "form"].includes(widget.type) ? (
         <Group>
           <Rect
             x={8}

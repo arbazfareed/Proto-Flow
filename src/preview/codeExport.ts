@@ -572,14 +572,13 @@ ${EXPRESSION_RUNTIME_SOURCE}
         <figcaption>{text}</figcaption>
       </figure>;
     }
-    if (widget.type === "flex-row" || widget.type === "flex-column" || widget.type === "container") {
+    if (widget.type === "flex-row" || widget.type === "flex-column" || ["container", "frame", "group", "section"].includes(widget.type)) {
       return <section key={widget.id} className={\`pf-layout is-\${widget.type}\`}
         aria-label={String(widget.props.label ?? widget.type)}
-        style={{ ...style(widget), display: widget.type === "container" ? "block" : "flex",
+        style={{ ...style(widget), display: widget.type === "flex-row" || widget.type === "flex-column" ? "flex" : "block",
           flexDirection: widget.type === "flex-row" ? "row" : "column",
           gap: typeof widget.props.gap === "number" ? widget.props.gap : 12,
-          padding: typeof widget.props.padding === "number" ? widget.props.padding : 12,
-          border: "1px dashed #8d7eb7", borderRadius: 7, background: "#5a4a8020" }}
+          padding: typeof widget.props.padding === "number" ? widget.props.padding : 12 }}
         {...interactionHandlers(widget, item)} />;
     }
     if (widget.type === "spacer") {

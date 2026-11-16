@@ -23,6 +23,7 @@ import {
 } from "lucide-react";
 import type { WidgetStyle } from "../project/schema";
 import { getWidgetIconDefinition } from "../layout/widgetIcons";
+import { PLAIN_BOX_TYPES } from "../project/plainBoxes";
 
 export const PRIMITIVE_TOOLS = [
   "rectangle",
@@ -377,6 +378,14 @@ function genericElementDefinition(
   if (type === "avatar") {
     style.fillOpacity = 1;
     style.stroke = null;
+  }
+  if (PLAIN_BOX_TYPES.has(type)) {
+    // A plain, neutral box: white with a light hairline border, no tint.
+    style.fill = "#ffffff";
+    style.fillOpacity = 1;
+    style.stroke = "#d9d9e1";
+    style.strokeWidth = 1;
+    style.cornerRadius = 8;
   }
   if (type === "testimonial-card" || type === "feature-card") {
     style.fill = "#ffffff";
