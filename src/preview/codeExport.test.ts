@@ -164,7 +164,8 @@ describe("React code export preparation", () => {
     expect(source).toContain('...(mode === "mouse" ? {');
     expect(source).toContain('...(mode === "both" ? {');
     expect(source).toContain('...(mode !== "mouse" ? {');
-    expect(source).toContain('if (mode === "touch" && (event.key === "Enter" || event.key === " "))');
+    expect(source).toContain('runFirstInteraction(widget, ["onClick", "onTap"], item)');
+    expect(source).not.toContain('mode === "touch" && (event.key === "Enter"');
     expect(source).toContain("onPointerUp");
     expect(source).toContain("onPointerLeave");
     expect(source).toContain("onMouseLeave");
