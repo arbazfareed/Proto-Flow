@@ -1,3 +1,4 @@
+import { avatarInitials } from "../project/avatarInitials";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { CSSProperties, ChangeEvent, HTMLAttributes, MouseEvent, ReactNode, TouchEvent } from "react";
 import { ArrowLeft, Camera, RotateCcw, RotateCw, SlidersHorizontal, X } from "lucide-react";
@@ -65,11 +66,13 @@ function getWidgetText(
   item?: RepeaterRecord,
   liteMode = false,
 ): string {
-  const text = stringProp(
-    widget,
-    "text",
-    stringProp(widget, "label", stringProp(widget, "title", "")),
-  );
+  const text = widget.type === "avatar"
+    ? avatarInitials(widget.props)
+    : stringProp(
+        widget,
+        "text",
+        stringProp(widget, "label", stringProp(widget, "title", "")),
+      );
   return liteMode ? text : runtime.interpolate(text, screenId, item, widget);
 }
 

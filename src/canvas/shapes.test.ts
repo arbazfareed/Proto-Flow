@@ -123,10 +123,9 @@ describe("canvas shape registry", () => {
   });
 
   it("provides an editable avatar and modern app-element defaults", () => {
-    expect(getShapeDefinition("avatar")?.props).toMatchObject({
-      label: "Alex Morgan",
-      initials: "AM",
-    });
+    expect(getShapeDefinition("avatar")?.props).toMatchObject({ label: "Alex Morgan" });
+    // Initials follow the name until the user sets their own (B73).
+    expect(getShapeDefinition("avatar")?.props.initials).toBeUndefined();
     expect(getShapeDefinition("icon-button")?.props.iconName).toBe("Plus");
     expect(getShapeDefinition("select")?.props).toMatchObject({
       placeholder: "Select...",
