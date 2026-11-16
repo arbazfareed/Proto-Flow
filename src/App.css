@@ -29,6 +29,9 @@
 .topbar-icon { width:28px; height:28px; }
 .button { min-height:31px; padding:0 11px; border-radius:6px; font-size:11px; font-weight:550; white-space:nowrap; }
 .button-primary { color:#fff; border-color:#795ed0; background:#795ed0; box-shadow:0 1px 2px #0003; }
+/* Share: a clear, always-visible call to action beside Save (B58). */
+.button-share { display:inline-flex; align-items:center; gap:6px; color:#e9e3ff; border:1px solid #795ed0; background:#795ed01f; }
+.button-share:hover { background:#795ed033; }
 .button-primary:hover { background:#694ac3; }
 .button-secondary { color:#d0d0d6; border-color:#36373e; background:#202125; }
 .button-secondary:hover,.button-quiet:hover { background:#292a30; }
@@ -1281,11 +1284,10 @@
   .brand-lockup { gap:8px; }
   .topbar-actions { gap:4px; }
   .window-controls { margin-right:-8px; }
-  .topbar-actions>.topbar-icon,
-  .topbar-actions>button[aria-label="Publish to cloud"],
-  .topbar-actions>button[aria-label="Open collaboration"] { display:none; }
+  .topbar-actions>.topbar-icon { display:none; }
   .topbar-actions>button[aria-label="Open privacy and diagnostics settings"],
   .topbar-actions>button[aria-label="Share beta feedback"] { display:inline-flex; }
+  /* Secondary actions shrink to icons (with tooltips); Share keeps its label (B58). */
   .topbar-actions>.button-secondary,.command-trigger { width:32px; min-width:32px; padding:0; font-size:0; }
   .topbar-actions>.button-secondary { gap:0; }
   .topbar-actions>.command-trigger>span,
@@ -1309,10 +1311,9 @@
   .document-name { max-width:clamp(72px,18vw,150px); }
   .topbar-actions { gap:3px; }
   .topbar-actions>.topbar-icon,
-  .topbar-actions>button[aria-label="Publish to cloud"],
-  .topbar-actions>button[aria-label="Open collaboration"],
-  .topbar-actions>button[aria-label="Export React code"],
+  .topbar-actions>button[aria-label="Export code with React"],
   .topbar-actions>button[aria-label="Export HTML bundle"] { display:none; }
+  .topbar-actions>.button-share { padding:0 9px; }
   .topbar-actions>button[aria-label="Open privacy and diagnostics settings"],
   .topbar-actions>button[aria-label="Share beta feedback"] { display:inline-flex; }
   .topbar-actions>.command-trigger,

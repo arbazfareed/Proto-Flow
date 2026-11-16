@@ -10,7 +10,9 @@ import {
   History,
   Puzzle,
   Redo2,
+  Share2,
   Undo2,
+  UsersRound,
 } from "lucide-react";
 
 export interface AppCommand {
@@ -70,9 +72,48 @@ export interface CoreCommandActions {
   openVersionHistory: () => void;
   createCheckpoint: () => void;
   openHelp: () => void;
+  /** Optional so older callers keep working; shown when provided (B58). */
+  share?: () => void;
+  collaborate?: () => void;
+  exportHtml?: () => void;
+  exportCode?: () => void;
 }
 
 export function createCoreCommands(actions: CoreCommandActions): AppCommand[] {
+  const optional: (AppCommand | undefined)[] = [
+    actions.share ? {
+      id: "project.share",
+      label: "Share Link",
+      keywords: ["publish", "cloud", "link", "send", "present"],
+      icon: <Share2 />,
+      run: actions.share,
+    } : undefined,
+    actions.collaborate ? {
+      id: "project.collaborate",
+      label: "Collaborate",
+      keywords: ["invite", "team", "real-time", "session"],
+      icon: <UsersRound />,
+      run: actions.collaborate,
+    } : undefined,
+    actions.exportHtml ? {
+      id: "project.export-html",
+      label: "Export HTML Bundle",
+      keywords: ["download", "offline", "website", "zip"],
+      icon: <ArrowDownToLine />,
+      run: actions.exportHtml,
+    } : undefined,
+    actions.exportCode ? {
+      id: "project.export-code",
+      label: "Export React Code",
+      keywords: ["tailwind", "developer", "handoff"],
+      icon: <FileText />,
+      run: actions.exportCode,
+    } : undefined,
+  ];
+  return [...optional.filter((command): command is AppCommand => command !== undefined), ...coreCommandList(actions)];
+}
+
+function coreCommandList(actions: CoreCommandActions): AppCommand[] {
   return [
     {
       id: "project.new",

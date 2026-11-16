@@ -632,8 +632,12 @@ function AppShell() {
       openVersionHistory: () => setVersionHistoryOpen(true),
       createCheckpoint: () => void createManualCheckpoint(),
       openHelp: () => setHelpOpen(true),
+      share: () => setCloudPreviewOpen(true),
+      collaborate: openCollaboration,
+      exportHtml: () => setHtmlExportOpen(true),
+      exportCode: () => setReactExportOpen(true),
     }),
-    [createManualCheckpoint, createNewProject, openFile, redo, requestUpdateCheck, save, toggleGrid, toggleSnap, undo],
+    [createManualCheckpoint, createNewProject, openCollaboration, openFile, redo, requestUpdateCheck, save, toggleGrid, toggleSnap, undo],
   );
 
   useEffect(() => {
