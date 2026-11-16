@@ -71,3 +71,16 @@ export function readableTextColour(
     ? DARK_TEXT_COLOUR
     : LIGHT_TEXT_COLOUR;
 }
+
+/** Dark or white text for a label drawn on its own fill (a button), painted over white. */
+export function readableTextOnFill(fill: string | null | undefined, fillOpacity = 1): string {
+  if (typeof fill !== "string") return DARK_TEXT_COLOUR;
+  const parsed = parseStyleColor(fill);
+  if (!parsed) return DARK_TEXT_COLOUR;
+  const alpha = Math.min(1, Math.max(0, parsed.opacity * fillOpacity));
+  const top = toRgb(parsed.hex);
+  const background = top.map((channel) => 255 + (channel - 255) * alpha) as Rgb;
+  return contrastRatio(background, toRgb(DARK_TEXT_COLOUR)) >= contrastRatio(background, toRgb(LIGHT_TEXT_COLOUR))
+    ? DARK_TEXT_COLOUR
+    : LIGHT_TEXT_COLOUR;
+}

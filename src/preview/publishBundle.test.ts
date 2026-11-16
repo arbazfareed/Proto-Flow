@@ -36,6 +36,16 @@ describe("standalone published preview bundle", () => {
     expect(PREVIEW_RUNTIME_SCRIPT).toContain("withOpacity(widget.style.stroke, widget.style.strokeOpacity)");
   });
 
+  it("picks a readable button label colour like the canvas does", () => {
+    const source = PREVIEW_RUNTIME_SCRIPT.match(/function readableOn\(color, opacity\) \{[\s\S]*?\n\}/)?.[0];
+    expect(source).toBeDefined();
+    const readableOn = new Function(`${source}; return readableOn;`)() as (color: string, opacity?: number) => string;
+    expect(readableOn("#694ac3")).toBe("#ffffff");
+    expect(readableOn("#fff")).toBe("#24212b");
+    expect(readableOn("#694ac3", 0.1)).toBe("#24212b");
+    expect(readableOn("not-a-colour")).toBe("#24212b");
+  });
+
   it("renders semantic cards, charts, and flex-layout elements", () => {
     const project = createEmptyProject("Learning widget runtime");
     project.screens[0].widgets.push(

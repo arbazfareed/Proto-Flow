@@ -1158,15 +1158,6 @@ export function CanvasStage({
           itemBinding: {},
         };
       }
-      if (type === "button" && typeof window !== "undefined") {
-        const accent = getComputedStyle(document.documentElement)
-          .getPropertyValue("--accent-strong")
-          .trim();
-        if (/^#[\da-f]{3,8}$/i.test(accent)) {
-          widget.style.fill = accent;
-          widget.style.stroke = accent;
-        }
-      }
       const visibleWidgets = getCanvasWidgets(screen, current.activeRepeaterEdit);
       const siblings = visibleWidgets.map((item) => ({
         id: item.id,

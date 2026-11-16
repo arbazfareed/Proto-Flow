@@ -229,7 +229,8 @@ const CORE_SHAPE_TOOL_DEFINITIONS: Record<
     shortcut: "B",
     width: 120,
     height: 40,
-    style: { fill: "#8b69ed", stroke: "#8b69ed", strokeWidth: 1, cornerRadius: 7 },
+    // Deep enough for white label text to pass WCAG AA (about 6:1).
+    style: { fill: "#694ac3", stroke: "#694ac3", strokeWidth: 1, cornerRadius: 7 },
     props: { label: "Button", variant: "primary", state: "default" },
     icon: MousePointer2,
   },
