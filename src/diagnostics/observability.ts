@@ -8,6 +8,7 @@ import {
 } from "./privacy";
 import { useStore } from "../store";
 import { collectWidgetsDeep } from "../project/dynamicPanels";
+import { APP_VERSION } from "../appVersion";
 
 export const TELEMETRY_BATCH_INTERVAL_MS = 30_000;
 export const TELEMETRY_BATCH_SIZE = 20;
@@ -183,7 +184,7 @@ interface SentryModule {
 const sentryDsn = import.meta.env.VITE_GLITCHTIP_DSN?.trim() ?? "";
 const umamiEndpoint = import.meta.env.VITE_UMAMI_ENDPOINT?.trim().replace(/\/+$/, "") ?? "";
 const umamiWebsiteId = import.meta.env.VITE_UMAMI_WEBSITE_ID?.trim() ?? "";
-const applicationVersion = import.meta.env.VITE_APP_VERSION?.trim() || "0.1.0";
+const applicationVersion = APP_VERSION;
 const allowedErrorTypes = new Set([
   "Error",
   "TypeError",
