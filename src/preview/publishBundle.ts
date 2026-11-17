@@ -1,3 +1,4 @@
+import { iconDataScript } from "./iconExport";
 /// <reference types="vite/client" />
 
 import type { Project } from "../project/schema";
@@ -444,6 +445,18 @@ function bindWidgetEvents(element, widget, item) {
     }
   }, { passive: true });
 }
+const ICON_SVGS = (() => {
+  try { return JSON.parse(document.getElementById("icon-data")?.textContent || "{}"); } catch { return {}; }
+})();
+function drawIcon(element, name, strokeWidth, size) {
+  const svg = ICON_SVGS[name];
+  if (!svg) return false;
+  element.innerHTML = svg;
+  const node = element.querySelector("svg");
+  if (node && typeof strokeWidth === "number") node.setAttribute("stroke-width", String(strokeWidth));
+  if (node && size) { node.setAttribute("width", size); node.setAttribute("height", size); }
+  return true;
+}
 const PLAIN_BOX_TYPES = ["container", "frame", "group", "section"];
 function readableOn(color, opacity) {
   // Dark or white label for a button, whichever reads better on its fill (as on the canvas).
@@ -519,7 +532,17 @@ function renderWidget(widget, activeScreen, item, localVariables = {}) {
     : widget.props.text ?? widget.props.label ?? widget.props.title ?? "";
   const shownText = text(rawText, activeScreen.id, item, widget);
   if (widget.type === "ellipse" || widget.type === "circle") element.style.borderRadius = "50%";
-  if (widget.type === "button" || widget.type === "icon-button") element.textContent = shownText || "Button";
+  if (widget.type === "icon-button") {
+    element.style.display = "flex";
+    element.style.alignItems = "center";
+    element.style.justifyContent = "center";
+    element.style.padding = "0";
+    element.style.color = typeof widget.props.iconColor === "string"
+      ? widget.props.iconColor
+      : readableOn(widget.style.fill, widget.style.fillOpacity);
+    element.setAttribute("aria-label", shownText || widget.name || String(widget.props.iconName || "Icon button"));
+    if (!drawIcon(element, String(widget.props.iconName || "Plus"), 2, "56%")) element.textContent = "+";
+  } else if (widget.type === "button") element.textContent = shownText || "Button";
   else if (widget.type === "input" || widget.type === "search" || widget.type === "textarea") {
     const input = document.createElement(widget.type === "textarea" ? "textarea" : "input");
     input.className = "preview-control";
@@ -559,14 +582,6 @@ function renderWidget(widget, activeScreen, item, localVariables = {}) {
       element.append(image);
     } else element.textContent = shownText || "Image";
   } else if (widget.type === "icon" || widget.type === "custom-icon") {
-    const glyphs = {
-      Activity: "◒", AlertCircle: "!", ArrowLeft: "←", ArrowRight: "→",
-      Bell: "♩", Bookmark: "☆", CalendarDays: "▦", CircleDot: "⊙",
-      CircleHelp: "?", Image: "▧", MessageCircle: "◌", MoreHorizontal: "•••",
-      Phone: "✆", Plus: "+", Search: "⌕", Settings: "⚙",
-      Shield: "⬡", SlidersHorizontal: "☷", Sun: "☼", UserRound: "◉",
-      Users: "♧", Video: "▣",
-    };
     const iconName = typeof widget.props.iconName === "string" ? widget.props.iconName : "";
     element.setAttribute("role", "img");
     element.setAttribute("aria-label", widget.name || iconName || "Icon");
@@ -575,7 +590,10 @@ function renderWidget(widget, activeScreen, item, localVariables = {}) {
     element.style.justifyContent = "center";
     element.style.padding = "0";
     element.style.backgroundColor = "transparent";
-    element.textContent = glyphs[iconName] || "•";
+    // The real icon (B77), drawn in the icon colour; "•" only if it is missing.
+    if (!drawIcon(element, iconName, typeof widget.style.strokeWidth === "number" ? widget.style.strokeWidth : null)) {
+      element.textContent = "•";
+    }
   } else if (widget.type === "list" && Array.isArray(widget.props.items)) {
     const list = document.createElement("ul");
     for (const listItem of widget.props.items) {
@@ -910,6 +928,7 @@ export function generatePublishedPreviewHtml(project: Project): string {
 <main class="stage-wrap"><section id="stage" class="stage" aria-label="Prototype preview"></section></main>
 <template id="inter-font-license">${INTER_FONT_LICENSE}</template>
 <script id="project-data" type="application/json">${projectData}</script>
+${iconDataScript(project)}
 <script>${PREVIEW_RUNTIME_SCRIPT}</script>
 </body>
 </html>`;

@@ -28,6 +28,7 @@ import {
 } from "../project/repeaters";
 import { getAutoLayoutPositions, type WidgetPosition } from "../project/widgetLayout";
 import { getPreviewIconComponent } from "./widgetIcons";
+import { useFullIconSet } from "../canvas/iconLibrary";
 import { DEVICE_PRESETS, findDevicePreset } from "../devices/catalog";
 import type { DevicePreset } from "../devices/types";
 import { getPreviewWindowSize } from "./windowSizing";
@@ -327,6 +328,8 @@ export function PreviewWidget({
   const multiTouchFired = useRef(false);
   const lastTap = useRef(0);
   const [dismissed, setDismissed] = useState(false);
+  // Icons beyond the built-in set appear once the full set has loaded.
+  useFullIconSet();
   useEffect(() => () => {
     window.clearTimeout(longPressTimer.current);
     window.clearTimeout(touchClickTimer.current);

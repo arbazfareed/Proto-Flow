@@ -1,3 +1,4 @@
+import { ensureProjectIcons } from "../preview/iconExport";
 import { useMemo, useState } from "react";
 import { Code2, Download, X } from "lucide-react";
 import { useStore } from "../store";
@@ -95,6 +96,7 @@ export function ReactCodeExportDialog({ onClose }: { onClose: () => void }) {
     try {
       const projectWithAssets = await embedProjectAssets(project, projectPath, options.includeAssets);
       const selectedProject = prepareExportProject(projectWithAssets, options);
+      await ensureProjectIcons(selectedProject);
       const screenName = selectedProject.screens.length === 1
         ? selectedProject.screens[0].name
         : selectedProject.name;
