@@ -365,6 +365,25 @@ function duplicateScreen(screen: Screen): Screen {
   };
 }
 
+const SHOW_ALL_SCREENS_KEY = "protoflow.screens.showAll";
+
+/** The screens list shows every screen (with thumbnails) unless the user chose "Current". */
+function readShowAllScreens(): boolean {
+  try {
+    return window.localStorage.getItem(SHOW_ALL_SCREENS_KEY) !== "false";
+  } catch {
+    return true;
+  }
+}
+
+function writeShowAllScreens(value: boolean) {
+  try {
+    window.localStorage.setItem(SHOW_ALL_SCREENS_KEY, String(value));
+  } catch {
+    // Storage can be unavailable; the choice then lasts for this session only.
+  }
+}
+
 export function ScreenLayerSidebar({ tutorialProjectId }: { tutorialProjectId: string | null }) {
   const project = useStore((state) => state.project);
   const activeScreenId = useStore((state) => state.getActiveScreenId());
@@ -409,7 +428,7 @@ export function ScreenLayerSidebar({ tutorialProjectId }: { tutorialProjectId: s
   const [screenPickerOpen, setScreenPickerOpen] = useState(false);
   const [deviceTargetScreenId, setDeviceTargetScreenId] = useState<string | null>(null);
   const [draggedScreenId, setDraggedScreenId] = useState<string | null>(null);
-  const [showAllScreens, setShowAllScreens] = useState(false);
+  const [showAllScreens, setShowAllScreens] = useState(readShowAllScreens);
   const previousScreenListMode = useRef<boolean | null>(null);
   const [draggedLayerIds, setDraggedLayerIds] = useState<string[]>([]);
   const [dropIndicator, setDropIndicator] = useState<LayerDropIndicator>(null);
@@ -2071,7 +2090,11 @@ export function ScreenLayerSidebar({ tutorialProjectId }: { tutorialProjectId: s
               aria-label={showAllScreens ? "Show current screen only" : "Show all screens"}
               aria-pressed={showAllScreens}
               title={showAllScreens ? "Show current screen only" : "Show all screens"}
-              onClick={() => setShowAllScreens((expanded) => !expanded)}
+              onClick={() => setShowAllScreens((expanded) => {
+                const next = !expanded;
+                writeShowAllScreens(next);
+                return next;
+              })}
             >
               {showAllScreens ? "Current" : "All"}
             </button>
