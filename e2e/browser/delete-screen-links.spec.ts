@@ -8,7 +8,8 @@ test("B84: deleting a linked screen asks where its links should go, and never le
   await startWorkspace(page, "Blank project");
   await page.getByRole("button", { name: "Create Desktop screen" }).click();
   await page.getByRole("button", { name: "Previous screen" }).click();
-  const screenItem = page.locator("[data-screen-index]").first();
+  // The Screens panel lists every screen (B94); the open one is the selected row.
+  const screenItem = page.locator("[data-screen-index][aria-selected=\"true\"]");
   const screenCount = () => page.evaluate(() => document.querySelectorAll("[data-screen-index]").length);
   void screenCount;
 
