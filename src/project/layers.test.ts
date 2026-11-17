@@ -1,7 +1,10 @@
 import { describe, expect, it } from "vitest";
 import { createEmptyProject, parseProject } from "./schema";
 import {
+  containerAdoptsWidget,
   getSelectedContainingParentId,
+  getWidgetParentIdMap,
+  isWidgetCentreInside,
   isWidgetContainedBy,
   isWidgetContainer,
   reorderScreens,
@@ -216,5 +219,36 @@ describe("layer and screen ordering", () => {
       name: "Card",
       groupId: expect.any(String),
     });
+  });
+});
+
+describe("B4: containers nest by centre point", () => {
+  const box = (id: string, type: string, x: number, y: number, width: number, height: number) => ({
+    id, type, groupId: undefined as string | undefined, x, y, width, height, zIndex: 0,
+  });
+
+  it("adopts a widget whose centre is inside a container even if it hangs over the edge", () => {
+    const card = box("card", "container", 0, 0, 200, 100);
+    const halfOver = box("child", "rectangle", 150, 20, 80, 40); // centre (190, 40) is inside
+    const outside = box("other", "rectangle", 180, 20, 80, 40); // centre (220, 40) is outside
+    const map = getWidgetParentIdMap([card, halfOver, outside]);
+    expect(map.get("child")).toBe("card");
+    expect(map.has("other")).toBe(false);
+  });
+
+  it("keeps the full-fit rule for repeaters", () => {
+    const repeater = box("rep", "repeater", 0, 0, 200, 100);
+    const halfOver = box("child", "rectangle", 150, 20, 80, 40);
+    expect(containerAdoptsWidget(repeater, halfOver)).toBe(false);
+    expect(containerAdoptsWidget(repeater, box("in", "rectangle", 10, 10, 50, 50))).toBe(true);
+  });
+
+  it("does not let a plain shape adopt by centre", () => {
+    const shape = box("bg", "rectangle", 0, 0, 200, 100);
+    expect(getWidgetParentIdMap([shape, box("t", "text", 150, 20, 80, 40)]).has("t")).toBe(false);
+  });
+
+  it("puts the centre exactly on the edge inside", () => {
+    expect(isWidgetCentreInside(box("a", "text", 160, 0, 80, 20), box("p", "container", 0, 0, 200, 100))).toBe(true);
   });
 });

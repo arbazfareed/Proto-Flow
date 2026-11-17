@@ -68,6 +68,8 @@ import {
 import {
   getSelectedContainingParentId,
   isWidgetContainedBy,
+  containerAdoptsWidget,
+  getWidgetParentIdMap,
   isWidgetContainer,
   syncWidgetGroupIdsToContainment,
 } from "../project/layers";
@@ -237,6 +239,27 @@ function getEffectiveScreenWidgets(
     screen.device?.height ?? DEFAULT_DEVICE_PRESET.viewport.height,
     screen.compactLayout,
   );
+}
+
+/** The given widgets plus every unlocked widget nested inside them, at any depth. */
+function withNestedWidgets(widgets: readonly Widget[], ids: readonly string[]): string[] {
+  const parentById = getWidgetParentIdMap(widgets);
+  const childrenById = new Map<string, string[]>();
+  for (const [childId, parentId] of parentById) {
+    childrenById.set(parentId, [...(childrenById.get(parentId) ?? []), childId]);
+  }
+  const lockedIds = new Set(widgets.filter((item) => item.locked).map((item) => item.id));
+  const result = new Set(ids);
+  const queue = [...ids];
+  while (queue.length > 0) {
+    const id = queue.shift()!;
+    for (const childId of childrenById.get(id) ?? []) {
+      if (result.has(childId) || lockedIds.has(childId)) continue;
+      result.add(childId);
+      queue.push(childId);
+    }
+  }
+  return [...result];
 }
 
 function commitWidgetGeometry(
@@ -743,7 +766,7 @@ function WidgetNode({
 }
 
 type EditableWidgetText = {
-  key: "text" | "label" | "placeholder" | "value" | "items";
+  key: "text" | "label" | "placeholder" | "value" | "items" | "title";
   value: string;
 };
 
@@ -757,7 +780,25 @@ const DOUBLE_CLICK_LABEL_TYPES = new Set([
   "tooltip", "banner", "empty-state", "metric-card", "feature-card", "pricing-card",
 ]);
 
+// B4: panels drawn with a title strip (Modal, Drawer, Sidebar, Menu, Footer, Form…) edit that
+// title on double-click; Card edits its title.
+const DOUBLE_CLICK_TITLE_STRIP_TYPES = new Set([
+  "modal", "overlay", "drawer", "panel", "sidebar", "menu", "dropdown-menu", "footer", "form",
+  "accordion", "carousel", "tabs-container",
+]);
+
 function getEditableWidgetText(widget: Widget): EditableWidgetText | null {
+  if (widget.type === "card") {
+    const title = widget.props.title;
+    return { key: "title", value: typeof title === "string" ? title : "Product card" };
+  }
+  if (DOUBLE_CLICK_TITLE_STRIP_TYPES.has(widget.type)) {
+    const label = widget.props.label;
+    return {
+      key: "label",
+      value: typeof label === "string" ? label : getShapeDefinition(widget.type)?.label ?? "",
+    };
+  }
   const keys = widget.type === "list"
     ? ["items"]
     : ["text", "heading", "paragraph", "link", "label"].includes(widget.type)
@@ -967,6 +1008,33 @@ export function CanvasStage({
       : [...baseScreenWidgets].sort((first, second) => first.zIndex - second.zIndex),
     [activeBreakpoint, activeScreen, baseScreenWidgets],
   );
+  // B4: while a widget is dragged (or drawn) over a container, outline the container it will be
+  // placed inside, using the same centre-point rule that nests it on drop.
+  const dropContainer = useMemo(() => {
+    const movingIds = Object.keys(previewPositions);
+    let moving: Widget | undefined;
+    if (shapeDraft) {
+      moving = shapeDraft.preview;
+    } else if (movingIds.length > 0) {
+      const primaryId = dragPrimaryIdRef.current && previewPositions[dragPrimaryIdRef.current]
+        ? dragPrimaryIdRef.current
+        : movingIds[0];
+      const widget = screenWidgets.find((item) => item.id === primaryId);
+      const position = previewPositions[primaryId];
+      if (widget && position) moving = { ...widget, x: position.x, y: position.y };
+    }
+    if (!moving) return undefined;
+    const excluded = new Set(movingIds);
+    const candidates = screenWidgets.filter((item) =>
+      !excluded.has(item.id) && item.id !== moving.id && isWidgetContainer(item),
+    );
+    if (candidates.length === 0) return undefined;
+    const parentId = getWidgetParentIdMap([
+      ...candidates,
+      { ...moving, groupId: undefined },
+    ]).get(moving.id);
+    return parentId ? candidates.find((item) => item.id === parentId) : undefined;
+  }, [previewPositions, screenWidgets, shapeDraft]);
   const autoLayoutPositions = useMemo(
     () => getAutoLayoutPositions(screenWidgets),
     [screenWidgets],
@@ -1223,7 +1291,7 @@ export function CanvasStage({
       if (
         dropParent &&
         isWidgetContainer(dropParent) &&
-        isWidgetContainedBy(widget, dropParent)
+        containerAdoptsWidget(dropParent, widget)
       ) {
         widget.groupId = dropParent.id;
       } else {
@@ -2430,10 +2498,15 @@ export function CanvasStage({
         const screen = current.project.screens.find(
           (item) => item.id === current.getActiveScreenId(),
         );
-        const selected = screen
+        const effective = screen
           ? getEffectiveScreenWidgets(screen, current.activeBreakpointId, current.activeRepeaterEdit)
-              .filter((widget) => current.selectedIds.includes(widget.id) && !widget.locked)
           : [];
+        const selectedIds = effective
+          .filter((widget) => current.selectedIds.includes(widget.id) && !widget.locked)
+          .map((widget) => widget.id);
+        // B4: nudging a container nudges what is inside it.
+        const movingIds = new Set(withNestedWidgets(effective, selectedIds));
+        const selected = effective.filter((widget) => movingIds.has(widget.id));
         if (selected.length === 0) return;
         const distance = event.shiftKey ? 10 : 1;
         const delta = {
@@ -3090,12 +3163,14 @@ export function CanvasStage({
                       current.select([widget.id]);
                       current = useStore.getState();
                     }
-                    const movableIds = current.selectedIds.filter((id) =>
+                    const selectedMovable = current.selectedIds.filter((id) =>
                       current.project.screens
                         .find((screen) => screen.id === current.getActiveScreenId())
                         ?.widgets.some((item) => item.id === id && !item.locked),
                     );
-                    if (!movableIds.includes(widget.id)) return;
+                    if (!selectedMovable.includes(widget.id)) return;
+                    // B4: what is inside a container moves with it.
+                    const movableIds = withNestedWidgets(screenWidgets, selectedMovable);
                     const positions = new Map<string, CanvasPoint>();
                     for (const id of movableIds) {
                       const node = stageRef.current?.findOne(`#${id}`);
@@ -3165,6 +3240,22 @@ export function CanvasStage({
             })}
           </Layer>
           <Layer ref={transformerLayerRef} perfectDrawEnabled={false}>
+            {dropContainer && (
+              <Rect
+                name="drop-container-highlight"
+                x={dropContainer.x}
+                y={dropContainer.y}
+                width={dropContainer.width}
+                height={dropContainer.height}
+                rotation={dropContainer.rotation ?? 0}
+                stroke="#2f80ed"
+                strokeWidth={2 / zoom}
+                dash={[6 / zoom, 4 / zoom]}
+                fill="rgba(47, 128, 237, 0.06)"
+                listening={false}
+                perfectDrawEnabled={false}
+              />
+            )}
             <Transformer
               ref={transformerRef}
               enabledAnchors={[
