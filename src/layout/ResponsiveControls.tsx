@@ -320,6 +320,183 @@ function updateSelectedWidget(
   }));
 }
 
+function updateWidgets(
+  screenId: string,
+  widgetIds: readonly string[],
+  update: (widget: Widget) => Widget,
+): void {
+  const ids = new Set(widgetIds);
+  saveScreenUpdate(screenId, (screen) => ({
+    ...screen,
+    breakpoints: screen.breakpoints ?? [...getScreenBreakpoints(screen)],
+    widgets: screen.widgets.map((widget) => ids.has(widget.id) ? update(widget) : widget),
+  }));
+}
+
+/** The one value all widgets share, or "mixed". */
+function shared<T>(values: readonly T[]): T | "mixed" {
+  return values.every((value) => value === values[0]) ? values[0] : "mixed";
+}
+
+function withoutOverrideField(widget: Widget, breakpointId: string, field: keyof WidgetOverride): Widget {
+  const override = { ...widget.overrides?.[breakpointId] };
+  delete override[field];
+  const overrides = { ...widget.overrides };
+  if (Object.keys(override).length) overrides[breakpointId] = override;
+  else delete overrides[breakpointId];
+  return { ...widget, overrides: Object.keys(overrides).length ? overrides : undefined };
+}
+
+/**
+ * Position pins (B86): they apply to every screen size unless "Only at this size" is chosen,
+ * and they work on several widgets at once (B85).
+ */
+function ConstraintControls({ screen, widgets, breakpoint }: {
+  screen: Screen;
+  widgets: readonly Widget[];
+  breakpoint: { id: string; name: string; width: number; height: number };
+}) {
+  const ids = widgets.map((widget) => widget.id);
+  const perSize = widgets.some((widget) => widget.overrides?.[breakpoint.id]?.constraints !== undefined);
+  const [onlyThisSize, setOnlyThisSize] = useState(perSize);
+  useEffect(() => setOnlyThisSize(perSize), [perSize, breakpoint.id, ids.join(",")]);
+  const effective = (widget: Widget) =>
+    widget.overrides?.[breakpoint.id]?.constraints ?? widget.constraints;
+  const horizontal = shared(widgets.map((widget) => effective(widget)?.horizontal ?? "left"));
+  const vertical = shared(widgets.map((widget) => effective(widget)?.vertical ?? "top"));
+
+  const apply = (patch: Partial<ResponsiveConstraints>) => {
+    updateWidgets(screen.id, ids, (current) => {
+      const now = effective(current) ?? { horizontal: "left", vertical: "top" };
+      const next: ResponsiveConstraints = { ...now, ...patch } as ResponsiveConstraints;
+      if (onlyThisSize) return updateWidgetOverride(current, breakpoint.id, { constraints: next });
+      // All sizes: set the base rule and drop any per-size copies, so every size agrees.
+      let base: Widget = { ...current, constraints: next };
+      for (const id of Object.keys(current.overrides ?? {})) {
+        if (current.overrides?.[id]?.constraints !== undefined) base = withoutOverrideField(base, id, "constraints");
+      }
+      return base;
+    });
+  };
+
+  return (
+    <>
+      <div className="section-label responsive-constraints-label">
+        <span>Position constraints</span>
+      </div>
+      <div className="responsive-scope" role="radiogroup" aria-label="Where these pins apply">
+        <label>
+          <input type="radio" name="constraint-scope" checked={!onlyThisSize} onChange={() => setOnlyThisSize(false)} />
+          All screen sizes
+        </label>
+        <label>
+          <input type="radio" name="constraint-scope" checked={onlyThisSize} onChange={() => setOnlyThisSize(true)} />
+          Only {breakpoint.name} ({breakpoint.width} × {breakpoint.height})
+        </label>
+      </div>
+      <label className="field-label" htmlFor="responsive-horizontal-constraint">Horizontal</label>
+      <select
+        id="responsive-horizontal-constraint"
+        className="text-field"
+        value={horizontal}
+        onChange={(event) => {
+          const value = event.currentTarget.value;
+          if (["left", "right", "center", "scale", "stretch"].includes(value)) {
+            apply({ horizontal: value as ResponsiveConstraints["horizontal"] });
+          }
+        }}
+      >
+        {horizontal === "mixed" && <option value="mixed" disabled>Mixed</option>}
+        <option value="left">Pin left</option>
+        <option value="right">Pin right</option>
+        <option value="center">Center</option>
+        <option value="scale">Scale with width</option>
+        <option value="stretch">Pin left and right</option>
+      </select>
+      <label className="field-label" htmlFor="responsive-vertical-constraint">Vertical</label>
+      <select
+        id="responsive-vertical-constraint"
+        className="text-field"
+        value={vertical}
+        onChange={(event) => {
+          const value = event.currentTarget.value;
+          if (["top", "bottom", "center", "scale", "stretch"].includes(value)) {
+            apply({ vertical: value as ResponsiveConstraints["vertical"] });
+          }
+        }}
+      >
+        {vertical === "mixed" && <option value="mixed" disabled>Mixed</option>}
+        <option value="top">Pin top</option>
+        <option value="bottom">Pin bottom</option>
+        <option value="center">Center</option>
+        <option value="scale">Scale with height</option>
+        <option value="stretch">Pin top and bottom</option>
+      </select>
+      {perSize && (
+        <button
+          className="responsive-reset-field"
+          aria-label="Reset position constraint overrides"
+          onClick={() => updateWidgets(screen.id, ids, (current) => withoutOverrideField(current, breakpoint.id, "constraints"))}
+        >
+          Use the all-sizes pins here
+        </button>
+      )}
+    </>
+  );
+}
+
+/** Rules for several selected widgets at once (B85). */
+function MultiResponsivePanel({ screen, widgets }: { screen: Screen; widgets: readonly Widget[] }) {
+  const activeBreakpointId = useStore((state) => state.activeBreakpointId);
+  const breakpoint = resolveActiveBreakpoint(screen, activeBreakpointId);
+  const ids = widgets.map((widget) => widget.id);
+  const cascade = shared(widgets.map((widget) =>
+    widget.overrides?.[breakpoint.id]?.cascadeMode ?? widget.cascadeMode ?? "absolute"));
+  const hiddenHere = shared(widgets.map((widget) => widget.overrides?.[breakpoint.id]?.visible === false));
+  return (
+    <section className="responsive-panel" aria-label="Responsive widget rules">
+      <div className="responsive-panel-heading">
+        <div>
+          <div className="section-label"><span>{widgets.length} widgets · {breakpoint.name}</span></div>
+          <p>{breakpoint.width} × {breakpoint.height} viewport. Changes apply to every selected widget.</p>
+        </div>
+      </div>
+      <label className="field-label" htmlFor="widget-cascade-mode">Cascade behavior at this size</label>
+      <select
+        id="widget-cascade-mode"
+        className="text-field"
+        value={cascade}
+        onChange={(event) => {
+          const value = event.currentTarget.value;
+          if (value !== "absolute" && value !== "stack" && value !== "fluid" && value !== "hide") return;
+          updateWidgets(screen.id, ids, (current) => updateWidgetOverride(current, breakpoint.id, { cascadeMode: value }));
+        }}
+      >
+        {cascade === "mixed" && <option value="mixed" disabled>Mixed</option>}
+        <option value="absolute">Absolute</option>
+        <option value="stack">Stack vertical</option>
+        <option value="fluid">Fluid width</option>
+        <option value="hide">Hide</option>
+      </select>
+      <label className="responsive-visible-field">
+        <input
+          type="checkbox"
+          checked={hiddenHere === true}
+          ref={(element) => { if (element) element.indeterminate = hiddenHere === "mixed"; }}
+          onChange={(event) => {
+            const hide = event.currentTarget.checked;
+            updateWidgets(screen.id, ids, (current) => hide
+              ? updateWidgetOverride(current, breakpoint.id, { visible: false })
+              : withoutOverrideField(current, breakpoint.id, "visible"));
+          }}
+        />
+        Hide at {breakpoint.name} ({breakpoint.width} px)
+      </label>
+      <ConstraintControls screen={screen} widgets={widgets} breakpoint={breakpoint} />
+    </section>
+  );
+}
+
 function setBreakpointOverrideField<K extends keyof WidgetOverride>(
   screen: Screen,
   widget: Widget,
@@ -381,6 +558,17 @@ function resetNestedOverrideField(
 
 export function ResponsivePanel({
   screen,
+  widgets,
+}: {
+  screen: Screen;
+  widgets: readonly Widget[];
+}) {
+  if (widgets.length > 1) return <MultiResponsivePanel screen={screen} widgets={widgets} />;
+  return <SingleResponsivePanel screen={screen} widget={widgets[0]} />;
+}
+
+function SingleResponsivePanel({
+  screen,
   widget,
 }: {
   screen: Screen;
@@ -407,7 +595,6 @@ export function ResponsivePanel({
     breakpoint.id,
   ).length > 0;
   const cascadeMode = override?.cascadeMode ?? widget.cascadeMode ?? "absolute";
-  const constraints = override?.constraints ?? widget.constraints;
   useEffect(() => {
     setFieldErrors({});
     setFillError("");
@@ -463,41 +650,6 @@ export function ResponsivePanel({
     );
   };
 
-  const setConstraint = (
-    axis: keyof ResponsiveConstraints,
-    value: string,
-  ) => {
-    if (axis === "horizontal") {
-      if (!["left", "right", "center", "scale", "stretch"].includes(value)) return;
-      const horizontal = value as ResponsiveConstraints["horizontal"];
-      updateSelectedWidget(screen.id, widget.id, (current) => updateWidgetOverride(
-        current,
-        breakpoint.id,
-        {
-          constraints: {
-            horizontal,
-            vertical: current.overrides?.[breakpoint.id]?.constraints?.vertical ??
-              current.constraints?.vertical ?? "top",
-          },
-        },
-      ));
-      return;
-    }
-    if (!["top", "bottom", "center", "scale", "stretch"].includes(value)) return;
-    const vertical = value as ResponsiveConstraints["vertical"];
-    updateSelectedWidget(screen.id, widget.id, (current) => updateWidgetOverride(
-      current,
-      breakpoint.id,
-      {
-        constraints: {
-          horizontal: current.overrides?.[breakpoint.id]?.constraints?.horizontal ??
-            current.constraints?.horizontal ?? "left",
-          vertical,
-        },
-      },
-    ));
-  };
-
   const textKey = typeof effectiveWidget.props.label === "string" ? "label" : "text";
   const textValue = effectiveWidget.props[textKey];
 
@@ -505,8 +657,8 @@ export function ResponsivePanel({
     <section className="responsive-panel" aria-label="Responsive widget rules">
       <div className="responsive-panel-heading">
         <div>
-          <div className="section-label"><span>{breakpoint.name} override</span></div>
-          <p>{breakpoint.width} × {breakpoint.height} viewport</p>
+          <div className="section-label"><span>{breakpoint.name} · {breakpoint.width} × {breakpoint.height}</span></div>
+          <p>Rules below say whether they apply to every size or only this one.</p>
         </div>
         {overflows && <span className="responsive-overflow-warning" role="status">Overflows viewport</span>}
       </div>
@@ -515,7 +667,7 @@ export function ResponsivePanel({
           This important widget has no override at this breakpoint.
         </p>
       )}
-      <label className="field-label" htmlFor="widget-cascade-mode">Cascade behavior</label>
+      <label className="field-label" htmlFor="widget-cascade-mode">Cascade behavior at this size</label>
       <select
         id="widget-cascade-mode"
         className="text-field"
@@ -562,44 +714,7 @@ export function ResponsivePanel({
         />
         Important: require a breakpoint override
       </label>
-      <div className="section-label responsive-constraints-label">
-        <span>Position constraints</span>
-      </div>
-      <label className="field-label" htmlFor="responsive-horizontal-constraint">Horizontal</label>
-      <select
-        id="responsive-horizontal-constraint"
-        className="text-field"
-        value={constraints?.horizontal ?? "left"}
-        onChange={(event) => setConstraint("horizontal", event.currentTarget.value)}
-      >
-        <option value="left">Pin left</option>
-        <option value="right">Pin right</option>
-        <option value="center">Center</option>
-        <option value="scale">Scale with width</option>
-        <option value="stretch">Pin left and right</option>
-      </select>
-      <label className="field-label" htmlFor="responsive-vertical-constraint">Vertical</label>
-      <select
-        id="responsive-vertical-constraint"
-        className="text-field"
-        value={constraints?.vertical ?? "top"}
-        onChange={(event) => setConstraint("vertical", event.currentTarget.value)}
-      >
-        <option value="top">Pin top</option>
-        <option value="bottom">Pin bottom</option>
-        <option value="center">Center</option>
-        <option value="scale">Scale with height</option>
-        <option value="stretch">Pin top and bottom</option>
-      </select>
-      {override?.constraints !== undefined && (
-        <button
-          className="responsive-reset-field"
-          aria-label="Reset position constraint overrides"
-          onClick={() => resetBreakpointOverrideField(screen, widget, breakpoint.id, "constraints")}
-        >
-          Reset constraints
-        </button>
-      )}
+      <ConstraintControls screen={screen} widgets={[widget]} breakpoint={breakpoint} />
       {!override ? (
         <button className="button button-secondary responsive-add-override" onClick={addOverride}>
           <Plus size={13} /> Add override for this breakpoint
