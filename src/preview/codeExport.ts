@@ -4,6 +4,7 @@ import type { Project } from "../project/schema";
 import { EXPRESSION_RUNTIME_SOURCE } from "../project/expressions";
 import { widgetNotesCodeComments } from "../project/widgetNotes";
 import { ensureRichTextRuns } from "../project/richText";
+import { projectIconSvgs } from "./iconExport";
 import interFont from "@fontsource-variable/inter/files/inter-latin-wght-normal.woff2?inline";
 import interFontLicense from "@fontsource-variable/inter/LICENSE?raw";
 
@@ -100,6 +101,8 @@ ${notesComments ? `\n${notesComments}\n` : ""}
 const interFontData = ${JSON.stringify(interFont)};
 const interFontLicense = ${JSON.stringify(interFontLicense)};
 const project = ${jsxString(exportProject)};
+// The real icons this prototype uses, as SVG (B77).
+const iconSvgs: Record<string, string> = ${JSON.stringify(projectIconSvgs(project))};
 type Widget = typeof project.screens[number]["widgets"][number];
 type TouchGestureState = {
   x: number;
@@ -516,7 +519,25 @@ ${EXPRESSION_RUNTIME_SOURCE}
         </div>)}
       </div>;
     }
-    if (["button", "icon-button"].includes(widget.type)) {
+    if (widget.type === "icon" || widget.type === "custom-icon") {
+      const svg = iconSvgs[String(widget.props.iconName ?? "")];
+      const iconStyle: CSSProperties = { ...style(widget), color: typeof widget.style.stroke === "string" ? widget.style.stroke : "#24212b",
+        background: "transparent", border: "none", padding: 0, display: "flex", alignItems: "center", justifyContent: "center" };
+      return svg
+        ? <div key={widget.id} role="img" aria-label={String(widget.name ?? widget.props.iconName ?? "Icon")} style={iconStyle}
+            dangerouslySetInnerHTML={{ __html: svg }} {...interactionHandlers(widget, item)} />
+        : <div key={widget.id} role="img" aria-label="Icon" style={iconStyle} {...interactionHandlers(widget, item)}>•</div>;
+    }
+    if (widget.type === "icon-button") {
+      const svg = iconSvgs[String(widget.props.iconName ?? "Plus")];
+      return <button key={widget.id} type="button" aria-label={text || String(widget.props.iconName ?? "Icon button")}
+        style={{ ...style(widget), display: "flex", alignItems: "center", justifyContent: "center", padding: 0,
+          color: typeof widget.props.iconColor === "string" ? widget.props.iconColor : readableOn(String(widget.style.fill ?? ""), widget.style.fillOpacity) }}
+        {...interactionHandlers(widget, item)}>
+        {svg ? <span style={{ width: "56%", height: "56%", display: "flex" }} dangerouslySetInnerHTML={{ __html: svg }} /> : "+"}
+      </button>;
+    }
+    if (widget.type === "button") {
       return <button key={widget.id} type="button" style={style(widget)}
         {...interactionHandlers(widget, item)}>{text}</button>;
     }

@@ -2,6 +2,8 @@ import { useEffect, useMemo, useState } from "react";
 import { Check, Copy, ExternalLink, Link2, Trash2, X } from "lucide-react";
 import QRCode from "qrcode";
 import { generatePublishedPreviewHtml, publishedBundleSize } from "../preview/publishBundle";
+import { ensureProjectIcons } from "../preview/iconExport";
+import { useFullIconSet } from "../canvas/iconLibrary";
 import { useStore } from "../store";
 import {
   fetchPublishedPreviews,
@@ -38,7 +40,10 @@ export function CloudPreviewDialog({ onClose }: { onClose: () => void }) {
   const [qrDataUrl, setQrDataUrl] = useState("");
   const [message, setMessage] = useState("");
   const [copied, setCopied] = useState(false);
-  const bundle = useMemo(() => generatePublishedPreviewHtml(project), [project]);
+  // Icons beyond the built-in set are drawn once the full set has loaded (B77).
+  const iconsReady = useFullIconSet();
+  useEffect(() => { void ensureProjectIcons(project).catch(() => undefined); }, [project]);
+  const bundle = useMemo(() => generatePublishedPreviewHtml(project), [project, iconsReady]);
   const bundleSize = useMemo(() => publishedBundleSize(bundle), [bundle]);
   const payload = useMemo(() => ({ projectName, bundle }), [bundle, projectName]);
   const publisher = useMeteredAction<PublishedPreview>(

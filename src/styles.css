@@ -526,3 +526,10 @@ html[data-theme="light"] .text-colour-value { color: #6b6878; }
 html[data-theme="light"] .button-share { color: #5b3fc4; border-color: #b7a6f0; background: #f4f0ff; }
 html[data-theme="light"] .button-share:hover { background: #ebe4ff; }
 html[data-theme="light"] .responsive-scope { color: #4b4858; }
+html[data-theme="light"] .icon-picker-trigger { color: #2a2733; border-color: #d9d6e2; background: #ffffff; }
+html[data-theme="light"] .icon-picker-popover { border-color: #dedbe6; background: #ffffff; box-shadow: 0 12px 32px #2a1f4a26; }
+html[data-theme="light"] .icon-picker-search { color: #6b6878; border-color: #dedbe6; background: #f7f6fb; }
+html[data-theme="light"] .icon-picker-search input { color: #2a2733; }
+html[data-theme="light"] .icon-picker-grid button { color: #2a2733; }
+html[data-theme="light"] .icon-picker-grid button:hover, html[data-theme="light"] .icon-picker-grid button:focus-visible { border-color: #c9bdf3; background: #f4f0ff; }
+html[data-theme="light"] .icon-picker-note { color: #6b6878; }

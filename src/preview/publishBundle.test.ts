@@ -17,8 +17,10 @@ describe("standalone published preview bundle", () => {
     expect(html).toContain('input.className = "preview-control"');
     expect(html).toContain("const shapeOrText = [");
     expect(html).toContain('element.textContent = shownText || (shapeOrText ? "" : widget.type.replaceAll("-", " "))');
-    expect(html).toContain('const glyphs = {');
-    expect(html).toContain('element.textContent = glyphs[iconName] || "•"');
+    // Real icons, not text symbols (B77).
+    expect(html).not.toContain('const glyphs = {');
+    expect(html).toContain("function drawIcon(element, name, strokeWidth, size)");
+    expect(html).toContain('<script id="icon-data" type="application/json">');
     expect(html).toContain("function widgetVisible(widget, activeScreen)");
     expect(html).toContain("if (!widgetVisible(widget, activeScreen)) continue;");
     expect(html).toContain("if (matchedRule && renderAfter) render();");

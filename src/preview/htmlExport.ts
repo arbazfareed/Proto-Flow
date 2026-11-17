@@ -1,3 +1,4 @@
+import { ensureProjectIcons, iconDataScript } from "./iconExport";
 import JSZip from "jszip";
 import type { Project } from "../project/schema";
 import {
@@ -199,6 +200,7 @@ ${notesComments}
 <header class="toolbar"><button id="back" type="button" aria-label="Back">Back</button><select id="screen-picker" aria-label="Preview screen"></select><button id="restart" type="button">Restart</button><span>Exported with ProtoFlow · ${escapeHtml(titleSuffix)}</span></header>
 <main class="stage-wrap"><section id="stage" class="stage" aria-label="Prototype preview"></section></main>
 <script id="project-data" type="application/json">${serializeProject(project)}</script>
+${iconDataScript(project)}
 <script src="./runtime.js" defer></script>
 </body>
 </html>`;
@@ -212,6 +214,7 @@ export async function generateLocalHtmlArchive(
     mode?: Exclude<LocalHtmlExportMode, "device-images">;
   },
 ): Promise<Uint8Array> {
+  await ensureProjectIcons(project);
   const prepared = prepareHtmlProject(project, options.includeInteractions, options.includeAssets);
   const zip = new JSZip();
   const assets = zip.folder("assets");
@@ -275,6 +278,7 @@ export async function generateDeviceImageArchive(
   project: Project,
   options: { includeInteractions: boolean; includeAssets: boolean },
 ): Promise<Uint8Array> {
+  await ensureProjectIcons(project);
   const prepared = prepareHtmlProject(project, options.includeInteractions, options.includeAssets);
   if (!options.includeAssets) {
     for (const screen of prepared.screens) {

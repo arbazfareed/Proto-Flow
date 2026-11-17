@@ -27,7 +27,7 @@ import {
 } from "./shapeTools";
 import { MAX_WIDGET_TEXT_LENGTH } from "./textMeasurement";
 import { getSafeBlendMode, normalizeListItems, styleColorToRgba } from "./styleInspector";
-import { renderCanvasIconSvg } from "./iconLibrary";
+import { renderCanvasIconSvg, useFullIconSet } from "./iconLibrary";
 import { PLAIN_BOX_TYPES } from "../project/plainBoxes";
 import { readableTextOnFill } from "./readableText";
 import { avatarInitials } from "../project/avatarInitials";
@@ -342,12 +342,14 @@ function CanvasIcon({
 }) {
   const [image, setImage] = useState<HTMLImageElement | null>(null);
   const [failed, setFailed] = useState(false);
+  // Redraw once the full icon set arrives, for icons beyond the built-in ones.
+  const fullSetLoaded = useFullIconSet();
   const source = useMemo(
     () =>
       `data:image/svg+xml;charset=utf-8,${encodeURIComponent(
         renderCanvasIconSvg(name, color, strokeWidth),
       )}`,
-    [color, name, strokeWidth],
+    [color, name, strokeWidth, fullSetLoaded],
   );
 
   useEffect(() => {

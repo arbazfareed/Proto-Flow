@@ -113,7 +113,7 @@ import {
   type ShapeTool,
 } from "../canvas/shapeTools";
 import { ElementLibrary } from "./ElementLibrary";
-import { CANVAS_ICON_NAMES } from "../canvas/iconLibrary";
+import { IconPicker } from "./IconPicker";
 import { useWalletStore } from "../wallet/store";
 import { WalletHistoryDialog } from "./WalletHistoryDialog";
 import { VariablesPanel } from "./VariablesPanel";
@@ -1593,19 +1593,18 @@ function StyleSection({ widgets }: { widgets: Widget[] }) {
       </div>
       <div className="style-control-grid">
         {iconWidgets.length > 0 && (
-          <label className="style-control">
+          <div className="style-control">
             <span>Icon</span>
-            <select
-              aria-label="Canvas icon"
+            <IconPicker
+              label="Canvas icon"
               value={iconName}
               disabled={iconWidgets.length !== editableWidgets.length}
-              onChange={(event) => applyProps({ iconName: event.currentTarget.value })}
-              onBlur={finishEditSession}
-            >
-              {iconName === "" && <option value="" disabled>Mixed</option>}
-              {CANVAS_ICON_NAMES.map((name) => <option key={name} value={name}>{name}</option>)}
-            </select>
-          </label>
+              onChange={(name) => {
+                applyProps({ iconName: name });
+                finishEditSession();
+              }}
+            />
+          </div>
         )}
         <label className="style-control">
           <span>Stroke width <button type="button" className="icon-button small-icon" aria-label="Reset stroke" onClick={() => resetSection("stroke")}><RotateCcw size={11} /></button></span>
@@ -3008,19 +3007,17 @@ function WidgetPropertiesSection({
             : widget.type === "mobile-app" || widget.type === "web-app" || widget.type === "icon" || widget.type === "icon-button"
               ? <>
                   {textField("label", "Accessible label")}
-                  <label className="field-label widget-property-field">
+                  <div className="field-label widget-property-field">
                     Icon
-                    <select
-                      className="text-field"
+                    <IconPicker
+                      label="Icon"
                       value={typeof widget.props.iconName === "string" ? widget.props.iconName : ""}
-                      onChange={(event) => {
-                        updateProp("iconName", event.currentTarget.value);
+                      onChange={(name) => {
+                        updateProp("iconName", name);
                         finishEdit();
                       }}
-                    >
-                      {CANVAS_ICON_NAMES.map((name) => <option key={name} value={name}>{name}</option>)}
-                    </select>
-                  </label>
+                    />
+                  </div>
                 </>
               : contentFields();
 
