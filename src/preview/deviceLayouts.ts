@@ -39,6 +39,24 @@ export function resolvePreviewWidgets(
       : closest,
   );
 
+  // The widest breakpoint has no upper limit. When it was designed at its own width (not the
+  // screen's base width) and the window is wider, lay it out as designed and stretch it to the
+  // full width, instead of stopping at that width with a blank strip beside it (B91).
+  if (
+    breakpoint.maxWidth === undefined &&
+    breakpoint.width !== baseWidth &&
+    viewport.width > breakpoint.width
+  ) {
+    const designed = resolveWidgetsForBreakpoint(
+      screen.widgets,
+      { ...breakpoint, height: viewport.height },
+      baseWidth,
+      baseHeight,
+      screen.compactLayout,
+    );
+    return stretchHorizontally(designed, viewport.width / breakpoint.width);
+  }
+
   return resolveWidgetsForBreakpoint(
     screen.widgets,
     { ...breakpoint, width: viewport.width, height: viewport.height },
@@ -46,4 +64,27 @@ export function resolvePreviewWidgets(
     baseHeight,
     screen.compactLayout,
   );
+}
+
+/** Widgets that would look wrong stretched (round, square or pictures): they move, not stretch. */
+const KEEP_SHAPE_TYPES = new Set(["avatar", "icon", "custom-icon", "icon-button", "image", "fab", "checkbox", "radio", "toggle"]);
+
+/**
+ * Spreads a layout across a wider window: positions and widths scale by `scale`; widgets that
+ * should keep their shape stay the same size, centred where they would have stretched to.
+ */
+export function stretchHorizontally(widgets: readonly Widget[], scale: number): Widget[] {
+  return widgets.map((widget) => {
+    const keepShape = KEEP_SHAPE_TYPES.has(widget.type) ||
+      ((widget.type === "ellipse" || widget.type === "circle") && widget.width === widget.height);
+    if (keepShape) {
+      const centre = (widget.x + widget.width / 2) * scale;
+      return { ...widget, x: Math.round(centre - widget.width / 2) };
+    }
+    return {
+      ...widget,
+      x: Math.round(widget.x * scale),
+      width: Math.max(1, Math.round(widget.width * scale)),
+    };
+  });
 }
