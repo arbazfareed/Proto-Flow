@@ -58,6 +58,34 @@ export function isWidgetContainedBy(
   );
 }
 
+/**
+ * A container adopts a widget when the widget's centre is inside it (B4), as in Figma. A widget
+ * drawn half over a card used to be left outside it silently, so it did not move with the card.
+ */
+export function isWidgetCentreInside(
+  widget: Pick<Widget, "x" | "y" | "width" | "height">,
+  parent: Pick<Widget, "x" | "y" | "width" | "height">,
+): boolean {
+  const centreX = widget.x + widget.width / 2;
+  const centreY = widget.y + widget.height / 2;
+  return (
+    centreX >= parent.x &&
+    centreX <= parent.x + parent.width &&
+    centreY >= parent.y &&
+    centreY <= parent.y + parent.height
+  );
+}
+
+/** Repeaters keep the full-fit rule; every other container nests by centre point. */
+export function containerAdoptsWidget(
+  parent: Pick<Widget, "type" | "x" | "y" | "width" | "height">,
+  widget: Pick<Widget, "x" | "y" | "width" | "height">,
+): boolean {
+  return parent.type === "repeater"
+    ? isWidgetContainedBy(widget, parent)
+    : isWidgetContainedBy(widget, parent) || isWidgetCentreInside(widget, parent);
+}
+
 export function getWidgetParentIdMap(
   widgets: readonly WidgetParentCandidate[],
 ): Map<string, string> {
@@ -75,12 +103,12 @@ export function getWidgetParentIdMap(
     const validReferencedParent =
       referencedParent &&
       referencedParent.id !== widget.id &&
-      (referencedParent.type === "repeater" || isWidgetContainedBy(widget, referencedParent));
+      (referencedParent.type === "repeater" || containerAdoptsWidget(referencedParent, widget));
     const widgetArea = widget.width * widget.height;
     const containingParents = candidateParents.filter((candidate) =>
       candidate.id !== widget.id &&
       candidate.width * candidate.height > widgetArea &&
-      isWidgetContainedBy(widget, candidate),
+      containerAdoptsWidget(candidate, widget),
     );
 
     if (validReferencedParent) {
@@ -146,7 +174,7 @@ export function getSelectedContainingParentId(
     !parentByWidgetId.has(parent.id) &&
     isWidgetContainer(parent) &&
     !isWidgetContainer(child) &&
-    isWidgetContainedBy(child, parent)
+    containerAdoptsWidget(parent, child)
     ? nearestContainingParentId ?? parent.id
     : undefined;
 }
