@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { createShapeWidget } from "./shapes";
 import {
+  getSelectAllIds,
   getSelectionBounds,
   getSelectedParentWidgetIds,
   getSelectionUpdates,
@@ -142,5 +143,18 @@ describe("selection geometry", () => {
     expect(offsetSelection([movable, locked], { x: 10, y: -10 })).toEqual([
       { id: movable.id, x: 20, y: 10 },
     ]);
+  });
+
+  it("selects every visible, unlocked, top-level widget for Select All (B27)", () => {
+    const first = widget(0, 0);
+    const second = widget(50, 0);
+    const locked = widget(100, 0, 20, 10, { locked: true });
+    const hidden = widget(150, 0, 20, 10, { visible: false });
+    const card = { ...widget(0, 100, 200, 200), type: "card" };
+    const inside = { ...widget(10, 110, 50, 20), groupId: card.id };
+
+    expect(getSelectAllIds([first, second, locked, hidden, card, inside]))
+      .toEqual([first.id, second.id, card.id]);
+    expect(getSelectAllIds([])).toEqual([]);
   });
 });

@@ -122,6 +122,7 @@ import {
   getSelectedParentWidgetIds,
   getSelectionBounds,
   getSelectionUpdates,
+  getSelectAllIds,
   getWidgetsInsideBounds,
   type SelectionOperation,
 } from "./selection";
@@ -2164,6 +2165,15 @@ export function CanvasStage({
     current.select(copies.map((widget) => widget.id));
   }, [updateActiveScreenWidgets]);
 
+  const selectAllWidgets = useCallback(() => {
+    const current = useStore.getState();
+    const screen = current.project.screens.find(
+      (item) => item.id === current.getActiveScreenId(),
+    );
+    if (!screen) return;
+    current.select(getSelectAllIds(getCanvasWidgets(screen, current.activeRepeaterEdit)));
+  }, []);
+
   const deleteSelection = useCallback(() => {
     const current = useStore.getState();
     const screen = current.project.screens.find(
@@ -2471,6 +2481,12 @@ export function CanvasStage({
           duplicateSelection();
           return;
         }
+        if (key === "a") {
+          // B27: Select All for the current screen.
+          event.preventDefault();
+          selectAllWidgets();
+          return;
+        }
         return;
       }
       if (event.key === "Escape" && canvasContextMenu) {
@@ -2595,6 +2611,7 @@ export function CanvasStage({
     requestCreateSymbolFromSelection,
     deleteSelection,
     duplicateSelection,
+    selectAllWidgets,
     onToolChange,
     pasteSelection,
     pasteStyleSelection,
