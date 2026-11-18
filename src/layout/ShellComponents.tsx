@@ -3232,6 +3232,10 @@ export function StatusBar() {
   const zoom = useStore((state) => state.zoom);
   const selectedCount = useStore((state) => state.selectedIds.length);
   const networkStatus = useWalletStore((state) => state.networkStatus);
+  const hasSyncedBefore = useWalletStore((state) => state.lastSyncedAt !== null);
+  // B16: people who never used the cloud see nothing about it. The cloud status
+  // appears only once the wallet has synced at least once.
+  const showCloudStatus = networkStatus === "online" || hasSyncedBefore;
 
   return (
     <footer className="app-statusbar">
@@ -3239,14 +3243,16 @@ export function StatusBar() {
       <span>{Math.round(zoom * 100)}%</span>
       <span>{selectedCount} selected</span>
       <span className="status-spacer" />
-      <span className={`network-status network-status-${networkStatus}`} role="status">
-        {networkStatus === "online" ? <Wifi size={12} /> : <WifiOff size={12} />}
-        {networkStatus === "online"
-          ? "Cloud connected"
-          : networkStatus === "offline"
-            ? "Sync paused — reconnect to use cloud features"
-            : "Checking cloud"}
-      </span>
+      {showCloudStatus && (
+        <span className={`network-status network-status-${networkStatus}`} role="status">
+          {networkStatus === "online" ? <Wifi size={12} /> : <WifiOff size={12} />}
+          {networkStatus === "online"
+            ? "Cloud connected"
+            : networkStatus === "offline"
+              ? "Sync paused — reconnect to use cloud features"
+              : "Checking cloud"}
+        </span>
+      )}
       <span>ProtoFlow {APP_VERSION}</span>
     </footer>
   );
