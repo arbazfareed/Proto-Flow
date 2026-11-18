@@ -684,6 +684,7 @@
 .empty-shortcut kbd { margin:0 1px; padding:2px 4px; }
 .canvas-zoom-controls { position:absolute; z-index:2; top:12px; right:14px; display:flex; align-items:center; gap:3px; padding:3px; border:1px solid #303137; border-radius:6px; color:#d5d3dc; background:#191a1eeb; box-shadow:0 3px 12px #0004; }
 .canvas-zoom-controls .icon-button { width:25px; height:25px; }
+.canvas-pan-hint { position:absolute; z-index:2; top:48px; right:14px; padding:4px 8px; border:1px solid #303137; border-radius:6px; color:#d5d3dc; background:#191a1eeb; font-size:11px; pointer-events:none; }
 .canvas-zoom-controls .icon-button:disabled { opacity:.3; }
 .canvas-zoom-controls .icon-button[aria-pressed="true"] { color:#d6c4ff; background:#302a3c; }
 .canvas-zoom-value { min-width:42px; color:#d8d5e0; font-size:10px; font-variant-numeric:tabular-nums; text-align:center; }

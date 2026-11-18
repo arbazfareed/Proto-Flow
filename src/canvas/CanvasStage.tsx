@@ -11,6 +11,7 @@ import {
   LoaderCircle,
   Maximize2,
   Minus,
+  MousePointer2,
   Plus,
   X,
 } from "lucide-react";
@@ -925,6 +926,7 @@ export function CanvasStage({
   const [size, setSize] = useState<CanvasSize>({ width: 0, height: 0 });
   const [spacePressed, setSpacePressed] = useState(false);
   const [panMode, setPanMode] = useState(false);
+  const panModeRef = useRef(false);
   const [isPanning, setIsPanning] = useState(false);
   const [previewPositions, setPreviewPositions] = useState<Record<string, CanvasPoint>>({});
   const [guides, setGuides] = useState<CanvasGuide[]>([]);
@@ -2476,6 +2478,12 @@ export function CanvasStage({
         event.preventDefault();
         return;
       }
+      if (event.key === "Escape" && panModeRef.current) {
+        // B3: Escape always leaves the hand tool.
+        setPanMode(false);
+        event.preventDefault();
+        return;
+      }
       if (event.key === "Escape" && activeToolRef.current) {
         onToolChange(null);
         setShapeDraft(null);
@@ -2548,6 +2556,22 @@ export function CanvasStage({
         }
       }
       const key = event.key.toLowerCase();
+      if (!event.shiftKey && key === "h") {
+        // B3: H = hand (pan) tool.
+        event.preventDefault();
+        setPanMode(true);
+        onToolChange(null);
+        setShapeDraft(null);
+        return;
+      }
+      if (!event.shiftKey && key === "v") {
+        // B3: V = select tool; leaves pan mode and any drawing tool.
+        event.preventDefault();
+        setPanMode(false);
+        onToolChange(null);
+        setShapeDraft(null);
+        return;
+      }
       const tool = event.shiftKey
         ? key === "r"
           ? "radio"
@@ -2661,6 +2685,10 @@ export function CanvasStage({
   useEffect(() => {
     if (activeTool) setPanMode(false);
   }, [activeTool]);
+
+  useEffect(() => {
+    panModeRef.current = panMode;
+  }, [panMode]);
 
   useEffect(() => {
     const resetSpacePan = () => {
@@ -3742,11 +3770,29 @@ export function CanvasStage({
           </>
         );
       })()}
+      {panMode && (
+        <div className="canvas-pan-hint" role="status">
+          Hand tool · press Esc or V to exit · hold Space to pan anytime
+        </div>
+      )}
       <div className="canvas-zoom-controls" role="group" aria-label="Canvas view controls">
+        <button
+          className={`icon-button small-icon${!panMode && !activeTool ? " is-active" : ""}`}
+          type="button"
+          title="Select (V)"
+          aria-label="Select tool"
+          aria-pressed={!panMode && !activeTool}
+          onClick={() => {
+            setPanMode(false);
+            onToolChange(null);
+          }}
+        >
+          <MousePointer2 size={14} />
+        </button>
         <button
           className={`icon-button small-icon${panMode ? " is-active" : ""}`}
           type="button"
-          title={panMode ? "Exit canvas pan mode" : "Pan canvas"}
+          title={panMode ? "Exit hand tool (Esc or V)" : "Hand tool (H)"}
           aria-label={panMode ? "Exit canvas pan mode" : "Pan canvas"}
           aria-pressed={panMode}
           onClick={() => {
