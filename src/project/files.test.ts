@@ -309,11 +309,75 @@ describe("project file commands", () => {
     expect(savedImages[4].props.assetPath).toBe("assets/budget.png");
     expect(invokeMock).toHaveBeenCalledTimes(2);
   });
+});
 
-  it("rejects opening project files outside the desktop runtime", async () => {
+describe("opening a .pflow file in the browser (B45)", () => {
+  type Listener = () => void;
+
+  /** A fake file input: `choose` runs the `change` handlers, `cancel` runs the `cancel` handlers. */
+  function stubFilePicker(action: "choose" | "cancel", file?: { name: string; size: number; text: () => Promise<string> }) {
+    const listeners: Record<string, Listener[]> = {};
+    const input = {
+      type: "",
+      accept: "",
+      style: {} as Record<string, string>,
+      files: file ? [file] : [],
+      addEventListener: (name: string, listener: Listener) => {
+        (listeners[name] ??= []).push(listener);
+      },
+      remove: vi.fn(),
+      click: vi.fn(() => {
+        for (const listener of listeners[action === "choose" ? "change" : "cancel"] ?? []) listener();
+      }),
+    };
+    vi.stubGlobal("document", {
+      createElement: vi.fn(() => input),
+      body: { append: vi.fn() },
+    });
+    return input;
+  }
+
+  beforeEach(() => {
+    vi.clearAllMocks();
     isTauriMock.mockReturnValue(false);
+  });
 
-    await expect(openProjectFile()).rejects.toThrow("desktop app");
+  it("shows a file picker for .pflow files and opens the chosen project", async () => {
+    const project = createEmptyProject("Reopened in browser");
+    const content = serializeProject(project);
+    const input = stubFilePicker("choose", {
+      name: "Reopened in browser.pflow",
+      size: content.length,
+      text: async () => content,
+    });
+
+    await expect(openProjectFile()).resolves.toEqual({
+      project,
+      path: "Reopened in browser.pflow",
+    });
+    expect(input.type).toBe("file");
+    expect(input.accept).toContain(".pflow");
+    expect(input.click).toHaveBeenCalledOnce();
+    expect(input.remove).toHaveBeenCalled();
     expect(invokeMock).not.toHaveBeenCalled();
+    vi.unstubAllGlobals();
+  });
+
+  it("returns null when the picker is closed without choosing a file", async () => {
+    stubFilePicker("cancel");
+
+    await expect(openProjectFile()).resolves.toBeNull();
+    vi.unstubAllGlobals();
+  });
+
+  it("rejects a damaged file and a file that is too large without loading them", async () => {
+    stubFilePicker("choose", { name: "broken.pflow", size: 20, text: async () => '{"schemaVersion":"1.0.0"' });
+    await expect(openProjectFile()).rejects.toBeInstanceOf(SchemaValidationError);
+
+    const text = vi.fn(async () => "{}");
+    stubFilePicker("choose", { name: "huge.pflow", size: 101 * 1024 * 1024, text });
+    await expect(openProjectFile()).rejects.toThrow("too large to open in the browser");
+    expect(text).not.toHaveBeenCalled();
+    vi.unstubAllGlobals();
   });
 });
