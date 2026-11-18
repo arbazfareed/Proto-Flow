@@ -15,6 +15,9 @@ export const EXPRESSION_FUNCTIONS = [
   "formatDate", "padStart", "padEnd",
 ] as const;
 
+/** Upper bound for padStart/padEnd target length, so a huge value cannot freeze the preview (B19). */
+export const MAX_PAD_LENGTH = 10_000;
+
 export const EXPRESSION_RUNTIME_SOURCE = String.raw`
 function evaluateExpression(source, context = {}) {
   if (source.length > 2000) throw new Error("Expression is too long.");
@@ -164,8 +167,8 @@ function evaluateExpression(source, context = {}) {
         const parts = { yyyy: String(date.getFullYear()), MM: String(date.getMonth() + 1).padStart(2, "0"), dd: String(date.getDate()).padStart(2, "0"), HH: String(date.getHours()).padStart(2, "0"), mm: String(date.getMinutes()).padStart(2, "0"), ss: String(date.getSeconds()).padStart(2, "0") };
         return String(args[1] ?? "yyyy-MM-dd").replace(/yyyy|MM|dd|HH|mm|ss/g, (part) => parts[part]);
       }
-      case "padStart": return String(value ?? "").padStart(numeric(args[1] ?? 0), String(args[2] ?? " "));
-      case "padEnd": return String(value ?? "").padEnd(numeric(args[1] ?? 0), String(args[2] ?? " "));
+      case "padStart": return String(value ?? "").padStart(Math.min(numeric(args[1] ?? 0), 10000), String(args[2] ?? " "));
+      case "padEnd": return String(value ?? "").padEnd(Math.min(numeric(args[1] ?? 0), 10000), String(args[2] ?? " "));
       default: throw new Error('Unknown expression function "' + name + '".');
     }
   }
@@ -470,11 +473,11 @@ function callFunction(name: string, args: unknown[], context: ExpressionContext)
     case "now": return (context.now ?? Date.now)();
     case "formatDate": return formatDate(first, args[1] === undefined ? undefined : String(args[1]));
     case "padStart": return String(first ?? "").padStart(
-      requireNumber(args[1] ?? 0, name),
+      Math.min(requireNumber(args[1] ?? 0, name), MAX_PAD_LENGTH),
       args[2] === undefined ? " " : String(args[2]),
     );
     case "padEnd": return String(first ?? "").padEnd(
-      requireNumber(args[1] ?? 0, name),
+      Math.min(requireNumber(args[1] ?? 0, name), MAX_PAD_LENGTH),
       args[2] === undefined ? " " : String(args[2]),
     );
     default: throw new Error(`Unknown expression function "${name}".`);
