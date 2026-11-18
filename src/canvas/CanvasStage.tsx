@@ -2579,14 +2579,6 @@ export function CanvasStage({
         }
       }
       const key = event.key.toLowerCase();
-      if (!event.shiftKey && key === "h") {
-        // B3: H = hand (pan) tool.
-        event.preventDefault();
-        setPanMode(true);
-        onToolChange(null);
-        setShapeDraft(null);
-        return;
-      }
       if (!event.shiftKey && key === "v") {
         // B3: V = select tool; leaves pan mode and any drawing tool.
         event.preventDefault();
@@ -3812,7 +3804,7 @@ export function CanvasStage({
         <button
           className={`icon-button small-icon${panMode ? " is-active" : ""}`}
           type="button"
-          title={panMode ? "Exit hand tool (Esc or V)" : "Hand tool (H)"}
+          title={panMode ? "Exit hand tool (Esc or V)" : "Hand tool (or hold Space)"}
           aria-label={panMode ? "Exit canvas pan mode" : "Pan canvas"}
           aria-pressed={panMode}
           onClick={() => {
