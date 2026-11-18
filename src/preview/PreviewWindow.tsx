@@ -1130,10 +1130,7 @@ export function PreviewWindow() {
     return () => window.clearTimeout(timeout);
   }, [toast]);
 
-  const runEvent = useCallback((widget: Widget, event: PreviewEvent, item?: RepeaterRecord) => {
-    const runtime = runtimeRef.current;
-    if (!runtime) return 0;
-    const errors = runtime.runEvent(widget, event, item);
+  const publishRunResult = useCallback((runtime: PreviewRuntime, errors: string[]) => {
     const ranRules = runtime.lastRunRuleCount;
     if (ranRules > 0) trackEvent("preview_rule_fired");
     if (runtime.lastAddedRepeaterRows > 0) {
@@ -1149,16 +1146,29 @@ export function PreviewWindow() {
     return ranRules;
   }, []);
 
+  const runEvent = useCallback((widget: Widget, event: PreviewEvent, item?: RepeaterRecord) => {
+    const runtime = runtimeRef.current;
+    if (!runtime) return 0;
+    return publishRunResult(runtime, runtime.runEvent(widget, event, item));
+  }, [publishRunResult]);
+
+  const runLoadEvents = useCallback((widgets: Widget[]) => {
+    const runtime = runtimeRef.current;
+    if (!runtime) return 0;
+    return publishRunResult(runtime, runtime.runLoadEvents(widgets));
+  }, [publishRunResult]);
+
   useEffect(() => {
     if (!project || !runtimeRef.current) return;
     const screen = project.screens.find((item) => item.id === runtimeRef.current?.currentScreenId);
     if (!screen || loadedScreenRef.current === screen.id) return;
     loadedScreenRef.current = screen.id;
-    for (const widget of flattenActivePanelWidgets(
+    // One call per screen load: screen-level rules run once even when the screen has no widgets.
+    runLoadEvents(flattenActivePanelWidgets(
       screen.widgets,
       runtimeRef.current.snapshot().panelStates,
-    )) runEvent(widget, "onLoad");
-  }, [project, runtimeSnapshot?.screenId, runtimeRevision, runEvent]);
+    ));
+  }, [project, runtimeSnapshot?.screenId, runtimeRevision, runLoadEvents]);
 
   const restart = () => {
     if (!runtimeRef.current) return;
