@@ -150,7 +150,8 @@ export function OnboardingWizard({
     const trapFocusAndHandleEscape = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
         event.preventDefault();
-        if (window.confirm("Skip onboarding and go straight to your workspace?")) onSkip();
+        // B13: skip straight away; no browser confirm() popup.
+        onSkip();
         return;
       }
       if (event.key !== "Tab" || !panelRef.current) return;
@@ -250,9 +251,7 @@ export function OnboardingWizard({
             <button
               className="onboarding-skip"
               type="button"
-              onClick={() => {
-                if (window.confirm("Skip onboarding and go straight to your workspace?")) onSkip();
-              }}
+              onClick={onSkip}
             >
               Skip onboarding <X size={14} />
             </button>
