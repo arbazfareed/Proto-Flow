@@ -6,10 +6,28 @@ import {
 } from "../canvas/images";
 import { parseProject, serializeProject, type Project, type Widget } from "./schema";
 
-function requireDesktopRuntime(): void {
-  if (!isTauri()) {
-    throw new Error("Project files can be opened from the Proto Flow desktop app.");
-  }
+/** Largest .pflow file the browser version reads into memory. */
+const MAX_BROWSER_PROJECT_BYTES = 100 * 1024 * 1024;
+
+/** Shows the browser's file picker. Resolves null when the person closes it without choosing (B45). */
+function pickProjectFileInBrowser(): Promise<File | null> {
+  return new Promise((resolve) => {
+    const input = document.createElement("input");
+    input.type = "file";
+    input.accept = ".pflow,application/json";
+    input.style.display = "none";
+    let settled = false;
+    const finish = (file: File | null) => {
+      if (settled) return;
+      settled = true;
+      input.remove();
+      resolve(file);
+    };
+    input.addEventListener("change", () => finish(input.files?.[0] ?? null));
+    input.addEventListener("cancel", () => finish(null));
+    document.body.append(input);
+    input.click();
+  });
 }
 
 function downloadProjectInBrowser(project: Project): { path: string; project: Project } {
@@ -48,7 +66,14 @@ function downloadProjectInBrowser(project: Project): { path: string; project: Pr
 }
 
 export async function openProjectFile(): Promise<{ project: Project; path: string } | null> {
-  requireDesktopRuntime();
+  if (!isTauri()) {
+    const file = await pickProjectFileInBrowser();
+    if (!file) return null;
+    if (file.size > MAX_BROWSER_PROJECT_BYTES) {
+      throw new Error("This project file is too large to open in the browser (over 100 MB).");
+    }
+    return { project: parseProject(await file.text()), path: file.name };
+  }
   const opened = await invoke<{ path: string; content: string } | null>("open_project");
   if (!opened) return null;
   return { project: parseProject(opened.content), path: opened.path };
