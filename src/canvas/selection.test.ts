@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { createShapeWidget } from "./shapes";
 import {
   getSelectAllIds,
+  getWidgetsTouchingBounds,
   getSelectionBounds,
   getSelectedParentWidgetIds,
   getSelectionUpdates,
@@ -156,5 +157,27 @@ describe("selection geometry", () => {
     expect(getSelectAllIds([first, second, locked, hidden, card, inside]))
       .toEqual([first.id, second.id, card.id]);
     expect(getSelectAllIds([])).toEqual([]);
+  });
+
+  it("selects widgets a selection box only touches, skipping locked, hidden and contained ones (B28)", () => {
+    const left = widget(0, 0, 100, 50);
+    const right = widget(200, 0, 100, 50);
+    const far = widget(500, 500, 100, 50);
+    const locked = widget(20, 10, 20, 10, { locked: true });
+    const hidden = widget(30, 10, 20, 10, { visible: false });
+    const card = { ...widget(0, 100, 200, 200), type: "card" };
+    const inside = { ...widget(10, 110, 50, 20), groupId: card.id };
+    const all = [left, right, far, locked, hidden, card, inside];
+
+    // A box covering only the right half of `left` and the left half of `right`.
+    expect(getWidgetsTouchingBounds(all, { x: 60, y: 10, width: 180, height: 20 }))
+      .toEqual([left.id, right.id]);
+    // The same box dragged up and to the left (negative size) selects the same widgets.
+    expect(getWidgetsTouchingBounds(all, { x: 240, y: 30, width: -180, height: -20 }))
+      .toEqual([left.id, right.id]);
+    // Touching edges do not count, and an empty area selects nothing.
+    expect(getWidgetsTouchingBounds(all, { x: 100, y: 60, width: 100, height: 20 })).toEqual([]);
+    // A box inside a container selects the container, not the widget in it.
+    expect(getWidgetsTouchingBounds(all, { x: 20, y: 120, width: 10, height: 10 })).toEqual([card.id]);
   });
 });

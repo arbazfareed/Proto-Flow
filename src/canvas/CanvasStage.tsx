@@ -123,7 +123,7 @@ import {
   getSelectionBounds,
   getSelectionUpdates,
   getSelectAllIds,
-  getWidgetsInsideBounds,
+  getWidgetsTouchingBounds,
   type SelectionOperation,
 } from "./selection";
 import {
@@ -167,6 +167,8 @@ interface ShapeDraft {
 interface SelectionDraft {
   start: CanvasPoint;
   current: CanvasPoint;
+  /** Widgets that stay selected while the box is dragged with Shift held (B28). */
+  keep: string[];
 }
 
 /** Smallest click area, in screen pixels, for thin widgets. */
@@ -1956,8 +1958,11 @@ export function CanvasStage({
       const tool = activeToolRef.current;
       if (!tool) {
         if (event.target === stage) {
-          useStore.getState().clearSelection();
-          setSelectionDraft({ start: position, current: position });
+          const store = useStore.getState();
+          const additive = "shiftKey" in event.evt && Boolean(event.evt.shiftKey);
+          const keep = additive ? [...store.selectedIds] : [];
+          if (!additive) store.clearSelection();
+          setSelectionDraft({ start: position, current: position, keep });
         }
         return;
       }
@@ -2022,14 +2027,15 @@ export function CanvasStage({
     const dx = position.x - selectionDraft.start.x;
     const dy = position.y - selectionDraft.start.y;
     if (Math.max(Math.abs(dx), Math.abs(dy)) >= 3) {
-      useStore.getState().select(
-        getWidgetsInsideBounds(screenWidgets, {
+      useStore.getState().select([
+        ...selectionDraft.keep,
+        ...getWidgetsTouchingBounds(screenWidgets, {
           x: selectionDraft.start.x,
           y: selectionDraft.start.y,
           width: dx,
           height: dy,
         }),
-      );
+      ]);
     }
     setSelectionDraft(null);
   }, [finishDrawing, getPointerWorldPosition, screenWidgets, selectionDraft, shapeDraft]);

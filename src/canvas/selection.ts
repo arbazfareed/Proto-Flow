@@ -90,6 +90,34 @@ export function getWidgetsInsideBounds(
 }
 
 /**
+ * Ids a selection box selects (B28). A widget is selected as soon as the box touches it, not only
+ * when the box surrounds it completely, so dragging across part of a widget selects it. Locked and
+ * hidden widgets are left out, and so is a widget inside a container (the container moves it).
+ */
+export function getWidgetsTouchingBounds(
+  widgets: readonly Widget[],
+  bounds: SelectionBounds,
+): string[] {
+  const left = Math.min(bounds.x, bounds.x + bounds.width);
+  const top = Math.min(bounds.y, bounds.y + bounds.height);
+  const right = Math.max(bounds.x, bounds.x + bounds.width);
+  const bottom = Math.max(bounds.y, bounds.y + bounds.height);
+  const parentByWidgetId = getWidgetParentIdMap(widgets);
+  return widgets
+    .filter(
+      (widget) =>
+        widget.visible &&
+        !widget.locked &&
+        !parentByWidgetId.has(widget.id) &&
+        widget.x < right &&
+        widget.x + widget.width > left &&
+        widget.y < bottom &&
+        widget.y + widget.height > top,
+    )
+    .map((widget) => widget.id);
+}
+
+/**
  * Ids that Select All (Ctrl/Cmd+A) selects on the current screen (B27). Locked and hidden widgets
  * are left out, like box selection. A widget inside a container is left out too, because moving
  * the container already moves what is inside it and selecting both would move them twice.
