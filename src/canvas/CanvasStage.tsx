@@ -93,6 +93,7 @@ import {
 import { getLayerAccentColor } from "../layout/layerGrouping";
 import { SymbolNameDialog } from "../layout/SymbolNameDialog";
 import {
+  applyCanvasWheel,
   clampCanvasZoom,
   fitCanvasBounds,
   getVisibleGridSpacing,
@@ -2794,18 +2795,14 @@ export function CanvasStage({
   const handleWheel = useCallback(
     (event: { evt: WheelEvent; target: { getStage: () => KonvaStage | null } }) => {
       const nativeEvent = event.evt;
-      if (!(nativeEvent.ctrlKey || nativeEvent.metaKey)) return;
       nativeEvent.preventDefault();
 
       const stage = event.target.getStage();
       const pointer = stage?.getPointerPosition();
       if (!pointer) return;
 
-      const currentView = currentViewRef.current;
-      const zoomFactor = Math.pow(1.01, -nativeEvent.deltaY);
-      applyView(
-        zoomAroundPointer(currentView, pointer, currentView.zoom * zoomFactor),
-      );
+      // B29: scroll pans, Shift+scroll pans sideways, Ctrl/Cmd+scroll (or a pinch) zooms.
+      applyView(applyCanvasWheel(currentViewRef.current, nativeEvent, pointer));
     },
     [applyView],
   );
