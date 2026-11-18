@@ -55,9 +55,20 @@ describe("safe expression engine", () => {
     expect(evaluateExpression('toString(12)')).toBe("12");
     expect(evaluateExpression('toNumber("12.5")')).toBe(12.5);
     expect(evaluateExpression('toBoolean("false")')).toBe(false);
-    expect(evaluateExpression('formatDate(0, "yyyy-MM-dd")')).toBe("1970-01-01");
+    // A timestamp is an instant shown in local time, so build it from local parts: the result is the same in every time zone.
+    const localMoment = new Date(2024, 2, 10, 15, 30).getTime();
+    expect(evaluateExpression(`formatDate(${localMoment}, "yyyy-MM-dd HH:mm")`)).toBe("2024-03-10 15:30");
     expect(evaluateExpression('padStart("7", 3, "0")')).toBe("007");
     expect(evaluateExpression('padEnd("x", 3, "!")')).toBe("x!!");
+  });
+
+  it("keeps the day of a date-only string in every time zone (B18)", () => {
+    expect(evaluateExpression('formatDate("2024-03-10", "dd/MM/yyyy")')).toBe("10/03/2024");
+    expect(evaluateExpression('formatDate("2024-01-01", "yyyy-MM-dd")')).toBe("2024-01-01");
+    expect(evaluateExpression('formatDate("2024-12-31", "MM/dd/yyyy")')).toBe("12/31/2024");
+    // the exported/standalone runtime copy behaves the same
+    const runtime = runInNewContext(`${EXPRESSION_RUNTIME_SOURCE}\nevaluateExpression('formatDate("2024-03-10", "dd/MM/yyyy")')`);
+    expect(runtime).toBe("10/03/2024");
   });
 
   it("caps padStart/padEnd length so a huge value cannot freeze the preview (B19)", () => {

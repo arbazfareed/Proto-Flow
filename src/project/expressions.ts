@@ -162,7 +162,9 @@ function evaluateExpression(source, context = {}) {
       case "toBoolean": return typeof value === "string" ? value.length > 0 && value.toLowerCase() !== "false" : Boolean(value);
       case "now": return Date.now();
       case "formatDate": {
-        const date = new Date(value === undefined ? Date.now() : value);
+        // B18: a date-only string like "2024-03-10" is a calendar date, not an instant, so it keeps its day in every time zone.
+        const dateOnly = typeof value === "string" ? /^(\d{4})-(\d{2})-(\d{2})$/.exec(value) : null;
+        const date = dateOnly ? new Date(Number(dateOnly[1]), Number(dateOnly[2]) - 1, Number(dateOnly[3])) : new Date(value === undefined ? Date.now() : value);
         if (!Number.isFinite(date.getTime())) throw new Error("Invalid date.");
         const parts = { yyyy: String(date.getFullYear()), MM: String(date.getMonth() + 1).padStart(2, "0"), dd: String(date.getDate()).padStart(2, "0"), HH: String(date.getHours()).padStart(2, "0"), mm: String(date.getMinutes()).padStart(2, "0"), ss: String(date.getSeconds()).padStart(2, "0") };
         return String(args[1] ?? "yyyy-MM-dd").replace(/yyyy|MM|dd|HH|mm|ss/g, (part) => parts[part]);
@@ -415,8 +417,16 @@ function requireNumber(value: unknown, functionName: string): number {
   return number;
 }
 
+/** B18: a date-only string such as "2024-03-10" is a calendar date, not an instant, so it keeps its day in every time zone. */
+function parseDateValue(value: unknown): Date {
+  if (value instanceof Date) return value;
+  const dateOnly = typeof value === "string" ? /^(\d{4})-(\d{2})-(\d{2})$/.exec(value) : null;
+  if (dateOnly) return new Date(Number(dateOnly[1]), Number(dateOnly[2]) - 1, Number(dateOnly[3]));
+  return new Date(value === undefined ? Date.now() : value as string | number);
+}
+
 function formatDate(value: unknown, format = "yyyy-MM-dd"): string {
-  const date = value instanceof Date ? value : new Date(value === undefined ? Date.now() : value as string | number);
+  const date = parseDateValue(value);
   if (!Number.isFinite(date.getTime())) throw new Error("formatDate received an invalid date.");
   const parts: Record<string, string> = {
     yyyy: String(date.getFullYear()),
