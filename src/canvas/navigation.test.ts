@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  applyCanvasWheel,
   centerCanvasView,
   clampCanvasZoom,
   fitCanvasBounds,
@@ -141,3 +142,36 @@ describe("canvas navigation math | geometry-math", () => {
     expect(view.pan.y).toBeCloseTo(124);
   });
 });
+
+describe("canvas wheel and trackpad scrolling | B29", () => {
+  const view = { zoom: 1.5, pan: { x: -80, y: 45 } };
+  const pointer = { x: 310, y: 225 };
+  const wheel = { deltaX: 0, deltaY: 0, deltaMode: 0, ctrlKey: false, metaKey: false, shiftKey: false };
+
+  it("pans in the scroll direction on a plain scroll and keeps the zoom", () => {
+    expect(applyCanvasWheel(view, { ...wheel, deltaY: 100 }, pointer))
+      .toEqual({ zoom: 1.5, pan: { x: -80, y: -55 } });
+    expect(applyCanvasWheel(view, { ...wheel, deltaX: -30, deltaY: 20 }, pointer))
+      .toEqual({ zoom: 1.5, pan: { x: -50, y: 25 } });
+  });
+
+  it("pans sideways on Shift+scroll, without swapping an already sideways scroll", () => {
+    expect(applyCanvasWheel(view, { ...wheel, deltaY: 100, shiftKey: true }, pointer))
+      .toEqual({ zoom: 1.5, pan: { x: -180, y: 45 } });
+    expect(applyCanvasWheel(view, { ...wheel, deltaX: 40, shiftKey: true }, pointer))
+      .toEqual({ zoom: 1.5, pan: { x: -120, y: 45 } });
+  });
+
+  it("zooms around the pointer on Ctrl or Cmd+scroll", () => {
+    const zoomed = applyCanvasWheel(view, { ...wheel, deltaY: -100, ctrlKey: true }, pointer);
+    expect(zoomed).toEqual(zoomAroundPointer(view, pointer, 1.5 * Math.pow(1.01, 100)));
+    expect(applyCanvasWheel(view, { ...wheel, deltaY: -100, metaKey: true }, pointer)).toEqual(zoomed);
+    expect(zoomed.zoom).toBeGreaterThan(view.zoom);
+  });
+
+  it("converts line and page wheel deltas to pixels", () => {
+    expect(applyCanvasWheel(view, { ...wheel, deltaY: 3, deltaMode: 1 }, pointer).pan.y).toBe(45 - 48);
+    expect(applyCanvasWheel(view, { ...wheel, deltaY: 1, deltaMode: 2 }, pointer).pan.y).toBe(45 - 800);
+  });
+});
+

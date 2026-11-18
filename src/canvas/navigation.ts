@@ -120,6 +120,49 @@ export function zoomAroundPointer(
   };
 }
 
+export interface CanvasWheelInput {
+  deltaX: number;
+  deltaY: number;
+  /** WheelEvent.deltaMode: 0 pixels, 1 lines, 2 pages. */
+  deltaMode: number;
+  ctrlKey: boolean;
+  metaKey: boolean;
+  shiftKey: boolean;
+}
+
+const WHEEL_LINE_PIXELS = 16;
+const WHEEL_PAGE_PIXELS = 800;
+
+/**
+ * What the mouse wheel or a trackpad scroll does to the canvas (B29): Ctrl/Cmd+scroll (also a
+ * trackpad pinch) zooms around the pointer, Shift+scroll pans sideways, and a plain scroll pans in
+ * the direction of the scroll. Line and page wheel deltas are converted to pixels first.
+ */
+export function applyCanvasWheel(
+  view: CanvasView,
+  wheel: CanvasWheelInput,
+  pointer: { x: number; y: number },
+): CanvasView {
+  const unit = wheel.deltaMode === 1 ? WHEEL_LINE_PIXELS : wheel.deltaMode === 2 ? WHEEL_PAGE_PIXELS : 1;
+  let deltaX = wheel.deltaX * unit;
+  let deltaY = wheel.deltaY * unit;
+
+  if (wheel.ctrlKey || wheel.metaKey) {
+    return zoomAroundPointer(view, pointer, view.zoom * Math.pow(1.01, -deltaY));
+  }
+
+  // Some systems already turn Shift+scroll into a sideways scroll, so only swap when they did not.
+  if (wheel.shiftKey && deltaX === 0) {
+    deltaX = deltaY;
+    deltaY = 0;
+  }
+  const roundPan = (value: number) => Math.round(value * 10_000) / 10_000;
+  return {
+    zoom: view.zoom,
+    pan: { x: roundPan(view.pan.x - deltaX), y: roundPan(view.pan.y - deltaY) },
+  };
+}
+
 export function getWidgetBounds(
   widgets: readonly Pick<CanvasBounds, "x" | "y" | "width" | "height">[],
 ): CanvasBounds | null {
