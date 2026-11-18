@@ -837,14 +837,18 @@ function render() {
   }
   if (loadedScreen !== activeScreen.id) {
     loadedScreen = activeScreen.id;
+    let ranLoadRule = false;
     for (const rule of activeScreen.interactionRules.filter((item) => item.event === "onLoad")) {
       const localVariables = Object.fromEntries((rule.localVariables || []).map((entry) => [entry.name, entry.initial]));
       const checks = rule.conditions.map((condition) => matches(condition, activeScreen.id, undefined, undefined, localVariables));
       if (!rule.conditions.length || (rule.conditionMode === "any" ? checks.some(Boolean) : checks.every(Boolean))) {
+        ranLoadRule = true;
         actions(rule, activeScreen.id, undefined, undefined, localVariables);
       }
     }
-    if (loadedScreen === screenId) return;
+    // A load rule may have changed variables or visibility after the widgets above were drawn, or
+    // moved to another screen, so draw again. loadedScreen already matches, so this cannot loop (B38).
+    if (loadedScreen === screenId && !ranLoadRule) return;
     render();
   }
 }

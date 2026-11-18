@@ -1,3 +1,4 @@
+import { JSDOM } from "jsdom";
 import { describe, expect, it } from "vitest";
 import { createEmptyProject, type Widget } from "../project/schema";
 import {
@@ -149,6 +150,40 @@ describe("standalone published preview bundle", () => {
     expect(html).toContain('firePointer(widget, ["onTap", "onClick"], item');
     expect(html).toContain('for (const rule of activeScreen.interactionRules.filter((item) => item.event === "onLoad"))');
     expect(html).not.toContain("for (const widget of activeScreen.widgets)");
+  });
+
+  it("redraws the exported page after a screen On load rule changes a variable (B38)", () => {
+    const project = createEmptyProject("On load redraw");
+    const screen = project.screens[0];
+    screen.widgets = [{
+      id: crypto.randomUUID(),
+      type: "text",
+      x: 20,
+      y: 20,
+      width: 200,
+      height: 40,
+      rotation: 0,
+      opacity: 1,
+      visible: true,
+      locked: false,
+      zIndex: 0,
+      style: {},
+      props: { text: "Count: {{count}}" },
+    }];
+    project.variables.push({ id: crypto.randomUUID(), name: "count", type: "number", initial: 0, scope: "project" });
+    screen.interactionRules = [{
+      id: crypto.randomUUID(),
+      event: "onLoad",
+      conditionMode: "all",
+      conditions: [],
+      actions: [{ type: "setVariable", target: "count", value: "[[ count + 1 ]]" }],
+    }];
+
+    const dom = new JSDOM(generatePublishedPreviewHtml(project), { runScripts: "dangerously", pretendToBeVisual: true });
+    const stage = dom.window.document.querySelector("[data-screen-id]");
+    expect(stage?.textContent).toContain("Count: 1");
+    expect(stage?.textContent).not.toContain("Count: 0");
+    dom.window.close();
   });
 
   it("includes dynamic-panel state switching and transition rendering in the standalone runtime", () => {
