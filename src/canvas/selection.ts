@@ -89,6 +89,18 @@ export function getWidgetsInsideBounds(
     .map((widget) => widget.id);
 }
 
+/**
+ * Ids that Select All (Ctrl/Cmd+A) selects on the current screen (B27). Locked and hidden widgets
+ * are left out, like box selection. A widget inside a container is left out too, because moving
+ * the container already moves what is inside it and selecting both would move them twice.
+ */
+export function getSelectAllIds(widgets: readonly Widget[]): string[] {
+  const parentByWidgetId = getWidgetParentIdMap(widgets);
+  return widgets
+    .filter((widget) => widget.visible && !widget.locked && !parentByWidgetId.has(widget.id))
+    .map((widget) => widget.id);
+}
+
 export function getSelectionUpdates(
   widgets: readonly Widget[],
   operation: SelectionOperation,
