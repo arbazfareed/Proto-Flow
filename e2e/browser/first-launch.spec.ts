@@ -40,7 +40,6 @@ test("first launch finishes privacy and all five onboarding steps", async ({ pag
   await page.keyboard.press("Tab");
   await expect(first).toBeFocused();
 
-  page.once("dialog", (dialog) => dialog.accept());
   await onboarding.getByRole("button", { name: /Skip onboarding/ }).click();
   await expect(onboarding).toHaveCount(0);
 });

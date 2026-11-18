@@ -129,12 +129,12 @@ describe("OnboardingWizard", () => {
     expect(props.onComplete).toHaveBeenCalledWith("existing");
   });
 
-  it("confirms before skipping onboarding", () => {
-    const confirm = vi.spyOn(window, "confirm").mockReturnValue(true);
+  it("skips onboarding straight away without a browser popup (B13)", () => {
+    const confirm = vi.spyOn(window, "confirm");
     const { props } = renderWizard();
     fireEvent.click(screen.getByRole("button", { name: /Skip onboarding/ }));
 
-    expect(confirm).toHaveBeenCalledOnce();
+    expect(confirm).not.toHaveBeenCalled();
     expect(props.onSkip).toHaveBeenCalledOnce();
     confirm.mockRestore();
   });
