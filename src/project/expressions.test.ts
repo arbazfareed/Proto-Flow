@@ -6,6 +6,7 @@ import {
   EXPRESSION_RUNTIME_SOURCE,
   getExpressionCacheSize,
   interpolateExpressions,
+  MAX_PAD_LENGTH,
 } from "./expressions";
 import type { Widget } from "./schema";
 
@@ -57,6 +58,18 @@ describe("safe expression engine", () => {
     expect(evaluateExpression('formatDate(0, "yyyy-MM-dd")')).toBe("1970-01-01");
     expect(evaluateExpression('padStart("7", 3, "0")')).toBe("007");
     expect(evaluateExpression('padEnd("x", 3, "!")')).toBe("x!!");
+  });
+
+  it("caps padStart/padEnd length so a huge value cannot freeze the preview (B19)", () => {
+    const padStart = evaluateExpression('padStart("x", 100000000)') as string;
+    const padEnd = evaluateExpression('padEnd("x", 100000000, "ab")') as string;
+    expect(padStart).toHaveLength(MAX_PAD_LENGTH);
+    expect(padEnd).toHaveLength(MAX_PAD_LENGTH);
+    // normal padding is unchanged
+    expect(evaluateExpression('padStart("7", 3, "0")')).toBe("007");
+    // the exported/standalone runtime copy enforces the same cap
+    const runtime = runInNewContext(`${EXPRESSION_RUNTIME_SOURCE}\nevaluateExpression('padStart("x", 100000000)')`);
+    expect((runtime as string).length).toBe(MAX_PAD_LENGTH);
   });
 
   it("resolves variables, item fields, widget properties, and this-widget geometry", () => {
