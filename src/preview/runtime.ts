@@ -277,17 +277,52 @@ export class PreviewRuntime {
       (!rule.widgetId || rule.widgetId === widget.id) &&
       (!rule.importedNodeId || rule.importedNodeId === widget.props.importedNodeId),
     );
-    for (const rule of rules) {
-      const localVariables = this.initializeLocalVariables(rule.localVariables);
-      if (!this.conditionsMatch(rule, screen.id, item, widget, localVariables)) continue;
-      this.lastRunRuleCount += 1;
-      try {
-        this.runActions(rule, screen, item, widget, localVariables);
-      } catch (error) {
-        errors.push(error instanceof Error ? error.message : "Interaction action failed.");
+    for (const rule of rules) this.executeRule(rule, screen, errors, item, widget);
+    return errors;
+  }
+
+  /**
+   * Runs the current screen's On load rules once each (B36, B37). A rule that is not tied to a
+   * widget belongs to the screen, so it runs once per screen load, however many widgets the screen
+   * has, and also on a screen with no widgets. A rule tied to a widget runs once, and only when
+   * that widget is on the screen (or in its active panel state).
+   */
+  runLoadEvents(widgets: Widget[]): string[] {
+    this.lastRunRuleCount = 0;
+    this.lastAddedRepeaterRows = 0;
+    this.lastPanelStateChanges = 0;
+    const screen = this.currentScreen;
+    const errors: string[] = [];
+    for (const rule of screen.interactionRules) {
+      if (rule.event !== "onLoad") continue;
+      let widget: Widget | undefined;
+      if (rule.widgetId || rule.importedNodeId) {
+        widget = widgets.find((candidate) =>
+          (!rule.widgetId || rule.widgetId === candidate.id) &&
+          (!rule.importedNodeId || rule.importedNodeId === candidate.props.importedNodeId),
+        );
+        if (!widget) continue;
       }
+      this.executeRule(rule, screen, errors, undefined, widget);
     }
     return errors;
+  }
+
+  private executeRule(
+    rule: InteractionRule,
+    screen: Screen,
+    errors: string[],
+    item?: RepeaterRecord,
+    widget?: Widget,
+  ): void {
+    const localVariables = this.initializeLocalVariables(rule.localVariables);
+    if (!this.conditionsMatch(rule, screen.id, item, widget, localVariables)) return;
+    this.lastRunRuleCount += 1;
+    try {
+      this.runActions(rule, screen, item, widget, localVariables);
+    } catch (error) {
+      errors.push(error instanceof Error ? error.message : "Interaction action failed.");
+    }
   }
 
   updateBoundVariable(widget: Widget, value: RuntimeVariableValue): void {

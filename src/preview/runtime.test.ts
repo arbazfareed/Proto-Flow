@@ -49,6 +49,61 @@ function createProject(): Project {
 }
 
 describe("PreviewRuntime", () => {
+  it("runs a screen-level On load rule once, however many widgets the screen has (B36)", () => {
+    const project = createProject();
+    const screen = project.screens[0];
+    expect(screen.widgets.length).toBeGreaterThan(1);
+    screen.interactionRules = [{
+      id: crypto.randomUUID(),
+      event: "onLoad",
+      conditionMode: "all",
+      conditions: [],
+      actions: [{ type: "setVariable", target: "count", value: "[[ count + 1 ]]" }],
+    }];
+    const runtime = new PreviewRuntime(project);
+    expect(runtime.runLoadEvents(screen.widgets)).toEqual([]);
+    expect(runtime.lastRunRuleCount).toBe(1);
+    expect(runtime.getVariable("count")).toBe(1);
+  });
+
+  it("runs a screen-level On load rule on a screen with no widgets (B37)", () => {
+    const project = createProject();
+    const screen = project.screens[0];
+    screen.widgets = [];
+    screen.interactionRules = [{
+      id: crypto.randomUUID(),
+      event: "onLoad",
+      conditionMode: "all",
+      conditions: [],
+      actions: [{ type: "setVariable", target: "count", value: "[[ 2 + 3 ]]" }],
+    }];
+    const runtime = new PreviewRuntime(project);
+    expect(runtime.runLoadEvents([])).toEqual([]);
+    expect(runtime.lastRunRuleCount).toBe(1);
+    expect(runtime.getVariable("count")).toBe(5);
+  });
+
+  it("runs a widget-bound On load rule once, and only when that widget is on the screen", () => {
+    const project = createProject();
+    const screen = project.screens[0];
+    const [bound, other] = screen.widgets;
+    screen.interactionRules = [{
+      id: crypto.randomUUID(),
+      widgetId: bound.id,
+      event: "onLoad",
+      conditionMode: "all",
+      conditions: [],
+      actions: [{ type: "setVariable", target: "count", value: "[[ count + 1 ]]" }],
+    }];
+    const runtime = new PreviewRuntime(project);
+    runtime.runLoadEvents([other]);
+    expect(runtime.lastRunRuleCount).toBe(0);
+    expect(runtime.getVariable("count")).toBe(0);
+    runtime.runLoadEvents(screen.widgets);
+    expect(runtime.lastRunRuleCount).toBe(1);
+    expect(runtime.getVariable("count")).toBe(1);
+  });
+
   it("counts fired rules, panel-state changes, and repeater rows without exposing row data", () => {
     const project = createProject();
     const screen = project.screens[0];
