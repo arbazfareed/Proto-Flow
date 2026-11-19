@@ -38,6 +38,104 @@ function reportAutosaveWriteError(error: unknown): void {
   });
 }
 
+/*
+ * localStorage holds only about 5 MB per site, so a project with a few images does not fit (B34).
+ * When a write there fails, the snapshot goes to IndexedDB instead, which has far more room.
+ * localStorage stays the first choice because other code reads it straight away.
+ */
+const OVERFLOW_DB_NAME = "proto-flow-autosave";
+const OVERFLOW_STORE = "snapshots";
+const OVERFLOW_KEY = "latest";
+
+/** The project payload last written to IndexedDB, so an unchanged project is not written again. */
+let lastOverflowPayload: string | null = null;
+
+function overflowSupported(): boolean {
+  return typeof indexedDB !== "undefined" && indexedDB !== null;
+}
+
+function openOverflowDatabase(): Promise<IDBDatabase> {
+  return new Promise((resolve, reject) => {
+    const request = indexedDB.open(OVERFLOW_DB_NAME, 1);
+    request.onupgradeneeded = () => {
+      request.result.createObjectStore(OVERFLOW_STORE);
+    };
+    request.onsuccess = () => resolve(request.result);
+    request.onerror = () => reject(request.error ?? new Error("Could not open autosave storage."));
+    request.onblocked = () => reject(new Error("Autosave storage is blocked by another tab."));
+  });
+}
+
+async function runOverflowRequest<T>(
+  mode: IDBTransactionMode,
+  run: (store: IDBObjectStore) => IDBRequest<T>,
+): Promise<T> {
+  const database = await openOverflowDatabase();
+  try {
+    return await new Promise<T>((resolve, reject) => {
+      const transaction = database.transaction(OVERFLOW_STORE, mode);
+      const request = run(transaction.objectStore(OVERFLOW_STORE));
+      transaction.oncomplete = () => resolve(request.result);
+      transaction.onerror = () => reject(transaction.error ?? new Error("Autosave storage failed."));
+      transaction.onabort = () => reject(transaction.error ?? new Error("Autosave storage was cancelled."));
+    });
+  } finally {
+    database.close();
+  }
+}
+
+async function writeOverflowSnapshot(serialized: string): Promise<void> {
+  await runOverflowRequest("readwrite", (store) => store.put(serialized, OVERFLOW_KEY));
+}
+
+async function readOverflowSnapshot(): Promise<string | null> {
+  if (!overflowSupported()) return null;
+  try {
+    const value = await runOverflowRequest<unknown>("readonly", (store) => store.get(OVERFLOW_KEY));
+    return typeof value === "string" ? value : null;
+  } catch (error) {
+    console.error("Could not read Proto Flow autosave data from IndexedDB.", error);
+    return null;
+  }
+}
+
+async function deleteOverflowSnapshot(): Promise<void> {
+  lastOverflowPayload = null;
+  if (!overflowSupported()) return;
+  try {
+    await runOverflowRequest("readwrite", (store) => store.delete(OVERFLOW_KEY));
+  } catch (error) {
+    console.error("Could not remove Proto Flow autosave data from IndexedDB.", error);
+  }
+}
+
+/**
+ * Stores a snapshot, in localStorage when it fits and in IndexedDB when it does not. Returns true
+ * when it was stored in localStorage straight away. The person is only told that autosave failed
+ * when neither place could take it.
+ */
+function storeSnapshot(snapshot: AutosaveSnapshot, projectPayload: string): boolean {
+  const serialized = JSON.stringify(snapshot);
+  try {
+    localStorage.setItem(AUTOSAVE_KEY, serialized);
+    lastOverflowPayload = null;
+    return true;
+  } catch (error) {
+    if (!overflowSupported()) {
+      reportAutosaveWriteError(error);
+      return false;
+    }
+    console.error("Autosave did not fit in localStorage; using IndexedDB instead.", error);
+    writeOverflowSnapshot(serialized).then(
+      () => {
+        lastOverflowPayload = projectPayload;
+      },
+      (overflowError: unknown) => reportAutosaveWriteError(overflowError),
+    );
+    return false;
+  }
+}
+
 function removeStoredSnapshot(key: string): void {
   try {
     localStorage.removeItem(key);
@@ -112,29 +210,48 @@ export function readAutosave(): AutosaveSnapshot | null {
 }
 
 /**
+ * The newest recovery snapshot from localStorage or IndexedDB (B34). Use this at startup, because a
+ * large project may only have been stored in IndexedDB.
+ */
+export async function readAutosaveAsync(): Promise<AutosaveSnapshot | null> {
+  const local = readAutosave();
+  const serialized = await readOverflowSnapshot();
+  if (!serialized) return local;
+
+  let overflow: AutosaveSnapshot | null = null;
+  try {
+    overflow = AutosaveSchema.parse(JSON.parse(serialized));
+    if (isExpired(overflow, Date.now())) overflow = null;
+  } catch {
+    overflow = null;
+  }
+  if (!overflow) {
+    await deleteOverflowSnapshot();
+    return local;
+  }
+  return !local || overflow.ts > local.ts ? overflow : local;
+}
+
+/**
  * Write a recovery snapshot right away, outside the 30-second interval.
  * Used after restoring a recovered project and after a browser download,
  * so there is never a window in which the only copy of the work is in memory.
  */
 export function writeAutosave(project: Project, filePath: string | null = null): boolean {
+  const projectPayload = serializeProject(project);
   const snapshot: AutosaveSnapshot = {
-    project: parseProject(serializeProject(project)),
+    project: parseProject(projectPayload),
     ts: Date.now(),
     ...(filePath ? { filePath } : {}),
   };
-  try {
-    localStorage.setItem(AUTOSAVE_KEY, JSON.stringify(snapshot));
-    clearedProjectPayload = null;
-    return true;
-  } catch (error) {
-    reportAutosaveWriteError(error);
-    return false;
-  }
+  clearedProjectPayload = null;
+  return storeSnapshot(snapshot, projectPayload);
 }
 
 export function clearAutosave(): void {
   localStorage.removeItem(AUTOSAVE_KEY);
   localStorage.removeItem(LEGACY_RECOVERY_KEY);
+  void deleteOverflowSnapshot();
   clearedProjectPayload = serializeProject(useStore.getState().project);
 }
 
@@ -147,21 +264,17 @@ export function startAutosave(): () => void {
     if (clearedProjectPayload === serializedProject) return;
     clearedProjectPayload = null;
 
+    if (lastOverflowPayload === serializedProject) return;
     const previousSnapshot = readAutosave();
     if (
       previousSnapshot &&
       serializeProject(previousSnapshot.project) === serializedProject
     ) return;
 
-    const snapshot: AutosaveSnapshot = {
+    storeSnapshot({
       project: parseProject(serializedProject),
       ts: Date.now(),
-    };
-    try {
-      localStorage.setItem(AUTOSAVE_KEY, JSON.stringify(snapshot));
-    } catch (error) {
-      reportAutosaveWriteError(error);
-    }
+    }, serializedProject);
   }, AUTOSAVE_INTERVAL_MS);
 
   return () => window.clearInterval(interval);

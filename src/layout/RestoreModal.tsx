@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { ArrowRight, Clock3, X } from "lucide-react";
-import { clearAutosave, readAutosave, writeAutosave, type AutosaveSnapshot } from "../project/autosave";
+import { clearAutosave, readAutosaveAsync, writeAutosave, type AutosaveSnapshot } from "../project/autosave";
 import { parseProject } from "../project/schema";
 import { useStore } from "../store";
 
@@ -9,7 +9,13 @@ export function RestoreModal() {
   const restoreProject = useStore((state) => state.restoreProject);
 
   useEffect(() => {
-    setSnapshot(readAutosave());
+    let active = true;
+    void readAutosaveAsync().then((found) => {
+      if (active) setSnapshot(found);
+    });
+    return () => {
+      active = false;
+    };
   }, []);
 
   const discard = () => {
