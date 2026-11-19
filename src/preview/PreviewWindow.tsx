@@ -395,6 +395,11 @@ export function PreviewWidget({
     }
     return 0;
   };
+  // On a Mouse screen the touch handlers are off, so a click or mouse event that the browser labels
+  // "touch" (some touchpads and touch screens do) is the only signal there is and must count as a
+  // mouse event. On other screens the touch handlers already ran for it.
+  const ignoreTouchPointer = (event: MouseEvent<HTMLElement>) =>
+    inputMode !== "mouse" && isTouchPointerEvent(event);
   const clickEvents: readonly PreviewEvent[] = inputMode === "touch" ? ["onTap", "onClick"] : ["onClick"];
   const clickable = runtime.currentScreen.interactionRules.some((rule) =>
     (rule.event === "onClick" || rule.event === "onTap") && rule.widgetId === widget.id);
@@ -419,7 +424,7 @@ export function PreviewWidget({
       const pointerType = "pointerType" in event.nativeEvent
         ? event.nativeEvent.pointerType
         : undefined;
-      if (pointerType === "touch") {
+      if (pointerType === "touch" && inputMode !== "mouse") {
         suppressCompatibilityClick.current = false;
         window.clearTimeout(touchClickTimer.current);
         return;
@@ -429,12 +434,10 @@ export function PreviewWidget({
         window.clearTimeout(touchClickTimer.current);
         return;
       }
-      if (pointerType !== "touch") {
-        firePointer(clickEvents, { x: event.clientX, y: event.clientY }, event.currentTarget);
-      }
+      firePointer(clickEvents, { x: event.clientX, y: event.clientY }, event.currentTarget);
     },
     onDoubleClick: (event: MouseEvent<HTMLElement>) => {
-      if (isTouchPointerEvent(event)) return;
+      if (ignoreTouchPointer(event)) return;
       firePointer(
         inputMode === "touch" ? ["onDoubleTap", "onDoubleClick"] : ["onDoubleClick"],
         { x: event.clientX, y: event.clientY },
@@ -442,21 +445,21 @@ export function PreviewWidget({
       );
     },
     onContextMenu: (event: MouseEvent<HTMLElement>) => {
-      if (inputMode === "touch" || isTouchPointerEvent(event)) return;
+      if (inputMode === "touch" || ignoreTouchPointer(event)) return;
       event.preventDefault();
       runEvent(widget, "onRightClick", item);
     },
     onMouseEnter: (event: MouseEvent<HTMLElement>) => {
-      if (inputMode !== "touch" && !isTouchPointerEvent(event)) runEvent(widget, "onHover", item);
+      if (inputMode !== "touch" && !ignoreTouchPointer(event)) runEvent(widget, "onHover", item);
     },
     onMouseLeave: (event: MouseEvent<HTMLElement>) => {
-      if (inputMode !== "touch" && !isTouchPointerEvent(event)) runEvent(widget, "onHover", item);
+      if (inputMode !== "touch" && !ignoreTouchPointer(event)) runEvent(widget, "onHover", item);
     },
     onMouseDown: (event: MouseEvent<HTMLElement>) => {
-      if (inputMode !== "touch" && !isTouchPointerEvent(event)) runEvent(widget, "onMouseDown", item);
+      if (inputMode !== "touch" && !ignoreTouchPointer(event)) runEvent(widget, "onMouseDown", item);
     },
     onMouseUp: (event: MouseEvent<HTMLElement>) => {
-      if (inputMode !== "touch" && !isTouchPointerEvent(event)) runEvent(widget, "onMouseUp", item);
+      if (inputMode !== "touch" && !ignoreTouchPointer(event)) runEvent(widget, "onMouseUp", item);
     },
     onFocus: () => runEvent(widget, "onFocus", item),
     onBlur: () => runEvent(widget, "onBlur", item),

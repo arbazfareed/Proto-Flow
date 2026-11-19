@@ -113,6 +113,27 @@ describe("PreviewWidget input-mode interactions", () => {
     ]);
   });
 
+  it("counts a click the browser labels as touch when the screen is in mouse mode (touchpad click)", () => {
+    const { button, runEvent } = renderWidget("mouse");
+    // Some touchpads and touch screens label their clicks "touch". Mouse mode has no touch handlers,
+    // so nothing else would ever run for it.
+    const touchLabelled = (type: string, detail = 1) => {
+      const event = new MouseEvent(type, { bubbles: true, cancelable: true, detail, relatedTarget: document.body });
+      Object.defineProperty(event, "pointerType", { value: "touch" });
+      return event;
+    };
+    fireEvent(button, touchLabelled("click"));
+    fireEvent(button, touchLabelled("dblclick", 2));
+    fireEvent(button, touchLabelled("mousedown"));
+    fireEvent(button, touchLabelled("mouseup"));
+    expect(runEvent.mock.calls.map(([, event]) => event)).toEqual([
+      "onClick",
+      "onDoubleClick",
+      "onMouseDown",
+      "onMouseUp",
+    ]);
+  });
+
   it("keeps keyboard triggers available in every input mode", () => {
     for (const mode of ["touch", "mouse", "both"] as const) {
       cleanup();
