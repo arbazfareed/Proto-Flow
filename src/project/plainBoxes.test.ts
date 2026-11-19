@@ -6,6 +6,12 @@ describe("plain layout boxes", () => {
   it("draws a Footer as a plain box like a Container, not a coloured card", () => {
     expect(PLAIN_BOX_TYPES.has("footer")).toBe(true);
     expect(PLAIN_BOX_TYPES.has("container")).toBe(true);
+    for (const type of ["panel", "drawer", "overlay", "sidebar", "navbar", "form"]) {
+      expect(PLAIN_BOX_TYPES.has(type)).toBe(true);
+    }
+    // Cards and modals keep their editable title.
+    expect(PLAIN_BOX_TYPES.has("card")).toBe(false);
+    expect(PLAIN_BOX_TYPES.has("modal")).toBe(false);
   });
 
   it("uses the same list in published prototypes", () => {
