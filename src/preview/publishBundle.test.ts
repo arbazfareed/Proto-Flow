@@ -49,6 +49,18 @@ describe("standalone published preview bundle", () => {
     expect(readableOn("not-a-colour")).toBe("#24212b");
   });
 
+  it("runs a Key down rule only for its chosen key (B9)", () => {
+    const source = PREVIEW_RUNTIME_SCRIPT.match(/function keyMatches\(ruleKey, pressedKey\) \{[\s\S]*?\n\}/)?.[0];
+    expect(source).toBeDefined();
+    const keyMatches = new Function(`${source}; return keyMatches;`)() as (ruleKey: string | undefined, pressed: string) => boolean;
+    expect(keyMatches(undefined, "Tab")).toBe(true);
+    expect(keyMatches("", "a")).toBe(true);
+    expect(keyMatches("Enter", "Enter")).toBe(true);
+    expect(keyMatches("Enter", "Tab")).toBe(false);
+    expect(keyMatches("a", "A")).toBe(true);
+    expect(keyMatches(" ", " ")).toBe(true);
+  });
+
   it("renders semantic cards, charts, and flex-layout elements", () => {
     const project = createEmptyProject("Learning widget runtime");
     project.screens[0].widgets.push(
