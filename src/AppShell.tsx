@@ -542,6 +542,20 @@ function AppShell() {
 
   const save = useCallback(async (saveAs = false) => {
     const current = useStore.getState();
+    if (!isTauri() && !saveAs) {
+      // B62: in the browser, Save (Ctrl+S) keeps the project in browser storage and
+      // never downloads a file. "Download .pflow" is the separate action for a file copy.
+      try {
+        if (!writeAutosave(current.project, null)) throw new Error("storage unavailable");
+        useStore.getState().markClean();
+        trackEvent("project_saved");
+        notify("Saved in this browser. Use Download .pflow to get a file copy.");
+      } catch (error) {
+        console.error("Could not save the project in browser storage.", error);
+        notify("Could not save in this browser. Use Download .pflow to keep a file copy.", true);
+      }
+      return;
+    }
     try {
       const result = await saveProjectFile(
         current.project,
