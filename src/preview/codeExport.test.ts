@@ -159,7 +159,7 @@ describe("React code export preparation", () => {
     expect(source).toContain('runInteractions(widget, "onDoubleClick", item)');
     expect(source).toContain('"onSwipeLeft"');
     expect(source).toContain('"onPinchOut"');
-    expect(source).toContain('runInteractions(widget, "onKeyDown", item)');
+    expect(source).toContain('runInteractions(widget, "onKeyDown", item, event.key)');
     expect(source).toContain('if (event.pointerType !== "touch") runInteractions(widget, "onClick", item)');
     expect(source).toContain('...(mode === "mouse" ? {');
     expect(source).toContain('...(mode === "both" ? {');
