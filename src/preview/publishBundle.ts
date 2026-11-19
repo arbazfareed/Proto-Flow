@@ -273,10 +273,14 @@ function actions(rule, activeScreen, item, widget, localVariables) {
     }
   }
 }
-function fire(widget, event, item, renderAfter = true) {
+function keyMatches(ruleKey, pressedKey) {
+  if (!ruleKey) return true;
+  return String(ruleKey).toLowerCase() === String(pressedKey).toLowerCase();
+}
+function fire(widget, event, item, renderAfter = true, pressedKey = "") {
   const activeScreen = screen();
   let matchedRule = false;
-  for (const rule of activeScreen.interactionRules.filter((item) => item.event === event && (!item.widgetId || item.widgetId === widget.id))) {
+  for (const rule of activeScreen.interactionRules.filter((item) => item.event === event && (!item.widgetId || item.widgetId === widget.id) && (event !== "onKeyDown" || keyMatches(item.key, pressedKey)))) {
     const localVariables = Object.fromEntries((rule.localVariables || []).map((entry) => [entry.name, entry.initial]));
     const checks = rule.conditions.map((condition) => matches(condition, activeScreen.id, item, widget, localVariables));
     if (rule.conditions.length && (rule.conditionMode === "any" ? !checks.some(Boolean) : !checks.every(Boolean))) continue;
@@ -340,7 +344,7 @@ function bindWidgetEvents(element, widget, item) {
   element.addEventListener("focusin", () => fire(widget, "onFocus", item));
   element.addEventListener("focusout", () => fire(widget, "onBlur", item));
   element.addEventListener("keydown", (event) => {
-    fire(widget, "onKeyDown", item);
+    fire(widget, "onKeyDown", item, true, event.key);
     // On every screen, Enter or Space on a clickable widget acts as a click (B2, WCAG 2.1.1).
     // Real buttons and form fields already do this themselves.
     if ((event.key === "Enter" || event.key === " ") && event.target === element && !NATIVE_KEY_TARGETS.includes(element.tagName)) {

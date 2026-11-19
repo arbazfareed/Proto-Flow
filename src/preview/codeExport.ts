@@ -166,10 +166,11 @@ ${EXPRESSION_RUNTIME_SOURCE}
     }
     return value;
   };
-  const runInteractions = (widget: Widget, eventName: string, item?: Record<string, unknown>) => {
+  const runInteractions = (widget: Widget, eventName: string, item?: Record<string, unknown>, pressedKey = "") => {
     const updates: Record<string, unknown> = {};
     for (const rule of screen.interactionRules.filter((entry) =>
-      entry.event === eventName && (!entry.widgetId || entry.widgetId === widget.id))) {
+      entry.event === eventName && (!entry.widgetId || entry.widgetId === widget.id) &&
+      (eventName !== "onKeyDown" || !entry.key || entry.key.toLowerCase() === pressedKey.toLowerCase()))) {
       const localVariables: Record<string, unknown> = {};
       for (const definition of rule.localVariables ?? []) {
         let localValue = definition.initial;
@@ -237,7 +238,7 @@ ${EXPRESSION_RUNTIME_SOURCE}
       onFocus: () => runInteractions(widget, "onFocus", item),
       onBlur: () => runInteractions(widget, "onBlur", item),
       onKeyDown: (event: { key: string; target: unknown; currentTarget: { tagName: string }; preventDefault: () => void }) => {
-        runInteractions(widget, "onKeyDown", item);
+        runInteractions(widget, "onKeyDown", item, event.key);
         // On every screen, Enter or Space on a clickable widget acts as a click (B2). Real
         // buttons and form fields already do this themselves.
         if ((event.key === "Enter" || event.key === " ") && event.target === event.currentTarget &&

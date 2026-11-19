@@ -192,6 +192,12 @@ function isCompleteRule(rule: InteractionRule): boolean {
   return InteractionRuleSchema.safeParse(rule).success;
 }
 
+const KEY_CHOICES: Array<[string, string]> = [
+  ["", "Any key"], ["Enter", "Enter"], [" ", "Space"], ["Escape", "Escape"], ["Tab", "Tab"],
+  ["ArrowUp", "Arrow up"], ["ArrowDown", "Arrow down"], ["ArrowLeft", "Arrow left"],
+  ["ArrowRight", "Arrow right"], ["Backspace", "Backspace"], ["Delete", "Delete"],
+];
+
 export function InteractionBuilder({
   project,
   screen,
@@ -511,6 +517,20 @@ export function InteractionBuilder({
               ))}
             </select>
           </label>
+          {rule.event === "onKeyDown" && (
+            <label>Key
+              <select
+                aria-label="Key"
+                value={rule.key ?? ""}
+                onChange={(event) => {
+                  const key = event.currentTarget.value;
+                  updateRule(rule.id, (item) => ({ ...item, key: key || undefined }));
+                }}
+              >
+                {KEY_CHOICES.map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+              </select>
+            </label>
+          )}
           <div className="interaction-subheading">
             <span>Conditions</span>
             <button type="button" onClick={() => updateRule(rule.id, (item) => ({

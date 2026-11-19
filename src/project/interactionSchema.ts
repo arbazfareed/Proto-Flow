@@ -101,6 +101,8 @@ export const InteractionRuleSchema = z
       "onKeyDown",
     ]),
     conditionMode: z.enum(["all", "any"]).optional(),
+    // Only for "Key down": run this rule for this key only (an event.key value). Empty means any key.
+    key: z.string().max(40).optional(),
     conditions: z.array(InteractionConditionSchema),
     actions: z.array(InteractionActionSchema).min(1),
     localVariables: z.array(InteractionLocalVariableSchema).optional(),
