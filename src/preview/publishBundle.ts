@@ -461,7 +461,7 @@ function drawIcon(element, name, strokeWidth, size) {
   if (node && size) { node.setAttribute("width", size); node.setAttribute("height", size); }
   return true;
 }
-const PLAIN_BOX_TYPES = ["container", "frame", "group", "section"];
+const PLAIN_BOX_TYPES = ["container", "frame", "group", "section", "footer"];
 function readableOn(color, opacity) {
   // Dark or white label for a button, whichever reads better on its fill (as on the canvas).
   const hex = typeof color === "string" ? color.trim().replace(/^#/, "") : "";
