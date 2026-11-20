@@ -68,6 +68,8 @@ describe("local project autosave", () => {
     vi.setSystemTime(new Date("2026-01-01T12:00:00.000Z"));
     storage.clear();
     vi.stubGlobal("localStorage", storage);
+    // These tests are about localStorage alone; say so, so no other test file can change that.
+    vi.stubGlobal("indexedDB", undefined);
     vi.stubGlobal("window", {
       setInterval: globalThis.setInterval.bind(globalThis),
       clearInterval: globalThis.clearInterval.bind(globalThis),
