@@ -194,8 +194,13 @@ export async function saveProjectFile(
   project: Project,
   currentPath: string | null,
   saveAs = false,
+  options: { download?: boolean } = {},
 ): Promise<SavedProject | null> {
-  if (!isTauri()) return saveProjectInBrowser(project, currentPath, saveAs);
+  if (!isTauri()) {
+    // The "Download .pflow" button always downloads a copy, even where the browser could save in place.
+    if (options.download) return downloadProjectInBrowser(project);
+    return saveProjectInBrowser(project, currentPath, saveAs);
+  }
   let path = currentPath;
   if (saveAs || !path) {
     path = await invoke<string | null>("pick_project_save_path", {

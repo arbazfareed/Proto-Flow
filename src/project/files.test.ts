@@ -493,6 +493,23 @@ describe("saving in the browser when it can write to a file (B62)", () => {
     expect(handle.writable.write).toHaveBeenCalledOnce();
   });
 
+  it("the Download button still downloads a copy, without opening the file picker", async () => {
+    const showSaveFilePicker = vi.fn();
+    const click = vi.fn();
+    const link = { href: "", download: "", style: {} as Record<string, string>, click, remove: vi.fn() };
+    vi.stubGlobal("window", { showSaveFilePicker, setTimeout: vi.fn() });
+    vi.stubGlobal("document", { createElement: vi.fn(() => link), body: { append: vi.fn() } });
+    vi.stubGlobal("URL", { createObjectURL: vi.fn(() => "blob:copy"), revokeObjectURL: vi.fn() });
+    const project = createEmptyProject("Copy of my work");
+
+    const result = await saveProjectFile(project, null, true, { download: true });
+
+    expect(result).toEqual({ path: "Copy of my work.pflow", project, method: "download" });
+    expect(showSaveFilePicker).not.toHaveBeenCalled();
+    expect(click).toHaveBeenCalledOnce();
+    expect(link.download).toBe("Copy of my work.pflow");
+  });
+
   it("returns null when the open picker is closed", async () => {
     vi.stubGlobal("window", {
       showOpenFilePicker: vi.fn(async () => {

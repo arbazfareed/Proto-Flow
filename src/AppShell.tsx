@@ -540,13 +540,14 @@ function AppShell() {
     setUpdateCheckRequest((requestId) => requestId + 1);
   }, [notify]);
 
-  const save = useCallback(async (saveAs = false) => {
+  const save = useCallback(async (saveAs = false, options: { download?: boolean } = {}) => {
     const current = useStore.getState();
     try {
       const result = await saveProjectFile(
         current.project,
         saveAs ? null : current.filePath,
         saveAs,
+        options,
       );
       if (!result) return;
       useStore.setState({ project: result.project });
@@ -565,9 +566,11 @@ function AppShell() {
         writeAutosave(result.project, null);
       }
       notify(
-        result.method === "download"
-          ? `Downloaded ${result.path} to your Downloads folder. This browser cannot save over a file, so each save downloads a new copy. Use Open project to reopen it.`
-          : "Project saved",
+        result.method !== "download"
+          ? "Project saved"
+          : options.download
+            ? `Downloaded ${result.path} to your Downloads folder.`
+            : `Downloaded ${result.path} to your Downloads folder. This browser cannot save over a file, so each save downloads a new copy. Use Open project to reopen it.`,
       );
     } catch (error) {
       notify(
@@ -1315,7 +1318,7 @@ function AppShell() {
         onNew={createNewProject}
         onOpen={() => void openFile()}
         onSave={() => void save()}
-        onSaveAs={() => void save(true)}
+        onSaveAs={() => void save(true, { download: true })}
         onUndo={undo}
         onRedo={redo}
         onOpenPalette={() => setPaletteOpen(true)}
