@@ -219,6 +219,33 @@ describe("standalone published preview bundle", () => {
     dom.window.close();
   });
 
+  it("treats a pen or stylus click like a mouse click on Both screens (B12)", () => {
+    const project = createEmptyProject("Pen export");
+    const screen = project.screens[0];
+    screen.inputMode = "both";
+    const base = { rotation: 0, opacity: 1, visible: true, locked: false, zIndex: 0, style: {}, width: 120, height: 40 };
+    const button = { ...base, id: crypto.randomUUID(), type: "button", x: 10, y: 10, props: { label: "Go" } } as Widget;
+    const label = { ...base, id: crypto.randomUUID(), type: "text", x: 10, y: 80, props: { text: "Count: {{count}}" } } as Widget;
+    screen.widgets.push(button, label);
+    project.variables.push({ id: crypto.randomUUID(), name: "count", type: "number", initial: 0, scope: "project" });
+    screen.interactionRules = [{
+      id: crypto.randomUUID(), widgetId: button.id, event: "onClick", conditionMode: "all", conditions: [],
+      actions: [{ type: "setVariable", target: "count", value: "[[ count + 1 ]]" }],
+    }];
+    const dom = new JSDOM(generatePublishedPreviewHtml(project), { runScripts: "dangerously", pretendToBeVisual: true });
+    const press = (pointerType: string) => {
+      const target = Array.from(dom.window.document.querySelectorAll("[data-screen-id] *")).find((node) => node.textContent === "Go");
+      const event = new dom.window.Event("pointerup", { bubbles: true });
+      Object.defineProperty(event, "pointerType", { value: pointerType });
+      target?.dispatchEvent(event);
+      return dom.window.document.querySelector("[data-screen-id]")?.textContent ?? "";
+    };
+    expect(press("pen")).toContain("Count: 1");
+    expect(press("mouse")).toContain("Count: 2");
+    expect(press("touch")).toContain("Count: 2");
+    dom.window.close();
+  });
+
   it("shows no loop notice when screens do not loop (B39)", () => {
     const dom = new JSDOM(generatePublishedPreviewHtml(createEmptyProject("No loop")), { runScripts: "dangerously", pretendToBeVisual: true });
     expect(dom.window.document.getElementById("loop-notice")).toBeNull();
