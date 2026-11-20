@@ -2,6 +2,7 @@
 
 import type { Project } from "../project/schema";
 import { EXPRESSION_RUNTIME_SOURCE } from "../project/expressions";
+import { CONDITION_COMPARE_RUNTIME_SOURCE } from "../project/conditionCompare";
 import { widgetNotesCodeComments } from "../project/widgetNotes";
 import { ensureRichTextRuns } from "../project/richText";
 import { projectIconSvgs } from "./iconExport";
@@ -132,6 +133,7 @@ const repeaterItemVisible = (widget: Widget, item: Record<string, unknown>): boo
 
 export default function App() {
 ${EXPRESSION_RUNTIME_SOURCE}
+${CONDITION_COMPARE_RUNTIME_SOURCE}
   void interFontLicense;
   const fontFace = \`@font-face{font-family:Inter;src:url("\${interFontData}") format("woff2");font-style:normal;font-weight:100 900;font-display:swap}@media(prefers-reduced-motion:reduce){.pf-export *{animation:none!important;transition:none!important}}\`;
   const [screenId, setScreenId] = useState(project.startScreenId);
@@ -188,16 +190,7 @@ ${EXPRESSION_RUNTIME_SOURCE}
         const expected = typeof condition.value === "string"
           ? resolveActionValue(condition.value, variables, item, widget)
           : condition.value;
-        switch (condition.operator) {
-          case "equals": return current === expected;
-          case "notEquals": return current !== expected;
-          case "greaterThan": return typeof current === "number" && typeof expected === "number" && current > expected;
-          case "greaterThanOrEqual": return typeof current === "number" && typeof expected === "number" && current >= expected;
-          case "lessThan": return typeof current === "number" && typeof expected === "number" && current < expected;
-          case "lessThanOrEqual": return typeof current === "number" && typeof expected === "number" && current <= expected;
-          case "contains": return typeof current === "string" && typeof expected === "string" && current.includes(expected);
-          default: return false;
-        }
+        return compareCondition(condition.operator, current, expected);
       });
       if (rule.conditions.length && (rule.conditionMode === "any" ? !matches.some(Boolean) : !matches.every(Boolean))) continue;
       for (const action of rule.actions) {

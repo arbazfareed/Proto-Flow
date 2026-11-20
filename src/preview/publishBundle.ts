@@ -3,6 +3,7 @@ import { iconDataScript } from "./iconExport";
 
 import type { Project } from "../project/schema";
 import { EXPRESSION_RUNTIME_SOURCE } from "../project/expressions";
+import { CONDITION_COMPARE_RUNTIME_SOURCE } from "../project/conditionCompare";
 import { ensureRichTextRuns } from "../project/richText";
 import interFont from "@fontsource-variable/inter/files/inter-latin-wght-normal.woff2?inline";
 import interFontLicense from "@fontsource-variable/inter/LICENSE?raw";
@@ -11,6 +12,7 @@ export const INTER_FONT_LICENSE = interFontLicense;
 
 export const PREVIEW_RUNTIME_SCRIPT = String.raw`
 ${EXPRESSION_RUNTIME_SOURCE}
+${CONDITION_COMPARE_RUNTIME_SOURCE}
 const project = JSON.parse(document.getElementById("project-data").textContent);
 const stage = document.getElementById("stage");
 const screenPicker = document.getElementById("screen-picker");
@@ -214,16 +216,7 @@ function matches(condition, activeScreen, item, widget, localVariables) {
       });
     } catch { return false; }
   }
-  switch (condition.operator) {
-    case "equals": return current === expected;
-    case "notEquals": return current !== expected;
-    case "greaterThan": return current > expected;
-    case "greaterThanOrEqual": return current >= expected;
-    case "lessThan": return current < expected;
-    case "lessThanOrEqual": return current <= expected;
-    case "contains": return typeof current === "string" && current.includes(expected);
-    default: return false;
-  }
+  return compareCondition(condition.operator, current, expected);
 }
 function actions(rule, activeScreen, item, widget, localVariables) {
   for (const action of rule.actions) {

@@ -16,6 +16,7 @@ import {
   getPanelStates,
   type PanelTransition,
 } from "../project/dynamicPanels";
+import { compareCondition } from "../project/conditionCompare";
 import {
   getRepeaterDataset,
   interpolateItem,
@@ -95,27 +96,7 @@ function conditionMatches(
   value: RuntimeVariableValue | undefined,
 ): boolean {
   if (value === undefined) return false;
-  switch (condition.operator) {
-    case "equals":
-      return value === condition.value;
-    case "notEquals":
-      return value !== condition.value;
-    case "greaterThan":
-      return typeof value === "number" && typeof condition.value === "number" &&
-        value > condition.value;
-    case "greaterThanOrEqual":
-      return typeof value === "number" && typeof condition.value === "number" &&
-        value >= condition.value;
-    case "lessThan":
-      return typeof value === "number" && typeof condition.value === "number" &&
-        value < condition.value;
-    case "lessThanOrEqual":
-      return typeof value === "number" && typeof condition.value === "number" &&
-        value <= condition.value;
-    case "contains":
-      return typeof value === "string" && typeof condition.value === "string" &&
-        value.includes(condition.value);
-  }
+  return compareCondition(condition.operator, value, condition.value);
 }
 
 export class PreviewRuntime {
