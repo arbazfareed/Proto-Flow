@@ -133,6 +133,8 @@ export interface CanvasWheelInput {
 const WHEEL_LINE_PIXELS = 16;
 const WHEEL_PAGE_PIXELS = 800;
 
+const MAX_WHEEL_ZOOM_DELTA = 12;
+
 /**
  * What the mouse wheel or a trackpad scroll does to the canvas (B29): Ctrl/Cmd+scroll (also a
  * trackpad pinch) zooms around the pointer, Shift+scroll pans sideways, and a plain scroll pans in
@@ -148,7 +150,11 @@ export function applyCanvasWheel(
   let deltaY = wheel.deltaY * unit;
 
   if (wheel.ctrlKey || wheel.metaKey) {
-    return zoomAroundPointer(view, pointer, view.zoom * Math.pow(1.01, -deltaY));
+    // B30: one mouse-wheel notch reports a delta of about 100, which used to zoom by 2.7x. Cap what a
+    // single event can do (about 12%) so three notches no longer jump from 58% to 400%.
+    // Trackpad pinches send small deltas and stay smooth.
+    const zoomDelta = Math.max(-MAX_WHEEL_ZOOM_DELTA, Math.min(MAX_WHEEL_ZOOM_DELTA, deltaY));
+    return zoomAroundPointer(view, pointer, view.zoom * Math.pow(1.01, -zoomDelta));
   }
 
   // Some systems already turn Shift+scroll into a sideways scroll, so only swap when they did not.
