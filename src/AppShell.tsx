@@ -540,13 +540,14 @@ function AppShell() {
     setUpdateCheckRequest((requestId) => requestId + 1);
   }, [notify]);
 
-  const save = useCallback(async (saveAs = false) => {
+  const save = useCallback(async (saveAs = false, options: { download?: boolean } = {}) => {
     const current = useStore.getState();
     try {
       const result = await saveProjectFile(
         current.project,
         saveAs ? null : current.filePath,
         saveAs,
+        options,
       );
       if (!result) return;
       useStore.setState({ project: result.project });
@@ -560,12 +561,17 @@ function AppShell() {
           console.error("Could not clear the saved autosave snapshot.", error);
         }
       } else {
-        // The browser cannot reopen a downloaded .pflow file, so the local
-        // recovery copy is the only way back into this project. Refresh it
-        // instead of deleting it.
+        // A browser save does not remove the local recovery copy. Refresh it instead of deleting
+        // it, so the project can still be recovered if the saved file is lost.
         writeAutosave(result.project, null);
       }
-      notify(isTauri() ? "Project saved" : `Project downloaded as ${result.path}`);
+      notify(
+        result.method !== "download"
+          ? "Project saved"
+          : options.download
+            ? `Downloaded ${result.path} to your Downloads folder.`
+            : `Downloaded ${result.path} to your Downloads folder. This browser cannot save over a file, so each save downloads a new copy. Use Open project to reopen it.`,
+      );
     } catch (error) {
       notify(
         error instanceof Error ? error.message : "Could not save project.",
@@ -1312,7 +1318,7 @@ function AppShell() {
         onNew={createNewProject}
         onOpen={() => void openFile()}
         onSave={() => void save()}
-        onSaveAs={() => void save(true)}
+        onSaveAs={() => void save(true, { download: true })}
         onUndo={undo}
         onRedo={redo}
         onOpenPalette={() => setPaletteOpen(true)}
