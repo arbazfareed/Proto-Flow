@@ -1,4 +1,4 @@
-import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("@tauri-apps/api/core", () => ({
   invoke: vi.fn(),
@@ -137,7 +137,7 @@ describe("project file commands", () => {
 
     const result = await saveProjectFile(project, null);
 
-    expect(result).toEqual({ path: "Offline demo.pflow", project });
+    expect(result).toEqual({ path: "Offline demo.pflow", project, method: "download" });
     expect(invokeMock).not.toHaveBeenCalled();
     expect(createObjectURL).toHaveBeenCalledWith(expect.any(Blob));
     expect(click).toHaveBeenCalledOnce();
@@ -379,5 +379,139 @@ describe("opening a .pflow file in the browser (B45)", () => {
     await expect(openProjectFile()).rejects.toThrow("too large to open in the browser");
     expect(text).not.toHaveBeenCalled();
     vi.unstubAllGlobals();
+  });
+});
+
+describe("saving in the browser when it can write to a file (B62)", () => {
+  type Writable = { write: ReturnType<typeof vi.fn>; close: ReturnType<typeof vi.fn>; abort: ReturnType<typeof vi.fn> };
+
+  function makeHandle(name: string, opts: { failWrite?: boolean; text?: string } = {}) {
+    const writable: Writable = {
+      write: vi.fn(async () => { if (opts.failWrite) throw new Error("Disk is full"); }),
+      close: vi.fn(async () => undefined),
+      abort: vi.fn(async () => undefined),
+    };
+    const text = opts.text ?? "";
+    return {
+      name,
+      writable,
+      createWritable: vi.fn(async () => writable),
+      getFile: vi.fn(async () => ({ name, size: text.length, text: async () => text }) as unknown as File),
+    };
+  }
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    isTauriMock.mockReturnValue(false);
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it("asks where to save once, then overwrites the same file on every later save", async () => {
+    const handle = makeHandle("Checkout flow.pflow");
+    const showSaveFilePicker = vi.fn(async () => handle);
+    vi.stubGlobal("window", { showSaveFilePicker });
+    const project = createEmptyProject("Checkout flow");
+
+    const first = await saveProjectFile(project, null);
+    expect(first).toEqual({ path: "Checkout flow.pflow", project, method: "file" });
+    expect(showSaveFilePicker).toHaveBeenCalledOnce();
+    expect(showSaveFilePicker).toHaveBeenCalledWith(expect.objectContaining({ suggestedName: "Checkout flow.pflow" }));
+
+    const second = await saveProjectFile(project, "Checkout flow.pflow");
+    const third = await saveProjectFile(project, "Checkout flow.pflow");
+
+    expect(second?.method).toBe("file");
+    expect(third?.method).toBe("file");
+    expect(showSaveFilePicker).toHaveBeenCalledOnce();
+    expect(handle.createWritable).toHaveBeenCalledTimes(3);
+    expect(handle.writable.write).toHaveBeenCalledTimes(3);
+    expect(handle.writable.close).toHaveBeenCalledTimes(3);
+    expect(JSON.parse(handle.writable.write.mock.calls[0][0] as string).name).toBe("Checkout flow");
+  });
+
+  it("asks again for Save As, for a new project, and when the file name no longer matches", async () => {
+    const first = makeHandle("One.pflow");
+    const second = makeHandle("Two.pflow");
+    const showSaveFilePicker = vi.fn()
+      .mockResolvedValueOnce(first)
+      .mockResolvedValueOnce(second)
+      .mockResolvedValueOnce(second)
+      .mockResolvedValueOnce(first);
+    vi.stubGlobal("window", { showSaveFilePicker });
+    const project = createEmptyProject("One");
+
+    await saveProjectFile(project, null);
+    await saveProjectFile(project, "One.pflow", true); // Save As
+    expect(showSaveFilePicker).toHaveBeenCalledTimes(2);
+
+    await saveProjectFile(project, null); // a new project has no file name yet
+    expect(showSaveFilePicker).toHaveBeenCalledTimes(3);
+
+    await saveProjectFile(project, "Other.pflow"); // not the file we hold a handle for
+    expect(showSaveFilePicker).toHaveBeenCalledTimes(4);
+  });
+
+  it("does nothing when the file picker is closed", async () => {
+    const showSaveFilePicker = vi.fn(async () => {
+      throw new DOMException("The user aborted a request.", "AbortError");
+    });
+    vi.stubGlobal("window", { showSaveFilePicker });
+
+    await expect(saveProjectFile(createEmptyProject("Cancelled"), null)).resolves.toBeNull();
+  });
+
+  it("reports a write failure, aborts the write, and asks again on the next save", async () => {
+    const broken = makeHandle("Broken.pflow", { failWrite: true });
+    const fresh = makeHandle("Broken.pflow");
+    const showSaveFilePicker = vi.fn().mockResolvedValueOnce(broken).mockResolvedValueOnce(fresh);
+    vi.stubGlobal("window", { showSaveFilePicker });
+    const project = createEmptyProject("Broken");
+
+    await expect(saveProjectFile(project, null)).rejects.toThrow("Disk is full");
+    expect(broken.writable.abort).toHaveBeenCalledOnce();
+
+    await expect(saveProjectFile(project, "Broken.pflow")).resolves.toMatchObject({ method: "file" });
+    expect(showSaveFilePicker).toHaveBeenCalledTimes(2);
+  });
+
+  it("saves back into the file that was opened with the file picker", async () => {
+    const project = createEmptyProject("Opened in browser");
+    const handle = makeHandle("Opened in browser.pflow", { text: serializeProject(project) });
+    const showOpenFilePicker = vi.fn(async () => [handle]);
+    const showSaveFilePicker = vi.fn();
+    vi.stubGlobal("window", { showOpenFilePicker, showSaveFilePicker });
+
+    await expect(openProjectFile()).resolves.toEqual({ project, path: "Opened in browser.pflow" });
+    await expect(saveProjectFile(project, "Opened in browser.pflow")).resolves.toMatchObject({
+      path: "Opened in browser.pflow",
+      method: "file",
+    });
+    expect(showSaveFilePicker).not.toHaveBeenCalled();
+    expect(handle.writable.write).toHaveBeenCalledOnce();
+  });
+
+  it("returns null when the open picker is closed", async () => {
+    vi.stubGlobal("window", {
+      showOpenFilePicker: vi.fn(async () => {
+        throw new DOMException("The user aborted a request.", "AbortError");
+      }),
+    });
+
+    await expect(openProjectFile()).resolves.toBeNull();
+  });
+
+  it("still refuses to save a project whose images live beside a desktop project", async () => {
+    vi.stubGlobal("window", { showSaveFilePicker: vi.fn() });
+    const project = createEmptyProject("Desktop images");
+    project.screens[0].widgets = [{
+      id: crypto.randomUUID(), type: "image", x: 0, y: 0, width: 50, height: 50, rotation: 0,
+      opacity: 1, visible: true, locked: false, zIndex: 0, style: {},
+      props: { assetPath: "assets/a.png", src: "asset://a.png" },
+    }];
+
+    await expect(saveProjectFile(project, null)).rejects.toThrow("stored beside its desktop project");
   });
 });

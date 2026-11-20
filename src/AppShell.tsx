@@ -560,12 +560,15 @@ function AppShell() {
           console.error("Could not clear the saved autosave snapshot.", error);
         }
       } else {
-        // The browser cannot reopen a downloaded .pflow file, so the local
-        // recovery copy is the only way back into this project. Refresh it
-        // instead of deleting it.
+        // A browser save does not remove the local recovery copy. Refresh it instead of deleting
+        // it, so the project can still be recovered if the saved file is lost.
         writeAutosave(result.project, null);
       }
-      notify(isTauri() ? "Project saved" : `Project downloaded as ${result.path}`);
+      notify(
+        result.method === "download"
+          ? `Downloaded ${result.path} to your Downloads folder. This browser cannot save over a file, so each save downloads a new copy. Use Open project to reopen it.`
+          : "Project saved",
+      );
     } catch (error) {
       notify(
         error instanceof Error ? error.message : "Could not save project.",
