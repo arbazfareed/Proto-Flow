@@ -99,6 +99,10 @@ function conditionMatches(
   return compareCondition(condition.operator, value, condition.value);
 }
 
+export const MAX_AUTOMATIC_NAVIGATIONS = 20;
+export const LOOP_DETECTED_MESSAGE =
+  "Loop detected: screens keep sending the prototype to each other from On load rules, so it stopped after 20 automatic moves. Change one of the On load rules to break the loop.";
+
 export class PreviewRuntime {
   private project: Project;
   private readonly variables: VariableRuntimeStore;
@@ -110,6 +114,9 @@ export class PreviewRuntime {
   private repeaterData: Record<string, unknown> = {};
   private widgetTexts: Record<string, string> = {};
   lastRunRuleCount = 0;
+  // B39: how many screen loads in a row were sent straight on to another screen by an On load rule.
+  private loadNavigationChain = 0;
+  private inLoadEvents = false;
   lastAddedRepeaterRows = 0;
   lastPanelStateChanges = 0;
 
@@ -191,6 +198,8 @@ export class PreviewRuntime {
       throw new Error(`Cannot navigate to unknown screen "${screenId}".`);
     }
     if (screenId === this.screenId) return;
+    // A person moving to another screen starts a fresh count; only automatic moves from On load rules add up.
+    if (!this.inLoadEvents) this.loadNavigationChain = 0;
     this.backStack.push(this.screenId);
     this.screenId = screenId;
   }
@@ -274,6 +283,13 @@ export class PreviewRuntime {
     this.lastPanelStateChanges = 0;
     const screen = this.currentScreen;
     const errors: string[] = [];
+    // B39: screens whose On load rules send the prototype to each other would run forever.
+    if (this.loadNavigationChain >= MAX_AUTOMATIC_NAVIGATIONS) {
+      return [LOOP_DETECTED_MESSAGE];
+    }
+    const startScreenId = this.screenId;
+    this.inLoadEvents = true;
+    try {
     for (const rule of screen.interactionRules) {
       if (rule.event !== "onLoad") continue;
       let widget: Widget | undefined;
@@ -286,6 +302,10 @@ export class PreviewRuntime {
       }
       this.executeRule(rule, screen, errors, undefined, widget);
     }
+    } finally {
+      this.inLoadEvents = false;
+    }
+    this.loadNavigationChain = this.screenId !== startScreenId ? this.loadNavigationChain + 1 : 0;
     return errors;
   }
 

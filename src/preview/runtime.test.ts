@@ -49,6 +49,44 @@ function createProject(): Project {
 }
 
 describe("PreviewRuntime", () => {
+  it("stops two screens that send each other on load after 20 moves, then lets a person carry on (B39)", () => {
+    const project = createProject();
+    const [first, second] = project.screens;
+    const goTo = (target: string): InteractionRule => ({
+      id: crypto.randomUUID(), event: "onLoad", conditionMode: "all", conditions: [],
+      actions: [{ type: "navigate", target }],
+    });
+    first.interactionRules = [goTo(second.id)];
+    second.interactionRules = [goTo(first.id)];
+    const runtime = new PreviewRuntime(project);
+    let loopMessage: string | undefined;
+    let loads = 0;
+    for (; loads < 200 && !loopMessage; loads += 1) {
+      loopMessage = runtime.runLoadEvents(runtime.currentScreen.widgets).find((message) => message.startsWith("Loop detected"));
+    }
+    expect(loopMessage).toBeDefined();
+    expect(loads).toBeLessThanOrEqual(22);
+    const stoppedOn = runtime.currentScreenId;
+    expect(runtime.runLoadEvents(runtime.currentScreen.widgets)[0]).toMatch(/^Loop detected/);
+    expect(runtime.currentScreenId).toBe(stoppedOn);
+    // A person choosing a screen starts a fresh count.
+    runtime.navigate(stoppedOn === first.id ? second.id : first.id);
+    expect(runtime.runLoadEvents(runtime.currentScreen.widgets)).toEqual([]);
+  });
+
+  it("does not warn about a normal chain of a few automatic moves (B39)", () => {
+    const project = createProject();
+    const [first, second] = project.screens;
+    first.interactionRules = [{
+      id: crypto.randomUUID(), event: "onLoad", conditionMode: "all", conditions: [],
+      actions: [{ type: "navigate", target: second.id }],
+    }];
+    const runtime = new PreviewRuntime(project);
+    expect(runtime.runLoadEvents(runtime.currentScreen.widgets)).toEqual([]);
+    expect(runtime.currentScreenId).toBe(second.id);
+    expect(runtime.runLoadEvents(runtime.currentScreen.widgets)).toEqual([]);
+  });
+
   it("runs a screen-level On load rule once, however many widgets the screen has (B36)", () => {
     const project = createProject();
     const screen = project.screens[0];

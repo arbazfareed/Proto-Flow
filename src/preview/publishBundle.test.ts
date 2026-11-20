@@ -1,6 +1,6 @@
 import { JSDOM } from "jsdom";
 import { describe, expect, it } from "vitest";
-import { createEmptyProject, type Widget } from "../project/schema";
+import { createEmptyProject, type Widget, type InteractionRule } from "../project/schema";
 import {
   generatePublishedPreviewHtml,
   getPublishedProjectData,
@@ -195,6 +195,33 @@ describe("standalone published preview bundle", () => {
     const stage = dom.window.document.querySelector("[data-screen-id]");
     expect(stage?.textContent).toContain("Count: 1");
     expect(stage?.textContent).not.toContain("Count: 0");
+    dom.window.close();
+  });
+
+  it("stops two screens that send each other on load and shows a Loop detected notice (B39)", () => {
+    const project = createEmptyProject("Loop export");
+    const first = project.screens[0];
+    const second = { ...first, id: crypto.randomUUID(), name: "Other", widgets: [] as Widget[], interactionRules: [] as InteractionRule[] };
+    project.screens.push(second);
+    const goTo = (target: string) => ({
+      id: crypto.randomUUID(), event: "onLoad" as const, conditionMode: "all" as const, conditions: [],
+      actions: [{ type: "navigate" as const, target }],
+    });
+    first.interactionRules = [goTo(second.id)];
+    second.interactionRules = [goTo(first.id)];
+
+    const started = Date.now();
+    const dom = new JSDOM(generatePublishedPreviewHtml(project), { runScripts: "dangerously", pretendToBeVisual: true });
+    expect(Date.now() - started).toBeLessThan(3000);
+    const notice = dom.window.document.getElementById("loop-notice");
+    expect(notice?.getAttribute("role")).toBe("alert");
+    expect(notice?.textContent).toContain("Loop detected");
+    dom.window.close();
+  });
+
+  it("shows no loop notice when screens do not loop (B39)", () => {
+    const dom = new JSDOM(generatePublishedPreviewHtml(createEmptyProject("No loop")), { runScripts: "dangerously", pretendToBeVisual: true });
+    expect(dom.window.document.getElementById("loop-notice")).toBeNull();
     dom.window.close();
   });
 
