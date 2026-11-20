@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { ArrowRight, Clock3, X } from "lucide-react";
 import { clearAutosave, readAutosaveAsync, writeAutosave, type AutosaveSnapshot } from "../project/autosave";
 import { parseProject } from "../project/schema";
+import { getPreviousSession } from "../project/sessionExit";
 import { useStore } from "../store";
 
 export function RestoreModal() {
@@ -47,14 +48,19 @@ export function RestoreModal() {
 
   if (!snapshot) return null;
 
+  // "Crash" is only said when the last session really ended without closing (B35).
+  const crashed = getPreviousSession() === "crashed";
+
   return (
     <div className="overlay">
       <section className="dialog-card" role="dialog" aria-modal="true" aria-labelledby="recovery-title">
         <div className="dialog-icon recovery-dialog-icon"><Clock3 size={19} /></div>
         <button className="icon-button dialog-close" aria-label="Discard recovery prompt" onClick={discard}><X size={17} /></button>
-        <span className="eyebrow">CRASH RECOVERY</span>
-        <h2 id="recovery-title">Pick up where you left off?</h2>
-        <p>Proto Flow found unsaved changes from {new Date(snapshot.ts).toLocaleString()}. Restore the recovered copy of <strong>{snapshot.project.name}</strong>?</p>
+        <span className="eyebrow">{crashed ? "CRASH RECOVERY" : "UNSAVED WORK"}</span>
+        <h2 id="recovery-title">Restore unsaved work?</h2>
+        <p>
+          {crashed ? "Proto Flow did not close properly last time. It found" : "Proto Flow found"} unsaved changes from {new Date(snapshot.ts).toLocaleString()}. Restore the recovered copy of <strong>{snapshot.project.name}</strong>?
+        </p>
         <div className="dialog-actions">
           <button className="button button-quiet" onClick={discard}>Discard</button>
           <button className="button button-primary" onClick={restore}>Restore project <ArrowRight size={15} /></button>

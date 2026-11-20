@@ -1,13 +1,56 @@
 import { screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it } from "vitest";
 import { AUTOSAVE_KEY } from "../project/autosave";
 import { createEmptyProject } from "../project/schema";
+import { resetSessionTrackingForTests, startSessionTracking } from "../project/sessionExit";
 import { useStore } from "../store";
 import { renderWithProviders } from "../test/render";
 import { RestoreModal } from "./RestoreModal";
 
 describe("RestoreModal", () => {
+  afterEach(() => {
+    resetSessionTrackingForTests();
+    localStorage.removeItem("proto-flow-session-state");
+  });
+
+  function seedSnapshot(name: string) {
+    localStorage.setItem(AUTOSAVE_KEY, JSON.stringify({ project: createEmptyProject(name), ts: Date.now() }));
+  }
+
+  it("asks to restore unsaved work, without saying crash, after a normal close or reload (B35)", async () => {
+    seedSnapshot("Reloaded project");
+    localStorage.setItem("proto-flow-session-state", "clean");
+    startSessionTracking();
+    renderWithProviders(<RestoreModal />);
+
+    const dialog = await screen.findByRole("dialog", { name: "Restore unsaved work?" });
+    expect(dialog).toHaveTextContent("UNSAVED WORK");
+    expect(dialog).toHaveTextContent("Proto Flow found unsaved changes");
+    expect(dialog).not.toHaveTextContent(/crash/i);
+    expect(dialog).not.toHaveTextContent("did not close properly");
+  });
+
+  it("says crash only when the last session really ended without closing (B35)", async () => {
+    seedSnapshot("Crashed project");
+    localStorage.setItem("proto-flow-session-state", "running");
+    startSessionTracking();
+    renderWithProviders(<RestoreModal />);
+
+    const dialog = await screen.findByRole("dialog", { name: "Restore unsaved work?" });
+    expect(dialog).toHaveTextContent("CRASH RECOVERY");
+    expect(dialog).toHaveTextContent("Proto Flow did not close properly last time");
+  });
+
+  it("does not say crash on a first start, when nothing is known", async () => {
+    seedSnapshot("First start project");
+    renderWithProviders(<RestoreModal />);
+
+    const dialog = await screen.findByRole("dialog", { name: "Restore unsaved work?" });
+    expect(dialog).toHaveTextContent("UNSAVED WORK");
+    expect(dialog).not.toHaveTextContent(/crash/i);
+  });
+
   it("restores a valid autosave and keeps a fresh recovery snapshot", async () => {
     const user = userEvent.setup();
     const project = createEmptyProject("Recovered project");
