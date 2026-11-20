@@ -218,6 +218,17 @@ function matches(condition, activeScreen, item, widget, localVariables) {
   }
   return compareCondition(condition.operator, current, expected);
 }
+let loadDepth = 0;
+const MAX_AUTOMATIC_LOADS = 20;
+function showLoopNotice() {
+  if (document.getElementById("loop-notice")) return;
+  const notice = document.createElement("div");
+  notice.id = "loop-notice";
+  notice.setAttribute("role", "alert");
+  notice.textContent = "Loop detected: screens keep sending the prototype to each other from On load rules, so it stopped after 20 automatic moves.";
+  notice.style.cssText = "position:fixed;left:12px;right:12px;bottom:12px;padding:10px 14px;border-radius:8px;background:#7f1d1d;color:#fff;font:14px system-ui,sans-serif;z-index:2147483647";
+  document.body.append(notice);
+}
 function actions(rule, activeScreen, item, widget, localVariables) {
   for (const action of rule.actions) {
     if (action.type === "navigate" || action.type === "navigateTo") {
@@ -833,7 +844,11 @@ function render() {
     stage.append(renderWidget(widget, activeScreen));
   }
   if (loadedScreen !== activeScreen.id) {
+    // B39: On load rules that send screens to each other would recurse for ever; stop after 20 in a row.
+    if (loadDepth >= MAX_AUTOMATIC_LOADS) { showLoopNotice(); return; }
     loadedScreen = activeScreen.id;
+    loadDepth += 1;
+    try {
     let ranLoadRule = false;
     for (const rule of activeScreen.interactionRules.filter((item) => item.event === "onLoad")) {
       const localVariables = Object.fromEntries((rule.localVariables || []).map((entry) => [entry.name, entry.initial]));
@@ -847,6 +862,7 @@ function render() {
     // moved to another screen, so draw again. loadedScreen already matches, so this cannot loop (B38).
     if (loadedScreen === screenId && !ranLoadRule) return;
     render();
+    } finally { loadDepth -= 1; }
   }
 }
 screenPicker.addEventListener("change", () => {
