@@ -323,15 +323,16 @@ function bindWidgetEvents(element, widget, item) {
   if (mouseEnabled) {
     if (mode === "both") {
       element.addEventListener("pointerup", (event) => {
-        if (event.pointerType !== "mouse") return;
+        // B12: a pen or stylus acts like a mouse; only touch is handled separately.
+        if (event.pointerType === "touch") return;
         firePointer(widget, ["onClick"], item, event.clientX, event.clientY, element);
         fire(widget, "onMouseUp", item);
       });
       element.addEventListener("pointerenter", (event) => {
-        if (event.pointerType === "mouse") fire(widget, "onHover", item);
+        if (event.pointerType !== "touch") fire(widget, "onHover", item);
       });
       element.addEventListener("pointerdown", (event) => {
-        if (event.pointerType === "mouse") fire(widget, "onMouseDown", item);
+        if (event.pointerType !== "touch") fire(widget, "onMouseDown", item);
       });
     } else {
       element.addEventListener("click", (event) => firePointer(widget, ["onClick"], item, event.clientX, event.clientY, element));
@@ -366,7 +367,7 @@ function bindWidgetEvents(element, widget, item) {
   if (mode === "touch") {
     // Opened on a computer, a mouse click stands in for a tap.
     element.addEventListener("pointerup", (event) => {
-      if (event.pointerType === "mouse") firePointer(widget, ["onTap", "onClick"], item, event.clientX, event.clientY, element);
+      if (event.pointerType !== "touch") firePointer(widget, ["onTap", "onClick"], item, event.clientX, event.clientY, element);
     });
   }
   if (!touchEnabled) return;

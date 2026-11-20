@@ -262,7 +262,7 @@ ${CONDITION_COMPARE_RUNTIME_SOURCE}
       ...(mode === "touch" ? {
         // Opened on a computer, a mouse click stands in for a tap.
         onPointerUp: (event: { pointerType: string }) => {
-          if (event.pointerType === "mouse") runFirstInteraction(widget, ["onTap", "onClick"], item);
+          if (event.pointerType !== "touch") runFirstInteraction(widget, ["onTap", "onClick"], item);
         },
       } : {}),
       ...(mode === "both" ? {
@@ -270,19 +270,19 @@ ${CONDITION_COMPARE_RUNTIME_SOURCE}
           if (event.detail === 0) runInteractions(widget, "onClick", item);
         },
         onPointerUp: (event: { pointerType: string }) => {
-          if (event.pointerType === "mouse") {
+          if (event.pointerType !== "touch") {
             runInteractions(widget, "onClick", item);
             runInteractions(widget, "onMouseUp", item);
           }
         },
         onPointerEnter: (event: { pointerType: string }) => {
-          if (event.pointerType === "mouse") runInteractions(widget, "onHover", item);
+          if (event.pointerType !== "touch") runInteractions(widget, "onHover", item);
         },
         onPointerLeave: (event: { pointerType: string }) => {
-          if (event.pointerType === "mouse") runInteractions(widget, "onHover", item);
+          if (event.pointerType !== "touch") runInteractions(widget, "onHover", item);
         },
         onPointerDown: (event: { pointerType: string }) => {
-          if (event.pointerType === "mouse") runInteractions(widget, "onMouseDown", item);
+          if (event.pointerType !== "touch") runInteractions(widget, "onMouseDown", item);
         },
         onDoubleClick: (event: { pointerType?: string }) => {
           if (event.pointerType !== "touch") runInteractions(widget, "onDoubleClick", item);
