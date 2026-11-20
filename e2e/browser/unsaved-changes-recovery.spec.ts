@@ -21,7 +21,7 @@ test("warns before leaving with unsaved changes and keeps them recoverable", asy
   // B35: a normal reload is not a crash, so the prompt must not say so.
   const recovery = page.getByRole("dialog", { name: "Restore unsaved work?" });
   await expect(recovery).toBeVisible();
-  await expect(recovery.getByText("UNSAVED WORK")).toBeVisible();
+  await expect(recovery.locator(".eyebrow")).toHaveText("UNSAVED WORK");
   await expect(recovery.getByText(/crash/i)).toHaveCount(0);
   await recovery.getByRole("button", { name: /Restore project/ }).click();
   await expect(page.locator(".document-name")).toHaveText("Unsaved draft");
