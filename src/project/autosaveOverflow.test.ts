@@ -1,4 +1,4 @@
-import "fake-indexeddb/auto";
+import { IDBFactory } from "fake-indexeddb";
 import { beforeEach, afterEach, describe, expect, it, vi } from "vitest";
 import {
   AUTOSAVE_INTERVAL_MS,
@@ -60,6 +60,9 @@ describe("autosave when localStorage is full (B34)", () => {
     vi.useFakeTimers({ toFake: ["setInterval", "clearInterval", "Date"] });
     vi.setSystemTime(new Date("2026-01-01T12:00:00.000Z"));
     storage.clear();
+    // A fresh IndexedDB for every test, removed again afterwards so it cannot leak into other files
+    // (the test pool shares globals between files).
+    vi.stubGlobal("indexedDB", new IDBFactory());
     vi.stubGlobal("localStorage", storage);
     vi.stubGlobal("window", {
       setInterval: globalThis.setInterval.bind(globalThis),
