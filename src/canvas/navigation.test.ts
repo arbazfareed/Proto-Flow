@@ -164,9 +164,25 @@ describe("canvas wheel and trackpad scrolling | B29", () => {
 
   it("zooms around the pointer on Ctrl or Cmd+scroll", () => {
     const zoomed = applyCanvasWheel(view, { ...wheel, deltaY: -100, ctrlKey: true }, pointer);
-    expect(zoomed).toEqual(zoomAroundPointer(view, pointer, 1.5 * Math.pow(1.01, 100)));
+    expect(zoomed).toEqual(zoomAroundPointer(view, pointer, 1.5 * Math.pow(1.01, 12)));
     expect(applyCanvasWheel(view, { ...wheel, deltaY: -100, metaKey: true }, pointer)).toEqual(zoomed);
     expect(zoomed.zoom).toBeGreaterThan(view.zoom);
+  });
+
+  it("caps one wheel notch so three notches cannot jump from 58% to 400% (B30)", () => {
+    let current = { zoom: 0.58, pan: { x: 0, y: 0 } };
+    for (let notch = 0; notch < 3; notch += 1) {
+      current = applyCanvasWheel(current, { ...wheel, deltaY: -100, ctrlKey: true }, pointer);
+    }
+    expect(current.zoom).toBeGreaterThan(0.58);
+    expect(current.zoom).toBeLessThan(0.58 * 1.15 ** 3);
+    const out = applyCanvasWheel({ zoom: 1, pan: { x: 0, y: 0 } }, { ...wheel, deltaY: 100, ctrlKey: true }, pointer);
+    expect(out.zoom).toBeCloseTo(1 / Math.pow(1.01, 12));
+  });
+
+  it("keeps small trackpad pinch deltas smooth and uncapped (B30)", () => {
+    const pinch = applyCanvasWheel({ zoom: 1, pan: { x: 0, y: 0 } }, { ...wheel, deltaY: -4, ctrlKey: true }, pointer);
+    expect(pinch.zoom).toBeCloseTo(Math.pow(1.01, 4));
   });
 
   it("converts line and page wheel deltas to pixels", () => {
