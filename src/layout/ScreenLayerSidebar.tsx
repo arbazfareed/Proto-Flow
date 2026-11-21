@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { nextScreenName } from "../project/screenNames";
 import { itemCountLabel } from "./itemCountLabel";
 import type { CSSProperties, DragEvent, KeyboardEvent as ReactKeyboardEvent } from "react";
 import {
@@ -952,9 +953,7 @@ export function ScreenLayerSidebar({ tutorialProjectId }: { tutorialProjectId: s
     : activeScreen ? [activeScreen] : [];
 
   const addScreen = (device: ScreenDevice) => {
-    const name = device.presetId === "custom"
-      ? `Custom ${device.width} × ${device.height}`
-      : findDevicePreset(device.presetId)?.name ?? `Screen ${project.screens.length + 1}`;
+    const name = nextScreenName(project.screens);
     const screen: Screen = {
       id: crypto.randomUUID(),
       name,
