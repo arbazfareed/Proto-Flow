@@ -122,6 +122,62 @@ describe("importHtmlToWidgets", () => {
     expect(heading.y).toBeLessThan(paragraph.y);
   });
 
+  describe("B52: flex rows and default text colour", () => {
+    const navHtml = (navCss: string, extra = "") => `<!doctype html><html><head><style>
+      body { margin: 0; font-family: Arial, sans-serif; }
+      nav { display: flex; padding: 12px 20px; ${navCss} }
+      nav a { color: #222222; }
+      ${extra}
+    </style></head><body><nav><a href="#">Home</a><a href="#">Pricing</a><a href="#">Contact us</a></nav></body></html>`;
+    const importLinks = (navCss: string, extra = "") =>
+      importHtmlToWidgets(navHtml(navCss, extra), "", 1200).filter(({ type }) => type === "link");
+
+    it("sizes a left-aligned navbar's links to their text, with the 16 px gap between them", () => {
+      const links = importLinks("gap: 16px;");
+      expect(links).toHaveLength(3);
+      // Not three equal stretched boxes: each is as wide as its text, so longer text is wider.
+      expect(links[0].width).toBeLessThan(links[1].width);
+      expect(links[1].width).toBeLessThan(links[2].width);
+      expect(links[2].width).toBeLessThan(150);
+      // Packed to the left, with the gap from the page's CSS.
+      expect(links[1].x - (links[0].x + links[0].width)).toBeCloseTo(16, 0);
+      expect(links[2].x - (links[1].x + links[1].width)).toBeCloseTo(16, 0);
+    });
+
+    it("packs the row by justify-content", () => {
+      const start = importLinks("gap: 16px;");
+      const center = importLinks("gap: 16px; justify-content: center;");
+      const end = importLinks("gap: 16px; justify-content: flex-end;");
+      const between = importLinks("justify-content: space-between;");
+      const rightEdge = (links: typeof start) => links[2].x + links[2].width;
+
+      const centreShift = center[0].x - start[0].x;
+      expect(centreShift).toBeGreaterThan(100);
+      expect(end[0].x - start[0].x).toBeCloseTo(centreShift * 2, 0);
+      // Space-between puts the first at the start and the last at the end.
+      expect(between[0].x).toBeCloseTo(start[0].x, 0);
+      expect(rightEdge(between)).toBeCloseTo(rightEdge(end), 0);
+      expect(between[1].x).toBeGreaterThan(start[1].x);
+    });
+
+    it("lets a flex: 1 item fill the free space while the others keep their text width", () => {
+      const links = importLinks("gap: 16px;", "nav a:nth-child(2) { flex: 1; }");
+      expect(links[0].width).toBeLessThan(60);
+      expect(links[1].width).toBeGreaterThan(800);
+      expect(links[2].width).toBeLessThan(150);
+      expect(links[2].x + links[2].width).toBeGreaterThan(1100);
+    });
+
+    it("draws headings and paragraphs black when the page sets no colour, as a browser does", () => {
+      const html = "<!doctype html><html><body><h1>Welcome</h1><p>Some text</p></body></html>";
+      const widgets = importHtmlToWidgets(html, "", 1200);
+      expect(widgets.find(({ type }) => type === "heading")?.style.fill).toBe("#000000");
+      expect(widgets.find(({ type }) => type === "paragraph")?.style.fill).toBe("#000000");
+      const grey = importHtmlToWidgets("<!doctype html><html><body><h1 style=\"color:#336699\">Hi</h1></body></html>", "", 1200);
+      expect(grey.find(({ type }) => type === "heading")?.style.fill).toBe("#336699");
+    });
+  });
+
   it("extracts embedded document styles and applies shorthands, grid layout, and media rules", () => {
     const html = `<!doctype html><html><head><style>
       * { box-sizing: border-box; font-family: Arial, sans-serif; }

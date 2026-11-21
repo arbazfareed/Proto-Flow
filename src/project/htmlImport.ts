@@ -357,6 +357,7 @@ function utilityDeclarations(element: Element): CssDeclarations {
     if (className === "grid") declarations.display = "grid";
     if (className === "flex-row") declarations["flex-direction"] = "row";
     if (className === "flex-col") declarations["flex-direction"] = "column";
+    if (className === "flex-1") declarations.flex = "1";
     const gap = className.match(/^gap-(\d+)$/)?.[1];
     if (gap && TAILWIND_SPACING[gap] !== undefined) {
       declarations.gap = `${TAILWIND_SPACING[gap]}px`;
@@ -379,7 +380,11 @@ function isSafeStyleValue(property: string, value: string): boolean {
   if (property === "font-weight") return /^(?:normal|bold|bolder|lighter|[1-9]00)$/i.test(value);
   if (property === "line-height") return /^(?:normal|(?:\d+(?:\.\d+)?)(?:px|rem|em|%)?)$/i.test(value);
   if (property === "text-align") return /^(?:left|right|center|justify|start|end)$/i.test(value);
-  if (property === "justify-content") return /^(?:flex-start|flex-end|center|space-between|space-around|space-evenly)$/i.test(value);
+  if (property === "justify-content") return /^(?:flex-start|flex-end|start|end|center|space-between|space-around|space-evenly)$/i.test(value);
+  if (property === "flex-grow") return /^\d+(?:\.\d+)?$/.test(value);
+  if (property === "flex") {
+    return /^(?:none|auto|\d+(?:\.\d+)?(?:\s+\d+(?:\.\d+)?)?(?:\s+(?:auto|0|\d+(?:\.\d+)?(?:px|rem|em|%)))?)$/i.test(value);
+  }
   if (property === "align-items") return /^(?:stretch|flex-start|flex-end|center|baseline)$/i.test(value);
   if (property === "object-fit") return /^(?:fill|contain|cover|none|scale-down)$/i.test(value);
   if (LENGTH_STYLE_PROPERTIES.has(property)) {
@@ -608,6 +613,37 @@ interface HtmlLayoutBox {
   height: number;
 }
 
+/** How much a flex item grows to fill free space: `flex-grow`, or the first number of `flex` (B52). */
+function flexGrowOf(styles: CssDeclarations): number {
+  const grow = Number(styles["flex-grow"]);
+  if (styles["flex-grow"] !== undefined && Number.isFinite(grow)) return Math.max(0, grow);
+  const first = splitCssTokens(styles.flex ?? "")[0]?.toLowerCase();
+  if (first === undefined || first === "none") return 0;
+  if (first === "auto") return 1;
+  const amount = Number(first);
+  return Number.isFinite(amount) ? Math.max(0, amount) : 0;
+}
+
+/**
+ * The width a flex item takes when the page gives it none: its text on one line plus its side
+ * padding, never more than the row. 0 means "no text to size by" (an image, an empty box), and
+ * those still share what is left over (B52).
+ */
+function flexItemContentWidth(
+  child: Element,
+  styles: CssDeclarations,
+  parentFontSize: number,
+  available: number,
+): number {
+  const text = (child.textContent ?? "").replace(/\s+/g, " ").trim();
+  if (!text) return 0;
+  const fontSize = cssLength(styles["font-size"], parentFontSize, parentFontSize);
+  const padding = cssLength(styles.padding, available, 0);
+  const sides = cssLength(styles["padding-left"], available, padding) +
+    cssLength(styles["padding-right"], available, padding);
+  return Math.min(available, Math.ceil(text.length * fontSize * 0.55) + sides);
+}
+
 function cssLength(value: string | undefined, basis: number, fallback: number): number {
   if (!value) return fallback;
   const match = value.match(/^(-?\d+(?:\.\d+)?)(px|rem|em|%)?$/i);
@@ -680,6 +716,10 @@ function setWidgetStyles(widget: Widget, styles: CssDeclarations, isContainer: b
     widget.style.strokeWidth = borderWidth;
   } else if (widget.type !== "image" && widget.type !== "path" && foreground) {
     widget.style.fill = foreground;
+  } else if (widget.type === "heading" || widget.type === "paragraph") {
+    // No colour anywhere in the source: a browser draws this text black, not the editor's
+    // default grey (B52).
+    widget.style.fill = "#000000";
   }
 
   if (widget.type === "path") {
@@ -1021,25 +1061,44 @@ function renderElementTree(
     ? Math.max(1, (childWidth - gap * (columnCount - 1)) / columnCount)
     : childWidth;
   if (flexRow && children.length) {
-    const flexBaseWidths = children.map((child) => {
-      const childStyles = declarationsFor(child, rules);
+    // Real flexbox: an item with no width takes its content's width and the row is packed by
+    // justify-content (left-aligned by default). Items that grow (flex: 1) or have nothing to
+    // size by share the space that is left (B52).
+    const childStylesList = children.map((child) => declarationsFor(child, rules));
+    const gapsWidth = gap * (children.length - 1);
+    const bases = children.map((child, index) => {
+      const childStyles = childStylesList[index];
       if (childStyles.width) return cssLength(childStyles.width, childWidth, childWidth);
       if (childStyles["max-width"]) return cssLength(childStyles["max-width"], childWidth, childWidth);
-      return 0;
+      return flexItemContentWidth(child, childStyles, fontSize, childWidth);
     });
-    const fixedWidth = flexBaseWidths.reduce((sum, item) => sum + item, 0);
-    const autoCount = flexBaseWidths.filter((item) => item === 0).length;
-    const freeWidth = Math.max(0, childWidth - gap * (children.length - 1) - fixedWidth);
-    const autoWidth = autoCount ? freeWidth / autoCount : 0;
-    const totalWidth = fixedWidth + autoWidth * autoCount;
-    const shrink = totalWidth + gap * (children.length - 1) > childWidth
-      ? Math.max(0, childWidth - gap * (children.length - 1)) / Math.max(1, totalWidth)
-      : 1;
-    const widths = flexBaseWidths.map((item) => (item || autoWidth) * shrink);
-    const justifyGap = styles["justify-content"] === "space-between" && children.length > 1 && gap === 0
-      ? Math.max(0, (childWidth - widths.reduce((sum, item) => sum + item, 0)) / (children.length - 1))
-      : gap;
-    let cursorX = childStartX;
+    const grows = childStylesList.map((childStyles, index) => {
+      const grow = flexGrowOf(childStyles);
+      return grow > 0 ? grow : bases[index] === 0 ? 1 : 0;
+    });
+    const totalGrow = grows.reduce((sum, item) => sum + item, 0);
+    const baseTotal = bases.reduce((sum, item) => sum + item, 0);
+    const freeWidth = Math.max(0, childWidth - gapsWidth - baseTotal);
+    let widths = bases.map((item, index) => item + (totalGrow ? freeWidth * grows[index] / totalGrow : 0));
+    const widthTotal = widths.reduce((sum, item) => sum + item, 0);
+    if (widthTotal + gapsWidth > childWidth) {
+      const shrink = Math.max(0, childWidth - gapsWidth) / Math.max(1, widthTotal);
+      widths = widths.map((item) => item * shrink);
+    }
+    const leftover = Math.max(0, childWidth - gapsWidth - widths.reduce((sum, item) => sum + item, 0));
+    const count = children.length;
+    const justify = (styles["justify-content"] ?? "flex-start").toLowerCase();
+    let startOffset = 0;
+    let extraGap = 0;
+    if (leftover > 0) {
+      if (justify === "center") startOffset = leftover / 2;
+      else if (justify === "flex-end" || justify === "end") startOffset = leftover;
+      else if (justify === "space-between" && count > 1) extraGap = leftover / (count - 1);
+      else if (justify === "space-around") { extraGap = leftover / count; startOffset = extraGap / 2; }
+      else if (justify === "space-evenly") { extraGap = leftover / (count + 1); startOffset = extraGap; }
+    }
+    const justifyGap = gap + extraGap;
+    let cursorX = childStartX + startOffset;
     const rowChildren: Array<{ startIndex: number; endIndex: number; nextY: number }> = [];
     for (const [index, child] of children.entries()) {
       const startIndex = state.widgets.length;
