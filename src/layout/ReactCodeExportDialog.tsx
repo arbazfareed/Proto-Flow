@@ -165,6 +165,10 @@ export function ReactCodeExportDialog({ onClose }: { onClose: () => void }) {
         <p className="react-export-summary">
           {project.screens.length} screen{project.screens.length === 1 ? "" : "s"} · {(projectBytes / 1024).toFixed(1)} KiB project · ZIP export costs 3 credits
         </p>
+        <p className="react-export-cost-note">
+          The project ZIP is built in the cloud, which is why it uses credits. The fixed-layout JSX file and the HTML
+          bundle are built on this computer: they are free, work offline, and never use credits.
+        </p>
         <div className="react-export-actions">
           <button
             className="button button-primary"

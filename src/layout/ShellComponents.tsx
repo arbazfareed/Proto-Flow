@@ -272,6 +272,9 @@ export function TopBar({
   const walletJwt = useWalletStore((state) => state.jwt);
   const syncWallet = useWalletStore((state) => state.sync);
   const claimDaily = useWalletStore((state) => state.claimDaily);
+  // Until a balance has been loaded (first launch, offline, cloud unreachable) the balance is
+  // unknown, not 0, so no number is shown (B15).
+  const balanceKnown = lastSyncedAt !== null;
   const [walletMenuOpen, setWalletMenuOpen] = useState(false);
   const [walletHistoryOpen, setWalletHistoryOpen] = useState(false);
   const [claimingDaily, setClaimingDaily] = useState(false);
@@ -394,7 +397,7 @@ export function TopBar({
         <button className="button button-secondary" aria-label="Collaborate" title="Start or join a real-time collaboration session" onClick={onOpenCollaboration}>
           <UsersRound size={14} /> Collaborate
         </button>
-        <button className="button button-secondary" aria-label="Export code with React" title="Export a React and Tailwind project" onClick={onExportReactCode}>
+        <button className="button button-secondary" aria-label="Export code with React" title="Export a React and Tailwind project (the project ZIP uses 3 cloud credits; single-file JSX is free)" onClick={onExportReactCode}>
           <Code2 size={14} /> Export code
         </button>
         <button className="button button-secondary" aria-label="Export HTML bundle" title="Export a free offline HTML bundle" onClick={onExportHtml}>
@@ -402,14 +405,14 @@ export function TopBar({
         </button>
         <div className="wallet-menu-anchor" ref={walletMenuRef}>
           <button
-            className={`wallet-balance-pill wallet-balance-${walletBalance < 5 ? "low" : walletBalance < 20 ? "medium" : "healthy"}`}
+            className={`wallet-balance-pill wallet-balance-${!balanceKnown ? "unknown" : walletBalance < 5 ? "low" : walletBalance < 20 ? "medium" : "healthy"}`}
             onClick={() => setWalletMenuOpen((open) => !open)}
-            aria-label={`${walletBalance} credits; open wallet details`}
+            aria-label={balanceKnown ? `${walletBalance} credits; open wallet details` : "Credits not loaded yet; open wallet details"}
             aria-expanded={walletMenuOpen}
             aria-controls="wallet-balance-menu"
           >
             <Zap size={13} />
-            <span>{walletBalance} Credits</span>
+            <span>{balanceKnown ? `${walletBalance} Credits` : "Credits"}</span>
             <ChevronDown size={12} />
           </button>
           {walletMenuOpen && (
@@ -423,7 +426,7 @@ export function TopBar({
               <header className="wallet-menu-heading">
                 <div>
                   <span className="eyebrow">FREE WALLET</span>
-                  <strong><Coins size={15} /> {walletBalance} credits</strong>
+                  <strong><Coins size={15} /> {balanceKnown ? `${walletBalance} credits` : "Credits not loaded yet"}</strong>
                 </div>
                 <button
                   className="icon-button small-icon"
@@ -435,10 +438,12 @@ export function TopBar({
                   <RefreshCw size={14} />
                 </button>
               </header>
-              <div className="wallet-menu-totals">
-                <span>Lifetime granted <strong>{lifetimeGranted}</strong></span>
-                <span>Lifetime spent <strong>{lifetimeSpent}</strong></span>
-              </div>
+              {balanceKnown && (
+                <div className="wallet-menu-totals">
+                  <span>Lifetime granted <strong>{lifetimeGranted}</strong></span>
+                  <span>Lifetime spent <strong>{lifetimeSpent}</strong></span>
+                </div>
+              )}
               {(walletStatus === "offline" || networkStatus === "offline") && (
                 <p className="wallet-menu-status"><WifiOff size={13} /> Offline — last synced {lastSyncedAt ? formatWalletSyncAge(lastSyncedAt) : "unknown"}</p>
               )}

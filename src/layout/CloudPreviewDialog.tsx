@@ -52,6 +52,7 @@ export function CloudPreviewDialog({ onClose }: { onClose: () => void }) {
     { skipConfirmation: true },
   );
   const balance = useWalletStore((state) => state.balance);
+  const balanceKnown = useWalletStore((state) => state.lastSyncedAt !== null);
 
   const refreshHistory = async () => {
     if (!token) return;
@@ -223,7 +224,7 @@ export function CloudPreviewDialog({ onClose }: { onClose: () => void }) {
             </article>
           ))}
         </section>
-        <p className="cloud-preview-balance">{balance} credits available</p>
+        <p className="cloud-preview-balance">{balanceKnown ? `${balance} credits available` : "Credits not loaded yet"}</p>
       </section>
     </div>
   );

@@ -1069,6 +1069,7 @@
 .wallet-balance-healthy { color:#9be3b0; border-color:#337849; background:#163321; }
 .wallet-balance-medium { color:#f0d17b; border-color:#796329; background:#332c18; }
 .wallet-balance-low { color:#f2a1a1; border-color:#793c42; background:#351c20; }
+.wallet-balance-unknown { color:#a9a6b3; border-color:#393840; background:transparent; }
 .wallet-balance-pill:hover { filter:brightness(1.15); }
 .wallet-balance-menu { position:absolute; z-index:50; top:calc(100% + 9px); right:0; width:min(330px,calc(100vw - 16px)); max-height:min(75vh,560px); overflow:auto; padding:13px; border:1px solid #393a42; border-radius:9px; color:#d9d8df; background:#1c1d21; box-shadow:0 14px 40px #0009; cursor:default; }
 .wallet-menu-heading { display:flex; align-items:center; justify-content:space-between; padding-bottom:10px; border-bottom:1px solid #303137; }
@@ -1395,7 +1396,7 @@
 .react-export-toggles legend { padding:0 5px; color:var(--text-secondary); font-size:11px; }
 .react-export-toggles label { display:flex; align-items:center; gap:5px; color:var(--text-primary); font-size:11px; }
 .react-export-toggles input { accent-color:#9b7cf2; }
-.react-export-summary,.react-export-help,.react-export-message { margin:12px 0 0; color:var(--text-muted); font-size:11px; line-height:1.55; }
+.react-export-summary,.react-export-cost-note,.react-export-help,.react-export-message { margin:12px 0 0; color:var(--text-muted); font-size:11px; line-height:1.55; }
 .react-export-actions { display:flex; flex-wrap:wrap; gap:8px; margin-top:14px; }
 .react-export-actions .button { display:flex; align-items:center; gap:6px; }
 .react-export-message { color:var(--text-secondary); }

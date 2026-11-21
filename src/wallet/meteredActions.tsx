@@ -458,7 +458,9 @@ export function useMeteredAction<T = unknown>(
         const message =
           wallet.status === "offline" || wallet.networkStatus === "offline"
             ? "Cloud actions require an internet connection. Reconnect and try again."
-            : "Your wallet is not synced. Refresh it before using cloud actions.";
+            : "Your credits are still loading. Try the cloud action again in a moment.";
+        // Start loading them now, so the retry works without a refresh button (B15).
+        if (wallet.status !== "loading" && wallet.networkStatus !== "offline") void wallet.sync();
         setError(message);
         context.notify(message);
         trackEvent("action_failed", { actionType, reason: "network" });

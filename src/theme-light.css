@@ -1896,6 +1896,11 @@ html[data-theme="light"] .wallet-balance-low {
     border-color: hsl(354, 45%, 85%);
     background: #f8f8fb
 }
+html[data-theme="light"] .wallet-balance-unknown {
+    color: #5d5b6a;
+    border-color: #d6d6e0;
+    background: transparent
+}
 html[data-theme="light"] .wallet-balance-menu {
     border: 1px solid #d6d6e0;
     color: #34333d;
