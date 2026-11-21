@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   applyCanvasWheel,
+  keyboardZoomStep,
   centerCanvasView,
   clampCanvasZoom,
   fitCanvasBounds,
@@ -188,6 +189,15 @@ describe("canvas wheel and trackpad scrolling | B29", () => {
   it("converts line and page wheel deltas to pixels", () => {
     expect(applyCanvasWheel(view, { ...wheel, deltaY: 3, deltaMode: 1 }, pointer).pan.y).toBe(45 - 48);
     expect(applyCanvasWheel(view, { ...wheel, deltaY: 1, deltaMode: 2 }, pointer).pan.y).toBe(45 - 800);
+  });
+
+  it("maps Ctrl+= / Ctrl++ to zoom in and Ctrl+- to zoom out (B31)", () => {
+    expect(keyboardZoomStep({ key: "=" })).toBe(0.1);
+    expect(keyboardZoomStep({ key: "+" })).toBe(0.1);
+    expect(keyboardZoomStep({ key: "-" })).toBe(-0.1);
+    expect(keyboardZoomStep({ key: "_" })).toBe(-0.1);
+    expect(keyboardZoomStep({ key: "0" })).toBe(0);
+    expect(keyboardZoomStep({ key: "=", altKey: true })).toBe(0);
   });
 });
 
