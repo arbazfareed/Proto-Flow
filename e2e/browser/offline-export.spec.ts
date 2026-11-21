@@ -64,10 +64,14 @@ test("shows responsive React export settings and the three-credit ZIP price with
   page,
 }) => {
   await startWorkspace(page, "Responsive web");
+  // B15: with no cloud connection the balance is unknown, so the top bar must not say "0 Credits".
+  await expect(page.getByRole("button", { name: "Credits not loaded yet; open wallet details" })).toBeVisible();
+  await expect(page.getByText(/\b0 Credits\b/i)).toHaveCount(0);
   await page.getByRole("button", { name: "Export code" }).click();
 
   const dialog = page.getByRole("dialog", { name: "Export React code" });
   await expect(dialog.getByText(/ZIP export costs 3 credits/)).toBeVisible();
+  await expect(dialog.getByText(/built in the cloud, which is why it uses credits/)).toBeVisible();
   await expect(dialog.getByRole("button", { name: "Download project ZIP (3 credits)" })).toBeVisible();
   const responsive = dialog.getByLabel("Responsive breakpoint layouts");
   await responsive.check();
