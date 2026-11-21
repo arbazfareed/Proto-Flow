@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { itemCountLabel } from "./itemCountLabel";
 import type { CSSProperties, DragEvent, KeyboardEvent as ReactKeyboardEvent } from "react";
 import {
   ChevronDown,
@@ -2308,7 +2309,7 @@ export function ScreenLayerSidebar({ tutorialProjectId }: { tutorialProjectId: s
           <div className="layer-tree-title">
             <span>LAYERS</span>
             <span className="layer-count">
-              {activeScreen?.widgets.length ?? 0} items
+              {itemCountLabel(activeScreen?.widgets.length ?? 0)}
             </span>
           </div>
           <div className="layer-tree-controls">
