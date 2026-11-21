@@ -103,4 +103,30 @@ describe("ElementLibrary imported code shortcuts", () => {
 
     expect(screen.queryByRole("region", { name: "Detected in imported code" })).toBeNull();
   });
+
+  it("search also filters the Screens, Import and Status groups (B14)", () => {
+    renderWithProviders(
+      <ElementLibrary activeTool={null} mode="sidebar" onSelectTool={vi.fn()} onAddScreen={vi.fn()} />,
+    );
+    const search = screen.getByRole("searchbox", { name: "Search elements" });
+
+    // Before searching, everything is listed.
+    expect(screen.getAllByRole("button", { name: /^Create .* screen$/ })).toHaveLength(5);
+    expect(screen.getByRole("region", { name: "Status indicators" })).toBeVisible();
+
+    fireEvent.change(search, { target: { value: "text" } });
+    expect(screen.queryByRole("button", { name: /^Create .* screen$/ })).toBeNull();
+    expect(screen.queryByRole("region", { name: "Screens" })).toBeNull();
+    expect(screen.queryByRole("region", { name: "Status indicators" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Image URL import" })).toBeNull();
+    expect(screen.getByRole("button", { name: "Add Text" })).toBeVisible();
+
+    // Screens can still be found by their own words.
+    fireEvent.change(search, { target: { value: "mobile" } });
+    expect(screen.getAllByRole("button", { name: /^Create .* screen$/ })).toHaveLength(1);
+    expect(screen.getByRole("button", { name: "Create Mobile screen" })).toBeVisible();
+
+    fireEvent.change(search, { target: { value: "zzzz" } });
+    expect(screen.getByRole("status").textContent).toContain("No elements match");
+  });
 });

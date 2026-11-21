@@ -1,4 +1,5 @@
 import { useLayoutEffect, useRef, useState } from "react";
+import { matchesElementQuery } from "./elementSearch";
 import type { RefObject } from "react";
 import { createPortal } from "react-dom";
 import {
@@ -116,6 +117,15 @@ function ElementLibraryContents({
       .includes(query.trim().toLowerCase()),
   );
   const [placement, setPlacement] = useState({ left: 12, top: 80, width: 760 });
+  // B14: the search also filters the Screens, Import and Status groups.
+  const screenTools = SCREEN_TOOLS.filter(({ category, label }) =>
+    matchesElementQuery(`${category} ${label}`, query));
+  const showImport = matchesElementQuery("import image url link", query);
+  const statusItems = STATUS_INDICATORS.filter(({ label }) =>
+    matchesElementQuery(`status indicators ${label}`, query));
+  const searching = query.trim() !== "";
+  const nothingMatches = searching && matchingToolTypes.length === 0 && screenTools.length === 0
+    && !showImport && statusItems.length === 0;
   const groupedTools = new Map<string, ShapeTool[]>();
   for (const tool of matchingToolTypes) {
     const group = getToolGroup(tool);
@@ -278,10 +288,15 @@ function ElementLibraryContents({
         )}
       </label>
 
+      {nothingMatches && (
+        <p className="element-library-empty" role="status">No elements match “{query.trim()}”.</p>
+      )}
+
+      {screenTools.length > 0 && (
       <section className="element-library-section" aria-label="Screens" data-onboarding-target="device">
         <h3>Screens</h3>
         <div className="element-library-grid">
-          {SCREEN_TOOLS.map(({ category, label }) => {
+          {screenTools.map(({ category, label }) => {
             const { icon: ScreenDeviceIcon, color } = getScreenIconDefinition(category);
             return (
               <button
@@ -299,7 +314,9 @@ function ElementLibraryContents({
           })}
         </div>
       </section>
+      )}
 
+      {showImport && (
       <section className="element-library-section" aria-label="Import image">
         <h3>Import</h3>
         <div className="element-library-grid">
@@ -315,6 +332,7 @@ function ElementLibraryContents({
           </button>
         </div>
       </section>
+      )}
 
       {unlockedTools.length > 0 && (
         <section
@@ -359,10 +377,11 @@ function ElementLibraryContents({
         );
       })}
 
+      {statusItems.length > 0 && (
       <section className="element-library-section element-library-status" aria-label="Status indicators">
         <h3>Status indicators</h3>
         <div className="element-library-status-list">
-          {STATUS_INDICATORS.map(({ label, icon: StatusIcon, color }) => (
+          {statusItems.map(({ label, icon: StatusIcon, color }) => (
             <span className="element-library-status-item" key={label}>
               <StatusIcon size={14} style={{ color }} aria-hidden="true" />
               {label}
@@ -370,6 +389,7 @@ function ElementLibraryContents({
           ))}
         </div>
       </section>
+      )}
     </div>
   );
 
