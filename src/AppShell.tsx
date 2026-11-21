@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { PREVIEW_WINDOW_BASE_TITLE } from "./preview/previewWindowTitle";
 import { isTauri } from "@tauri-apps/api/core";
 import { currentMonitor, getCurrentWindow } from "@tauri-apps/api/window";
 import { LogicalSize } from "@tauri-apps/api/dpi";
@@ -813,7 +814,7 @@ function AppShell() {
       const previewSize = getPreviewWindowSize({ width, height }, monitor);
       const preview = new WebviewWindow("preview", {
         url: "/?preview=1",
-        title: "ProtoFlow Preview",
+        title: PREVIEW_WINDOW_BASE_TITLE,
         width: previewSize.width,
         height: previewSize.height,
         minWidth: Math.min(360, previewSize.width),

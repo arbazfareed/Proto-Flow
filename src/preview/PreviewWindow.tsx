@@ -1,4 +1,5 @@
 import { avatarInitials } from "../project/avatarInitials";
+import { previewWindowTitle } from "./previewWindowTitle";
 import { PREVIEW_FIT_HINT, previewFitLabel } from "./previewZoomLabel";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { CSSProperties, ChangeEvent, HTMLAttributes, KeyboardEvent, MouseEvent, ReactNode, TouchEvent } from "react";
@@ -1014,6 +1015,12 @@ function PreviewDeviceFrame({
 
 export function PreviewWindow() {
   const [project, setProject] = useState<Project | null>(null);
+  // B69: give this window its own title so it is not mistaken for the editor.
+  useEffect(() => {
+    const previousTitle = document.title;
+    document.title = previewWindowTitle(project?.name);
+    return () => { document.title = previousTitle; };
+  }, [project?.name]);
   const [runtimeSnapshot, setRuntimeSnapshot] = useState<PreviewRuntimeSnapshot | null>(null);
   const [selectedDeviceId, setSelectedDeviceId] = useState("");
   const [previewMode, setPreviewMode] = useState<"single" | "columns" | "grid">("single");
