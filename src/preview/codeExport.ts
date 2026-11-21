@@ -255,7 +255,7 @@ ${CONDITION_COMPARE_RUNTIME_SOURCE}
           runInteractions(widget, "onRightClick", item);
         },
         onMouseEnter: () => runInteractions(widget, "onHover", item),
-        onMouseLeave: () => runInteractions(widget, "onHover", item),
+        onMouseLeave: () => runInteractions(widget, "onMouseLeave", item),
         onMouseDown: () => runInteractions(widget, "onMouseDown", item),
         onMouseUp: () => runInteractions(widget, "onMouseUp", item),
       } : {}),
@@ -279,7 +279,7 @@ ${CONDITION_COMPARE_RUNTIME_SOURCE}
           if (event.pointerType !== "touch") runInteractions(widget, "onHover", item);
         },
         onPointerLeave: (event: { pointerType: string }) => {
-          if (event.pointerType !== "touch") runInteractions(widget, "onHover", item);
+          if (event.pointerType !== "touch") runInteractions(widget, "onMouseLeave", item);
         },
         onPointerDown: (event: { pointerType: string }) => {
           if (event.pointerType !== "touch") runInteractions(widget, "onMouseDown", item);

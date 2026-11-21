@@ -169,6 +169,12 @@ describe("React code export preparation", () => {
     expect(source).toContain("onPointerUp");
     expect(source).toContain("onPointerLeave");
     expect(source).toContain("onMouseLeave");
+    // B50: Hover runs on enter only; leaving runs the separate Mouse leave event.
+    expect(source).toContain('onMouseEnter: () => runInteractions(widget, "onHover", item)');
+    expect(source).toContain('onMouseLeave: () => runInteractions(widget, "onMouseLeave", item)');
+    expect(source).toContain('runInteractions(widget, "onMouseLeave", item);');
+    expect(source).not.toMatch(/onMouseLeave: \(\) => runInteractions\(widget, "onHover"/);
+    expect(source).not.toMatch(/onPointerLeave[^}]*runInteractions\(widget, "onHover"/);
     const transpiled = ts.transpileModule(source, {
       compilerOptions: { jsx: ts.JsxEmit.ReactJSX, target: ts.ScriptTarget.ES2022 },
       reportDiagnostics: true,

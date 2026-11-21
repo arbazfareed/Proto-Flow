@@ -450,7 +450,8 @@ export function PreviewWidget({
       if (inputMode !== "touch" && !isTouchPointerEvent(event)) runEvent(widget, "onHover", item);
     },
     onMouseLeave: (event: MouseEvent<HTMLElement>) => {
-      if (inputMode !== "touch" && !isTouchPointerEvent(event)) runEvent(widget, "onHover", item);
+      // B50: leaving is its own event; Hover runs once, when the mouse enters.
+      if (inputMode !== "touch" && !isTouchPointerEvent(event)) runEvent(widget, "onMouseLeave", item);
     },
     onMouseDown: (event: MouseEvent<HTMLElement>) => {
       if (inputMode !== "touch" && !isTouchPointerEvent(event)) runEvent(widget, "onMouseDown", item);

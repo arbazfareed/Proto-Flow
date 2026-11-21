@@ -22,7 +22,7 @@ const EVENT_NAMES: Record<string, InteractionRule["event"]> = {
   contextmenu: "onRightClick",
   mouseover: "onHover",
   mouseenter: "onHover",
-  mouseleave: "onHover",
+  mouseleave: "onMouseLeave",
   mousedown: "onMouseDown",
   mouseup: "onMouseUp",
   change: "onChange",

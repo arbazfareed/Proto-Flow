@@ -246,6 +246,43 @@ describe("standalone published preview bundle", () => {
     dom.window.close();
   });
 
+  it("runs Hover once on mouse enter and Mouse leave on leave, on Mouse and Both screens (B50)", () => {
+    for (const mode of ["mouse", "both"] as const) {
+      const project = createEmptyProject(`Hover export ${mode}`);
+      const screen = project.screens[0];
+      screen.inputMode = mode;
+      const base = { rotation: 0, opacity: 1, visible: true, locked: false, zIndex: 0, style: {}, width: 120, height: 40 };
+      const button = { ...base, id: crypto.randomUUID(), type: "button", x: 10, y: 10, props: { label: "Over me" } } as Widget;
+      const label = { ...base, id: crypto.randomUUID(), type: "text", x: 10, y: 80, props: { text: "In {{entered}} out {{left}}" } } as Widget;
+      screen.widgets.push(button, label);
+      for (const name of ["entered", "left"]) {
+        project.variables.push({ id: crypto.randomUUID(), name, type: "number", initial: 0, scope: "project" });
+      }
+      const counter = (event: InteractionRule["event"], target: string): InteractionRule => ({
+        id: crypto.randomUUID(), widgetId: button.id, event, conditionMode: "all", conditions: [],
+        actions: [{ type: "setVariable", target, value: `[[ ${target} + 1 ]]` }],
+      });
+      screen.interactionRules = [counter("onHover", "entered"), counter("onMouseLeave", "left")];
+
+      const dom = new JSDOM(generatePublishedPreviewHtml(project), { runScripts: "dangerously", pretendToBeVisual: true });
+      const send = (type: string, pointerType?: string) => {
+        const target = Array.from(dom.window.document.querySelectorAll("[data-screen-id] *")).find((node) => node.textContent === "Over me");
+        const event = new dom.window.Event(type, { bubbles: false });
+        if (pointerType) Object.defineProperty(event, "pointerType", { value: pointerType });
+        target?.dispatchEvent(event);
+        return dom.window.document.querySelector("[data-screen-id]")?.textContent ?? "";
+      };
+      const [enter, leave] = mode === "mouse" ? ["mouseenter", "mouseleave"] : ["pointerenter", "pointerleave"];
+      const pointer = mode === "both" ? "mouse" : undefined;
+
+      expect(send(enter, pointer)).toContain("In 1 out 0");
+      expect(send(leave, pointer)).toContain("In 1 out 1");
+      expect(send(enter, pointer)).toContain("In 2 out 1");
+      if (mode === "both") expect(send("pointerleave", "touch")).toContain("In 2 out 1");
+      dom.window.close();
+    }
+  });
+
   it("shows no loop notice when screens do not loop (B39)", () => {
     const dom = new JSDOM(generatePublishedPreviewHtml(createEmptyProject("No loop")), { runScripts: "dangerously", pretendToBeVisual: true });
     expect(dom.window.document.getElementById("loop-notice")).toBeNull();

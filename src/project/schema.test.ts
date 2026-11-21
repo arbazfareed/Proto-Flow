@@ -122,7 +122,7 @@ describe("ProtoFlow project schema", () => {
     const events = [
       "onTap", "onDoubleTap", "onLongPress", "onSwipeLeft", "onSwipeRight",
       "onSwipeUp", "onSwipeDown", "onPinchIn", "onPinchOut", "onPan",
-      "onClick", "onDoubleClick", "onRightClick", "onHover", "onMouseDown",
+      "onClick", "onDoubleClick", "onRightClick", "onHover", "onMouseLeave", "onMouseDown",
       "onMouseUp", "onFocus", "onBlur", "onKeyDown",
     ] as const;
     const validated = parseProject({

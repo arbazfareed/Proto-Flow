@@ -80,6 +80,7 @@ export const InteractionRuleSchema = z
       "onDoubleClick",
       "onRightClick",
       "onHover",
+      "onMouseLeave",
       "onMouseDown",
       "onMouseUp",
       "onChange",
