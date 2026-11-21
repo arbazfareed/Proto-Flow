@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { nextScreenName } from "./project/screenNames";
 import { PREVIEW_WINDOW_BASE_TITLE } from "./preview/previewWindowTitle";
 import { isTauri } from "@tauri-apps/api/core";
 import { currentMonitor, getCurrentWindow } from "@tauri-apps/api/window";
@@ -846,7 +847,7 @@ function AppShell() {
     const device = toScreenDevice(preset);
     const screen: Screen = {
       id: crypto.randomUUID(),
-      name: preset.name,
+      name: nextScreenName(useStore.getState().project.screens),
       device,
       inputMode: inferScreenInputMode(device),
       breakpoints: createDefaultBreakpoints(device.width, device.height),
