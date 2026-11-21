@@ -92,6 +92,7 @@ import {
 } from "../project/symbols";
 import { getLayerAccentColor } from "../layout/layerGrouping";
 import { SymbolNameDialog } from "../layout/SymbolNameDialog";
+import { arrangeShortcut } from "./arrangeShortcuts";
 import {
   applyCanvasWheel,
   clampCanvasZoom,
@@ -2489,6 +2490,18 @@ export function CanvasStage({
           duplicateSelection();
           return;
         }
+        const arrange = arrangeShortcut(event);
+        if (arrange) {
+          // B47: Group, Ungroup, Bring forward / Send backward and Lock from the keyboard.
+          event.preventDefault();
+          if (useStore.getState().selectedIds.length === 0) return;
+          if (arrange === "group") {
+            if (useStore.getState().selectedIds.length >= 2) groupSelection();
+          } else if (arrange === "ungroup") groupSelection(true);
+          else if (arrange === "lock") toggleSelectionLock();
+          else changeSelectionZOrder(arrange);
+          return;
+        }
         if (key === "a") {
           // B27: Select All for the current screen.
           event.preventDefault();
@@ -2604,6 +2617,9 @@ export function CanvasStage({
   }, [
     beginWidgetTextEdit,
     canvasContextMenu,
+    changeSelectionZOrder,
+    groupSelection,
+    toggleSelectionLock,
     copySelection,
     copyStyleSelection,
     createWidgetAt,
