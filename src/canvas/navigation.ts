@@ -135,6 +135,15 @@ const WHEEL_PAGE_PIXELS = 800;
 
 const MAX_WHEEL_ZOOM_DELTA = 12;
 
+// B31: Ctrl+= or Ctrl++ zooms in and Ctrl+- zooms out by one step (the same 10% as the zoom buttons).
+export const KEYBOARD_ZOOM_STEP = 0.1;
+export function keyboardZoomStep(event: { key: string; altKey?: boolean }): number {
+  if (event.altKey) return 0;
+  if (event.key === "=" || event.key === "+") return KEYBOARD_ZOOM_STEP;
+  if (event.key === "-" || event.key === "_") return -KEYBOARD_ZOOM_STEP;
+  return 0;
+}
+
 /**
  * What the mouse wheel or a trackpad scroll does to the canvas (B29): Ctrl/Cmd+scroll (also a
  * trackpad pinch) zooms around the pointer, Shift+scroll pans sideways, and a plain scroll pans in

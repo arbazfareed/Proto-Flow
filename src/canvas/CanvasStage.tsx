@@ -100,6 +100,7 @@ import {
   getWidgetBounds,
   normalizeCanvasViewport,
   worldToScreen,
+  keyboardZoomStep,
   zoomAroundPointer,
   getCanvasViewportBounds,
   intersectsCanvasViewport,
@@ -2737,13 +2738,23 @@ export function CanvasStage({
 
   useEffect(() => {
     const onFitShortcut = (event: KeyboardEvent) => {
-      if (
-        !(event.ctrlKey || event.metaKey) ||
-        event.shiftKey ||
-        isEditingTarget(event.target)
-      ) {
+      if (!(event.ctrlKey || event.metaKey) || isEditingTarget(event.target)) return;
+
+      // B31: Ctrl+= / Ctrl++ zoom in and Ctrl+- zoom out around the middle of the canvas.
+      const zoomStep = keyboardZoomStep(event);
+      if (zoomStep !== 0) {
+        event.preventDefault();
+        if (size.width === 0 || size.height === 0) return;
+        applyView(
+          zoomAroundPointer(
+            currentViewRef.current,
+            { x: size.width / 2, y: size.height / 2 },
+            currentViewRef.current.zoom + zoomStep,
+          ),
+        );
         return;
       }
+      if (event.shiftKey) return;
 
       const key = event.key;
       if (key !== "0" && key !== "1") return;
