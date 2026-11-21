@@ -36,12 +36,16 @@ test("B59: interaction rules work in Preview without a Save click, and their men
 
   const actionType = rules.getByRole("combobox", { name: "Action type" });
   const actionTarget = rules.getByRole("combobox", { name: "Action target" });
+  // The unfinished field is outlined and named in the note (B51).
+  await expect(actionTarget).toHaveAttribute("aria-invalid", "true");
+  await expect(rules.getByText(/choose a target in the field outlined in red/)).toBeVisible();
   expect(await clippedPixels(actionType)).toBe(0);
   expect(await clippedPixels(actionTarget)).toBe(0);
 
   const destination = await actionTarget.locator("option").filter({ hasNotText: /Choose|Screen 1/ }).first();
   const destinationId = await destination.getAttribute("value");
   await actionTarget.selectOption(destinationId ?? "");
+  await expect(actionTarget).not.toHaveAttribute("aria-invalid", "true");
   expect(await clippedPixels(actionTarget)).toBe(0);
   await expect(rules.getByText(/Not active yet/)).toHaveCount(0);
   await expect(rules.getByText("Changes apply automatically. Undo (Ctrl+Z) reverts them.")).toBeVisible();
