@@ -174,8 +174,11 @@ function ActionTarget({
           .map((item) => ({ id: item.name, label: item.name }))
           .concat(localVariables.map((item) => ({ id: item.name, label: `${item.name} (local)` })))
       : widgetTargets.map((item) => ({ id: item.id, label: widgetLabels.get(item.id) ?? item.type }));
+  // An action needs a target to run; the field is outlined in red until one is chosen (B51).
+  const missingTarget = !action.target.trim();
   return (
-    <select aria-label="Action target" value={action.target} onChange={(event) => onChange(event.currentTarget.value)}>
+    <select aria-label="Action target" value={action.target} aria-invalid={missingTarget || undefined}
+      onChange={(event) => onChange(event.currentTarget.value)}>
       <option value="">Choose target</option>
       {action.target && !targets.some((item) => item.id === action.target) && (
         // Older projects can hold links to screens deleted before B84; say so and let them be re-pointed.
@@ -190,6 +193,15 @@ const RULE_COMMIT_DELAY_MS = 250;
 
 function isCompleteRule(rule: InteractionRule): boolean {
   return InteractionRuleSchema.safeParse(rule).success;
+}
+
+/** What to tell the person about a rule that is not active yet, naming the red fields (B51). */
+function pendingRuleNote(rule: InteractionRule): string {
+  const missing = rule.actions.filter((action) => !action.target.trim()).length;
+  if (missing === 0) return "Not active yet: finish the highlighted choices to turn this rule on.";
+  return missing === 1
+    ? "Not active yet: choose a target in the field outlined in red to turn this rule on."
+    : "Not active yet: choose a target in each field outlined in red to turn this rule on.";
 }
 
 const KEY_CHOICES: Array<[string, string]> = [
@@ -948,7 +960,7 @@ export function InteractionBuilder({
             <p className={`interaction-issue is-${issue.severity}`} key={`${issue.code}-${issueIndex}`}>{issue.message}</p>
           ))}
           {!isCompleteRule(rule) && (
-            <p className="interaction-pending-note">Not active yet: finish the highlighted choices to turn this rule on.</p>
+            <p className="interaction-pending-note">{pendingRuleNote(rule)}</p>
           )}
           <button type="button" className="interaction-test-button" onClick={() => runTest(rule)}><Play size={11} /> Test rule</button>
           {generatedRuleId === rule.id && (
