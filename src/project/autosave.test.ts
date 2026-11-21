@@ -1,5 +1,6 @@
 import { beforeEach, afterEach, describe, expect, it, vi } from "vitest";
 import {
+  AUTOSAVE_DEBOUNCE_MS,
   AUTOSAVE_INTERVAL_MS,
   AUTOSAVE_KEY,
   AUTOSAVE_MAX_AGE_MS,
@@ -73,6 +74,8 @@ describe("local project autosave", () => {
     vi.stubGlobal("window", {
       setInterval: globalThis.setInterval.bind(globalThis),
       clearInterval: globalThis.clearInterval.bind(globalThis),
+      setTimeout: globalThis.setTimeout.bind(globalThis),
+      clearTimeout: globalThis.clearTimeout.bind(globalThis),
     });
     resetStore();
   });
@@ -83,7 +86,7 @@ describe("local project autosave", () => {
   });
 
   it("writes only dirty projects on the 30-second interval", () => {
-    startAutosave();
+    const stopAutosave = startAutosave();
     vi.advanceTimersByTime(AUTOSAVE_INTERVAL_MS - 1);
     expect(storage.getItem(AUTOSAVE_KEY)).toBeNull();
 
@@ -95,6 +98,54 @@ describe("local project autosave", () => {
       project: { name: "Dirty prototype" },
       ts: Date.now(),
     });
+    stopAutosave();
+  });
+
+  it("saves a recovery copy shortly after a change, not only every 30 seconds (B65)", () => {
+    const stopAutosave = startAutosave();
+    useStore.getState().renameProject("Fresh edit");
+
+    vi.advanceTimersByTime(AUTOSAVE_DEBOUNCE_MS - 1);
+    expect(storage.getItem(AUTOSAVE_KEY)).toBeNull();
+
+    vi.advanceTimersByTime(1);
+    expect(readAutosave()?.project.name).toBe("Fresh edit");
+    stopAutosave();
+  });
+
+  it("debounces a burst of edits into one write of the latest state", () => {
+    const setItem = vi.spyOn(storage, "setItem");
+    const stopAutosave = startAutosave();
+
+    for (const name of ["One", "Two", "Three"]) {
+      useStore.getState().renameProject(name);
+      vi.advanceTimersByTime(AUTOSAVE_DEBOUNCE_MS / 2);
+    }
+    expect(setItem).not.toHaveBeenCalled();
+
+    vi.advanceTimersByTime(AUTOSAVE_DEBOUNCE_MS);
+    expect(setItem).toHaveBeenCalledTimes(1);
+    expect(readAutosave()?.project.name).toBe("Three");
+    stopAutosave();
+    setItem.mockRestore();
+  });
+
+  it("does not write for changes that leave the project clean", () => {
+    const stopAutosave = startAutosave();
+    useStore.getState().loadProject(createEmptyProject(), null);
+
+    vi.advanceTimersByTime(AUTOSAVE_DEBOUNCE_MS * 2);
+    expect(storage.getItem(AUTOSAVE_KEY)).toBeNull();
+    stopAutosave();
+  });
+
+  it("cancels a pending write when autosave is stopped", () => {
+    const stopAutosave = startAutosave();
+    useStore.getState().renameProject("Never written");
+    stopAutosave();
+
+    vi.advanceTimersByTime(AUTOSAVE_INTERVAL_MS);
+    expect(storage.getItem(AUTOSAVE_KEY)).toBeNull();
   });
 
   it("does not rewrite an unchanged autosave payload", () => {
@@ -122,7 +173,7 @@ describe("local project autosave", () => {
     const stopAutosave = startAutosave();
     useStore.getState().renameProject("Large prototype");
 
-    vi.advanceTimersByTime(AUTOSAVE_INTERVAL_MS);
+    vi.advanceTimersByTime(AUTOSAVE_DEBOUNCE_MS);
 
     expect(listener).toHaveBeenCalledWith(
       "Autosave failed. Save your project to disk and check available storage.",
