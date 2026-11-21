@@ -67,6 +67,8 @@ describe("autosave when localStorage is full (B34)", () => {
     vi.stubGlobal("window", {
       setInterval: globalThis.setInterval.bind(globalThis),
       clearInterval: globalThis.clearInterval.bind(globalThis),
+      setTimeout: globalThis.setTimeout.bind(globalThis),
+      clearTimeout: globalThis.clearTimeout.bind(globalThis),
     });
     resetStore();
     clearAutosave();

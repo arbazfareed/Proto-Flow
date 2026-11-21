@@ -5,6 +5,8 @@ import { parseProject, ProjectSchema, serializeProject, type Project } from "./s
 export const AUTOSAVE_KEY = "proto-flow:autosave:v1";
 const LEGACY_RECOVERY_KEY = "proto-flow:crash-recovery:v1";
 export const AUTOSAVE_INTERVAL_MS = 30_000;
+/** Quiet period after the last edit before the recovery copy is written (B65). */
+export const AUTOSAVE_DEBOUNCE_MS = 1_000;
 export const AUTOSAVE_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000;
 
 const AutosaveSchema = z.object({
@@ -255,27 +257,49 @@ export function clearAutosave(): void {
   clearedProjectPayload = serializeProject(useStore.getState().project);
 }
 
+function runAutosave(): void {
+  const { project, isDirty } = useStore.getState();
+  if (!isDirty) return;
+
+  const serializedProject = serializeProject(project);
+  if (clearedProjectPayload === serializedProject) return;
+  clearedProjectPayload = null;
+
+  if (lastOverflowPayload === serializedProject) return;
+  const previousSnapshot = readAutosave();
+  if (
+    previousSnapshot &&
+    serializeProject(previousSnapshot.project) === serializedProject
+  ) return;
+
+  storeSnapshot({
+    project: parseProject(serializedProject),
+    ts: Date.now(),
+  }, serializedProject);
+}
+
+/**
+ * Keeps a recovery copy of unsaved work. A copy is written shortly after every change
+ * (debounced, so dragging does not write on each mouse move) and the 30-second interval stays
+ * as a safety net. This closes the window in which up to 30 seconds of edits could be lost on a
+ * crash or an abrupt close (B65).
+ */
 export function startAutosave(): () => void {
-  const interval = window.setInterval(() => {
-    const { project, isDirty } = useStore.getState();
-    if (!isDirty) return;
+  const interval = window.setInterval(runAutosave, AUTOSAVE_INTERVAL_MS);
 
-    const serializedProject = serializeProject(project);
-    if (clearedProjectPayload === serializedProject) return;
-    clearedProjectPayload = null;
+  let debounceTimer: number | null = null;
+  const unsubscribe = useStore.subscribe((state, previous) => {
+    if (state.project === previous.project || !state.isDirty) return;
+    if (debounceTimer !== null) window.clearTimeout(debounceTimer);
+    debounceTimer = window.setTimeout(() => {
+      debounceTimer = null;
+      runAutosave();
+    }, AUTOSAVE_DEBOUNCE_MS);
+  });
 
-    if (lastOverflowPayload === serializedProject) return;
-    const previousSnapshot = readAutosave();
-    if (
-      previousSnapshot &&
-      serializeProject(previousSnapshot.project) === serializedProject
-    ) return;
-
-    storeSnapshot({
-      project: parseProject(serializedProject),
-      ts: Date.now(),
-    }, serializedProject);
-  }, AUTOSAVE_INTERVAL_MS);
-
-  return () => window.clearInterval(interval);
+  return () => {
+    window.clearInterval(interval);
+    unsubscribe();
+    if (debounceTimer !== null) window.clearTimeout(debounceTimer);
+  };
 }
