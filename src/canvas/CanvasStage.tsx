@@ -4,6 +4,14 @@ import type { DragEvent as ReactDragEvent, FormEvent } from "react";
 import { Circle, Group, Layer, Line, Rect, Stage, Text, Transformer } from "react-konva";
 import type Konva from "konva";
 import {
+  AlignCenterHorizontal,
+  AlignCenterVertical,
+  AlignEndHorizontal,
+  AlignEndVertical,
+  AlignHorizontalDistributeCenter,
+  AlignStartHorizontal,
+  AlignStartVertical,
+  AlignVerticalDistributeCenter,
   ArrowDownToLine,
   FolderOpen,
   Hand,
@@ -13,6 +21,8 @@ import {
   Minus,
   MousePointer2,
   Plus,
+  StretchHorizontal,
+  StretchVertical,
   X,
 } from "lucide-react";
 import type { Stage as KonvaStage } from "konva/lib/Stage";
@@ -3550,17 +3560,17 @@ export function CanvasStage({
           }}
         >
           {([
-            ["align-left", "Align left", "L"],
-            ["align-center", "Align horizontal centers", "C"],
-            ["align-right", "Align right", "R"],
-            ["align-top", "Align top", "T"],
-            ["align-middle", "Align vertical centers", "M"],
-            ["align-bottom", "Align bottom", "B"],
-            ["distribute-horizontal", "Distribute horizontally", "↔"],
-            ["distribute-vertical", "Distribute vertically", "↕"],
-            ["match-width", "Match width", "W"],
-            ["match-height", "Match height", "H"],
-          ] as const).map(([operation, title, label]) => (
+            ["align-left", "Align left", AlignStartVertical],
+            ["align-center", "Align horizontal centers", AlignCenterVertical],
+            ["align-right", "Align right", AlignEndVertical],
+            ["align-top", "Align top", AlignStartHorizontal],
+            ["align-middle", "Align vertical centers", AlignCenterHorizontal],
+            ["align-bottom", "Align bottom", AlignEndHorizontal],
+            ["distribute-horizontal", "Distribute horizontally", AlignHorizontalDistributeCenter],
+            ["distribute-vertical", "Distribute vertically", AlignVerticalDistributeCenter],
+            ["match-width", "Match width", StretchHorizontal],
+            ["match-height", "Match height", StretchVertical],
+          ] as const).map(([operation, title, Icon]) => (
             <button
               key={operation}
               className="selection-action"
@@ -3574,7 +3584,7 @@ export function CanvasStage({
               }
               onClick={() => applySelectionOperation(operation)}
             >
-              {label}
+              <Icon size={15} aria-hidden="true" />
             </button>
           ))}
         </div>
