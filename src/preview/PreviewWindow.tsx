@@ -1,4 +1,5 @@
 import { avatarInitials } from "../project/avatarInitials";
+import { PREVIEW_FIT_HINT, previewFitLabel } from "./previewZoomLabel";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { CSSProperties, ChangeEvent, HTMLAttributes, KeyboardEvent, MouseEvent, ReactNode, TouchEvent } from "react";
 import { ArrowLeft, Camera, RotateCcw, RotateCw, SlidersHorizontal, X } from "lucide-react";
@@ -1367,8 +1368,8 @@ export function PreviewWindow() {
         )}
         <button type="button" aria-label="Rotate devices" aria-pressed={rotated} title="Rotate devices" onClick={() => setRotated((value) => !value)}><RotateCw size={15} /></button>
         <button type="button" aria-label="Toggle device frame" aria-pressed={showDeviceFrame} title="Toggle device frame" onClick={() => setShowDeviceFrame((value) => !value)}><span className="preview-device-icon">▣</span></button>
-        <label className="preview-zoom">
-          Zoom {scalePercent}%
+        <label className="preview-zoom" title={PREVIEW_FIT_HINT}>
+          {previewFitLabel(scalePercent)}
           <input aria-label="Preview zoom" type="range" min="25" max="150" step="5" value={scalePercent} onChange={(event) => setScalePercent(Number(event.currentTarget.value))} />
         </label>
         <button className="preview-capture-button" type="button" aria-label="Capture preview screenshot" title="Capture 2× PNG screenshot" onClick={() => void captureScreenshot()}><Camera size={15} /></button>
