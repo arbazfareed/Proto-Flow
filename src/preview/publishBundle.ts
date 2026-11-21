@@ -331,12 +331,16 @@ function bindWidgetEvents(element, widget, item) {
       element.addEventListener("pointerenter", (event) => {
         if (event.pointerType !== "touch") fire(widget, "onHover", item);
       });
+      element.addEventListener("pointerleave", (event) => {
+        if (event.pointerType !== "touch") fire(widget, "onMouseLeave", item);
+      });
       element.addEventListener("pointerdown", (event) => {
         if (event.pointerType !== "touch") fire(widget, "onMouseDown", item);
       });
     } else {
       element.addEventListener("click", (event) => firePointer(widget, ["onClick"], item, event.clientX, event.clientY, element));
       element.addEventListener("mouseenter", () => fire(widget, "onHover", item));
+      element.addEventListener("mouseleave", () => fire(widget, "onMouseLeave", item));
       element.addEventListener("mousedown", () => fire(widget, "onMouseDown", item));
       element.addEventListener("mouseup", () => fire(widget, "onMouseUp", item));
     }

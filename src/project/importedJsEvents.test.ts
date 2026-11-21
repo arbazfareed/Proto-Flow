@@ -35,6 +35,27 @@ describe("analyzeImportedJsListeners", () => {
     ]);
   });
 
+  it("maps mouseenter and mouseover to Hover and mouseleave to Mouse leave (B50)", () => {
+    const analysis = analyzeImportedJsListeners(
+      `document.querySelector("#card").addEventListener("mouseenter", (event) => {
+        event.currentTarget.textContent = "In";
+      });
+      document.querySelector("#card").addEventListener("mouseover", (event) => {
+        event.currentTarget.textContent = "Over";
+      });
+      document.querySelector("#card").addEventListener("mouseleave", (event) => {
+        event.currentTarget.textContent = "Out";
+      });`,
+      '<div id="card">Card</div>',
+    );
+
+    expect(analysis.listeners.map((listener) => [listener.eventName, listener.protoFlowEvent])).toEqual([
+      ["mouseenter", "onHover"],
+      ["mouseover", "onHover"],
+      ["mouseleave", "onMouseLeave"],
+    ]);
+  });
+
   it("reports syntax errors and ignores unsupported, dynamic, or unmatched listeners", () => {
     expect(analyzeImportedJsListeners("document.querySelector(", "<button />")).toMatchObject({
       listeners: [],

@@ -6,6 +6,7 @@ export const INTERACTION_EVENTS = [
   ["onDoubleClick", "Double click"],
   ["onRightClick", "Right click"],
   ["onHover", "Hover"],
+  ["onMouseLeave", "Mouse leave"],
   ["onMouseDown", "Mouse down"],
   ["onMouseUp", "Mouse up"],
   ["onChange", "Change"],
@@ -30,7 +31,7 @@ export const INTERACTION_EVENTS = [
 // Click works everywhere: on the web a tap also produces a click.
 const ALWAYS_AVAILABLE_EVENTS = new Set(["onClick", "onChange", "onLoad", "onFocus", "onBlur", "onKeyDown"]);
 const MOUSE_EVENTS = new Set([
-  "onDoubleClick", "onRightClick", "onHover", "onMouseDown", "onMouseUp",
+  "onDoubleClick", "onRightClick", "onHover", "onMouseLeave", "onMouseDown", "onMouseUp",
 ]);
 const TOUCH_EVENTS = new Set([
   "onTap", "onDoubleTap", "onLongPress", "onSwipeLeft", "onSwipeRight", "onSwipeUp",

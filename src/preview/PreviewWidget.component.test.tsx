@@ -107,7 +107,7 @@ describe("PreviewWidget input-mode interactions", () => {
       "onDoubleClick",
       "onRightClick",
       "onHover",
-      "onHover",
+      "onMouseLeave",
       "onMouseDown",
       "onMouseUp",
     ]);
