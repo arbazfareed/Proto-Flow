@@ -53,6 +53,18 @@ export function PrivacySettingsDialog({
     }
   }, []);
 
+  // B54: Escape closes Settings, except on first launch (the choice is required) or while saving.
+  useEffect(() => {
+    if (firstLaunch) return;
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== "Escape" || saving) return;
+      event.preventDefault();
+      onClose();
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [firstLaunch, saving, onClose]);
+
   const persistSettings = async (nextSettings: PrivacySettings) => {
     setSaving(true);
     setMessage("");
