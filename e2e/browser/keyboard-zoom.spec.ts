@@ -45,19 +45,16 @@ test("B31: Shift+1 fits everything, but not while a button is selected", async (
   await page.mouse.click(empty.x, empty.y);
   await page.getByRole("button", { name: "Add Button" }).click();
   await page.mouse.click(centre.x, centre.y);
+  // After the first fit the Rectangle fills the middle of the canvas, so a click there can select
+  // the Rectangle instead of the new Button (it did on the Windows runner). Pick the Button in
+  // the Layers panel so the test always has the Button selected.
+  await page.locator(".layer-row", { hasText: "Button" }).click();
+  await expect(page.locator('.layer-row[aria-selected="true"]')).toHaveCount(1);
+  await expect(page.locator('.layer-row[aria-selected="true"]')).toContainText("Button");
   await expect(page.getByText("1 selected")).toBeVisible();
   await page.keyboard.press("Control+-");
   const beforeTyping = await read();
-  const layers = async () => (await page.locator(".layer-row").evaluateAll((rows) =>
-    rows.map((row) => `${(row.textContent ?? "").replace(/\s+/g, " ").trim().slice(0, 30)}${row.getAttribute("aria-selected") === "true" ? " [SELECTED]" : ""}`),
-  )).join(" | ");
-  const beforeText = await layers();
   await page.keyboard.press("Shift+1");
   await page.waitForTimeout(300);
-  const finalZoom = await read();
-  const afterText = await layers();
-  expect(
-    finalZoom,
-    `DIAG zoomed=${zoomed} beforeTyping=${beforeTyping} LAYERS_BEFORE=[${beforeText}] LAYERS_AFTER=[${afterText}]`,
-  ).toBe(beforeTyping);
+  expect(await read()).toBe(beforeTyping);
 });
