@@ -48,13 +48,16 @@ test("B31: Shift+1 fits everything, but not while a button is selected", async (
   await expect(page.getByText("1 selected")).toBeVisible();
   await page.keyboard.press("Control+-");
   const beforeTyping = await read();
-  const beforeText = (await page.locator("body").innerText()).replace(/\s+/g, " ");
+  const layers = async () => (await page.locator(".layer-row").evaluateAll((rows) =>
+    rows.map((row) => `${(row.textContent ?? "").replace(/\s+/g, " ").trim().slice(0, 30)}${row.getAttribute("aria-selected") === "true" ? " [SELECTED]" : ""}`),
+  )).join(" | ");
+  const beforeText = await layers();
   await page.keyboard.press("Shift+1");
   await page.waitForTimeout(300);
   const finalZoom = await read();
-  const afterText = (await page.locator("body").innerText()).replace(/\s+/g, " ");
+  const afterText = await layers();
   expect(
     finalZoom,
-    `DIAG zoomed=${zoomed} beforeTyping=${beforeTyping} BEFORE=[${beforeText.slice(0, 1800)}] AFTER=[${afterText.slice(0, 600)}]`,
+    `DIAG zoomed=${zoomed} beforeTyping=${beforeTyping} LAYERS_BEFORE=[${beforeText}] LAYERS_AFTER=[${afterText}]`,
   ).toBe(beforeTyping);
 });
