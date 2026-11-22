@@ -48,7 +48,13 @@ test("B31: Shift+1 fits everything, but not while a button is selected", async (
   await expect(page.getByText("1 selected")).toBeVisible();
   await page.keyboard.press("Control+-");
   const beforeTyping = await read();
+  const beforeText = (await page.locator("body").innerText()).replace(/\s+/g, " ");
   await page.keyboard.press("Shift+1");
   await page.waitForTimeout(300);
-  expect(await read()).toBe(beforeTyping);
+  const finalZoom = await read();
+  const afterText = (await page.locator("body").innerText()).replace(/\s+/g, " ");
+  expect(
+    finalZoom,
+    `DIAG zoomed=${zoomed} beforeTyping=${beforeTyping} BEFORE=[${beforeText.slice(0, 1800)}] AFTER=[${afterText.slice(0, 600)}]`,
+  ).toBe(beforeTyping);
 });
