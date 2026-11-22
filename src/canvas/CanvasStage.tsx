@@ -79,6 +79,7 @@ import {
 import {
   getSelectedContainingParentId,
   isWidgetContainedBy,
+  findRepeaterThatCannotTake,
   containerAdoptsWidget,
   getWidgetParentIdMap,
   isWidgetContainer,
@@ -838,6 +839,9 @@ function getEditableWidgetText(widget: Widget): EditableWidgetText | null {
   return { key, value: typeof value === "string" ? value : "" };
 }
 
+/** Shown on a repeater that is outlined because a widget over it does not fit completely (B17). */
+const REPEATER_BLOCKED_LABEL = "Must fit completely inside to join this repeater";
+
 const TEXT_FIRST_WIDGET_TYPES = new Set(["text", "heading", "paragraph", "link", "label"]);
 
 /** A single printable key (not Space, which pans the canvas) that should start typing. */
@@ -1029,7 +1033,11 @@ export function CanvasStage({
   );
   // B4: while a widget is dragged (or drawn) over a container, outline the container it will be
   // placed inside, using the same centre-point rule that nests it on drop.
-  const dropContainer = useMemo(() => {
+  const dropTargets = useMemo(() => {
+    const none: { container: Widget | undefined; blockedRepeater: Widget | undefined } = {
+      container: undefined,
+      blockedRepeater: undefined,
+    };
     const movingIds = Object.keys(previewPositions);
     let moving: Widget | undefined;
     if (shapeDraft) {
@@ -1042,18 +1050,25 @@ export function CanvasStage({
       const position = previewPositions[primaryId];
       if (widget && position) moving = { ...widget, x: position.x, y: position.y };
     }
-    if (!moving) return undefined;
+    if (!moving) return none;
     const excluded = new Set(movingIds);
     const candidates = screenWidgets.filter((item) =>
       !excluded.has(item.id) && item.id !== moving.id && isWidgetContainer(item),
     );
-    if (candidates.length === 0) return undefined;
+    if (candidates.length === 0) return none;
     const parentId = getWidgetParentIdMap([
       ...candidates,
       { ...moving, groupId: undefined },
     ]).get(moving.id);
-    return parentId ? candidates.find((item) => item.id === parentId) : undefined;
+    return {
+      container: parentId ? candidates.find((item) => item.id === parentId) : undefined,
+      // B17: a repeater needs the whole widget inside it, so a widget hanging over its edge is
+      // left outside; say so instead of failing silently.
+      blockedRepeater: findRepeaterThatCannotTake(moving, candidates),
+    };
   }, [previewPositions, screenWidgets, shapeDraft]);
+  const dropContainer = dropTargets.container;
+  const blockedRepeater = dropTargets.blockedRepeater;
   const autoLayoutPositions = useMemo(
     () => getAutoLayoutPositions(screenWidgets),
     [screenWidgets],
@@ -3387,6 +3402,44 @@ export function CanvasStage({
                 listening={false}
                 perfectDrawEnabled={false}
               />
+            )}
+            {blockedRepeater && (
+              <Group
+                name="drop-repeater-blocked"
+                x={blockedRepeater.x}
+                y={blockedRepeater.y}
+                rotation={blockedRepeater.rotation ?? 0}
+                listening={false}
+              >
+                <Rect
+                  width={blockedRepeater.width}
+                  height={blockedRepeater.height}
+                  stroke="#d97706"
+                  strokeWidth={2 / zoom}
+                  dash={[6 / zoom, 4 / zoom]}
+                  fill="rgba(217, 119, 6, 0.06)"
+                  perfectDrawEnabled={false}
+                />
+                <Rect
+                  x={6 / zoom}
+                  y={6 / zoom}
+                  width={(REPEATER_BLOCKED_LABEL.length * 5.6 + 12) / zoom}
+                  height={20 / zoom}
+                  fill="#fff7e6"
+                  stroke="#d97706"
+                  strokeWidth={1 / zoom}
+                  cornerRadius={3 / zoom}
+                  perfectDrawEnabled={false}
+                />
+                <Text
+                  x={12 / zoom}
+                  y={11 / zoom}
+                  text={REPEATER_BLOCKED_LABEL}
+                  fontSize={11 / zoom}
+                  fill="#7c4a03"
+                  perfectDrawEnabled={false}
+                />
+              </Group>
             )}
             <Transformer
               ref={transformerRef}
