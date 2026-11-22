@@ -1300,6 +1300,13 @@
   .wallet-balance-pill { width:32px; min-width:32px; justify-content:center; padding:0; }
   .wallet-balance-pill>span,.wallet-balance-pill>svg:last-child { display:none; }
 }
+/* B32: on a 1280 px laptop the 240 + 280 px panels took 41% of the width and squeezed the canvas to 760 px,
+   below the 830 px the one-row canvas toolbar needs, so it wrapped onto two rows. Narrower panels leave
+   the canvas 836 px at 1280. The 1200 px block below still wins on smaller windows. */
+@media (max-width:1365px) {
+  .left-sidebar { width:200px; }
+  .inspector { width:244px; }
+}
 @media (max-width:1200px) {
   .inspector { width:320px; }
   .left-sidebar { width:240px; }
