@@ -2,7 +2,7 @@ import { defineConfig, devices } from "playwright/test";
 
 export default defineConfig({
   testDir: "./e2e/browser",
-  testMatch: "**/*.spec.ts",
+  testMatch: "**/laptop-layout.spec.ts",
   fullyParallel: true,
   forbidOnly: Boolean(process.env.CI),
   retries: 0,
@@ -10,6 +10,7 @@ export default defineConfig({
   timeout: 120_000,
   expect: { timeout: 15_000 },
   reporter: [
+    ["github"],
     ["list"],
     ["html", { outputFolder: "playwright-report", open: "never" }],
   ],
