@@ -1,7 +1,9 @@
 import { describe, expect, it } from "vitest";
 import { createEmptyProject, parseProject } from "./schema";
+import type { Widget } from "./schema";
 import {
   containerAdoptsWidget,
+  findRepeaterThatCannotTake,
   getSelectedContainingParentId,
   getWidgetParentIdMap,
   isWidgetCentreInside,
@@ -250,5 +252,66 @@ describe("B4: containers nest by centre point", () => {
 
   it("puts the centre exactly on the edge inside", () => {
     expect(isWidgetCentreInside(box("a", "text", 160, 0, 80, 20), box("p", "container", 0, 0, 200, 100))).toBe(true);
+  });
+});
+
+describe("B17: a widget drawn partly over a container is stored inside it", () => {
+  const item = (id: string, type: string, x: number, y: number, width: number, height: number): Widget => ({
+    id, type, x, y, width, height,
+    rotation: 0, opacity: 1, visible: true, locked: false, zIndex: 0, style: {}, props: {},
+  });
+
+  it("records the container as the parent when the widget hangs over its edge with its centre inside", () => {
+    const card = item("card", "container", 0, 0, 200, 100);
+    const halfOver = item("child", "button", 150, 20, 80, 40); // centre (190, 40) inside; right edge outside
+    const synced = syncWidgetGroupIdsToContainment([card, halfOver]);
+    expect(synced.find((widget) => widget.id === "child")?.groupId).toBe("card");
+
+    // Dragged further out, so the centre leaves the card: it is released again.
+    const dragged = syncWidgetGroupIdsToContainment([card, { ...synced[1], x: 175 }]);
+    expect(dragged.find((widget) => widget.id === "child")?.groupId).toBeUndefined();
+  });
+
+  it("does the same for a card and a modal, not only a plain container", () => {
+    for (const type of ["card", "modal", "panel", "sidebar"]) {
+      const parent = item("p", type, 0, 0, 200, 100);
+      const child = item("c", "text", 150, 20, 80, 40);
+      expect(syncWidgetGroupIdsToContainment([parent, child])[1].groupId).toBe("p");
+    }
+  });
+});
+
+describe("B17: a repeater says why it did not take a widget dragged partly over it", () => {
+  const box = (type: string, x: number, y: number, width: number, height: number, id = type) => ({
+    id, type, x, y, width, height,
+  });
+  const repeater = box("repeater", 0, 0, 200, 100);
+
+  it("finds a repeater whose edge the widget hangs over with its centre inside", () => {
+    const halfOver = box("rectangle", 150, 20, 80, 40); // centre (190, 40) is inside, right edge is not
+    expect(containerAdoptsWidget(repeater, halfOver)).toBe(false);
+    expect(findRepeaterThatCannotTake(halfOver, [repeater])).toBe(repeater);
+  });
+
+  it("stays silent when the widget fits, is clearly outside, or could never fit", () => {
+    expect(findRepeaterThatCannotTake(box("rectangle", 10, 10, 50, 50), [repeater])).toBeUndefined();
+    // Centre (220, 40) is outside: nothing was going to be placed in the repeater.
+    expect(findRepeaterThatCannotTake(box("rectangle", 180, 20, 80, 40), [repeater])).toBeUndefined();
+    // Wider than the repeater: moving it cannot help.
+    expect(findRepeaterThatCannotTake(box("rectangle", -50, 20, 300, 40), [repeater])).toBeUndefined();
+    expect(findRepeaterThatCannotTake(box("rectangle", 20, -30, 40, 150), [repeater])).toBeUndefined();
+  });
+
+  it("only speaks for repeaters, because every other container adopts by centre", () => {
+    const halfOver = box("rectangle", 150, 20, 80, 40);
+    expect(findRepeaterThatCannotTake(halfOver, [box("container", 0, 0, 200, 100)])).toBeUndefined();
+    expect(findRepeaterThatCannotTake(halfOver, [box("card", 0, 0, 200, 100)])).toBeUndefined();
+  });
+
+  it("picks the smallest repeater when they are nested", () => {
+    const outer = box("repeater", 0, 0, 400, 300, "outer");
+    const inner = box("repeater", 100, 20, 120, 80, "inner");
+    const moving = box("rectangle", 190, 40, 60, 30); // centre (220, 55) inside inner, overhangs it
+    expect(findRepeaterThatCannotTake(moving, [outer, inner])?.id).toBe("inner");
   });
 });

@@ -86,6 +86,34 @@ export function containerAdoptsWidget(
     : isWidgetContainedBy(widget, parent) || isWidgetCentreInside(widget, parent);
 }
 
+/**
+ * A repeater only takes a widget that fits completely inside it, because the widgets inside are
+ * its row template. Every other container adopts by centre point, so a widget dragged or drawn
+ * over a repeater with its centre inside, but hanging over an edge, is left outside it. This finds
+ * that repeater (the smallest, if several) so the canvas can say why instead of leaving the widget
+ * outside with no hint (B17). A widget that is too big to ever fit gets no hint: there is nothing
+ * to move.
+ */
+export function findRepeaterThatCannotTake<
+  T extends Pick<Widget, "type" | "x" | "y" | "width" | "height">,
+>(
+  moving: Pick<Widget, "x" | "y" | "width" | "height">,
+  candidates: readonly T[],
+): T | undefined {
+  let found: T | undefined;
+  for (const candidate of candidates) {
+    if (
+      candidate.type !== "repeater" ||
+      !isWidgetCentreInside(moving, candidate) ||
+      isWidgetContainedBy(moving, candidate) ||
+      moving.width > candidate.width ||
+      moving.height > candidate.height
+    ) continue;
+    if (!found || candidate.width * candidate.height < found.width * found.height) found = candidate;
+  }
+  return found;
+}
+
 export function getWidgetParentIdMap(
   widgets: readonly WidgetParentCandidate[],
 ): Map<string, string> {
