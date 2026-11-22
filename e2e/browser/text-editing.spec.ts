@@ -67,7 +67,7 @@ test("canvas shortcuts do nothing while a dialog is open", async ({ page }) => {
   await startWorkspace(page, "Blank project");
   const layers = await page.locator(".layer-row").count();
   await page.getByRole("button", { name: "Open settings" }).click();
-  await expect(page.getByRole("dialog", { name: /privacy/i })).toBeVisible();
+  await expect(page.getByRole("dialog", { name: "Settings" })).toBeVisible();
   await page.keyboard.press("r");
   await page.keyboard.press("Shift+T");
   await page.keyboard.press("Escape");
