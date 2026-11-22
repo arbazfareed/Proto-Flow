@@ -1,13 +1,17 @@
 import { describe, expect, it } from "vitest";
 import { runInNewContext } from "node:vm";
 import {
+  EXPRESSION_RUNTIME_OUTPUT,
+  generateExpressionRuntimeSource,
+} from "../../scripts/generate-expression-runtime.mjs";
+import {
   clearExpressionCache,
   evaluateExpression,
-  EXPRESSION_RUNTIME_SOURCE,
   getExpressionCacheSize,
   interpolateExpressions,
   MAX_PAD_LENGTH,
 } from "./expressions";
+import { EXPRESSION_RUNTIME_SOURCE } from "./expressionRuntime.generated";
 import type { Widget } from "./schema";
 
 function widget(name: string, x: number, width: number): Widget {
@@ -160,5 +164,67 @@ describe("safe expression engine", () => {
     expect(runInNewContext(`${EXPRESSION_RUNTIME_SOURCE}\nevaluateExpression('userName.toUpperCase()', { variables: { userName: 'Avery' } })`))
       .toBe("AVERY");
     expect(EXPRESSION_RUNTIME_SOURCE).not.toMatch(/\beval\s*\(/);
+  });
+});
+
+describe("B20: exports run the same engine as the editor", () => {
+  it("keeps the committed export runtime in step with expressions.ts", () => {
+    // If this fails, expressions.ts changed: run `npm run generate:expression-runtime` and commit the result.
+    expect(
+      EXPRESSION_RUNTIME_SOURCE,
+      `${EXPRESSION_RUNTIME_OUTPUT} is out of date. Run: npm run generate:expression-runtime`,
+    ).toBe(
+      // The generated file stores the runtime inside a template literal, so compare what that literal evaluates to.
+      new Function(`return ${generateExpressionRuntimeSource().replace(/^[^]*?export const EXPRESSION_RUNTIME_SOURCE = /, "").replace(/;\s*$/, "")}`)(),
+    );
+  });
+
+  it("is generated, not a second hand-written engine", () => {
+    // The old copy kept its own token cache on the function and had its own error texts.
+    expect(EXPRESSION_RUNTIME_SOURCE).not.toContain("tokenCache");
+    expect(EXPRESSION_RUNTIME_SOURCE).not.toMatch(/String\.raw/);
+    // Only these two names are visible to the page the runtime is pasted into.
+    expect(EXPRESSION_RUNTIME_SOURCE).toMatch(/^\s*const \{ evaluateExpression, clearExpressionCache \} = \(\(\) => \{/);
+    // It is inlined into an HTML <script>, so it must not be able to close it.
+    expect(EXPRESSION_RUNTIME_SOURCE).not.toMatch(/<\/script|<!--/i);
+  });
+
+  const runtimeValue = (source: string, context: Record<string, unknown> = {}) => {
+    try {
+      return { value: runInNewContext(`${EXPRESSION_RUNTIME_SOURCE}\nevaluateExpression(${JSON.stringify(source)}, ctx)`, { ctx: context }) };
+    } catch (error) {
+      return { error: (error as Error).message };
+    }
+  };
+  const engineValue = (source: string, context: Record<string, unknown> = {}) => {
+    try {
+      return { value: evaluateExpression(source, context as never) };
+    } catch (error) {
+      return { error: (error as Error).message };
+    }
+  };
+
+  it("gives the same answer or the same error as the editor for a wide set of expressions", () => {
+    const cases: Array<[string, Record<string, unknown>?]> = [
+      ["1 + 2 * 3"], ["(1 + 2) * 3"], ["2 ** 3 ** 2"], ["10 % 4"], ["1 < 2 && 2 < 3"], ["!true"], ["1 == '1'"],
+      ["abs(-3)"], ["ceil(1.2)"], ["floor(1.8)"], ["round(2.5)"], ["min(3, 1, 2)"], ["max(3, 1, 2)"], ["min()"],
+      ["concat('a', 'b', 1)"], ["substring('hello', 1, 3)"], ["replace('a-a', '-', '+')"],
+      ["toUpperCase('abc')"], ["trim('  x ')"], ["length('abcd')"], ["toString(12)"], ["toNumber('7')"],
+      ["formatDate('2024-03-10', 'dd/MM/yyyy')"], ["padStart('7', 3, '0')"], ["padEnd('7', 3, '0')"],
+      ["userName.toUpperCase()", { variables: { userName: "Avery" } }],
+      ["item.score + 1", { item: { score: 3 } }], ["a.b.c", { variables: { a: { b: { c: 5 } } } }],
+      ["missing + 1"], ["1 / 0"], ["1 +"], ["1 2"], ["'unterminated"], ["constructor"], ["__proto__.x"],
+      ["abs('x')"], ["unknownFn(1)"], ["now()", { now: () => 1000 }],
+    ];
+    for (const [source, context] of cases) {
+      expect(runtimeValue(source, context), source).toEqual(engineValue(source, context));
+    }
+  });
+
+  it("no longer differs where the old copy did", () => {
+    // The old copy threw "Expected an expression value" here and ignored the supplied clock.
+    expect(runtimeValue("replace('a-a', '-', '+')")).toEqual({ value: "a+a" });
+    expect(runtimeValue("now()", { now: () => 1000 })).toEqual({ value: 1000 });
+    expect(runtimeValue("1 2")).toEqual({ error: 'Unexpected token "2".' });
   });
 });
