@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Bug, Download, ShieldCheck, X } from "lucide-react";
+import { Bug, Download, ShieldCheck, SlidersHorizontal, X } from "lucide-react";
 import {
   exportDiagnosticLog,
   PRIVACY_SETTINGS_KEY,
@@ -123,15 +123,41 @@ export function PrivacySettingsDialog({
         aria-labelledby="privacy-settings-title"
       >
         {!firstLaunch && (
-          <button className="icon-button dialog-close" aria-label="Close privacy settings" onClick={onClose}>
+          <button className="icon-button dialog-close" aria-label="Close settings" onClick={onClose}>
             <X size={17} />
           </button>
         )}
-        <div className="dialog-icon"><ShieldCheck size={19} /></div>
-        <span className="eyebrow">{firstLaunch ? "YOUR PRIVACY" : "SETTINGS"}</span>
+        <div className="dialog-icon">{firstLaunch ? <ShieldCheck size={19} /> : <SlidersHorizontal size={19} />}</div>
+        <span className="eyebrow">{firstLaunch ? "YOUR PRIVACY" : "PREFERENCES"}</span>
         <h2 id="privacy-settings-title">
-          {firstLaunch ? "Choose what you share" : "Privacy & diagnostics"}
+          {firstLaunch ? "Choose what you share" : "Settings"}
         </h2>
+
+        {/* B54: the theme is an appearance setting of its own, not part of privacy. */}
+        {!firstLaunch && (
+          <>
+            <h3 className="settings-section-title">Appearance</h3>
+            <label className="privacy-appearance-setting">
+              Workspace appearance
+              <select
+                aria-label="Workspace appearance"
+                value={theme}
+                onChange={(event) => {
+                  const value = event.target.value;
+                  if (value === "light" || value === "dark" || value === "system") {
+                    onThemeChange(value);
+                  }
+                }}
+              >
+                <option value="light">Light</option>
+                <option value="dark">Dark</option>
+                <option value="system">System</option>
+              </select>
+              <small>Saved on this device and applied immediately.</small>
+            </label>
+            <h3 className="settings-section-title">Privacy &amp; diagnostics</h3>
+          </>
+        )}
         <p>
           Both options are independent and off by default. You can change them here at any time.
           Project content, file paths, project names, emails, and variable values are never included.
@@ -141,27 +167,6 @@ export function PrivacySettingsDialog({
           for those features to ProtoFlow’s Cloudflare services. AI actions disclose and send the
           selected prompt and context to the configured AI provider when used.
         </p>
-
-        {!firstLaunch && (
-          <label className="privacy-appearance-setting">
-            Workspace appearance
-            <select
-              aria-label="Workspace appearance"
-              value={theme}
-              onChange={(event) => {
-                const value = event.target.value;
-                if (value === "light" || value === "dark" || value === "system") {
-                  onThemeChange(value);
-                }
-              }}
-            >
-              <option value="light">Light</option>
-              <option value="dark">Dark</option>
-              <option value="system">System</option>
-            </select>
-            <small>Saved on this device and applied immediately.</small>
-          </label>
-        )}
 
         <label className="privacy-setting-option">
           <input

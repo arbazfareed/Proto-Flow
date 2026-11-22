@@ -67,7 +67,7 @@ test("light theme has no dark panels or unreadable text in the main editor views
   problems.push(...await findLightThemeProblems(page));
   await page.keyboard.press("Escape");
 
-  await page.getByRole("button", { name: "Open privacy and diagnostics settings" }).click();
+  await page.getByRole("button", { name: "Open settings" }).click();
   problems.push(...await findLightThemeProblems(page));
 
   expect([...new Set(problems)]).toEqual([]);
