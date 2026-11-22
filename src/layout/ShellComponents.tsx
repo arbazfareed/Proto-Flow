@@ -537,8 +537,8 @@ export function TopBar({
         </button>
         <button
           className="icon-button topbar-icon"
-          title="Privacy and diagnostics settings"
-          aria-label="Open privacy and diagnostics settings"
+          title="Settings (appearance, privacy and diagnostics)"
+          aria-label="Open settings"
           onClick={onOpenPrivacySettings}
         >
           <Settings2 size={15} />

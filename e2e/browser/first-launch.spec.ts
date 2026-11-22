@@ -27,8 +27,8 @@ test("first launch finishes privacy and all five onboarding steps", async ({ pag
     name: "From first sketch to clickable prototype.",
   })).toHaveCount(0);
 
-  await page.getByRole("button", { name: "Open privacy and diagnostics settings" }).click();
-  const settings = page.getByRole("dialog", { name: "Privacy & diagnostics" });
+  await page.getByRole("button", { name: "Open settings" }).click();
+  const settings = page.getByRole("dialog", { name: "Settings" });
   await settings.getByRole("button", { name: "Show onboarding again" }).click();
   const onboarding = page.getByRole("dialog", { name: "From first sketch to clickable prototype." });
   await expect(onboarding).toBeVisible();

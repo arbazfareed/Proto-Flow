@@ -71,7 +71,7 @@ describe("Windows desktop first launch", () => {
       deviceTourCompleted: true,
     });
 
-    await $('[aria-label="Open privacy and diagnostics settings"]').click();
+    await $('[aria-label="Open settings"]').click();
     const settings = await $('[aria-labelledby="privacy-settings-title"]');
     await settings.$('//button[normalize-space(.)="Show onboarding again"]').click();
     const restartedWelcome = await $('[aria-labelledby="onboarding-title"]');
