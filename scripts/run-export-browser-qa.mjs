@@ -132,7 +132,7 @@ function fixtureSource() {
       responsive: Array.from(responsive),
       variants: Array.from(variants),
       published: generatePublishedPreviewHtml(project),
-      react: generateSingleFileJsx(project),
+      react: generateSingleFileJsx(project, { embedFont: true }),
       ids: { panel: panel.id, openState: openStateId },
     };
   })();`;
