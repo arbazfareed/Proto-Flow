@@ -19,6 +19,11 @@ describe("arrangeShortcut (B47)", () => {
     expect(arrangeShortcut({ key: "l" })).toBeNull();
   });
 
+  it("hides with Ctrl+Shift+H only, so Ctrl+H keeps its browser meaning", () => {
+    expect(arrangeShortcut({ key: "H", shiftKey: true })).toBe("hide");
+    expect(arrangeShortcut({ key: "h" })).toBeNull();
+  });
+
   it("ignores other keys", () => {
     expect(arrangeShortcut({ key: "d" })).toBeNull();
     expect(arrangeShortcut({ key: "a" })).toBeNull();

@@ -2240,6 +2240,25 @@ export function CanvasStage({
     ));
   }, [updateActiveScreenWidgets]);
 
+  // B47: hide the selected widgets, like the eye in the Layers panel. A hidden widget cannot be
+  // clicked on the canvas, so it leaves the selection; show it again from the Layers panel.
+  const hideSelection = useCallback(() => {
+    const current = useStore.getState();
+    const selected = new Set(current.selectedIds);
+    const screen = current.project.screens.find(
+      (item) => item.id === current.getActiveScreenId(),
+    );
+    if (!screen || selected.size === 0) return;
+    const canvasWidgets = getCanvasWidgets(screen, current.activeRepeaterEdit);
+    const hiding = new Set(canvasWidgets.filter((widget) => selected.has(widget.id)).map((widget) => widget.id));
+    if (hiding.size === 0) return;
+    updateActiveScreenWidgets(canvasWidgets.map((widget) =>
+      hiding.has(widget.id) ? { ...widget, visible: false } : widget,
+    ));
+    const after = useStore.getState();
+    after.select(after.selectedIds.filter((id) => !hiding.has(id)));
+  }, [updateActiveScreenWidgets]);
+
   const groupSelection = useCallback((ungroup = false) => {
     const current = useStore.getState();
     const selected = new Set(current.selectedIds);
@@ -2502,13 +2521,14 @@ export function CanvasStage({
         }
         const arrange = arrangeShortcut(event);
         if (arrange) {
-          // B47: Group, Ungroup, Bring forward / Send backward and Lock from the keyboard.
+          // B47: Group, Ungroup, Bring forward / Send backward, Lock and Hide from the keyboard.
           event.preventDefault();
           if (useStore.getState().selectedIds.length === 0) return;
           if (arrange === "group") {
             if (useStore.getState().selectedIds.length >= 2) groupSelection();
           } else if (arrange === "ungroup") groupSelection(true);
           else if (arrange === "lock") toggleSelectionLock();
+          else if (arrange === "hide") hideSelection();
           else changeSelectionZOrder(arrange);
           return;
         }
@@ -2630,6 +2650,7 @@ export function CanvasStage({
     changeSelectionZOrder,
     groupSelection,
     toggleSelectionLock,
+    hideSelection,
     copySelection,
     copyStyleSelection,
     createWidgetAt,
@@ -4007,6 +4028,9 @@ export function CanvasStage({
             {selectedWidgets.length > 0 && selectedWidgets.every((widget) => widget.locked)
               ? "Unlock"
               : "Lock"}
+          </button>
+          <button role="menuitem" disabled={selectedWidgets.length === 0} onClick={() => { hideSelection(); setCanvasContextMenu(null); }}>
+            Hide
           </button>
           <button role="menuitem" disabled={!selectedHasUnlockedWidget} onClick={() => { deleteSelection(); setCanvasContextMenu(null); }}>
             Delete
