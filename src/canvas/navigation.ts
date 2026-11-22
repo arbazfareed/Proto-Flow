@@ -144,6 +144,20 @@ export function keyboardZoomStep(event: { key: string; altKey?: boolean }): numb
   return 0;
 }
 
+// B31: Shift+1 zooms to fit everything on the screen. It is matched by the physical key (Digit1), so
+// it works on any keyboard layout, and only while no Ctrl, Cmd or Alt is held.
+export function isZoomToFitAllShortcut(event: {
+  key: string;
+  code?: string;
+  shiftKey?: boolean;
+  ctrlKey?: boolean;
+  metaKey?: boolean;
+  altKey?: boolean;
+}): boolean {
+  if (!event.shiftKey || event.ctrlKey || event.metaKey || event.altKey) return false;
+  return event.code === "Digit1" || (event.code === undefined && event.key === "!");
+}
+
 /**
  * What the mouse wheel or a trackpad scroll does to the canvas (B29): Ctrl/Cmd+scroll (also a
  * trackpad pinch) zooms around the pointer, Shift+scroll pans sideways, and a plain scroll pans in

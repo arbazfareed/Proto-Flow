@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   applyCanvasWheel,
   keyboardZoomStep,
+  isZoomToFitAllShortcut,
   centerCanvasView,
   clampCanvasZoom,
   fitCanvasBounds,
@@ -201,3 +202,19 @@ describe("canvas wheel and trackpad scrolling | B29", () => {
   });
 });
 
+describe("isZoomToFitAllShortcut (B31)", () => {
+  it("matches Shift+1 by the physical key, on any layout", () => {
+    expect(isZoomToFitAllShortcut({ key: "!", code: "Digit1", shiftKey: true })).toBe(true);
+    // AZERTY: Shift+& types "1" but is still the same physical key.
+    expect(isZoomToFitAllShortcut({ key: "1", code: "Digit1", shiftKey: true })).toBe(true);
+    expect(isZoomToFitAllShortcut({ key: "!", shiftKey: true })).toBe(true);
+  });
+
+  it("ignores plain 1, other keys, and any use of Ctrl, Cmd or Alt", () => {
+    expect(isZoomToFitAllShortcut({ key: "1", code: "Digit1" })).toBe(false);
+    expect(isZoomToFitAllShortcut({ key: "@", code: "Digit2", shiftKey: true })).toBe(false);
+    expect(isZoomToFitAllShortcut({ key: "!", code: "Digit1", shiftKey: true, ctrlKey: true })).toBe(false);
+    expect(isZoomToFitAllShortcut({ key: "!", code: "Digit1", shiftKey: true, metaKey: true })).toBe(false);
+    expect(isZoomToFitAllShortcut({ key: "!", code: "Digit1", shiftKey: true, altKey: true })).toBe(false);
+  });
+});

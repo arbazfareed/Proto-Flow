@@ -112,6 +112,7 @@ import {
   normalizeCanvasViewport,
   worldToScreen,
   keyboardZoomStep,
+  isZoomToFitAllShortcut,
   zoomAroundPointer,
   getCanvasViewportBounds,
   intersectsCanvasViewport,
@@ -2764,6 +2765,39 @@ export function CanvasStage({
 
   useEffect(() => {
     const onFitShortcut = (event: KeyboardEvent) => {
+      // B31: Shift+1 zooms to fit everything on the screen.
+      if (isZoomToFitAllShortcut(event)) {
+        if (isEditingTarget(event.target) || size.width === 0 || size.height === 0) return;
+        const store = useStore.getState();
+        const screen = store.project.screens.find(
+          (item) => item.id === store.getActiveScreenId(),
+        );
+        // With one text-editable widget selected, typing replaces its text, so the key stays a
+        // typing key there (it would otherwise type "!" into the widget).
+        if (store.selectedIds.length === 1 && screen) {
+          const selected = getEffectiveScreenWidgets(screen, store.activeBreakpointId, store.activeRepeaterEdit)
+            .find((widget) => widget.id === store.selectedIds[0] && !widget.locked);
+          const editable = selected ? getEditableWidgetText(selected) : null;
+          if (selected && editable && editable.key !== "items") return;
+        }
+        event.preventDefault();
+        const device = screen?.device ?? toScreenDevice(DEFAULT_DEVICE_PRESET);
+        const bounds = getWidgetBounds(screen?.widgets ?? []);
+        applyView(
+          bounds
+            ? fitCanvasBounds(bounds, size)
+            : fitCanvasBounds(
+                getDeviceFrameBounds(
+                  device,
+                  findDevicePreset(device.presetId)?.frameChrome?.bezel ?? 0,
+                  showDeviceFrame,
+                ),
+                size,
+                40,
+              ),
+        );
+        return;
+      }
       if (!(event.ctrlKey || event.metaKey) || isEditingTarget(event.target)) return;
 
       // B31: Ctrl+= / Ctrl++ zoom in and Ctrl+- zoom out around the middle of the canvas.
