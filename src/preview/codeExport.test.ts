@@ -20,6 +20,14 @@ function options(overrides: Partial<CodeExportOptions> = {}): CodeExportOptions 
 }
 
 describe("React code export preparation", () => {
+  it("keeps the export of an empty project small and readable (B41)", () => {
+    const source = generateSingleFileJsx(createEmptyProject("Empty"));
+    expect(source.length).toBeLessThan(65_000);
+    expect(source).not.toContain("data:font/woff2");
+    expect(source).toContain("const project = {\n  ");
+    expect(source.length).toBeLessThan(generateSingleFileJsx(createEmptyProject("Empty"), { embedFont: true }).length - 60_000);
+  });
+
   it("exports learning widgets with semantic elements and flex-based layout", () => {
     const project = createEmptyProject("Learning widgets");
     project.screens[0].widgets.push(
@@ -48,8 +56,9 @@ describe("React code export preparation", () => {
     expect(source).toContain("aria-busy=\"true\"");
     expect(source).toContain("layoutPosition(widget)");
     expect(source).toContain("const crossOffset = parent.props.alignItems === \"center\"");
-    expect(source).toContain("@font-face{font-family:Inter");
-    expect(source).toContain("SIL OPEN FONT LICENSE");
+    expect(generateSingleFileJsx(project, { embedFont: true })).toContain("@font-face{font-family:Inter");
+    expect(generateSingleFileJsx(project, { embedFont: true })).toContain("SIL OPEN FONT LICENSE");
+    expect(source).not.toContain("@font-face");
   });
 
   it("exports rich text as semantic JSX and keeps variable interpolation in runs", () => {

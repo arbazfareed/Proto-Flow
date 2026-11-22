@@ -84,8 +84,8 @@ export function prepareExportProject(project: Project, options: CodeExportOption
   };
 }
 
-function jsxString(value: unknown): string {
-  return JSON.stringify(value)
+function jsxString(value: unknown, indent?: number): string {
+  return JSON.stringify(value, null, indent)
     .replaceAll("<", "\\u003c")
     .replaceAll(">", "\\u003e")
     .replaceAll("&", "\\u0026")
@@ -93,15 +93,34 @@ function jsxString(value: unknown): string {
     .replaceAll("\u2029", "\\u2029");
 }
 
-export function generateSingleFileJsx(project: Project): string {
+export interface SingleFileJsxOptions {
+  /**
+   * Embed the Inter variable font (about 64 KB of base64) so the export looks the same offline.
+   * Off by default (B41): the file stays small and readable, and falls back to the system font
+   * until Inter is installed (`npm i @fontsource-variable/inter`).
+   */
+  embedFont?: boolean;
+}
+
+export function generateSingleFileJsx(project: Project, options: SingleFileJsxOptions = {}): string {
+  const embedFont = options.embedFont === true;
   const notesComments = widgetNotesCodeComments(project);
   const exportProject = ensureRichTextRuns(project);
+  const fontHeader = embedFont
+    ? `const interFontData = ${JSON.stringify(interFont)};
+const interFontLicense = ${JSON.stringify(interFontLicense)};`
+    : `// Fonts: this file uses "Inter" when it is installed and the system font otherwise.
+// To get the exact look, run \`npm i @fontsource-variable/inter\` and import it in your app entry.`;
+  const fontFaceSource = embedFont
+    ? `void interFontLicense;
+  const fontFace = \`@font-face{font-family:Inter;src:url("\${interFontData}") format("woff2");font-style:normal;font-weight:100 900;font-display:swap}@media(prefers-reduced-motion:reduce){.pf-export *{animation:none!important;transition:none!important}}\`;`
+    : `const fontFace = "@media(prefers-reduced-motion:reduce){.pf-export *{animation:none!important;transition:none!important}}";`;
   return `import { useRef, useState, type CSSProperties, type ReactNode, type TouchEvent } from "react";
 ${notesComments ? `\n${notesComments}\n` : ""}
 
-const interFontData = ${JSON.stringify(interFont)};
-const interFontLicense = ${JSON.stringify(interFontLicense)};
-const project = ${jsxString(exportProject)};
+${fontHeader}
+// Prototype data: one entry per screen, readable and editable.
+const project = ${jsxString(exportProject, 2)};
 // The real icons this prototype uses, as SVG (B77).
 const iconSvgs: Record<string, string> = ${JSON.stringify(projectIconSvgs(project))};
 type Widget = typeof project.screens[number]["widgets"][number];
@@ -134,8 +153,7 @@ const repeaterItemVisible = (widget: Widget, item: Record<string, unknown>): boo
 export default function App() {
 ${EXPRESSION_RUNTIME_SOURCE}
 ${CONDITION_COMPARE_RUNTIME_SOURCE}
-  void interFontLicense;
-  const fontFace = \`@font-face{font-family:Inter;src:url("\${interFontData}") format("woff2");font-style:normal;font-weight:100 900;font-display:swap}@media(prefers-reduced-motion:reduce){.pf-export *{animation:none!important;transition:none!important}}\`;
+  ${fontFaceSource}
   const [screenId, setScreenId] = useState(project.startScreenId);
   const [runtimeVariables, setRuntimeVariables] = useState<Record<string, unknown>>(() =>
     Object.fromEntries(project.variables.map((entry) => [entry.id, entry.initial])));
