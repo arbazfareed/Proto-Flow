@@ -26,3 +26,31 @@ jobs:
           path: coverage/
           if-no-files-found: warn
           retention-days: 14
+
+  # B18: dates were wrong on a US clock (formatDate("2024-03-10") showed the 9th) and nothing in CI
+  # could notice, because the runner is on UTC. These runs repeat the same tests in a zone west of
+  # UTC (where a date-only string slips back a day) and one far east of it.
+  unit-tests-timezones:
+    name: unit-tests-timezones (${{ matrix.timezone }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        timezone: [America/Los_Angeles, Pacific/Kiritimati]
+    env:
+      TZ: ${{ matrix.timezone }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - name: Confirm the time zone took effect
+        run: |
+          actual="$(node -p "Intl.DateTimeFormat().resolvedOptions().timeZone")"
+          echo "Running in $actual"
+          test "$actual" = "$TZ"
+      - run: npx vitest run
+      - run: npm run test:components
