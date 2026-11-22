@@ -129,4 +129,21 @@ describe("ElementLibrary imported code shortcuts", () => {
     fireEvent.change(search, { target: { value: "zzzz" } });
     expect(screen.getByRole("status").textContent).toContain("No elements match");
   });
+
+  it("explains expert elements in plain words in the tooltip, the info panel and the search (B64)", () => {
+    renderWithProviders(
+      <ElementLibrary activeTool={null} mode="sidebar" onSelectTool={vi.fn()} onAddScreen={vi.fn()} />,
+    );
+    const repeater = screen.getByRole("button", { name: "Add Repeater" });
+    expect(repeater.getAttribute("title")).toContain("A list that repeats one design for each item.");
+
+    fireEvent.click(screen.getByRole("button", { name: "Show Repeater code tips" }));
+    expect(screen.getByText("In plain words:")).toBeVisible();
+    expect(screen.getByText(/A list that repeats one design/)).toBeVisible();
+
+    // The search also understands the plain words, so "repeats" finds the Repeater.
+    fireEvent.change(screen.getByRole("searchbox", { name: "Search elements" }), { target: { value: "repeats" } });
+    expect(screen.getByRole("button", { name: "Add Repeater" })).toBeVisible();
+    expect(screen.queryByRole("button", { name: "Add Skeleton" })).toBeNull();
+  });
 });
