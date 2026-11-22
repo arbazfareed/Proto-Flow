@@ -2,7 +2,7 @@ import { iconDataScript } from "./iconExport";
 /// <reference types="vite/client" />
 
 import type { Project } from "../project/schema";
-import { EXPRESSION_RUNTIME_SOURCE } from "../project/expressions";
+import { EXPRESSION_RUNTIME_SOURCE } from "../project/expressionRuntime.generated";
 import { CONDITION_COMPARE_RUNTIME_SOURCE } from "../project/conditionCompare";
 import { ensureRichTextRuns } from "../project/richText";
 import interFont from "@fontsource-variable/inter/files/inter-latin-wght-normal.woff2?inline";

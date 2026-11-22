@@ -8,6 +8,7 @@
     "build": "tsc && vite build",
     "preview": "vite preview",
     "tauri": "tauri",
+    "generate:expression-runtime": "node scripts/generate-expression-runtime.mjs",
     "benchmark:canvas": "node scripts/run-canvas-benchmark.mjs",
     "benchmark:axure-parity": "node scripts/run-axure-parity-benchmark.mjs",
     "benchmark:performance": "npm run build -- --sourcemap && npm run analyze:bundle && npm run benchmark:vitest && npm run benchmark:axure-parity",

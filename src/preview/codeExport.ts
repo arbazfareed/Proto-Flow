@@ -1,7 +1,7 @@
 /// <reference types="vite/client" />
 
 import type { Project } from "../project/schema";
-import { EXPRESSION_RUNTIME_SOURCE } from "../project/expressions";
+import { EXPRESSION_RUNTIME_SOURCE } from "../project/expressionRuntime.generated";
 import { CONDITION_COMPARE_RUNTIME_SOURCE } from "../project/conditionCompare";
 import { widgetNotesCodeComments } from "../project/widgetNotes";
 import { ensureRichTextRuns } from "../project/richText";

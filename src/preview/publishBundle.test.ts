@@ -345,3 +345,33 @@ describe("standalone published preview bundle", () => {
     expect(() => new Function(PREVIEW_RUNTIME_SCRIPT)).not.toThrow();
   });
 });
+
+describe("published pages run the editor's expression engine (B20)", () => {
+  function pageText(text: string): string {
+    const project = createEmptyProject("Expressions");
+    project.screens[0].widgets = [{
+      id: crypto.randomUUID(), type: "text", x: 20, y: 20, width: 400, height: 40,
+      rotation: 0, opacity: 1, visible: true, locked: false, zIndex: 0, style: {},
+      props: { text },
+    }];
+    const dom = new JSDOM(generatePublishedPreviewHtml(project), { runScripts: "dangerously", pretendToBeVisual: true });
+    const shown = dom.window.document.querySelector("[data-screen-id]")?.textContent ?? "";
+    dom.window.close();
+    return shown;
+  }
+
+  it("shows the answers the editor shows, including the ones the old hand-written copy got wrong", () => {
+    // The old copy threw on replace() with "+" in it, so an exported page showed an error instead.
+    expect(pageText("[[ replace('a-a', '-', '+') ]]")).toContain("a+a");
+    expect(pageText("[[ 2 ** 3 ** 2 ]]")).toContain("512");
+    expect(pageText("[[ formatDate('2024-03-10', 'dd/MM/yyyy') ]]")).toContain("10/03/2024");
+    expect(pageText("[[ concat('Total: ', max(2, 7)) ]]")).toContain("Total: 7");
+  });
+
+  it("carries the generated engine and no second copy of it", () => {
+    const html = generatePublishedPreviewHtml(createEmptyProject("Engine"));
+    expect(html).toContain("const { evaluateExpression, clearExpressionCache } = (() => {");
+    expect(html).not.toContain("tokenCache");
+    expect(html.match(/function evaluateExpression\(/g)).toHaveLength(1);
+  });
+});
