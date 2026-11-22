@@ -1,4 +1,5 @@
 import { useLayoutEffect, useRef, useState } from "react";
+import { plainElementHint } from "./elementPlainHints";
 import { matchesElementQuery } from "./elementSearch";
 import type { RefObject } from "react";
 import { createPortal } from "react-dom";
@@ -112,7 +113,7 @@ function ElementLibraryContents({
   const [query, setQuery] = useState("");
   const [selectedGuide, setSelectedGuide] = useState<string | null>(null);
   const matchingToolTypes = ELEMENT_LIBRARY_TOOL_TYPES.filter((tool) =>
-    `${tool} ${getShapeToolDefinition(tool)?.label ?? tool}`
+    `${tool} ${getShapeToolDefinition(tool)?.label ?? tool} ${plainElementHint(tool) ?? ""}`
       .toLowerCase()
       .includes(query.trim().toLowerCase()),
   );
@@ -142,6 +143,7 @@ function ElementLibraryContents({
     if (!definition) return null;
     const guide = getWidgetLearningGuide(tool);
     const guideId = `element-guide-${tool}`;
+    const plainHint = plainElementHint(tool);
     const isGuideOpen = selectedGuide === tool;
     return (
       <div className="element-library-entry" key={tool}>
@@ -149,7 +151,7 @@ function ElementLibraryContents({
           className={`element-library-item${activeTool === tool ? " is-active" : ""}`}
           type="button"
           draggable
-          title={`Drag ${definition.label} onto the canvas or click to draw`}
+          title={`${plainHint ? `${definition.label}: ${plainHint} ` : ""}Drag ${definition.label} onto the canvas or click to draw`}
           aria-label={`Add ${definition.label}`}
           aria-pressed={activeTool === tool}
           onDragStart={(event) => {
@@ -189,6 +191,7 @@ function ElementLibraryContents({
         </button>
         {isGuideOpen && (
           <div className="element-library-learn-copy" id={guideId}>
+            {plainHint && <p className="element-library-plain-hint"><strong>In plain words:</strong> {plainHint}</p>}
             <div className="element-library-guide-markup">
               <span>HTML</span>
               <code>{guide.element}</code>
