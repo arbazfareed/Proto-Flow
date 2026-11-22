@@ -32,6 +32,10 @@ test("B32: on a 1280x720 laptop the side panels leave room and the toolbar is on
   }));
   expect(overflow.inspector).toBeLessThanOrEqual(1);
   expect(overflow.body).toBeLessThanOrEqual(1);
+
+  // The narrower inspector must still leave the layer's name visible (it once collapsed to nothing).
+  const name = await page.locator(".layer-row .layer-name", { hasText: /^Rectangle$/ }).boundingBox();
+  expect(name?.width ?? 0).toBeGreaterThanOrEqual(40);
 });
 
 test("B32: wider laptops keep the original panel widths", async ({ page }) => {

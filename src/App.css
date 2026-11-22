@@ -1304,8 +1304,13 @@
    below the 830 px the one-row canvas toolbar needs, so it wrapped onto two rows. Narrower panels leave
    the canvas 836 px at 1280. The 1200 px block below still wins on smaller windows. */
 @media (max-width:1365px) {
-  .left-sidebar { width:200px; }
-  .inspector { width:244px; }
+  .left-sidebar { width:184px; }
+  .inspector { width:260px; }
+  /* In the narrower inspector the "Screen child" badge, icon, count and two buttons left the layer name
+     no room at all (it collapsed to 0 px and disappeared). The badge may now shrink (its text stays in the
+     page for screen readers) and the name always keeps a little width. */
+  .layer-hierarchy-badge { flex:0 1 auto; min-width:0; max-width:46px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .layer-name { min-width:44px; }
 }
 @media (max-width:1200px) {
   .inspector { width:320px; }
