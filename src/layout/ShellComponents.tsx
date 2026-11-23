@@ -3085,6 +3085,13 @@ export function RightInspector({ onToggle, onUpdates, onRename, tutorialProjectI
       useStore.getState().setActiveRepeaterEdit(null);
     }
   }, [selectedWidget?.groupId, selectedWidget?.id, selectedWidget?.type]);
+  // B48: the whole right dock scrolls (settings, then Screens and Layers). If it was scrolled down to the
+  // Layers list, a newly selected widget's settings would sit above the visible area, so go back to the top.
+  const dockRef = useRef<HTMLElement>(null);
+  const hasSelection = selectedWidgets.length > 0;
+  useEffect(() => {
+    if (hasSelection && dockRef.current) dockRef.current.scrollTop = 0;
+  }, [hasSelection, selectedWidget?.id]);
   const selectedDefinition = selectedWidget
     ? getShapeToolDefinition(selectedWidget.type)
     : undefined;
@@ -3098,7 +3105,7 @@ export function RightInspector({ onToggle, onUpdates, onRename, tutorialProjectI
   if (!rightPanelOpen) return null;
 
   return (
-    <aside className="sidebar inspector right-dock" data-onboarding-target="inspector">
+    <aside ref={dockRef} className="sidebar inspector right-dock" data-onboarding-target="inspector">
       <div className="right-dock-header">
         <span className="right-dock-title">LAYERS &amp; INSPECTOR</span>
         <button className="icon-button small-icon" aria-label="Close right sidebar" onClick={onToggle}><PanelRightClose size={15} /></button>
@@ -3204,6 +3211,10 @@ export function RightInspector({ onToggle, onUpdates, onRename, tutorialProjectI
             <WidgetNotesPanel widget={selectedWidget} />
           </div>
         ) : null}
+        {/* B48: the project's own details are only shown when nothing is selected, so a selected widget's
+            settings come first. "Check for updates" stays in the left sidebar menu. */}
+        {!hasSelection && (
+          <>
         <div className="inspector-rule" />
         <div className="section-label inspector-project-label"><span>PROJECT DETAILS</span></div>
         <label className="field-label" htmlFor="project-name">Project name</label>
@@ -3223,6 +3234,8 @@ export function RightInspector({ onToggle, onUpdates, onRename, tutorialProjectI
         <button className="button button-quiet update-check" onClick={onUpdates}>Check for updates <ArrowRight size={14} /></button>
         <div className="inspector-rule" />
         <div className="recovery-note"><span>Unsaved projects are autosaved on this device every 30 seconds.</span></div>
+          </>
+        )}
       </div>
       <div className="inspector-footer"><span>Project schema</span><span className="schema-version">{project.schemaVersion}</span></div>
       </section>
