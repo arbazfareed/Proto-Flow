@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { NewProjectDialog } from "./layout/NewProjectDialog";
 import { nextScreenName } from "./project/screenNames";
 import { PREVIEW_WINDOW_BASE_TITLE } from "./preview/previewWindowTitle";
 import { isTauri } from "@tauri-apps/api/core";
@@ -614,9 +615,15 @@ function AppShell() {
     }
   }, [confirmDiscard, loadProject, notify]);
 
-  const createNewProject = useCallback(() => {
+  // B61: New project opens a template gallery; the project is created when a starting point is picked.
+  const [newProjectOpen, setNewProjectOpen] = useState(false);
+  const createNewProject = useCallback(() => setNewProjectOpen(true), []);
+
+  const startProjectFromTemplate = useCallback((template: StarterTemplateId) => {
     if (!confirmDiscard()) return;
-    useStore.getState().newProject();
+    setNewProjectOpen(false);
+    if (template === "blank") useStore.getState().newProject();
+    else useStore.getState().loadProject(createStarterProject(template), null);
     trackEvent("project_created");
     try {
       clearAutosave();
@@ -1380,6 +1387,9 @@ function AppShell() {
       </div>
       <StatusBar />
       <RestoreModal />
+      {newProjectOpen && (
+        <NewProjectDialog onSelect={startProjectFromTemplate} onClose={() => setNewProjectOpen(false)} />
+      )}
       {closePromptOpen && (
         <UnsavedChangesDialog
           projectName={useStore.getState().project.name}
