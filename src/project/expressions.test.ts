@@ -7,6 +7,7 @@ import {
 import {
   clearExpressionCache,
   evaluateExpression,
+  EXPRESSION_FUNCTIONS,
   getExpressionCacheSize,
   interpolateExpressions,
   MAX_PAD_LENGTH,
@@ -215,6 +216,8 @@ describe("B20: exports run the same engine as the editor", () => {
       ["item.score + 1", { item: { score: 3 } }], ["a.b.c", { variables: { a: { b: { c: 5 } } } }],
       ["missing + 1"], ["1 / 0"], ["1 +"], ["1 2"], ["'unterminated"], ["constructor"], ["__proto__.x"],
       ["abs('x')"], ["unknownFn(1)"], ["now()", { now: () => 1000 }],
+      ["length(123)"], ["length(true)"], ["-2 ** 2"], ["(-2) ** 2"], ["-(2 ** 2)"], ["2 ** -1"], ["min()"], ["max()"],
+      ["replaceAll('a-b-c', '-', '+')"], ["replace('Price', 'Price', '$&$&')"],
     ];
     for (const [source, context] of cases) {
       expect(runtimeValue(source, context), source).toEqual(engineValue(source, context));
@@ -226,5 +229,71 @@ describe("B20: exports run the same engine as the editor", () => {
     expect(runtimeValue("replace('a-a', '-', '+')")).toEqual({ value: "a+a" });
     expect(runtimeValue("now()", { now: () => 1000 })).toEqual({ value: 1000 });
     expect(runtimeValue("1 2")).toEqual({ error: 'Unexpected token "2".' });
+  });
+});
+
+describe("B21: small expression details", () => {
+  it("length() counts the characters of a number or true/false as well as of text and lists", () => {
+    expect(evaluateExpression("length(123)")).toBe(3);
+    expect(evaluateExpression("length(-4.5)")).toBe(4);
+    expect(evaluateExpression("length(true)")).toBe(4);
+    expect(evaluateExpression("length('abc')")).toBe(3);
+    expect(evaluateExpression("length(items)", { variables: { items: [1, 2, 3, 4] } })).toBe(4);
+    // Nothing there is still 0.
+    expect(evaluateExpression("length(missing)")).toBe(0);
+  });
+
+  it("asks for brackets when a sign sits directly before **, instead of silently returning 4", () => {
+    for (const source of ["-2 ** 2", "+2 ** 2", "-x ** 2", "1 + -2 ** 2", "2 * -3 ** 2", "!2 ** 2", "- 2 ** 2"]) {
+      expect(() => evaluateExpression(source, { variables: { x: 2 } }), source).toThrow(/sign directly before \*\*/);
+    }
+    // With brackets the meaning is explicit, and the maths agrees.
+    expect(evaluateExpression("(-2) ** 2")).toBe(4);
+    expect(evaluateExpression("-(2 ** 2)")).toBe(-4);
+    expect(evaluateExpression("(-x) ** 2", { variables: { x: 3 } })).toBe(9);
+  });
+
+  it("still accepts a sign anywhere that is not directly before **", () => {
+    expect(evaluateExpression("2 ** -1")).toBe(0.5);
+    expect(evaluateExpression("2 ** -2 + 1")).toBe(1.25);
+    expect(evaluateExpression("-2 * 3")).toBe(-6);
+    expect(evaluateExpression("-2 + 2 ** 2")).toBe(2);
+    expect(evaluateExpression("2 ** 3 ** 2")).toBe(512);
+    expect(evaluateExpression("-abs(-3)")).toBe(-3);
+    expect(evaluateExpression("5 - -2")).toBe(7);
+  });
+
+  it("replace() changes the first match and replaceAll() every match", () => {
+    expect(evaluateExpression("replace('a-b-c', '-', '+')")).toBe("a+b-c");
+    expect(evaluateExpression("replaceAll('a-b-c', '-', '+')")).toBe("a+b+c");
+    expect(evaluateExpression("replaceAll('aaa', 'a', 'bb')")).toBe("bbbbbb");
+    expect(evaluateExpression("replaceAll('abc', 'x', 'y')")).toBe("abc");
+    expect(evaluateExpression("replaceAll(name, ' ', '_')", { variables: { name: "Ada Lovelace King" } })).toBe("Ada_Lovelace_King");
+  });
+
+  it("inserts the replacement as written, so $ in it is text", () => {
+    expect(evaluateExpression("replace('Total: X', 'X', '$&')")).toBe("Total: $&");
+    expect(evaluateExpression("replaceAll('X and X', 'X', '$1')")).toBe("$1 and $1");
+    expect(evaluateExpression("replaceAll('price', 'price', '$')")).toBe("$");
+  });
+
+  it("is offered in the function list, so the expression field suggests replaceAll", () => {
+    expect(EXPRESSION_FUNCTIONS).toContain("replaceAll");
+  });
+
+  it("says min() and max() need a value, in plain words", () => {
+    expect(() => evaluateExpression("min()")).toThrow("min needs at least one value.");
+    expect(() => evaluateExpression("max()")).toThrow("max needs at least one value.");
+    expect(evaluateExpression("min(3)")).toBe(3);
+    expect(evaluateExpression("max(1, 2, 3)")).toBe(3);
+    expect(() => evaluateExpression("min('x')")).toThrow(/requires finite numeric arguments/);
+  });
+
+  it("gives the exported runtime the same behaviour, since it is generated from this engine", () => {
+    const run = (source: string) => runInNewContext(`${EXPRESSION_RUNTIME_SOURCE}\nevaluateExpression(${JSON.stringify(source)}, {})`);
+    expect(run("length(123)")).toBe(3);
+    expect(run("replaceAll('a-b-c', '-', '+')")).toBe("a+b+c");
+    expect(() => run("-2 ** 2")).toThrow(/sign directly before \*\*/);
+    expect(() => run("min()")).toThrow("min needs at least one value.");
   });
 });

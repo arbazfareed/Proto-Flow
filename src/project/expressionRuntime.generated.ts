@@ -6,7 +6,7 @@ export const EXPRESSION_RUNTIME_SOURCE = `
 const { evaluateExpression, clearExpressionCache } = (() => {
 const EXPRESSION_FUNCTIONS = [
     "abs", "ceil", "floor", "round", "min", "max", "random",
-    "concat", "substring", "replace", "toUpperCase", "toLowerCase",
+    "concat", "substring", "replace", "replaceAll", "toUpperCase", "toLowerCase",
     "trim", "length", "toString", "toNumber", "toBoolean", "now",
     "formatDate", "padStart", "padEnd",
 ];
@@ -114,12 +114,17 @@ class Parser {
     }
     parseBinary(minimumPrecedence) {
         this.enter();
+        const first = this.peek();
+        const startsWithSign = first.type === "operator" && ["!", "+", "-"].includes(first.value);
         let left = this.parseUnary();
         while (true) {
             const token = this.peek();
             const precedence = PRECEDENCE[token.value];
             if (token.type !== "operator" || precedence === undefined || precedence < minimumPrecedence)
                 break;
+            if (token.value === "**" && startsWithSign && left.type === "unary") {
+                throw new Error("A sign directly before ** is unclear: write (-2) ** 2 or -(2 ** 2).");
+            }
             this.index += 1;
             const right = this.parseBinary(precedence + (token.value === "**" ? 0 : 1));
             left = { type: "binary", operator: token.value, left, right };
@@ -279,16 +284,31 @@ function callFunction(name, args, context) {
         case "ceil": return Math.ceil(requireNumber(first, name));
         case "floor": return Math.floor(requireNumber(first, name));
         case "round": return Math.round(requireNumber(first, name));
-        case "min": return Math.min(...args.map((value) => requireNumber(value, name)));
-        case "max": return Math.max(...args.map((value) => requireNumber(value, name)));
+        case "min":
+        case "max": {
+            if (args.length === 0)
+                throw new Error(\`\${name} needs at least one value.\`);
+            const numbers = args.map((value) => requireNumber(value, name));
+            return name === "min" ? Math.min(...numbers) : Math.max(...numbers);
+        }
         case "random": return Math.random();
         case "concat": return args.map((value) => String(value ?? "")).join("");
         case "substring": return String(first ?? "").substring(requireNumber(args[1] ?? 0, name), args[2] === undefined ? undefined : requireNumber(args[2], name));
-        case "replace": return String(first ?? "").replace(String(args[1] ?? ""), String(args[2] ?? ""));
+        case "replace": {
+            const replacement = String(args[2] ?? "");
+            return String(first ?? "").replace(String(args[1] ?? ""), () => replacement);
+        }
+        case "replaceAll": {
+            const replacement = String(args[2] ?? "");
+            return String(first ?? "").replaceAll(String(args[1] ?? ""), () => replacement);
+        }
         case "toUpperCase": return String(first ?? "").toUpperCase();
         case "toLowerCase": return String(first ?? "").toLowerCase();
         case "trim": return String(first ?? "").trim();
-        case "length": return typeof first === "string" || Array.isArray(first) ? first.length : 0;
+        case "length":
+            if (typeof first === "string" || Array.isArray(first))
+                return first.length;
+            return typeof first === "number" || typeof first === "boolean" ? String(first).length : 0;
         case "toString": return String(first ?? "");
         case "toNumber": {
             const number = Number(first);

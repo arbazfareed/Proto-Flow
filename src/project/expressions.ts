@@ -14,7 +14,7 @@ export interface ExpressionContext {
 
 export const EXPRESSION_FUNCTIONS = [
   "abs", "ceil", "floor", "round", "min", "max", "random",
-  "concat", "substring", "replace", "toUpperCase", "toLowerCase",
+  "concat", "substring", "replace", "replaceAll", "toUpperCase", "toLowerCase",
   "trim", "length", "toString", "toNumber", "toBoolean", "now",
   "formatDate", "padStart", "padEnd",
 ] as const;
@@ -137,11 +137,18 @@ class Parser {
 
   private parseBinary(minimumPrecedence: number): ExpressionNode {
     this.enter();
+    const first = this.peek();
+    const startsWithSign = first.type === "operator" && ["!", "+", "-"].includes(first.value);
     let left = this.parseUnary();
     while (true) {
       const token = this.peek();
       const precedence = PRECEDENCE[token.value];
       if (token.type !== "operator" || precedence === undefined || precedence < minimumPrecedence) break;
+      // B21: "-2 ** 2" could mean (-2) ** 2 = 4 or -(2 ** 2) = -4, and the old reading (4) disagrees with
+      // maths. Ask for brackets instead of guessing, as JavaScript does.
+      if (token.value === "**" && startsWithSign && left.type === "unary") {
+        throw new Error("A sign directly before ** is unclear: write (-2) ** 2 or -(2 ** 2).");
+      }
       this.index += 1;
       const right = this.parseBinary(precedence + (token.value === "**" ? 0 : 1));
       left = { type: "binary", operator: token.value, left, right };
@@ -296,19 +303,35 @@ function callFunction(name: string, args: unknown[], context: ExpressionContext)
     case "ceil": return Math.ceil(requireNumber(first, name));
     case "floor": return Math.floor(requireNumber(first, name));
     case "round": return Math.round(requireNumber(first, name));
-    case "min": return Math.min(...args.map((value) => requireNumber(value, name)));
-    case "max": return Math.max(...args.map((value) => requireNumber(value, name)));
+    case "min":
+    case "max": {
+      // B21: with no values Math.min() is Infinity, which used to surface as "result is not a finite number".
+      if (args.length === 0) throw new Error(`${name} needs at least one value.`);
+      const numbers = args.map((value) => requireNumber(value, name));
+      return name === "min" ? Math.min(...numbers) : Math.max(...numbers);
+    }
     case "random": return Math.random();
     case "concat": return args.map((value) => String(value ?? "")).join("");
     case "substring": return String(first ?? "").substring(
       requireNumber(args[1] ?? 0, name),
       args[2] === undefined ? undefined : requireNumber(args[2], name),
     );
-    case "replace": return String(first ?? "").replace(String(args[1] ?? ""), String(args[2] ?? ""));
+    // The replacement is inserted as written: a "$&" or "$1" in it is text, not a pattern (B21).
+    case "replace": {
+      const replacement = String(args[2] ?? "");
+      return String(first ?? "").replace(String(args[1] ?? ""), () => replacement);
+    }
+    case "replaceAll": {
+      const replacement = String(args[2] ?? "");
+      return String(first ?? "").replaceAll(String(args[1] ?? ""), () => replacement);
+    }
     case "toUpperCase": return String(first ?? "").toUpperCase();
     case "toLowerCase": return String(first ?? "").toLowerCase();
     case "trim": return String(first ?? "").trim();
-    case "length": return typeof first === "string" || Array.isArray(first) ? first.length : 0;
+    case "length":
+      if (typeof first === "string" || Array.isArray(first)) return first.length;
+      // B21: a number or true/false has a length too, the length of how it is written: length(123) is 3.
+      return typeof first === "number" || typeof first === "boolean" ? String(first).length : 0;
     case "toString": return String(first ?? "");
     case "toNumber": {
       const number = Number(first);
