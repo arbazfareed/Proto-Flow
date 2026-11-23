@@ -19,19 +19,19 @@ Expressions can appear within text, image URLs, interaction action values, and r
 | Logical | `&&`, `||`, `!` |
 | Grouping | `(...)` |
 
-Arithmetic requires finite numeric values. `+` concatenates if either operand is a string. Logical operators short-circuit. Equality uses strict type equality.
+Arithmetic requires finite numeric values. `+` concatenates if either operand is a string. Logical operators short-circuit. Equality uses strict type equality. A sign directly before `**` needs brackets, because `-2 ** 2` could mean 4 or -4: write `(-2) ** 2` (4) or `-(2 ** 2)` (-4).
 
 ## Functions
 
 | Category | Functions |
 | --- | --- |
 | Math | `abs`, `ceil`, `floor`, `round`, `min`, `max`, `random` |
-| String | `concat`, `substring`, `replace`, `toUpperCase`, `toLowerCase`, `trim`, `length` |
+| String | `concat`, `substring`, `replace`, `replaceAll`, `toUpperCase`, `toLowerCase`, `trim`, `length` |
 | Type | `toString`, `toNumber`, `toBoolean` |
 | Date | `now`, `formatDate` |
 | Formatting | `padStart`, `padEnd` |
 
-`substring(text, start, end)` uses JavaScript-style substring indexes. `replace(text, search, replacement)` replaces the first match. `now()` returns Unix milliseconds. `formatDate(value, pattern)` supports `yyyy`, `MM`, `dd`, `HH`, `mm`, and `ss`; for example, `formatDate(now(), "yyyy-MM-dd")`. `random()` returns a value in `[0, 1)`.
+`substring(text, start, end)` uses JavaScript-style substring indexes. `replace(text, search, replacement)` replaces the first match and `replaceAll(text, search, replacement)` replaces every match; the replacement is inserted exactly as written. `length(value)` counts the characters of text, the items of a list, and the characters of a number or true/false (`length(123)` is 3). `min()` and `max()` need at least one value. `now()` returns Unix milliseconds. `formatDate(value, pattern)` supports `yyyy`, `MM`, `dd`, `HH`, `mm`, and `ss`; for example, `formatDate(now(), "yyyy-MM-dd")`. `random()` returns a value in `[0, 1)`.
 
 ## References
 
