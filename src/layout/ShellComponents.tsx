@@ -2469,7 +2469,9 @@ function DynamicPanelSection({ screen, widget }: { screen: Project["screens"][nu
         <div className={`dynamic-panel-state${state.id === activeState?.id ? " is-active" : ""}`} key={state.id}>
           <button
             className="button button-quiet"
-            aria-label={`Show ${state.name}`}
+            // B48: no aria-label here. It read "Show Your details" while the visible text is
+            // "Your details 3", which fails WCAG 2.5.3 (label in name). The name is now the visible text.
+            title={`Show ${state.name}`}
             aria-pressed={state.id === activeState?.id}
             onClick={() => selectState(state.id)}
           >
