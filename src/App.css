@@ -1569,3 +1569,6 @@
 .icon-picker-note { margin:6px 0 0; color:#8d8b96; font-size:10px; }
 .element-library-plain-hint { margin:0 0 6px; font-size:11px; line-height:1.4; color:inherit; }
 .element-library-plain-hint strong { color:inherit; font-weight:600; }
+.new-project-dialog { width:min(760px, calc(100vw - 32px)); max-height:90vh; overflow:auto; }
+.new-project-dialog .new-project-grid { margin-top:14px; }
+
