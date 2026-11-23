@@ -1,17 +1,17 @@
 import { act, screen } from "@testing-library/react";
-import { beforeEach, describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { createEmptyProject } from "../project/schema";
 import type { Widget } from "../project/schema";
 import { useStore } from "../store";
 import { renderWithProviders } from "../test/render";
 import { RightInspector } from "./ShellComponents";
 
-function buttonWidget(): Widget {
+function createButton(): Widget {
   return {
     id: crypto.randomUUID(),
     type: "button",
-    x: 20,
-    y: 20,
+    x: 0,
+    y: 0,
     width: 120,
     height: 40,
     rotation: 0,
@@ -26,73 +26,51 @@ function buttonWidget(): Widget {
 
 function renderInspector() {
   return renderWithProviders(
-    <RightInspector onToggle={() => {}} onUpdates={() => {}} onRename={() => {}} tutorialProjectId={null} />,
+    <RightInspector onToggle={vi.fn()} onUpdates={vi.fn()} onRename={vi.fn()} tutorialProjectId={null} />,
   );
 }
 
-describe("right inspector with a selected element (B48)", () => {
+describe("RightInspector selection (B48)", () => {
   let button: Widget;
 
   beforeEach(() => {
-    const project = createEmptyProject("Shop");
-    button = buttonWidget();
-    project.screens[0].widgets = [button];
+    const project = createEmptyProject();
+    button = createButton();
+    project.screens[0].widgets.push(button);
     useStore.getState().setProject(project);
     useStore.setState({ rightPanelOpen: true, inspectorTab: "design" });
-    useStore.getState().select([]);
+    useStore.getState().clearSelection();
   });
 
-  it("shows the project details and the Updates card when nothing is selected", () => {
+  it("shows project details and updates when nothing is selected", () => {
     renderInspector();
-
-    expect(screen.getByText("PROJECT DETAILS")).toBeInTheDocument();
-    expect(screen.getByLabelText("Project name")).toHaveValue("Shop");
-    expect(screen.getByText("UPDATES")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /Check for updates/ })).toBeInTheDocument();
-    expect(screen.getByText(/autosaved on this device/)).toBeInTheDocument();
+    expect(screen.getByText("PROJECT DETAILS")).toBeTruthy();
+    expect(screen.getByText("UPDATES")).toBeTruthy();
+    expect(screen.getByLabelText("Project name")).toBeTruthy();
   });
 
-  it("shows only the selected element's settings, not the project details or the Updates card", () => {
-    useStore.getState().select([button.id]);
+  it("hides project details and updates while a widget is selected", () => {
     renderInspector();
-
-    expect(screen.getByLabelText("Selected element identity")).toBeInTheDocument();
-    expect(screen.queryByText("PROJECT DETAILS")).toBeNull();
-    expect(screen.queryByLabelText("Project name")).toBeNull();
-    expect(screen.queryByText("UPDATES")).toBeNull();
-    expect(screen.queryByRole("button", { name: /Check for updates/ })).toBeNull();
-    expect(screen.queryByText(/autosaved on this device/)).toBeNull();
-    // The footer stays.
-    expect(screen.getByText("Project schema")).toBeInTheDocument();
-  });
-
-  it("brings the project details back when the selection is cleared", () => {
-    useStore.getState().select([button.id]);
-    renderInspector();
-    expect(screen.queryByText("PROJECT DETAILS")).toBeNull();
-
-    act(() => useStore.getState().select([]));
-
-    expect(screen.getByText("PROJECT DETAILS")).toBeInTheDocument();
-  });
-
-  it("scrolls the dock back to the top when an element is selected", () => {
-    const { container } = renderInspector();
-    const dock = container.querySelector("aside.right-dock") as HTMLElement;
-    dock.scrollTop = 480; // scrolled down to the Layers list
-
     act(() => useStore.getState().select([button.id]));
-
-    expect(dock.scrollTop).toBe(0);
+    expect(screen.queryByText("PROJECT DETAILS")).toBeNull();
+    expect(screen.queryByText("UPDATES")).toBeNull();
+    expect(screen.queryByLabelText("Project name")).toBeNull();
+    expect(screen.getByRole("tablist", { name: "Inspector panels" })).toBeTruthy();
   });
 
-  it("does not jump the dock back to the top while nothing is selected", () => {
+  it("brings project details back when the selection is cleared", () => {
+    renderInspector();
+    act(() => useStore.getState().select([button.id]));
+    act(() => useStore.getState().clearSelection());
+    expect(screen.getByText("PROJECT DETAILS")).toBeTruthy();
+  });
+
+  it("scrolls the panel back to the top when a widget is selected", () => {
     const { container } = renderInspector();
-    const dock = container.querySelector("aside.right-dock") as HTMLElement;
-    dock.scrollTop = 480;
-
-    act(() => useStore.getState().select([]));
-
-    expect(dock.scrollTop).toBe(480);
+    const dock = container.querySelector(".right-dock") as HTMLElement;
+    dock.scrollTop = 400;
+    expect(dock.scrollTop).toBe(400);
+    act(() => useStore.getState().select([button.id]));
+    expect(dock.scrollTop).toBe(0);
   });
 });

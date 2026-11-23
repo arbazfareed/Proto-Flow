@@ -3052,6 +3052,7 @@ export function RightInspector({ onToggle, onUpdates, onRename, tutorialProjectI
   const activeRepeaterEdit = useStore((state) => state.activeRepeaterEdit);
   const filePath = useStore((state) => state.filePath);
   const rightPanelOpen = useStore((state) => state.rightPanelOpen);
+  const dockRef = useRef<HTMLElement>(null);
   const displayPath = filePath ? filePath.replaceAll("\\", "/").split("/").at(-1) : "Not saved yet";
   const selectedScreen = project.screens.find((screen) => screen.id === activeScreenId);
   const selectedWidgets =
@@ -3087,13 +3088,13 @@ export function RightInspector({ onToggle, onUpdates, onRename, tutorialProjectI
       useStore.getState().setActiveRepeaterEdit(null);
     }
   }, [selectedWidget?.groupId, selectedWidget?.id, selectedWidget?.type]);
-  // B48: the whole right dock scrolls (settings, then Screens and Layers). If it was scrolled down to the
-  // Layers list, a newly selected widget's settings would sit above the visible area, so go back to the top.
-  const dockRef = useRef<HTMLElement>(null);
+  // B48: when something is selected, its settings come first. The dock keeps its old scroll
+  // position otherwise, which can leave the settings scrolled out of view.
   const hasSelection = selectedWidgets.length > 0;
+  const selectionKey = selectedWidgets.map((widget) => widget.id).join(",");
   useEffect(() => {
     if (hasSelection && dockRef.current) dockRef.current.scrollTop = 0;
-  }, [hasSelection, selectedWidget?.id]);
+  }, [hasSelection, selectionKey, rightPanelOpen]);
   const selectedDefinition = selectedWidget
     ? getShapeToolDefinition(selectedWidget.type)
     : undefined;
@@ -3213,29 +3214,28 @@ export function RightInspector({ onToggle, onUpdates, onRename, tutorialProjectI
             <WidgetNotesPanel widget={selectedWidget} />
           </div>
         ) : null}
-        {/* B48: the project's own details are only shown when nothing is selected, so a selected widget's
-            settings come first. "Check for updates" stays in the left sidebar menu. */}
+        {/* B48: project details and updates only show when nothing is selected, so the widget's own settings stay in view. */}
         {!hasSelection && (
           <>
-        <div className="inspector-rule" />
-        <div className="section-label inspector-project-label"><span>PROJECT DETAILS</span></div>
-        <label className="field-label" htmlFor="project-name">Project name</label>
-        <input id="project-name" className="text-field" value={project.name} maxLength={120} onChange={(event) => onRename(event.currentTarget.value)} />
-        <p className="field-hint">A name helps keep your ideas organized.</p>
-        <div className="inspector-rule" />
-        <div className="detail-row"><span>File</span><span className={`file-value ${filePath ? "" : "muted-value"}`} title={filePath ?? "Not saved yet"}>{displayPath}</span></div>
-        <div className="detail-row"><span>Format</span><span className="format-chip">.pflow <span>v1</span></span></div>
-        <div className="detail-row"><span>Screens</span><span>{project.screens.length}</span></div>
-        <div className="detail-row"><span>Widgets</span><span>{project.screens.reduce((total, screen) => total + collectWidgetsDeep(screen.widgets).length, 0)}</span></div>
-        <div className="inspector-rule" />
-        <div className="section-label update-label"><span>UPDATES</span><Sparkles size={14} /></div>
-        <div className="update-card">
-          <div className="update-card-icon"><Bell size={15} /></div>
-          <div><strong>Stay up to date</strong><p>Proto Flow checks for signed releases when the app starts.</p></div>
-        </div>
-        <button className="button button-quiet update-check" onClick={onUpdates}>Check for updates <ArrowRight size={14} /></button>
-        <div className="inspector-rule" />
-        <div className="recovery-note"><span>Unsaved projects are autosaved on this device every 30 seconds.</span></div>
+            <div className="inspector-rule" />
+            <div className="section-label inspector-project-label"><span>PROJECT DETAILS</span></div>
+            <label className="field-label" htmlFor="project-name">Project name</label>
+            <input id="project-name" className="text-field" value={project.name} maxLength={120} onChange={(event) => onRename(event.currentTarget.value)} />
+            <p className="field-hint">A name helps keep your ideas organized.</p>
+            <div className="inspector-rule" />
+            <div className="detail-row"><span>File</span><span className={`file-value ${filePath ? "" : "muted-value"}`} title={filePath ?? "Not saved yet"}>{displayPath}</span></div>
+            <div className="detail-row"><span>Format</span><span className="format-chip">.pflow <span>v1</span></span></div>
+            <div className="detail-row"><span>Screens</span><span>{project.screens.length}</span></div>
+            <div className="detail-row"><span>Widgets</span><span>{project.screens.reduce((total, screen) => total + collectWidgetsDeep(screen.widgets).length, 0)}</span></div>
+            <div className="inspector-rule" />
+            <div className="section-label update-label"><span>UPDATES</span><Sparkles size={14} /></div>
+            <div className="update-card">
+              <div className="update-card-icon"><Bell size={15} /></div>
+              <div><strong>Stay up to date</strong><p>Proto Flow checks for signed releases when the app starts.</p></div>
+            </div>
+            <button className="button button-quiet update-check" onClick={onUpdates}>Check for updates <ArrowRight size={14} /></button>
+            <div className="inspector-rule" />
+            <div className="recovery-note"><span>Unsaved projects are autosaved on this device every 30 seconds.</span></div>
           </>
         )}
       </div>
