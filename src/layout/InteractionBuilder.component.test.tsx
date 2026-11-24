@@ -54,3 +54,31 @@ describe("InteractionBuilder unfinished rules (B51)", () => {
     expect(within(rules).queryByText(/Not active yet/)).not.toBeInTheDocument();
   });
 });
+
+describe("InteractionBuilder new actions (B49)", () => {
+  it("offers Go back, Open link and Toggle, with the right field for each", () => {
+    renderBuilder();
+    const rules = screen.getByRole("region", { name: "Interaction rules" });
+    fireEvent.click(within(rules).getByRole("button", { name: "Add rule" }));
+    const type = within(rules).getByRole("combobox", { name: "Action type" });
+    const labels = Array.from(type.querySelectorAll("option")).map((option) => option.textContent);
+    expect(labels).toEqual(expect.arrayContaining(["Go back", "Open link", "Toggle show/hide"]));
+
+    // Open link takes an address, outlined until one is typed.
+    fireEvent.change(type, { target: { value: "openLink" } });
+    const link = within(rules).getByRole("textbox", { name: "Link address" });
+    expect(link).toHaveAttribute("aria-invalid", "true");
+    fireEvent.change(link, { target: { value: "example.com" } });
+    expect(within(rules).getByRole("textbox", { name: "Link address" })).not.toHaveAttribute("aria-invalid");
+
+    // Go back needs no target at all.
+    fireEvent.change(within(rules).getByRole("combobox", { name: "Action type" }), { target: { value: "goBack" } });
+    expect(within(rules).getByText("Returns to the previous screen")).toBeInTheDocument();
+    expect(within(rules).queryByRole("combobox", { name: "Action target" })).toBeNull();
+
+    // Toggle picks a widget like Show and Hide do.
+    fireEvent.change(within(rules).getByRole("combobox", { name: "Action type" }), { target: { value: "toggle" } });
+    expect(within(rules).getByRole("combobox", { name: "Action target" })).toBeInTheDocument();
+  });
+});
+

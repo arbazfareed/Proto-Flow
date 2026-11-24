@@ -4,6 +4,7 @@ import { iconDataScript } from "./iconExport";
 import type { Project } from "../project/schema";
 import { EXPRESSION_RUNTIME_SOURCE } from "../project/expressionRuntime.generated";
 import { CONDITION_COMPARE_RUNTIME_SOURCE } from "../project/conditionCompare";
+import { LINK_RUNTIME_SOURCE } from "../project/links";
 import { ensureRichTextRuns } from "../project/richText";
 import interFont from "@fontsource-variable/inter/files/inter-latin-wght-normal.woff2?inline";
 import interFontLicense from "@fontsource-variable/inter/LICENSE?raw";
@@ -13,6 +14,7 @@ export const INTER_FONT_LICENSE = interFontLicense;
 export const PREVIEW_RUNTIME_SCRIPT = String.raw`
 ${EXPRESSION_RUNTIME_SOURCE}
 ${CONDITION_COMPARE_RUNTIME_SOURCE}
+${LINK_RUNTIME_SOURCE}
 const project = JSON.parse(document.getElementById("project-data").textContent);
 const stage = document.getElementById("stage");
 const screenPicker = document.getElementById("screen-picker");
@@ -239,6 +241,17 @@ function actions(rule, activeScreen, item, widget, localVariables) {
       }
     } else if (action.type === "show" || action.type === "hide") {
       visibility.set(action.target, action.type === "show");
+    } else if (action.type === "toggle") {
+      const toggled = allWidgets(screen().widgets).find((item) => item.id === action.target);
+      if (!toggled) throw new Error("The widget to show or hide does not exist.");
+      visibility.set(action.target, !widgetVisible(toggled, activeScreen));
+    } else if (action.type === "goBack") {
+      const previous = backStack.pop();
+      if (previous) { screenId = previous; loadedScreen = ""; }
+    } else if (action.type === "openLink") {
+      const link = safeLinkUrl(action.target);
+      if (!link) throw new Error("Open link needs a web address that starts with http, https, mailto or tel.");
+      window.open(link, "_blank", "noopener,noreferrer");
     } else if (action.type === "setVariable") {
       setVariable(action.target, actionValue(action.value, item, widget, localVariables), activeScreen, localVariables);
     } else if (action.type === "setPanelState") {

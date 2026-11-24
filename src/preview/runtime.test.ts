@@ -49,6 +49,65 @@ function createProject(): Project {
 }
 
 describe("PreviewRuntime", () => {
+  it("Toggle flips a widget between shown and hidden (B49)", () => {
+    const project = createProject();
+    const [first] = project.screens;
+    const trigger = first.widgets[0];
+    const target = first.widgets[1];
+    first.interactionRules = [{
+      id: crypto.randomUUID(), widgetId: trigger.id, event: "onClick", conditionMode: "all", conditions: [],
+      actions: [{ type: "toggle", target: target.id }],
+    }];
+    const runtime = new PreviewRuntime(project);
+    expect(runtime.snapshot().visibility[target.id]).toBe(true);
+    expect(runtime.runEvent(trigger, "onClick")).toEqual([]);
+    expect(runtime.snapshot().visibility[target.id]).toBe(false);
+    expect(runtime.runEvent(trigger, "onClick")).toEqual([]);
+    expect(runtime.snapshot().visibility[target.id]).toBe(true);
+  });
+
+  it("Go back returns to the previous screen, and does nothing on the first one (B49)", () => {
+    const project = createProject();
+    const [first, second] = project.screens;
+    const trigger = first.widgets[0];
+    first.interactionRules = [{
+      id: crypto.randomUUID(), widgetId: trigger.id, event: "onClick", conditionMode: "all", conditions: [],
+      actions: [{ type: "goBack", target: "previous" }],
+    }];
+    const backButton = { ...trigger, id: crypto.randomUUID() };
+    second.widgets.push(backButton);
+    second.interactionRules = [{
+      id: crypto.randomUUID(), widgetId: backButton.id, event: "onClick", conditionMode: "all", conditions: [],
+      actions: [{ type: "goBack", target: "previous" }],
+    }];
+    const runtime = new PreviewRuntime(project);
+    expect(runtime.runEvent(trigger, "onClick")).toEqual([]);
+    expect(runtime.currentScreenId).toBe(first.id);
+    runtime.navigate(second.id);
+    expect(runtime.runEvent(backButton, "onClick")).toEqual([]);
+    expect(runtime.currentScreenId).toBe(first.id);
+  });
+
+  it("Open link queues a safe address for the Preview window and refuses unsafe ones (B49)", () => {
+    const project = createProject();
+    const [first] = project.screens;
+    const trigger = first.widgets[0];
+    const rule = (target: string) => ({
+      id: crypto.randomUUID(), widgetId: trigger.id, event: "onClick" as const, conditionMode: "all" as const, conditions: [],
+      actions: [{ type: "openLink", target }],
+    });
+    first.interactionRules = [rule("www.example.com")];
+    const runtime = new PreviewRuntime(project);
+    expect(runtime.runEvent(trigger, "onClick")).toEqual([]);
+    expect(runtime.takePendingLinks()).toEqual(["https://www.example.com/"]);
+    expect(runtime.takePendingLinks()).toEqual([]);
+
+    first.interactionRules = [rule("javascript:alert(1)")];
+    const unsafe = new PreviewRuntime(project);
+    expect(unsafe.runEvent(trigger, "onClick")[0]).toMatch(/Open link needs a web address/);
+    expect(unsafe.takePendingLinks()).toEqual([]);
+  });
+
   it("stops two screens that send each other on load after 20 moves, then lets a person carry on (B39)", () => {
     const project = createProject();
     const [first, second] = project.screens;

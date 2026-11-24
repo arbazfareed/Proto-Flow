@@ -1146,6 +1146,8 @@ export function PreviewWindow() {
       trackEvent("repeater_row_added", { count: runtime.lastAddedRepeaterRows });
     }
     if (runtime.lastPanelStateChanges > 0) trackEvent("panel_state_changed");
+    // B49: "Open link" actions open their address in a new tab, without giving it access to this window.
+    for (const url of runtime.takePendingLinks()) window.open(url, "_blank", "noopener,noreferrer");
     setRuntimeSnapshot(runtime.snapshot());
     setRuntimeRevision((revision) => revision + 1);
     if (errors.length > 0) {

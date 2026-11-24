@@ -1571,4 +1571,4 @@
 .element-library-plain-hint strong { color:inherit; font-weight:600; }
 .new-project-dialog { width:min(760px, calc(100vw - 32px)); max-height:90vh; overflow:auto; }
 .new-project-dialog .new-project-grid { margin-top:14px; }
-
+.interaction-action-note { font-size:11px; opacity:0.75; align-self:center; }

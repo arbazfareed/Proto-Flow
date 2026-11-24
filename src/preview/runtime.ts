@@ -17,6 +17,7 @@ import {
   type PanelTransition,
 } from "../project/dynamicPanels";
 import { compareCondition } from "../project/conditionCompare";
+import { safeLinkUrl } from "../project/links";
 import {
   getRepeaterDataset,
   interpolateItem,
@@ -116,6 +117,8 @@ export class PreviewRuntime {
   lastRunRuleCount = 0;
   // B39: how many screen loads in a row were sent straight on to another screen by an On load rule.
   private loadNavigationChain = 0;
+  // B49: addresses from "Open link" actions, opened by the Preview window after the rule has run.
+  private pendingLinks: string[] = [];
   private inLoadEvents = false;
   lastAddedRepeaterRows = 0;
   lastPanelStateChanges = 0;
@@ -202,6 +205,13 @@ export class PreviewRuntime {
     if (!this.inLoadEvents) this.loadNavigationChain = 0;
     this.backStack.push(this.screenId);
     this.screenId = screenId;
+  }
+
+  /** Addresses that "Open link" actions asked for since the last call. */
+  takePendingLinks(): string[] {
+    const links = this.pendingLinks;
+    this.pendingLinks = [];
+    return links;
   }
 
   back(): void {
@@ -409,11 +419,23 @@ export class PreviewRuntime {
           break;
         case "show":
         case "hide":
+        case "toggle":
           if (!collectWidgetsDeep(screen.widgets).some((item) => item.id === action.target)) {
             throw new Error(`Visibility action target "${action.target}" is missing.`);
           }
-          this.visibility[action.target] = action.type === "show";
+          this.visibility[action.target] = action.type === "toggle"
+            ? !this.visibility[action.target]
+            : action.type === "show";
           break;
+        case "goBack":
+          this.back();
+          break;
+        case "openLink": {
+          const url = safeLinkUrl(action.target);
+          if (!url) throw new Error("Open link needs a web address that starts with http, https, mailto or tel.");
+          this.pendingLinks.push(url);
+          break;
+        }
         case "setWidgetText":
           {
           const target = collectWidgetsDeep(screen.widgets).find((item) => item.id === action.target);

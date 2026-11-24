@@ -283,6 +283,83 @@ describe("standalone published preview bundle", () => {
     }
   });
 
+  it("runs Toggle, Go back and Open link in the published page (B49)", () => {
+    const project = createEmptyProject("Actions export");
+    const first = project.screens[0];
+    first.inputMode = "both";
+    const second = { ...first, id: crypto.randomUUID(), name: "Second", widgets: [] as Widget[], interactionRules: [] as InteractionRule[] };
+    project.screens.push(second);
+    const base = { rotation: 0, opacity: 1, visible: true, locked: false, zIndex: 0, style: {}, width: 140, height: 40 };
+    const make = (type: string, y: number, props: Record<string, unknown>) =>
+      ({ ...base, id: crypto.randomUUID(), type, x: 10, y, props }) as Widget;
+    const toggle = make("button", 10, { label: "Toggle it" });
+    const link = make("button", 60, { label: "Visit" });
+    const next = make("button", 110, { label: "Next" });
+    const note = make("text", 160, { text: "Shown" });
+    const back = make("button", 10, { label: "Back" });
+    first.widgets.push(toggle, link, next, note);
+    second.widgets.push(back);
+    const rule = (widget: Widget, action: Record<string, unknown>): InteractionRule => ({
+      id: crypto.randomUUID(), widgetId: widget.id, event: "onClick", conditionMode: "all", conditions: [],
+      actions: [action as InteractionRule["actions"][number]],
+    });
+    first.interactionRules = [
+      rule(toggle, { type: "toggle", target: note.id }),
+      rule(link, { type: "openLink", target: "www.example.com" }),
+      rule(next, { type: "navigate", target: second.id }),
+    ];
+    second.interactionRules = [rule(back, { type: "goBack", target: "previous" })];
+
+    const dom = new JSDOM(generatePublishedPreviewHtml(project), { runScripts: "dangerously", pretendToBeVisual: true });
+    const opened: string[][] = [];
+    dom.window.open = ((...args: string[]) => { opened.push(args); return null; }) as never;
+    const page = () => dom.window.document.querySelector("[data-screen-id]")?.textContent ?? "";
+    const press = (label: string) => {
+      const target = Array.from(dom.window.document.querySelectorAll("[data-screen-id] *"))
+        .filter((node) => node.textContent === label).pop();
+      const event = new dom.window.Event("pointerup", { bubbles: true });
+      Object.defineProperty(event, "pointerType", { value: "mouse" });
+      target?.dispatchEvent(event);
+    };
+
+    expect(page()).toContain("Shown");
+    press("Toggle it");
+    expect(page()).not.toContain("Shown");
+    press("Toggle it");
+    expect(page()).toContain("Shown");
+
+    press("Visit");
+    expect(opened).toEqual([["https://www.example.com/", "_blank", "noopener,noreferrer"]]);
+
+    press("Next");
+    expect(page()).toContain("Back");
+    press("Back");
+    expect(page()).toContain("Toggle it");
+    dom.window.close();
+  });
+
+  it("Open link refuses a javascript: address in the published page (B49)", () => {
+    const project = createEmptyProject("Unsafe link");
+    const screen = project.screens[0];
+    screen.inputMode = "both";
+    const button = { rotation: 0, opacity: 1, visible: true, locked: false, zIndex: 0, style: {}, width: 140, height: 40,
+      id: crypto.randomUUID(), type: "button", x: 10, y: 10, props: { label: "Bad" } } as Widget;
+    screen.widgets.push(button);
+    screen.interactionRules = [{
+      id: crypto.randomUUID(), widgetId: button.id, event: "onClick", conditionMode: "all", conditions: [],
+      actions: [{ type: "openLink", target: "javascript:alert(1)" }],
+    }];
+    const dom = new JSDOM(generatePublishedPreviewHtml(project), { runScripts: "dangerously", pretendToBeVisual: true });
+    const opened: unknown[] = [];
+    dom.window.open = ((...args: unknown[]) => { opened.push(args); return null; }) as never;
+    const target = Array.from(dom.window.document.querySelectorAll("[data-screen-id] *")).filter((node) => node.textContent === "Bad").pop();
+    const event = new dom.window.Event("pointerup", { bubbles: true });
+    Object.defineProperty(event, "pointerType", { value: "mouse" });
+    try { target?.dispatchEvent(event); } catch { /* the page reports the problem */ }
+    expect(opened).toEqual([]);
+    dom.window.close();
+  });
+
   it("shows no loop notice when screens do not loop (B39)", () => {
     const dom = new JSDOM(generatePublishedPreviewHtml(createEmptyProject("No loop")), { runScripts: "dangerously", pretendToBeVisual: true });
     expect(dom.window.document.getElementById("loop-notice")).toBeNull();

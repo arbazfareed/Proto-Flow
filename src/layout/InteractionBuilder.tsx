@@ -38,8 +38,11 @@ const OPERATORS = [
 
 const ACTIONS = [
   ["navigate", "Navigate"],
+  ["goBack", "Go back"],
+  ["openLink", "Open link"],
   ["show", "Show"],
   ["hide", "Hide"],
+  ["toggle", "Toggle show/hide"],
   ["setWidgetText", "Set widget text"],
   ["setVariable", "Set variable"],
   ["setPanelState", "Set panel state"],
@@ -69,6 +72,11 @@ function initialAction(type: string, screen: Screen): InteractionAction {
       return { type, target: "" };
     case "setVariable":
       return { type, target: "", value: "" };
+    case "goBack":
+      // The schema wants a target on every action; Go back needs none, so it carries a fixed marker.
+      return { type, target: "previous" };
+    case "openLink":
+      return { type, target: "" };
     case "setWidgetText":
       return {
         type,
@@ -83,6 +91,7 @@ function initialAction(type: string, screen: Screen): InteractionAction {
     case "filterRepeater":
     case "show":
     case "hide":
+    case "toggle":
       return {
         type,
         target: (type === "setPanelState"
@@ -153,6 +162,21 @@ function ActionTarget({
   localVariables: InteractionLocalVariable[];
   onChange: (target: string) => void;
 }) {
+  // B49: Go back needs no target, and Open link takes a web address instead of a widget.
+  if (action.type === "goBack") {
+    return <span className="interaction-action-note">Returns to the previous screen</span>;
+  }
+  if (action.type === "openLink") {
+    return (
+      <input
+        aria-label="Link address"
+        placeholder="https://example.com"
+        value={action.target}
+        aria-invalid={!action.target.trim() || undefined}
+        onChange={(event) => onChange(event.currentTarget.value)}
+      />
+    );
+  }
   const widgetTargets = collectWidgetsDeep(screen.widgets).filter((item) =>
     action.type === "setPanelState"
       ? ["panel", "dynamic-panel", "dynamicPanel"].includes(item.type)
