@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
 import { Check, Copy, ExternalLink, Link2, Trash2, X } from "lucide-react";
-import QRCode from "qrcode";
 import { generatePublishedPreviewHtml, publishedBundleSize } from "../preview/publishBundle";
 import { ensureProjectIcons } from "../preview/iconExport";
 import { useFullIconSet } from "../canvas/iconLibrary";
@@ -82,12 +81,12 @@ export function CloudPreviewDialog({ onClose }: { onClose: () => void }) {
       return;
     }
     let cancelled = false;
-    void QRCode.toDataURL(selectedPreview.url, {
+    void import("qrcode").then(({ default: QRCode }) => QRCode.toDataURL(selectedPreview.url, {
       errorCorrectionLevel: "M",
       margin: 2,
       width: 192,
       color: { dark: "#17141d", light: "#ffffff" },
-    }).then((dataUrl) => {
+    })).then((dataUrl) => {
       if (!cancelled) setQrDataUrl(dataUrl);
     }).catch((error: unknown) => {
       console.error("Could not generate a QR code for the published preview.", error);
