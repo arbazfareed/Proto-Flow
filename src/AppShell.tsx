@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { NewProjectDialog } from "./layout/NewProjectDialog";
 import { nextScreenName } from "./project/screenNames";
 import { PREVIEW_WINDOW_BASE_TITLE } from "./preview/previewWindowTitle";
@@ -37,19 +37,24 @@ import { RestoreModal } from "./layout/RestoreModal";
 import { UnsavedChangesDialog } from "./layout/UnsavedChangesDialog";
 import { measureImportedLayout } from "./project/htmlLayoutMeasure";
 import { UpdateToast } from "./layout/UpdateToast";
-import { WalletDialog } from "./layout/WalletDialog";
-import { CloudPreviewDialog } from "./layout/CloudPreviewDialog";
-import { ReactCodeExportDialog } from "./layout/ReactCodeExportDialog";
-import { ImportCodeDialog, type ImportedCode } from "./layout/ImportCodeDialog";
+import type { ImportedCode } from "./layout/ImportCodeDialog";
 import { findRequiredIcons, importHtmlToWidgets } from "./project/htmlImport";
 import {
   getImportedHtmlGeometryUpdates,
   updateImportedHtmlGeometry,
 } from "./project/importedCodeSync";
 import { getImportedElementTools } from "./project/importedElementTools";
-import { HtmlExportDialog } from "./layout/HtmlExportDialog";
-import { PluginManagerDialog } from "./layout/PluginManagerDialog";
-import { CollaborationDialog } from "./layout/CollaborationDialog";
+
+// B24: dialogs that open on demand are loaded the first time they are needed, so their code (and heavy
+// libraries such as the JavaScript parser for Import code and the collaboration libraries) is not part of the
+// file every start-up has to download and run.
+const WalletDialog = lazy(() => import("./layout/WalletDialog").then((module) => ({ default: module.WalletDialog })));
+const CloudPreviewDialog = lazy(() => import("./layout/CloudPreviewDialog").then((module) => ({ default: module.CloudPreviewDialog })));
+const ReactCodeExportDialog = lazy(() => import("./layout/ReactCodeExportDialog").then((module) => ({ default: module.ReactCodeExportDialog })));
+const ImportCodeDialog = lazy(() => import("./layout/ImportCodeDialog").then((module) => ({ default: module.ImportCodeDialog })));
+const HtmlExportDialog = lazy(() => import("./layout/HtmlExportDialog").then((module) => ({ default: module.HtmlExportDialog })));
+const PluginManagerDialog = lazy(() => import("./layout/PluginManagerDialog").then((module) => ({ default: module.PluginManagerDialog })));
+const CollaborationDialog = lazy(() => import("./layout/CollaborationDialog").then((module) => ({ default: module.CollaborationDialog })));
 import { CommandPalette } from "./layout/CommandPalette";
 import { VersionHistoryDialog } from "./layout/VersionHistoryDialog";
 import { commandRegistry, createCoreCommands } from "./commands/registry";
@@ -1402,14 +1407,16 @@ function AppShell() {
       <UpdateToast requestId={updateCheckRequest} />
       <CommandPalette />
       {importCodeOpen && (
-        <ImportCodeDialog
-          initialCode={importCodeDraft}
-          screens={currentProject.screens.map(({ id, name }) => ({ id, name }))}
-          sourceScreenId={useStore.getState().getActiveScreenId()}
-          onDraftChange={setImportCodeDraft}
-          onClose={() => setImportCodeOpen(false)}
-          onRenderOnCanvas={renderImportedCode}
-        />
+        <Suspense fallback={null}>
+          <ImportCodeDialog
+            initialCode={importCodeDraft}
+            screens={currentProject.screens.map(({ id, name }) => ({ id, name }))}
+            sourceScreenId={useStore.getState().getActiveScreenId()}
+            onDraftChange={setImportCodeDraft}
+            onClose={() => setImportCodeOpen(false)}
+            onRenderOnCanvas={renderImportedCode}
+          />
+        </Suspense>
       )}
       {privacyDialogOpen && (
         <PrivacySettingsDialog
@@ -1464,19 +1471,21 @@ function AppShell() {
           onNotify={notify}
         />
       )}
-      {walletOpen && <WalletDialog onClose={() => setWalletOpen(false)} />}
-      {cloudPreviewOpen && <CloudPreviewDialog onClose={() => setCloudPreviewOpen(false)} />}
-      {reactExportOpen && <ReactCodeExportDialog onClose={() => setReactExportOpen(false)} />}
-      {htmlExportOpen && <HtmlExportDialog onClose={() => setHtmlExportOpen(false)} />}
-      {pluginManagerOpen && <PluginManagerDialog onClose={() => setPluginManagerOpen(false)} />}
-      {collaborationMounted && (
-        <CollaborationDialog
-          open={collaborationOpen}
-          initialSessionId={collaborationInviteId}
-          onClose={closeCollaboration}
-          onSessionActive={setActiveCollaboration}
-        />
-      )}
+      <Suspense fallback={null}>
+        {walletOpen && <WalletDialog onClose={() => setWalletOpen(false)} />}
+        {cloudPreviewOpen && <CloudPreviewDialog onClose={() => setCloudPreviewOpen(false)} />}
+        {reactExportOpen && <ReactCodeExportDialog onClose={() => setReactExportOpen(false)} />}
+        {htmlExportOpen && <HtmlExportDialog onClose={() => setHtmlExportOpen(false)} />}
+        {pluginManagerOpen && <PluginManagerDialog onClose={() => setPluginManagerOpen(false)} />}
+        {collaborationMounted && (
+          <CollaborationDialog
+            open={collaborationOpen}
+            initialSessionId={collaborationInviteId}
+            onClose={closeCollaboration}
+            onSessionActive={setActiveCollaboration}
+          />
+        )}
+      </Suspense>
 
       {notice && (
         <div className={`toast${noticeIsError ? " toast-error" : ""}`} role={noticeIsError ? "alert" : "status"}>

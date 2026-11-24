@@ -1,5 +1,5 @@
 import { ensureProjectIcons, iconDataScript } from "./iconExport";
-import JSZip from "jszip";
+import type JSZip from "jszip";
 import type { Project } from "../project/schema";
 import {
   generatePublishedPreviewHtml,
@@ -11,7 +11,6 @@ import { widgetNotesHtmlComments } from "../project/widgetNotes";
 import { ensureRichTextRuns } from "../project/richText";
 import { getScreenBreakpoints, resolveWidgetsForBreakpoint } from "../project/responsive";
 import { DEVICE_PRESETS, findDevicePreset } from "../devices/catalog";
-import { toPng } from "html-to-image";
 
 export const MAX_LOCAL_HTML_EXPORT_BYTES = 100 * 1024 * 1024;
 const MAX_IMAGE_ASSET_BYTES = 25 * 1024 * 1024;
@@ -216,7 +215,8 @@ export async function generateLocalHtmlArchive(
 ): Promise<Uint8Array> {
   await ensureProjectIcons(project);
   const prepared = prepareHtmlProject(project, options.includeInteractions, options.includeAssets);
-  const zip = new JSZip();
+  const { default: JSZipClass } = await import("jszip");
+  const zip = new JSZipClass();
   const assets = zip.folder("assets");
   if (!assets) throw new Error("Could not create the assets folder in the HTML bundle.");
   zip.file("FONT-LICENSE.txt", INTER_FONT_LICENSE);
@@ -287,7 +287,9 @@ export async function generateDeviceImageArchive(
       }
     }
   }
-  const zip = new JSZip();
+  const { default: JSZipClass } = await import("jszip");
+  const { toPng } = await import("html-to-image");
+  const zip = new JSZipClass();
   zip.file("FONT-LICENSE.txt", INTER_FONT_LICENSE);
   const variants: Array<{ preset: typeof DEVICE_PRESETS[number]; screen: Project["screens"][number] }> = [];
   for (const category of ["desktop", "tablet", "phone"] as const) {

@@ -4,7 +4,6 @@ import { PREVIEW_FIT_HINT, previewFitLabel } from "./previewZoomLabel";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { CSSProperties, ChangeEvent, HTMLAttributes, KeyboardEvent, MouseEvent, ReactNode, TouchEvent } from "react";
 import { ArrowLeft, Camera, RotateCcw, RotateCw, SlidersHorizontal, X } from "lucide-react";
-import { toPng } from "html-to-image";
 import { emit, listen } from "@tauri-apps/api/event";
 import { isTauri } from "@tauri-apps/api/core";
 import { currentMonitor, getCurrentWindow } from "@tauri-apps/api/window";
@@ -1245,6 +1244,7 @@ export function PreviewWindow() {
       return;
     }
     try {
+      const { toPng } = await import("html-to-image");
       const dataUrl = await toPng(target, { pixelRatio: 2, cacheBust: true });
       const link = document.createElement("a");
       const safeName = (project?.name ?? "prototype")

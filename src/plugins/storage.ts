@@ -1,4 +1,3 @@
-import JSZip from "jszip";
 import type { InstalledPlugin } from "./manifest";
 import { parsePluginManifest } from "./manifest";
 
@@ -140,6 +139,7 @@ export async function readPluginArchive(file: File): Promise<Omit<InstalledPlugi
   }
   const archiveBytes = new Uint8Array(await file.arrayBuffer());
   validateZipDirectory(archiveBytes);
+  const { default: JSZip } = await import("jszip");
   const zip = await JSZip.loadAsync(archiveBytes, { checkCRC32: true });
   const paths = Object.keys(zip.files).filter((path) => !zip.files[path].dir);
   if (
