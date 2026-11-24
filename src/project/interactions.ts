@@ -14,6 +14,7 @@ import { VariableRuntimeStore } from "./variables";
 import { collectWidgetsDeep, getPanelStates } from "./dynamicPanels";
 import { evaluateExpression } from "./expressions";
 import { compareCondition } from "./conditionCompare";
+import { safeLinkUrl } from "./links";
 
 export type InteractionIssue = {
   severity: "error" | "warning";
@@ -135,11 +136,19 @@ function describeAction(
       return destination ? `Navigate to ${destination.name}` : `Unknown screen: ${action.target}`;
     }
     case "show":
-    case "hide": {
+    case "hide":
+    case "toggle": {
       const widget = collectWidgetsDeep(screen.widgets).find((item) => item.id === action.target);
+      const verb = action.type === "show" ? "Show" : action.type === "hide" ? "Hide" : "Toggle show/hide of";
       return widget
-        ? `${action.type === "show" ? "Show" : "Hide"} ${widget.name ?? widget.type}`
+        ? `${verb} ${widget.name ?? widget.type}`
         : `Unknown widget: ${action.target}`;
+    }
+    case "goBack":
+      return "Go back to the previous screen";
+    case "openLink": {
+      const link = safeLinkUrl(action.target);
+      return link ? `Open ${link}` : `Open link needs a web address: ${action.target || "(empty)"}`;
     }
     case "setVariable": {
       const localVariable = localDefinitions.find((item) => item.name === action.target);
@@ -343,7 +352,7 @@ export function validateInteractionRules(project: Project, screen: Screen): Inte
             targets.add(action.target);
             navigation.set(ownerScreen.id, targets);
           }
-        } else if (action.type === "show" || action.type === "hide" ||
+        } else if (action.type === "show" || action.type === "hide" || action.type === "toggle" ||
           action.type === "setPanelState" || ["setRepeaterData", "addRepeaterRow",
             "removeRepeaterRow", "sortRepeater", "filterRepeater"].includes(action.type)) {
           const targetScreen = project.screens.find((item) =>
@@ -389,7 +398,7 @@ export function validateInteractionRules(project: Project, screen: Screen): Inte
             });
           } else if (
             ownerScreen.id === screen.id &&
-            (action.type === "show" || action.type === "hide") &&
+            (action.type === "show" || action.type === "hide" || action.type === "toggle") &&
             rule.widgetId === action.target
           ) {
             issues.push({
