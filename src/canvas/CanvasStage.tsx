@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { readableTextColour } from "./readableText";
 import type { DragEvent as ReactDragEvent, FormEvent } from "react";
 import { Circle, Group, Layer, Line, Rect, Stage, Text, Transformer } from "react-konva";
@@ -79,7 +79,6 @@ import {
 import {
   getSelectedContainingParentId,
   isWidgetContainedBy,
-  findRepeaterThatCannotTake,
   containerAdoptsWidget,
   getWidgetParentIdMap,
   isWidgetContainer,
@@ -119,6 +118,7 @@ import {
   intersectsCanvasViewport,
 } from "./navigation";
 import { snapWidgetPosition, type CanvasGuide, type CanvasPoint } from "./snapping";
+import { computeDropTargets, createGuideStore, type GuideStore } from "./dragPerformance";
 import {
   createShapeWidget,
   getShapeDefinition,
@@ -459,6 +459,21 @@ function GridLayer({
   );
 }
 
+function LiveGuideLayer({
+  store,
+  size,
+  zoom,
+  pan,
+}: {
+  store: GuideStore;
+  size: CanvasSize;
+  zoom: number;
+  pan: CanvasPoint;
+}) {
+  const guides = useSyncExternalStore(store.subscribe, store.get);
+  return <GuideLayer guides={guides} size={size} zoom={zoom} pan={pan} />;
+}
+
 function GuideLayer({
   guides,
   size,
@@ -554,7 +569,7 @@ function CanvasPerformanceOverlay({
   );
 }
 
-function WidgetNode({
+function WidgetNodeView({
   widget,
   selected,
   hovered,
@@ -784,6 +799,58 @@ function WidgetNode({
   );
 }
 
+type WidgetNodeProps = Parameters<typeof WidgetNodeView>[0];
+
+// B44: only the widgets that change are drawn again. Dragging used to redraw every widget on the
+// screen on every mouse move (about 430 ms per move with 250 widgets in a dev build).
+function widgetNodePropsEqual(a: WidgetNodeProps, b: WidgetNodeProps): boolean {
+  return a.widget === b.widget &&
+    a.selected === b.selected &&
+    a.hovered === b.hovered &&
+    a.hoverAccent === b.hoverAccent &&
+    a.overflowed === b.overflowed &&
+    a.parentHighlighted === b.parentHighlighted &&
+    a.zoom === b.zoom &&
+    a.activeTool === b.activeTool &&
+    a.position.x === b.position.x &&
+    a.position.y === b.position.y &&
+    a.symbolDefinition === b.symbolDefinition &&
+    a.onSelect === b.onSelect &&
+    a.onHover === b.onHover &&
+    a.onDragStart === b.onDragStart &&
+    a.onDragMove === b.onDragMove &&
+    a.onDragEnd === b.onDragEnd &&
+    a.onDragBound === b.onDragBound &&
+    a.onEdit === b.onEdit &&
+    a.onContextMenu === b.onContextMenu;
+}
+
+const MemoWidgetNodeView = memo(WidgetNodeView, widgetNodePropsEqual);
+
+/**
+ * The canvas builds new handler functions for every widget on every render, which would defeat
+ * the memo above. This wrapper hands the drawn widget handlers that never change and always call
+ * the latest ones, so a widget is only drawn again when its own data or position changes.
+ */
+function WidgetNode(props: WidgetNodeProps) {
+  const latest = useRef(props);
+  latest.current = props;
+  const handlers = useMemo(
+    () => ({
+      onSelect: (event: Parameters<WidgetNodeProps["onSelect"]>[0]) => latest.current.onSelect(event),
+      onHover: (hovered: boolean) => latest.current.onHover(hovered),
+      onDragStart: () => latest.current.onDragStart(),
+      onDragMove: (position: CanvasPoint, altKey: boolean) => latest.current.onDragMove(position, altKey),
+      onDragEnd: (position: CanvasPoint) => latest.current.onDragEnd(position),
+      onDragBound: (position: CanvasPoint) => latest.current.onDragBound(position),
+      onEdit: () => latest.current.onEdit(),
+      onContextMenu: (event: Konva.KonvaEventObject<MouseEvent>) => latest.current.onContextMenu(event),
+    }),
+    [],
+  );
+  return <MemoWidgetNodeView {...props} {...handlers} />;
+}
+
 type EditableWidgetText = {
   key: "text" | "label" | "placeholder" | "value" | "items" | "title";
   value: string;
@@ -950,7 +1017,9 @@ export function CanvasStage({
   const panModeRef = useRef(false);
   const [isPanning, setIsPanning] = useState(false);
   const [previewPositions, setPreviewPositions] = useState<Record<string, CanvasPoint>>({});
-  const [guides, setGuides] = useState<CanvasGuide[]>([]);
+  const guideStore = useMemo(createGuideStore, []);
+  const setGuides = guideStore.set;
+  const [dragDropTargetIds, setDragDropTargetIds] = useState<{ containerId?: string; blockedRepeaterId?: string }>({});
   const [shapeDraft, setShapeDraft] = useState<ShapeDraft | null>(null);
   const [selectionDraft, setSelectionDraft] = useState<SelectionDraft | null>(null);
   const [canvasDropFeedback, setCanvasDropFeedback] = useState<CanvasDropFeedback | null>(null);
@@ -975,6 +1044,7 @@ export function CanvasStage({
   const altHeldRef = useRef(false);
   const pendingGuidesRef = useRef<CanvasGuide[]>([]);
   const dragStartPositionsRef = useRef<Map<string, CanvasPoint> | null>(null);
+  const dragPreviewStartedRef = useRef(false);
   const dragPrimaryIdRef = useRef<string | null>(null);
   const dragHistorySnapshotRef = useRef<Project | null>(null);
   const transformHistorySnapshotRef = useRef<Project | null>(null);
@@ -1038,35 +1108,30 @@ export function CanvasStage({
       container: undefined,
       blockedRepeater: undefined,
     };
-    const movingIds = Object.keys(previewPositions);
-    let moving: Widget | undefined;
     if (shapeDraft) {
-      moving = shapeDraft.preview;
-    } else if (movingIds.length > 0) {
-      const primaryId = dragPrimaryIdRef.current && previewPositions[dragPrimaryIdRef.current]
-        ? dragPrimaryIdRef.current
-        : movingIds[0];
-      const widget = screenWidgets.find((item) => item.id === primaryId);
-      const position = previewPositions[primaryId];
-      if (widget && position) moving = { ...widget, x: position.x, y: position.y };
+      return computeDropTargets(shapeDraft.preview, new Set(Object.keys(previewPositions)), screenWidgets);
     }
-    if (!moving) return none;
-    const excluded = new Set(movingIds);
-    const candidates = screenWidgets.filter((item) =>
-      !excluded.has(item.id) && item.id !== moving.id && isWidgetContainer(item),
-    );
-    if (candidates.length === 0) return none;
-    const parentId = getWidgetParentIdMap([
-      ...candidates,
-      { ...moving, groupId: undefined },
-    ]).get(moving.id);
+    // While dragging, the drag handler works out the targets and only changes this when they change.
+    if (Object.keys(previewPositions).length === 0) return none;
     return {
-      container: parentId ? candidates.find((item) => item.id === parentId) : undefined,
-      // B17: a repeater needs the whole widget inside it, so a widget hanging over its edge is
-      // left outside; say so instead of failing silently.
-      blockedRepeater: findRepeaterThatCannotTake(moving, candidates),
+      container: dragDropTargetIds.containerId
+        ? screenWidgets.find((item) => item.id === dragDropTargetIds.containerId)
+        : undefined,
+      blockedRepeater: dragDropTargetIds.blockedRepeaterId
+        ? screenWidgets.find((item) => item.id === dragDropTargetIds.blockedRepeaterId)
+        : undefined,
     };
-  }, [previewPositions, screenWidgets, shapeDraft]);
+  }, [dragDropTargetIds, previewPositions, screenWidgets, shapeDraft]);
+  const updateDragDropTargets = (moving: Widget, excludedIds: ReadonlySet<string>) => {
+    const targets = computeDropTargets(moving, excludedIds, screenWidgets);
+    const containerId = targets.container?.id;
+    const blockedRepeaterId = targets.blockedRepeater?.id;
+    setDragDropTargetIds((current) =>
+      current.containerId === containerId && current.blockedRepeaterId === blockedRepeaterId
+        ? current
+        : { containerId, blockedRepeaterId },
+    );
+  };
   const dropContainer = dropTargets.container;
   const blockedRepeater = dropTargets.blockedRepeater;
   const autoLayoutPositions = useMemo(
@@ -3356,12 +3421,25 @@ export function CanvasStage({
                         if (id === widget.id) continue;
                         stageRef.current?.findOne(`#${id}`)?.position(next);
                       }
-                      setPreviewPositions(nextPositions);
+                      // B44: React only needs to know a drag has started. The nodes are moved
+                      // directly, so no per-move state update (and no redraw of every widget).
+                      if (!dragPreviewStartedRef.current) {
+                        dragPreviewStartedRef.current = true;
+                        setPreviewPositions(nextPositions);
+                      }
+                      updateDragDropTargets(
+                        { ...widget, x: position.x, y: position.y },
+                        new Set(starts.keys()),
+                      );
                     } else {
                       setPreviewPositions((current) => ({
                         ...current,
                         [widget.id]: position,
                       }));
+                      updateDragDropTargets(
+                        { ...widget, x: position.x, y: position.y },
+                        new Set([widget.id]),
+                      );
                     }
                     setGuides(altKey ? [] : pendingGuidesRef.current);
                   }}
@@ -3379,7 +3457,9 @@ export function CanvasStage({
                     dragStartPositionsRef.current = null;
                     dragPrimaryIdRef.current = null;
                     dragHistorySnapshotRef.current = null;
+                    dragPreviewStartedRef.current = false;
                     setPreviewPositions({});
+                    setDragDropTargetIds({});
                     setGuides([]);
                   }}
                 />
@@ -3622,7 +3702,7 @@ export function CanvasStage({
               </Group>
             </Layer>
           )}
-          <GuideLayer guides={guides} size={size} zoom={zoom} pan={pan} />
+          <LiveGuideLayer store={guideStore} size={size} zoom={zoom} pan={pan} />
         </Stage>
       )}
       {import.meta.env.DEV && (
