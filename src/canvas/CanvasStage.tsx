@@ -799,11 +799,13 @@ function WidgetNodeView({
   );
 }
 
-type WidgetNodeProps = Parameters<typeof WidgetNodeView>[0];
+type WidgetNodeViewProps = Parameters<typeof WidgetNodeView>[0];
+// `hovered` is not passed in: each widget reads its own, so hovering redraws two widgets, not the canvas.
+type WidgetNodeProps = Omit<WidgetNodeViewProps, "hovered">;
 
 // B44: only the widgets that change are drawn again. Dragging used to redraw every widget on the
 // screen on every mouse move (about 430 ms per move with 250 widgets in a dev build).
-function widgetNodePropsEqual(a: WidgetNodeProps, b: WidgetNodeProps): boolean {
+function widgetNodePropsEqual(a: WidgetNodeViewProps, b: WidgetNodeViewProps): boolean {
   return a.widget === b.widget &&
     a.selected === b.selected &&
     a.hovered === b.hovered &&
@@ -833,6 +835,7 @@ const MemoWidgetNodeView = memo(WidgetNodeView, widgetNodePropsEqual);
  * the latest ones, so a widget is only drawn again when its own data or position changes.
  */
 function WidgetNode(props: WidgetNodeProps) {
+  const hovered = useStore((state) => state.hoveredWidgetId === props.widget.id);
   const latest = useRef(props);
   latest.current = props;
   const handlers = useMemo(
@@ -848,7 +851,7 @@ function WidgetNode(props: WidgetNodeProps) {
     }),
     [],
   );
-  return <MemoWidgetNodeView {...props} {...handlers} />;
+  return <MemoWidgetNodeView {...props} hovered={hovered} {...handlers} />;
 }
 
 type EditableWidgetText = {
@@ -1074,7 +1077,6 @@ export function CanvasStage({
   const activeBreakpointId = useStore((state) => state.activeBreakpointId);
   const activeRepeaterEdit = useStore((state) => state.activeRepeaterEdit);
   const selectedIds = useStore((state) => state.selectedIds);
-  const hoveredWidgetId = useStore((state) => state.hoveredWidgetId);
   useEffect(() => {
     activeToolRef.current = activeTool;
   }, [activeTool]);
@@ -3337,7 +3339,6 @@ export function CanvasStage({
                   key={widget.id}
                   widget={widget}
                   selected={selectedIds.includes(widget.id)}
-                  hovered={hoveredWidgetId === widget.id}
                   hoverAccent={getLayerAccentColor(widget)}
                   overflowed={getWidgetViewportOverflow(widget, activeDevice) > 0}
                   parentHighlighted={selectedParentWidgetIds.has(widget.id)}
