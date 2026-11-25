@@ -147,3 +147,47 @@ describe("ElementLibrary imported code shortcuts", () => {
     expect(screen.queryByRole("button", { name: "Add Skeleton" })).toBeNull();
   });
 });
+
+describe("ElementLibrary stays out of the way of edits (B44)", () => {
+  it("always calls the latest callback after the parent draws it again", () => {
+    const first = vi.fn();
+    const second = vi.fn();
+    const view = renderWithProviders(
+      <ElementLibrary activeTool={null} mode="sidebar" onSelectTool={first} onAddScreen={vi.fn()} />,
+    );
+    view.rerender(
+      <ElementLibrary activeTool={null} mode="sidebar" onSelectTool={second} onAddScreen={vi.fn()} />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Add Rectangle" }));
+
+    expect(second).toHaveBeenCalledTimes(1);
+    expect(first).not.toHaveBeenCalled();
+  });
+
+  it("keeps its search text and open tips when the parent draws it again", () => {
+    const view = renderWithProviders(
+      <ElementLibrary activeTool={null} mode="sidebar" onSelectTool={vi.fn()} onAddScreen={vi.fn()} />,
+    );
+    fireEvent.change(screen.getByRole("searchbox", { name: "Search elements" }), {
+      target: { value: "date" },
+    });
+    view.rerender(
+      <ElementLibrary activeTool={null} mode="sidebar" onSelectTool={vi.fn()} onAddScreen={vi.fn()} />,
+    );
+
+    expect((screen.getByRole("searchbox", { name: "Search elements" }) as HTMLInputElement).value).toBe("date");
+    expect(screen.getByRole("button", { name: "Add Date picker" })).toBeVisible();
+  });
+
+  it("shows a newly active tool as pressed", () => {
+    const view = renderWithProviders(
+      <ElementLibrary activeTool={null} mode="sidebar" onSelectTool={vi.fn()} onAddScreen={vi.fn()} />,
+    );
+    expect(screen.getByRole("button", { name: "Add Rectangle" }).getAttribute("aria-pressed")).toBe("false");
+    view.rerender(
+      <ElementLibrary activeTool="rectangle" mode="sidebar" onSelectTool={vi.fn()} onAddScreen={vi.fn()} />,
+    );
+    expect(screen.getByRole("button", { name: "Add Rectangle" }).getAttribute("aria-pressed")).toBe("true");
+  });
+});

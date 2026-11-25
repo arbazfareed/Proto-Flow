@@ -1,4 +1,4 @@
-import { useLayoutEffect, useRef, useState } from "react";
+import { memo, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { plainElementHint } from "./elementPlainHints";
 import { matchesElementQuery } from "./elementSearch";
 import type { RefObject } from "react";
@@ -399,24 +399,48 @@ function ElementLibraryContents({
   return mode === "popover" ? createPortal(contents, document.body) : contents;
 }
 
-export function ElementLibrary({
-  activeTool,
-  unlockedTools = [],
-  mode = "popover",
-  anchorRef,
-  onSelectTool,
-  onAddScreen,
-  onClose,
-}: ElementLibraryProps) {
+const NO_UNLOCKED_TOOLS: readonly ShapeTool[] = [];
+
+function sameTools(first: readonly ShapeTool[], second: readonly ShapeTool[]): boolean {
+  return first === second || (first.length === second.length && first.every((tool, index) => tool === second[index]));
+}
+
+// B44: the library does not depend on the project, but its parent is drawn again on every edit.
+// It is only drawn again when something it shows actually changes.
+const MemoElementLibraryContents = memo(
+  ElementLibraryContents,
+  (a, b) =>
+    a.activeTool === b.activeTool &&
+    a.mode === b.mode &&
+    a.anchorRef === b.anchorRef &&
+    sameTools(a.unlockedTools, b.unlockedTools) &&
+    a.onSelectTool === b.onSelectTool &&
+    a.onAddScreen === b.onAddScreen &&
+    a.onClose === b.onClose,
+);
+
+export function ElementLibrary(props: ElementLibraryProps) {
+  const { activeTool, unlockedTools = NO_UNLOCKED_TOOLS, mode = "popover", anchorRef } = props;
+  // The callbacks are new on every render of the parent. These never change and always call the latest.
+  const latest = useRef(props);
+  latest.current = props;
+  const handlers = useMemo(
+    () => ({
+      onSelectTool: (tool: ShapeTool) => latest.current.onSelectTool?.(tool),
+      onAddScreen: (category: DeviceCategory) => latest.current.onAddScreen(category),
+      onClose: () => latest.current.onClose?.(),
+    }),
+    [],
+  );
   return (
-    <ElementLibraryContents
+    <MemoElementLibraryContents
       activeTool={activeTool}
       unlockedTools={unlockedTools}
       mode={mode}
       anchorRef={anchorRef}
-      onSelectTool={onSelectTool ?? (() => undefined)}
-      onAddScreen={onAddScreen}
-      onClose={onClose ?? (() => undefined)}
+      onSelectTool={handlers.onSelectTool}
+      onAddScreen={handlers.onAddScreen}
+      onClose={handlers.onClose}
     />
   );
 }

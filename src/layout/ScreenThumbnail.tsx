@@ -13,6 +13,9 @@ export const SCREEN_THUMBNAIL_CACHE_LIMIT = 50;
 const RENDER_WIDTH = SCREEN_THUMBNAIL_WIDTH * 2;
 const RENDER_HEIGHT = SCREEN_THUMBNAIL_HEIGHT * 2;
 const RENDER_DEBOUNCE_MS = 200;
+// B44: while someone keeps editing, the hidden preview of every widget is not drawn. It starts
+// once the edits pause, and the old picture stays visible meanwhile.
+const STAGE_MOUNT_DEBOUNCE_MS = 400;
 const thumbnailCache = new Map<string, string>();
 
 export function getScreenThumbnailCacheKey(
@@ -69,6 +72,7 @@ export function ScreenThumbnail({
   const renderTimerRef = useRef<number | null>(null);
   const [isVisible, setIsVisible] = useState(false);
   const [failed, setFailed] = useState(false);
+  const [renderingKey, setRenderingKey] = useState<string | null>(null);
   const cacheKey = useMemo(
     () => getScreenThumbnailCacheKey(screen, breakpointId),
     [breakpointId, screen],
@@ -111,7 +115,8 @@ export function ScreenThumbnail({
     ),
     [baseDevice.height, baseDevice.width, breakpoint, screen.compactLayout, screen.widgets],
   );
-  const dataUrl = rendered?.key === cacheKey ? rendered.dataUrl : null;
+  const dataUrl = rendered?.dataUrl ?? null;
+  const showRenderer = isVisible && !failed && renderingKey === cacheKey && rendered?.key !== cacheKey;
 
   useEffect(() => {
     const element = observerRef.current;
@@ -157,6 +162,7 @@ export function ScreenThumbnail({
         cacheScreenThumbnail(cacheKey, result);
         setRendered({ key: cacheKey, dataUrl: result });
         setFailed(false);
+        setRenderingKey(null);
       } catch (error) {
         console.error(`Could not render a preview for screen "${screen.name}".`, error);
         setFailed(true);
@@ -168,19 +174,31 @@ export function ScreenThumbnail({
     const cached = getCachedScreenThumbnail(cacheKey);
     if (cached) {
       setRendered({ key: cacheKey, dataUrl: cached });
+      setRenderingKey(null);
       setFailed(false);
       return;
     }
-    setRendered(null);
     setFailed(false);
-    if (isVisible) scheduleRender();
+    if (!isVisible) return;
+    // No picture yet: draw it right away. Otherwise wait until the edits pause.
+    if (rendered === null) {
+      setRenderingKey(cacheKey);
+      return;
+    }
+    const timer = window.setTimeout(() => setRenderingKey(cacheKey), STAGE_MOUNT_DEBOUNCE_MS);
+    return () => window.clearTimeout(timer);
+    // `rendered` is read only to decide whether a picture exists yet.
+  }, [cacheKey, isVisible]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    if (showRenderer) scheduleRender();
     return () => {
       if (renderTimerRef.current !== null) {
         window.clearTimeout(renderTimerRef.current);
         renderTimerRef.current = null;
       }
     };
-  }, [cacheKey, isVisible, scheduleRender]);
+  }, [showRenderer, scheduleRender]);
 
   const frameRadius = chrome?.notch === "watch"
     ? Math.min(width, height) / 2
@@ -202,11 +220,11 @@ export function ScreenThumbnail({
       ) : failed ? (
         <span className="screen-thumbnail-fallback">Preview unavailable</span>
       ) : (
-        <>
-          <span className="screen-thumbnail-placeholder">
-            {empty ? "Empty screen" : "Rendering preview…"}
-          </span>
-          {isVisible && (
+        <span className="screen-thumbnail-placeholder">
+          {empty ? "Empty screen" : "Rendering preview…"}
+        </span>
+      )}
+      {showRenderer && (
             <span className="screen-thumbnail-renderer">
               <Stage
                 ref={stageRef}
@@ -352,8 +370,6 @@ export function ScreenThumbnail({
                 </Layer>
               </Stage>
             </span>
-          )}
-        </>
       )}
     </div>
   );
