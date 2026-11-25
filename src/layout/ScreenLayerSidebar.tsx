@@ -57,6 +57,7 @@ import {
   serializeLayerDragPayload,
 } from "../project/layerDrag";
 import { useStore } from "../store";
+import { useSettledHoveredWidget } from "./useSettledHoveredWidget";
 import { CategoryHeader } from "./CategoryHeader";
 import {
   buildLayerGroups,
@@ -391,7 +392,7 @@ export function ScreenLayerSidebar({ tutorialProjectId }: { tutorialProjectId: s
   const activeScreenId = useStore((state) => state.getActiveScreenId());
   const activeBreakpointId = useStore((state) => state.activeBreakpointId);
   const selectedIds = useStore((state) => state.selectedIds);
-  const hoveredWidgetId = useStore((state) => state.hoveredWidgetId);
+  const hoveredWidgetId = useSettledHoveredWidget();
   const activeScreen = project.screens.find((screen) => screen.id === activeScreenId);
   const activeBreakpoint = useMemo(
     () => activeScreen ? resolveActiveBreakpoint(activeScreen, activeBreakpointId) : undefined,
