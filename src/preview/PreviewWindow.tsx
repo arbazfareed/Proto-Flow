@@ -1161,6 +1161,27 @@ export function PreviewWindow() {
     return publishRunResult(runtime, runtime.runEvent(widget, event, item));
   }, [publishRunResult]);
 
+  // B49: what the runtime needs from this window for Open link and Wait.
+  const openLink = useCallback((url: string) => {
+    if (isTauri()) {
+      // This window is isolated and may not open anything; the main window opens it after checking it.
+      void emit("preview:open-link", { url }).catch((error: unknown) => {
+        setToast(error instanceof Error ? error.message : "Could not open the link.");
+      });
+    } else if (!window.open(url, "_blank", "noopener,noreferrer")) {
+      setToast("The browser blocked the link. Allow pop-ups for this page to open it.");
+    }
+  }, []);
+
+  useEffect(() => {
+    const runtime = runtimeRef.current;
+    if (!runtime) return;
+    runtime.onOpenLink = openLink;
+    runtime.onDelayedRun = (errors) => publishRunResult(runtime, errors);
+  }, [openLink, project, publishRunResult]);
+
+  useEffect(() => () => runtimeRef.current?.dispose(), []);
+
   const runLoadEvents = useCallback((widgets: Widget[]) => {
     const runtime = runtimeRef.current;
     if (!runtime) return 0;

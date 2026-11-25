@@ -24,6 +24,7 @@ import {
   type RepeaterRecord,
 } from "../project/repeaters";
 import { evaluateExpression, interpolateExpressions } from "../project/expressions";
+import { MAX_WAIT_MS, normalizeLinkUrl } from "../project/interactionSchema";
 
 function resolveExpressionValue(
   value: unknown,
@@ -114,6 +115,13 @@ export class PreviewRuntime {
   private repeaterData: Record<string, unknown> = {};
   private widgetTexts: Record<string, string> = {};
   lastRunRuleCount = 0;
+  /** B49: how the preview opens an address for an Open link action. Not set, the action does nothing. */
+  onOpenLink?: (url: string) => void;
+  /** B49: called with any errors after the rest of a rule has run following a Wait, so the screen can redraw. */
+  onDelayedRun?: (errors: string[]) => void;
+  private readonly waitTimers = new Set<ReturnType<typeof setTimeout>>();
+  // B49: an On load rule that reached a Wait has not moved yet, so its screen load must not reset the loop count.
+  private loadWaitScheduled = false;
   // B39: how many screen loads in a row were sent straight on to another screen by an On load rule.
   private loadNavigationChain = 0;
   private inLoadEvents = false;
@@ -177,7 +185,14 @@ export class PreviewRuntime {
     }
   }
 
+  /** Stops every Wait that has not finished (B49). Used on restart and when the preview closes. */
+  dispose(): void {
+    for (const timer of this.waitTimers) clearTimeout(timer);
+    this.waitTimers.clear();
+  }
+
   restart(): void {
+    this.dispose();
     this.variables.reset();
     this.screenId = this.project.startScreenId;
     this.backStack = [];
@@ -289,6 +304,7 @@ export class PreviewRuntime {
     }
     const startScreenId = this.screenId;
     this.inLoadEvents = true;
+    this.loadWaitScheduled = false;
     try {
     for (const rule of screen.interactionRules) {
       if (rule.event !== "onLoad") continue;
@@ -305,7 +321,9 @@ export class PreviewRuntime {
     } finally {
       this.inLoadEvents = false;
     }
-    this.loadNavigationChain = this.screenId !== startScreenId ? this.loadNavigationChain + 1 : 0;
+    this.loadNavigationChain = this.screenId !== startScreenId
+      ? this.loadNavigationChain + 1
+      : this.loadWaitScheduled ? this.loadNavigationChain : 0;
     return errors;
   }
 
@@ -389,14 +407,71 @@ export class PreviewRuntime {
     return Object.fromEntries(definitions.map(({ name, initial }) => [name, initial]));
   }
 
+  /**
+   * A Wait stops the rule here and picks it up again after the time, with the same screen, widget
+   * and local variables (B49). Time spent waiting is not blocked on: the preview stays usable.
+   */
+  private scheduleWait(
+    rule: InteractionRule,
+    screen: Screen,
+    item: RepeaterRecord | undefined,
+    widget: Widget | undefined,
+    localVariables: Record<string, RuntimeVariableValue>,
+    nextIndex: number,
+    milliseconds: number,
+  ): void {
+    const fromLoad = this.inLoadEvents;
+    if (fromLoad) this.loadWaitScheduled = true;
+    const delay = Math.min(Math.max(Number.isFinite(milliseconds) ? milliseconds : 0, 0), MAX_WAIT_MS);
+    const timer = setTimeout(() => {
+      this.waitTimers.delete(timer);
+      this.resumeAfterWait(rule, screen, item, widget, localVariables, nextIndex, fromLoad);
+    }, delay);
+    this.waitTimers.add(timer);
+  }
+
+  private resumeAfterWait(
+    rule: InteractionRule,
+    screen: Screen,
+    item: RepeaterRecord | undefined,
+    widget: Widget | undefined,
+    localVariables: Record<string, RuntimeVariableValue>,
+    nextIndex: number,
+    fromLoad: boolean,
+  ): void {
+    this.lastRunRuleCount = 0;
+    this.lastAddedRepeaterRows = 0;
+    this.lastPanelStateChanges = 0;
+    // B39: a rule that started from an On load keeps counting as an automatic move after a Wait,
+    // so screens that wait and then send each other on still stop after 20 moves.
+    if (fromLoad && this.loadNavigationChain >= MAX_AUTOMATIC_NAVIGATIONS) {
+      this.onDelayedRun?.([LOOP_DETECTED_MESSAGE]);
+      return;
+    }
+    const errors: string[] = [];
+    const startScreenId = this.screenId;
+    this.inLoadEvents = fromLoad;
+    try {
+      this.runActions(rule, screen, item, widget, localVariables, nextIndex);
+    } catch (error) {
+      errors.push(error instanceof Error ? error.message : "Interaction action failed.");
+    } finally {
+      this.inLoadEvents = false;
+    }
+    if (fromLoad) this.loadNavigationChain = this.screenId !== startScreenId ? this.loadNavigationChain + 1 : 0;
+    this.onDelayedRun?.(errors);
+  }
+
   private runActions(
     rule: InteractionRule,
     screen: Screen,
     item?: RepeaterRecord,
     widget?: Widget,
     localVariables: Record<string, RuntimeVariableValue> = {},
+    startIndex = 0,
   ): void {
-    for (const action of rule.actions) {
+    for (let index = startIndex; index < rule.actions.length; index += 1) {
+      const action = rule.actions[index];
       const actionValue = resolveExpressionValue(
         action.value,
         this.expressionContext(widget, item, localVariables),
@@ -414,6 +489,27 @@ export class PreviewRuntime {
           }
           this.visibility[action.target] = action.type === "show";
           break;
+        case "toggle": {
+          // B49: show it if it is hidden, hide it if it is showing.
+          const toggled = collectWidgetsDeep(screen.widgets).find((entry) => entry.id === action.target);
+          if (!toggled) throw new Error(`Visibility action target "${action.target}" is missing.`);
+          this.visibility[toggled.id] = !(this.visibility[toggled.id] ?? toggled.visible);
+          break;
+        }
+        case "goBack":
+          this.back();
+          break;
+        case "openLink": {
+          const link = normalizeLinkUrl(actionValue);
+          if (!link) {
+            throw new Error("Open link needs an address that starts with https://, http://, mailto: or tel:.");
+          }
+          this.onOpenLink?.(link);
+          break;
+        }
+        case "wait":
+          this.scheduleWait(rule, screen, item, widget, localVariables, index + 1, action.duration ?? 0);
+          return;
         case "setWidgetText":
           {
           const target = collectWidgetsDeep(screen.widgets).find((item) => item.id === action.target);

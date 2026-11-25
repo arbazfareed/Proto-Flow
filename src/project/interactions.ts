@@ -9,7 +9,12 @@ import type {
   Widget,
 } from "./schema";
 import { isValidVariableName } from "./schema";
-import { isValidInteractionLocalVariableName } from "./interactionSchema";
+import {
+  isDynamicLinkUrl,
+  isValidInteractionLocalVariableName,
+  NO_TARGET_ACTION_TYPES,
+  normalizeLinkUrl,
+} from "./interactionSchema";
 import { VariableRuntimeStore } from "./variables";
 import { collectWidgetsDeep, getPanelStates } from "./dynamicPanels";
 import { evaluateExpression } from "./expressions";
@@ -18,7 +23,7 @@ import { compareCondition } from "./conditionCompare";
 export type InteractionIssue = {
   severity: "error" | "warning";
   code: "unknown-target" | "self-visibility" | "navigation-cycle" | "type-mismatch" |
-    "unused-local" | "invalid-local" | "duplicate-local";
+    "unused-local" | "invalid-local" | "duplicate-local" | "invalid-value";
   message: string;
   ruleId: string;
 };
@@ -135,11 +140,32 @@ function describeAction(
       return destination ? `Navigate to ${destination.name}` : `Unknown screen: ${action.target}`;
     }
     case "show":
-    case "hide": {
+    case "hide":
+    case "toggle": {
       const widget = collectWidgetsDeep(screen.widgets).find((item) => item.id === action.target);
+      const verb = action.type === "show" ? "Show" : action.type === "hide" ? "Hide" : "Toggle";
       return widget
-        ? `${action.type === "show" ? "Show" : "Hide"} ${widget.name ?? widget.type}`
+        ? `${verb} ${widget.name ?? widget.type}`
         : `Unknown widget: ${action.target}`;
+    }
+    case "goBack":
+      return "Go back to the previous screen";
+    case "wait":
+      return `Wait ${action.duration ?? 0} ms, then continue`;
+    case "openLink": {
+      let address: unknown = action.value;
+      if (typeof address === "string") {
+        const expression = /^\[\[([\s\S]*?)\]\]$/.exec(address);
+        if (expression) {
+          try {
+            address = evaluateExpression(expression[1].trim(), getExpressionContext());
+          } catch {
+            return "Invalid expression for the link address";
+          }
+        }
+      }
+      const link = normalizeLinkUrl(address);
+      return link ? `Open link ${link}` : "Invalid link: only https://, http://, mailto: and tel: addresses open";
     }
     case "setVariable": {
       const localVariable = localDefinitions.find((item) => item.name === action.target);
@@ -317,6 +343,31 @@ export function validateInteractionRules(project: Project, screen: Screen): Inte
       }
 
       for (const action of rule.actions) {
+        if (action.type === "openLink") {
+          // The address is checked now unless it is filled in while the prototype runs.
+          if (ownerScreen.id === screen.id && (typeof action.value !== "string" ||
+            (!isDynamicLinkUrl(action.value) && !normalizeLinkUrl(action.value)))) {
+            issues.push({
+              severity: "error",
+              code: "invalid-value",
+              message: "Open link needs an address that starts with https://, http://, mailto: or tel:.",
+              ruleId: rule.id,
+            });
+          }
+          continue;
+        }
+        if (action.type === "wait") {
+          if (ownerScreen.id === screen.id && (typeof action.duration !== "number" || action.duration < 0)) {
+            issues.push({
+              severity: "error",
+              code: "invalid-value",
+              message: "Wait needs a time in milliseconds.",
+              ruleId: rule.id,
+            });
+          }
+          continue;
+        }
+        if (NO_TARGET_ACTION_TYPES.has(action.type)) continue;
         if (!action.target.trim()) {
           if (ownerScreen.id === screen.id) {
             issues.push({
@@ -343,7 +394,7 @@ export function validateInteractionRules(project: Project, screen: Screen): Inte
             targets.add(action.target);
             navigation.set(ownerScreen.id, targets);
           }
-        } else if (action.type === "show" || action.type === "hide" ||
+        } else if (action.type === "show" || action.type === "hide" || action.type === "toggle" ||
           action.type === "setPanelState" || ["setRepeaterData", "addRepeaterRow",
             "removeRepeaterRow", "sortRepeater", "filterRepeater"].includes(action.type)) {
           const targetScreen = project.screens.find((item) =>
@@ -389,7 +440,7 @@ export function validateInteractionRules(project: Project, screen: Screen): Inte
             });
           } else if (
             ownerScreen.id === screen.id &&
-            (action.type === "show" || action.type === "hide") &&
+            (action.type === "show" || action.type === "hide" || action.type === "toggle") &&
             rule.widgetId === action.target
           ) {
             issues.push({

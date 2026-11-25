@@ -51,10 +51,41 @@ export const InteractionConditionSchema = z
   })
   .strict();
 
-export const InteractionActionSchema = z
+/**
+ * Actions that need no target widget or screen (B49): Go back has nothing to point at, Wait is only a
+ * time, and Open link carries its address in `value` (so it can use {{variables}} and [[expressions]]).
+ */
+export const NO_TARGET_ACTION_TYPES: ReadonlySet<string> = new Set(["goBack", "wait", "openLink"]);
+
+/** The longest a Wait can be, in milliseconds. */
+export const MAX_WAIT_MS = 10_000;
+
+/**
+ * The address to open for an Open link action, or null if it is not one we allow. Only complete
+ * web, email and phone addresses are opened (https:, http:, mailto:, tel:); anything else, such as
+ * javascript: or file:, never is, whatever a project file says.
+ */
+export function normalizeLinkUrl(value: unknown): string | null {
+  if (typeof value !== "string") return null;
+  const text = value.trim();
+  if (!text || /[\u0000-\u001f\u007f]/.test(text)) return null;
+  try {
+    const url = new URL(text);
+    return ["https:", "http:", "mailto:", "tel:"].includes(url.protocol) ? url.href : null;
+  } catch {
+    return null;
+  }
+}
+
+/** An address that is filled in when the prototype runs ({{variable}} or [[expression]]), so it cannot be checked yet. */
+export function isDynamicLinkUrl(value: string): boolean {
+  return /\{\{|\[\[/.test(value);
+}
+
+const InteractionActionObjectSchema = z
   .object({
     type: z.string().trim().min(1),
-    target: z.string().trim().min(1),
+    target: z.string().trim(),
     value: z.unknown().optional(),
     stateId: z.string().uuid().optional(),
     transition: z.enum([
@@ -65,9 +96,29 @@ export const InteractionActionSchema = z
       "slide-up",
       "slide-down",
     ]).optional(),
-    duration: z.number().finite().min(0).max(10_000).optional(),
+    duration: z.number().finite().min(0).max(MAX_WAIT_MS).optional(),
   })
   .strict();
+
+export const InteractionActionSchema = InteractionActionObjectSchema.superRefine((action, context) => {
+  if (!NO_TARGET_ACTION_TYPES.has(action.type) && action.target.length === 0) {
+    context.addIssue({ code: "custom", path: ["target"], message: "Choose a target for this action." });
+  }
+  if (action.type === "openLink") {
+    if (typeof action.value !== "string" || !action.value.trim()) {
+      context.addIssue({ code: "custom", path: ["value"], message: "Open link needs a web address." });
+    } else if (!isDynamicLinkUrl(action.value) && !normalizeLinkUrl(action.value)) {
+      context.addIssue({
+        code: "custom",
+        path: ["value"],
+        message: "Open link only opens addresses that start with https://, http://, mailto: or tel:.",
+      });
+    }
+  }
+  if (action.type === "wait" && action.duration === undefined) {
+    context.addIssue({ code: "custom", path: ["duration"], message: "Wait needs a time in milliseconds." });
+  }
+});
 
 export const InteractionRuleSchema = z
   .object({

@@ -6,6 +6,7 @@ import { isTauri } from "@tauri-apps/api/core";
 import { currentMonitor, getCurrentWindow } from "@tauri-apps/api/window";
 import { LogicalSize } from "@tauri-apps/api/dpi";
 import { emitTo, listen } from "@tauri-apps/api/event";
+import { normalizeLinkUrl } from "./project/interactionSchema";
 import { WebviewWindow } from "@tauri-apps/api/webviewWindow";
 import { open as openExternal } from "@tauri-apps/plugin-shell";
 import { getCurrent, onOpenUrl } from "@tauri-apps/plugin-deep-link";
@@ -308,14 +309,26 @@ function AppShell() {
         const stopClosed = await listen("preview:closed", () => {
           previewConnected.current = false;
         });
+        // B49: the isolated preview window may not open anything itself, so an Open link action asks
+        // this window to. The address is checked again here, whatever the message says.
+        const stopOpenLink = await listen<{ url?: unknown }>("preview:open-link", (event) => {
+          const link = normalizeLinkUrl(event.payload?.url);
+          if (!link) return;
+          void openExternal(link).catch((error: unknown) => {
+            console.error("Could not open the link from the preview.", error);
+            notify(error instanceof Error ? error.message : "Could not open the link.", true);
+          });
+        });
         if (disposed) {
           stop();
           stopClosed();
+          stopOpenLink();
           return;
         }
         unlisten = () => {
           stop();
           stopClosed();
+          stopOpenLink();
         };
       };
       void setup().catch((error: unknown) => {

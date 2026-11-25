@@ -229,8 +229,42 @@ function showLoopNotice() {
   notice.style.cssText = "position:fixed;left:12px;right:12px;bottom:12px;padding:10px 14px;border-radius:8px;background:#7f1d1d;color:#fff;font:14px system-ui,sans-serif;z-index:2147483647";
   document.body.append(notice);
 }
-function actions(rule, activeScreen, item, widget, localVariables) {
-  for (const action of rule.actions) {
+// B49: Open link only opens complete web, email and phone addresses; javascript:, file: and the like never.
+function safeLinkUrl(value) {
+  if (typeof value !== "string") return null;
+  const text = value.trim();
+  if (!text || /[\u0000-\u001f\u007f]/.test(text)) return null;
+  try {
+    const url = new URL(text);
+    return ["https:", "http:", "mailto:", "tel:"].includes(url.protocol) ? url.href : null;
+  } catch (error) {
+    return null;
+  }
+}
+// B49: a Wait stops the rule and picks it up again later, so the page stays usable while it waits.
+const waitTimers = new Set();
+let waitLoadChain = 0;
+function scheduleWait(rule, ruleScreenId, item, widget, localVariables, nextIndex, milliseconds) {
+  const fromLoad = loadDepth > 0;
+  const delay = Math.min(Math.max(Number(milliseconds) || 0, 0), 10000);
+  const timer = setTimeout(() => {
+    waitTimers.delete(timer);
+    // B39: a rule that started from an On load keeps counting as an automatic move after a Wait.
+    if (fromLoad && waitLoadChain >= MAX_AUTOMATIC_LOADS) { showLoopNotice(); return; }
+    const before = screenId;
+    try {
+      actions(rule, ruleScreenId, item, widget, localVariables, nextIndex);
+    } catch (error) {
+      console.error("Interaction action failed after a wait.", error);
+    }
+    if (fromLoad) waitLoadChain = screenId !== before ? waitLoadChain + 1 : 0;
+    render();
+  }, delay);
+  waitTimers.add(timer);
+}
+function actions(rule, activeScreen, item, widget, localVariables, startIndex = 0) {
+  for (let index = startIndex; index < rule.actions.length; index += 1) {
+    const action = rule.actions[index];
     if (action.type === "navigate" || action.type === "navigateTo") {
       if (project.screens.some((item) => item.id === action.target) && action.target !== screenId) {
         backStack.push(screenId);
@@ -239,6 +273,21 @@ function actions(rule, activeScreen, item, widget, localVariables) {
       }
     } else if (action.type === "show" || action.type === "hide") {
       visibility.set(action.target, action.type === "show");
+    } else if (action.type === "toggle") {
+      const owner = project.screens.find((entry) => entry.id === activeScreen) || screen();
+      const toggled = allWidgets(owner.widgets).find((entry) => entry.id === action.target);
+      if (!toggled) throw new Error("Visibility action target is missing.");
+      visibility.set(action.target, !widgetVisible(toggled, owner));
+    } else if (action.type === "goBack") {
+      const previous = backStack.pop();
+      if (previous) { screenId = previous; loadedScreen = ""; }
+    } else if (action.type === "openLink") {
+      const link = safeLinkUrl(actionValue(action.value, item, widget, localVariables));
+      if (!link) throw new Error("Open link needs an address that starts with https://, http://, mailto: or tel:.");
+      window.open(link, "_blank", "noopener,noreferrer");
+    } else if (action.type === "wait") {
+      scheduleWait(rule, activeScreen, item, widget, localVariables, index + 1, action.duration);
+      return;
     } else if (action.type === "setVariable") {
       setVariable(action.target, actionValue(action.value, item, widget, localVariables), activeScreen, localVariables);
     } else if (action.type === "setPanelState") {
@@ -282,6 +331,7 @@ function keyMatches(ruleKey, pressedKey) {
   return String(ruleKey).toLowerCase() === String(pressedKey).toLowerCase();
 }
 function fire(widget, event, item, renderAfter = true, pressedKey = "") {
+  waitLoadChain = 0;
   const activeScreen = screen();
   let matchedRule = false;
   for (const rule of activeScreen.interactionRules.filter((item) => item.event === event && (!item.widgetId || item.widgetId === widget.id) && (event !== "onKeyDown" || keyMatches(item.key, pressedKey)))) {
@@ -872,6 +922,7 @@ function render() {
 }
 screenPicker.addEventListener("change", () => {
   if (project.screens.some((item) => item.id === screenPicker.value)) {
+    waitLoadChain = 0;
     backStack.push(screenId);
     screenId = screenPicker.value;
     loadedScreen = "";
@@ -879,11 +930,15 @@ screenPicker.addEventListener("change", () => {
   }
 });
 backButton.addEventListener("click", () => {
+  waitLoadChain = 0;
   screenId = backStack.pop() || screenId;
   loadedScreen = "";
   render();
 });
 document.getElementById("restart").addEventListener("click", () => {
+  for (const timer of waitTimers) clearTimeout(timer);
+  waitTimers.clear();
+  waitLoadChain = 0;
   variables.clear();
   for (const item of project.variables) variables.set(item.id, item.initial);
   visibility.clear();

@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { createEmptyProject, type InteractionRule, type Project, type Widget } from "../project/schema";
 import { PreviewRuntime } from "./runtime";
 import { evaluateExpression } from "../project/expressions";
@@ -603,5 +603,267 @@ describe("PreviewRuntime", () => {
       variable: expect.objectContaining({ name: "score", scope: "project" }),
       value: 1,
     }));
+  });
+});
+
+describe("PreviewRuntime: Go back, Toggle, Open link and Wait (B49)", () => {
+  const rule = (actions: InteractionRule["actions"], event: InteractionRule["event"] = "onClick"): InteractionRule => ({
+    id: crypto.randomUUID(), event, conditionMode: "all", conditions: [], actions,
+  });
+  const click = (runtime: PreviewRuntime) =>
+    runtime.runEvent(runtime.currentScreen.widgets[0], "onClick");
+
+  it("Go back returns to the screen the person came from, and does nothing at the start", () => {
+    const project = createProject();
+    const [first, second] = project.screens;
+    first.interactionRules = [rule([{ type: "navigate", target: second.id }])];
+    second.widgets = [makeWidget()];
+    second.interactionRules = [rule([{ type: "goBack", target: "" }])];
+    const runtime = new PreviewRuntime(project);
+    expect(click(runtime)).toEqual([]);
+    expect(runtime.currentScreenId).toBe(second.id);
+    expect(click(runtime)).toEqual([]);
+    expect(runtime.currentScreenId).toBe(first.id);
+    // Nothing to go back to: stays put, with no error.
+    first.interactionRules = [rule([{ type: "goBack", target: "" }])];
+    const fresh = new PreviewRuntime(project);
+    expect(click(fresh)).toEqual([]);
+    expect(fresh.currentScreenId).toBe(first.id);
+  });
+
+  it("Toggle shows a hidden widget and hides a showing one, each time it runs", () => {
+    const project = createProject();
+    const first = project.screens[0];
+    const target = first.widgets[1];
+    first.interactionRules = [rule([{ type: "toggle", target: target.id }])];
+    const runtime = new PreviewRuntime(project);
+    expect(runtime.snapshot().visibility[target.id]).toBe(true);
+    click(runtime);
+    expect(runtime.snapshot().visibility[target.id]).toBe(false);
+    click(runtime);
+    expect(runtime.snapshot().visibility[target.id]).toBe(true);
+  });
+
+  it("Toggle starts from a widget that is hidden in the project", () => {
+    const project = createProject();
+    const first = project.screens[0];
+    first.widgets[1].visible = false;
+    first.interactionRules = [rule([{ type: "toggle", target: first.widgets[1].id }])];
+    const runtime = new PreviewRuntime(project);
+    click(runtime);
+    expect(runtime.snapshot().visibility[first.widgets[1].id]).toBe(true);
+  });
+
+  it("Toggle reports a missing widget instead of throwing", () => {
+    const project = createProject();
+    project.screens[0].interactionRules = [rule([{ type: "toggle", target: crypto.randomUUID() }])];
+    expect(click(new PreviewRuntime(project))[0]).toMatch(/is missing/);
+  });
+
+  it("Open link hands a safe address to the preview, with variables filled in", () => {
+    const project = createProject();
+    project.screens[0].interactionRules = [
+      rule([{ type: "openLink", target: "", value: "https://example.com/items?n={{count}}" }]),
+    ];
+    const runtime = new PreviewRuntime(project);
+    const opened: string[] = [];
+    runtime.onOpenLink = (url) => opened.push(url);
+    expect(click(runtime)).toEqual([]);
+    expect(opened).toEqual(["https://example.com/items?n=0"]);
+  });
+
+  it("Open link accepts email and phone addresses and an expression", () => {
+    const project = createProject();
+    const [first] = project.screens;
+    first.interactionRules = [
+      rule([{ type: "openLink", target: "", value: "mailto:hello@example.com" }]),
+      rule([{ type: "openLink", target: "", value: "tel:+15551234567" }]),
+      rule([{ type: "openLink", target: "", value: "[[ concat('https://example.com/', 'a b') ]]" }]),
+    ];
+    const runtime = new PreviewRuntime(project);
+    const opened: string[] = [];
+    runtime.onOpenLink = (url) => opened.push(url);
+    expect(click(runtime)).toEqual([]);
+    expect(opened).toEqual(["mailto:hello@example.com", "tel:+15551234567", "https://example.com/a%20b"]);
+  });
+
+  it("Open link never opens javascript:, file:, data: or an address with no scheme", () => {
+    for (const value of ["javascript:alert(1)", "file:///etc/passwd", "data:text/html,hi", "example.com", "//example.com", "", "  "]) {
+      const project = createProject();
+      project.screens[0].interactionRules = [rule([{ type: "openLink", target: "", value }])];
+      const runtime = new PreviewRuntime(project);
+      const opened: string[] = [];
+      runtime.onOpenLink = (url) => opened.push(url);
+      expect(click(runtime)[0], JSON.stringify(value)).toMatch(/Open link needs an address/);
+      expect(opened, JSON.stringify(value)).toEqual([]);
+    }
+    // An address filled in while running is checked after it is filled in.
+    const project = createProject();
+    project.screens[0].interactionRules = [rule([{ type: "openLink", target: "", value: "[[ 'javascript:' + 'alert(1)' ]]" }])];
+    const runtime = new PreviewRuntime(project);
+    const opened: string[] = [];
+    runtime.onOpenLink = (url) => opened.push(url);
+    expect(click(runtime)[0]).toMatch(/Open link needs an address/);
+    expect(opened).toEqual([]);
+  });
+
+  describe("Wait", () => {
+    const countRule = (...actions: InteractionRule["actions"]) => rule(actions);
+    const set = (value: number): InteractionRule["actions"][number] => ({ type: "setVariable", target: "count", value });
+    const count = (runtime: PreviewRuntime) => runtime.getVariable("count");
+
+    it("runs the actions before it now and the actions after it once the time has passed", async () => {
+      vi.useFakeTimers();
+      try {
+        const project = createProject();
+        project.screens[0].interactionRules = [countRule(set(1), { type: "wait", target: "", duration: 500 }, set(2))];
+        const runtime = new PreviewRuntime(project);
+        const later: string[][] = [];
+        runtime.onDelayedRun = (errors) => later.push(errors);
+
+        expect(click(runtime)).toEqual([]);
+        expect(count(runtime)).toBe(1);
+        vi.advanceTimersByTime(499);
+        expect(count(runtime)).toBe(1);
+        expect(later).toEqual([]);
+        vi.advanceTimersByTime(1);
+        expect(count(runtime)).toBe(2);
+        // The screen is told so it can redraw, once.
+        expect(later).toEqual([[]]);
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it("keeps going through several Waits in one rule, in order", () => {
+      vi.useFakeTimers();
+      try {
+        const project = createProject();
+        project.screens[0].interactionRules = [countRule(
+          set(1), { type: "wait", target: "", duration: 100 }, set(2), { type: "wait", target: "", duration: 200 }, set(3),
+        )];
+        const runtime = new PreviewRuntime(project);
+        click(runtime);
+        vi.advanceTimersByTime(100);
+        expect(count(runtime)).toBe(2);
+        vi.advanceTimersByTime(199);
+        expect(count(runtime)).toBe(2);
+        vi.advanceTimersByTime(1);
+        expect(count(runtime)).toBe(3);
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it("can move to another screen after the wait, as a splash screen does", () => {
+      vi.useFakeTimers();
+      try {
+        const project = createProject();
+        const [first, second] = project.screens;
+        first.interactionRules = [rule([{ type: "wait", target: "", duration: 2000 }, { type: "navigate", target: second.id }], "onLoad")];
+        const runtime = new PreviewRuntime(project);
+        const later: string[][] = [];
+        runtime.onDelayedRun = (errors) => later.push(errors);
+        expect(runtime.runLoadEvents(first.widgets)).toEqual([]);
+        expect(runtime.currentScreenId).toBe(first.id);
+        vi.advanceTimersByTime(2000);
+        expect(runtime.currentScreenId).toBe(second.id);
+        expect(later).toEqual([[]]);
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it("reports an error in the part after the wait through onDelayedRun", () => {
+      vi.useFakeTimers();
+      try {
+        const project = createProject();
+        project.screens[0].interactionRules = [countRule({ type: "wait", target: "", duration: 10 }, { type: "toggle", target: crypto.randomUUID() })];
+        const runtime = new PreviewRuntime(project);
+        const later: string[][] = [];
+        runtime.onDelayedRun = (errors) => later.push(errors);
+        expect(click(runtime)).toEqual([]);
+        vi.advanceTimersByTime(10);
+        expect(later).toHaveLength(1);
+        expect(later[0][0]).toMatch(/is missing/);
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it("is cancelled by Restart and by dispose, so nothing happens after the preview is reset or closed", () => {
+      vi.useFakeTimers();
+      try {
+        const project = createProject();
+        project.screens[0].interactionRules = [countRule({ type: "wait", target: "", duration: 100 }, set(9))];
+        const runtime = new PreviewRuntime(project);
+        const later: string[][] = [];
+        runtime.onDelayedRun = (errors) => later.push(errors);
+        click(runtime);
+        runtime.restart();
+        vi.advanceTimersByTime(1000);
+        expect(count(runtime)).toBe(0);
+        click(runtime);
+        runtime.dispose();
+        vi.advanceTimersByTime(1000);
+        expect(count(runtime)).toBe(0);
+        expect(later).toEqual([]);
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it("still stops two screens that wait and then send each other on load (B39)", () => {
+      vi.useFakeTimers();
+      try {
+        const project = createProject();
+        const [first, second] = project.screens;
+        const goTo = (target: string) => rule([{ type: "wait", target: "", duration: 0 }, { type: "navigate", target }], "onLoad");
+        first.interactionRules = [goTo(second.id)];
+        second.interactionRules = [goTo(first.id)];
+        const runtime = new PreviewRuntime(project);
+        let moves = 0;
+        let loopMessage: string | undefined;
+        const noteLoop = (errors: string[]) => {
+          loopMessage ??= errors.find((message) => message.startsWith("Loop detected"));
+        };
+        runtime.onDelayedRun = (errors) => {
+          noteLoop(errors);
+          if (loopMessage) return;
+          moves += 1;
+          // What the preview window does after a screen changes: run the new screen's On load rules
+          // and show what that returns (that is where the loop notice comes from).
+          noteLoop(runtime.runLoadEvents(runtime.currentScreen.widgets));
+        };
+        noteLoop(runtime.runLoadEvents(runtime.currentScreen.widgets));
+        vi.advanceTimersByTime(60_000);
+        expect(loopMessage).toBeDefined();
+        expect(moves).toBeGreaterThan(5);
+        expect(moves).toBeLessThanOrEqual(22);
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it("does not warn when a waiting On load rule only runs once", () => {
+      vi.useFakeTimers();
+      try {
+        const project = createProject();
+        const [first, second] = project.screens;
+        first.interactionRules = [rule([{ type: "wait", target: "", duration: 50 }, { type: "navigate", target: second.id }], "onLoad")];
+        const runtime = new PreviewRuntime(project);
+        const later: string[][] = [];
+        runtime.onDelayedRun = (errors) => {
+          later.push(errors);
+          runtime.runLoadEvents(runtime.currentScreen.widgets);
+        };
+        runtime.runLoadEvents(first.widgets);
+        vi.advanceTimersByTime(10_000);
+        expect(later).toEqual([[]]);
+        expect(runtime.currentScreenId).toBe(second.id);
+      } finally {
+        vi.useRealTimers();
+      }
+    });
   });
 });
