@@ -2,7 +2,9 @@
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "default",
   "description": "Capability for the main window",
-  "windows": ["main"],
+  "windows": [
+    "main"
+  ],
   "permissions": [
     "core:default",
     "dialog:default",
@@ -20,6 +22,26 @@
     "deep-link:default",
     "process:default",
     "shell:allow-open",
-    "updater:default"
+    "updater:default",
+    "allow-set-crash-reporting-consent",
+    "allow-append-diagnostic-log",
+    "allow-export-diagnostic-logs",
+    "allow-get-diagnostics-platform",
+    "allow-save-project",
+    "allow-open-project",
+    "allow-load-project-history",
+    "allow-save-project-history",
+    "allow-save-project-as",
+    "allow-pick-project-save-path",
+    "allow-save-html-export",
+    "allow-save-image-asset",
+    "allow-read-image-asset",
+    "allow-read-dropped-image",
+    "allow-get-device-id",
+    "allow-get-wallet-identity",
+    "allow-reset-wallet-identity",
+    "allow-get-wallet-jwt",
+    "allow-save-wallet-jwt",
+    "allow-clear-wallet-jwt"
   ]
 }
