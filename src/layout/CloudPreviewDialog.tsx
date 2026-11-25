@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Check, Copy, ExternalLink, Link2, Trash2, X } from "lucide-react";
 import { generatePublishedPreviewHtml, publishedBundleSize } from "../preview/publishBundle";
 import { ensureProjectIcons } from "../preview/iconExport";
+import { embedRemoteImages, type PreparedPreview } from "../preview/remoteMedia";
 import { useFullIconSet } from "../canvas/iconLibrary";
 import { useStore } from "../store";
 import {
@@ -42,7 +43,21 @@ export function CloudPreviewDialog({ onClose }: { onClose: () => void }) {
   // Icons beyond the built-in set are drawn once the full set has loaded (B77).
   const iconsReady = useFullIconSet();
   useEffect(() => { void ensureProjectIcons(project).catch(() => undefined); }, [project]);
-  const bundle = useMemo(() => generatePublishedPreviewHtml(project), [project, iconsReady]);
+  // B23: a shared preview can only load pictures that are inside the page, so web pictures are embedded
+  // first. `prepared` is null while that runs; what cannot be embedded is listed below.
+  const [prepared, setPrepared] = useState<PreparedPreview | null>(null);
+  useEffect(() => {
+    let active = true;
+    setPrepared(null);
+    void embedRemoteImages(project).then((result) => {
+      if (active) setPrepared(result);
+    });
+    return () => {
+      active = false;
+    };
+  }, [project]);
+  const publishable = prepared?.project ?? project;
+  const bundle = useMemo(() => generatePublishedPreviewHtml(publishable), [publishable, iconsReady]);
   const bundleSize = useMemo(() => publishedBundleSize(bundle), [bundle]);
   const payload = useMemo(() => ({ projectName, bundle }), [bundle, projectName]);
   const publisher = useMeteredAction<PublishedPreview>(
@@ -167,13 +182,36 @@ export function CloudPreviewDialog({ onClose }: { onClose: () => void }) {
               onClick={() => void publish()}
               disabled={
                 publisher.isRunning ||
+                !prepared ||
                 !projectName.trim() ||
                 bundleSize > 10 * 1024 * 1024 ||
                 !token
               }
             >
-              {publisher.isRunning ? "Publishing…" : "Publish (2 credits)"}
+              {publisher.isRunning ? "Publishing…" : !prepared ? "Preparing pictures…" : "Publish (2 credits)"}
             </button>
+            {prepared && prepared.embedded > 0 && (
+              <p className="cloud-preview-message" role="status">
+                {prepared.embedded === 1 ? "1 picture from the web was" : `${prepared.embedded} pictures from the web were`} copied into the preview so it can show them.
+              </p>
+            )}
+            {prepared && prepared.remaining.length > 0 && (
+              <div className="cloud-preview-message" role="alert">
+                <p>
+                  {prepared.remaining.length === 1 ? "1 picture or video uses" : `${prepared.remaining.length} pictures or videos use`} a web address that
+                  a shared preview cannot load, so {prepared.remaining.length === 1 ? "it" : "they"} will show as missing:
+                </p>
+                <ul>
+                  {prepared.remaining.slice(0, 5).map((item) => (
+                    <li key={`${item.screenName}-${item.widgetName}-${item.kind}-${item.url}`}>
+                      {item.widgetName} on {item.screenName} ({item.kind})
+                    </li>
+                  ))}
+                  {prepared.remaining.length > 5 && <li>and {prepared.remaining.length - 5} more</li>}
+                </ul>
+                <p>Add the picture to the project as an image file before sharing. Videos must be removed or replaced.</p>
+              </div>
+            )}
             {!token && <p role="alert">Sync your wallet before publishing.</p>}
             {bundleSize > 10 * 1024 * 1024 && <p role="alert">The bundle exceeds the 10 MiB limit.</p>}
           </div>
