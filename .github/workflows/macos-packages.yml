@@ -72,3 +72,29 @@ jobs:
           path: macos-packages/
           if-no-files-found: error
           retention-days: 14
+  release:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: macos-*-packages
+          path: macos-release
+          merge-multiple: true
+      - name: Add macOS packages to the GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          (cd macos-release && shasum -a 256 *.dmg *.app.zip BUILD-INFO.txt > SHA256SUMS-macos.txt)
+          if gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
+            gh release upload "$GITHUB_REF_NAME" macos-release/* --clobber
+          else
+            gh release create "$GITHUB_REF_NAME" macos-release/* \
+              --title "ProtoFlow $GITHUB_REF_NAME" \
+              --notes "macOS: unsigned, non-notarized .dmg installers and zipped .app bundles for Apple Silicon and Intel. These are CI validation artifacts; configure Developer ID signing and Apple notarization before public distribution."
+          fi
