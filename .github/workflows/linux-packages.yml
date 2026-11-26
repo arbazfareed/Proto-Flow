@@ -7,12 +7,15 @@ on:
   pull_request:
     paths:
       - ".github/workflows/linux-packages.yml"
+      - ".github/workflows/windows-packages.yml"
       - "scripts/install-linux.sh"
       - "src-tauri/**"
       - "src/**"
       - "package.json"
       - "package-lock.json"
   push:
+    branches:
+      - feature/cross-platform-desktop-releases
     tags:
       - "v*"
   workflow_dispatch:
