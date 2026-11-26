@@ -1,5 +1,7 @@
 mod commands;
 
+use tauri::Manager;
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     let builder = tauri::Builder::default();
@@ -15,6 +17,16 @@ pub fn run() {
         .plugin(tauri_plugin_deep_link::init())
         .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_updater::Builder::new().build())
+        // B22: remember which files the person chose, so file commands can refuse any other path.
+        .manage(commands::path_guard::ApprovedPaths::default())
+        .on_window_event(|window, event| {
+            if let tauri::WindowEvent::DragDrop(tauri::DragDropEvent::Drop { paths, .. }) = event {
+                window
+                    .app_handle()
+                    .state::<commands::path_guard::ApprovedPaths>()
+                    .record_drop(paths);
+            }
+        })
         .setup(|app| {
             commands::diagnostics::initialize(app.handle())
                 .map_err(|error| std::io::Error::new(std::io::ErrorKind::Other, error))?;

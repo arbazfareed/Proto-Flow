@@ -1,13 +1,18 @@
 {
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "preview",
-  "description": "Permissions required by the isolated prototype preview window",
-  "windows": ["preview"],
+  "description": "Permissions required by the isolated prototype preview window. It can read project images and write diagnostics, but it cannot open, save or export files, or use the wallet.",
+  "windows": [
+    "preview"
+  ],
   "permissions": [
     "core:default",
     "core:event:allow-listen",
     "core:event:allow-emit",
     "core:window:allow-set-size",
-    "core:window:allow-set-focus"
+    "core:window:allow-set-focus",
+    "allow-read-image-asset",
+    "allow-append-diagnostic-log",
+    "allow-get-diagnostics-platform"
   ]
 }

@@ -11,6 +11,8 @@ use tauri::{AppHandle, Manager};
 use tauri_plugin_dialog::{DialogExt, FilePath};
 use uuid::Uuid;
 
+use super::path_guard::{ApprovedPaths, check_dropped_image, check_save_target};
+
 const MAX_PROJECT_FILE_BYTES: u64 = 10 * 1024 * 1024;
 const MAX_VERSION_HISTORY_FILE_BYTES: u64 = 50 * 1024 * 1024;
 const MAX_HTML_EXPORT_FILE_BYTES: usize = 100 * 1024 * 1024;
@@ -459,16 +461,31 @@ pub async fn save_project(
     content: String,
 ) -> Result<Option<String>, String> {
     run_dialog_task(move || {
-        save_project_with_dialog(path.map(PathBuf::from), &content, |filename| {
-            save_dialog(&app, filename)
-        })
+        // B22: a path handed in by the page must be one that was opened or picked in this session.
+        let approved = app.state::<ApprovedPaths>();
+        let path = path.map(PathBuf::from);
+        check_save_target(&approved, path.as_deref())?;
+        let saved =
+            save_project_with_dialog(path, &content, |filename| save_dialog(&app, filename))?;
+        if let Some(saved_path) = &saved {
+            approved.approve_project(Path::new(saved_path));
+        }
+        Ok(saved)
     })
     .await
 }
 
 #[tauri::command]
 pub async fn open_project(app: AppHandle) -> Result<Option<OpenedProject>, String> {
-    run_dialog_task(move || open_project_with_dialog(|| open_dialog(&app))).await
+    run_dialog_task(move || {
+        let opened = open_project_with_dialog(|| open_dialog(&app))?;
+        if let Some(project) = &opened {
+            app.state::<ApprovedPaths>()
+                .approve_project(Path::new(&project.path));
+        }
+        Ok(opened)
+    })
+    .await
 }
 
 #[tauri::command]
@@ -478,11 +495,16 @@ pub async fn save_project_as(
     content: String,
 ) -> Result<Option<String>, String> {
     run_dialog_task(move || {
-        save_project_as_with_dialog(
+        let saved = save_project_as_with_dialog(
             &safe_default_filename(&default_filename),
             &content,
             |filename| save_dialog(&app, filename),
-        )
+        )?;
+        if let Some(saved_path) = &saved {
+            app.state::<ApprovedPaths>()
+                .approve_project(Path::new(saved_path));
+        }
+        Ok(saved)
     })
     .await
 }
@@ -496,7 +518,9 @@ pub async fn pick_project_save_path(
         let Some(path) = save_dialog(&app, &safe_default_filename(&default_filename))? else {
             return Ok(None);
         };
-        path_to_string(&with_project_extension(path)).map(Some)
+        let picked = with_project_extension(path);
+        app.state::<ApprovedPaths>().approve_project(&picked);
+        path_to_string(&picked).map(Some)
     })
     .await
 }
@@ -696,8 +720,10 @@ pub fn read_image_asset(project_path: String, asset_path: String) -> Result<Imag
 }
 
 #[tauri::command]
-pub fn read_dropped_image(path: String) -> Result<ImageFile, String> {
+pub fn read_dropped_image(app: AppHandle, path: String) -> Result<ImageFile, String> {
     let path = PathBuf::from(path);
+    // B22: only a file that arrived in a real drop onto the window can be read here.
+    check_dropped_image(&app.state::<ApprovedPaths>(), &path)?;
     let metadata = fs::metadata(&path)
         .map_err(|error| format!("Could not inspect the dropped image: {error}"))?;
     if !metadata.is_file() {
