@@ -33,3 +33,4 @@ src-tauri/target-pf-t309/
 .env
 cloud/.dev.vars
 cloud/.wrangler/
+reports/editor-interactions-latest.json
