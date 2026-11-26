@@ -465,7 +465,8 @@ pub async fn save_project(
         let approved = app.state::<ApprovedPaths>();
         let path = path.map(PathBuf::from);
         check_save_target(&approved, path.as_deref())?;
-        let saved = save_project_with_dialog(path, &content, |filename| save_dialog(&app, filename))?;
+        let saved =
+            save_project_with_dialog(path, &content, |filename| save_dialog(&app, filename))?;
         if let Some(saved_path) = &saved {
             approved.approve_project(Path::new(saved_path));
         }
@@ -479,7 +480,8 @@ pub async fn open_project(app: AppHandle) -> Result<Option<OpenedProject>, Strin
     run_dialog_task(move || {
         let opened = open_project_with_dialog(|| open_dialog(&app))?;
         if let Some(project) = &opened {
-            app.state::<ApprovedPaths>().approve_project(Path::new(&project.path));
+            app.state::<ApprovedPaths>()
+                .approve_project(Path::new(&project.path));
         }
         Ok(opened)
     })
@@ -499,7 +501,8 @@ pub async fn save_project_as(
             |filename| save_dialog(&app, filename),
         )?;
         if let Some(saved_path) = &saved {
-            app.state::<ApprovedPaths>().approve_project(Path::new(saved_path));
+            app.state::<ApprovedPaths>()
+                .approve_project(Path::new(saved_path));
         }
         Ok(saved)
     })

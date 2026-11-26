@@ -32,7 +32,11 @@ fn path_key(path: &Path) -> String {
         .map(|part| part.as_os_str().to_string_lossy().into_owned())
         .collect::<Vec<_>>()
         .join("/");
-    if cfg!(windows) { joined.to_lowercase() } else { joined }
+    if cfg!(windows) {
+        joined.to_lowercase()
+    } else {
+        joined
+    }
 }
 
 fn remember(list: &Mutex<VecDeque<String>>, key: String) {
@@ -140,13 +144,19 @@ mod tests {
     fn case_matters_only_on_systems_where_it_matters() {
         let approved = ApprovedPaths::default();
         approved.approve_project(&p("/home/me/Work/App.pflow"));
-        assert_eq!(approved.is_project_approved(&p("/home/me/work/app.pflow")), cfg!(windows));
+        assert_eq!(
+            approved.is_project_approved(&p("/home/me/work/app.pflow")),
+            cfg!(windows)
+        );
     }
 
     #[test]
     fn only_dropped_images_can_be_read_as_dropped() {
         let approved = ApprovedPaths::default();
-        assert_eq!(check_dropped_image(&approved, &p("/home/me/secret.png")).unwrap_err(), IMAGE_NOT_DROPPED);
+        assert_eq!(
+            check_dropped_image(&approved, &p("/home/me/secret.png")).unwrap_err(),
+            IMAGE_NOT_DROPPED
+        );
         approved.record_drop(&[p("/home/me/pics/a.png"), p("/home/me/pics/b.png")]);
         assert!(check_dropped_image(&approved, &p("/home/me/pics/a.png")).is_ok());
         assert!(check_dropped_image(&approved, &p("/home/me/pics/b.png")).is_ok());
@@ -169,7 +179,9 @@ mod tests {
             approved.approve_project(&p(&format!("/p/{index}.pflow")));
         }
         assert!(!approved.is_project_approved(&p("/p/0.pflow")));
-        assert!(approved.is_project_approved(&p(&format!("/p/{}.pflow", MAX_REMEMBERED_PATHS + 4))));
+        assert!(
+            approved.is_project_approved(&p(&format!("/p/{}.pflow", MAX_REMEMBERED_PATHS + 4)))
+        );
     }
 
     #[test]

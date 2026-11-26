@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-set-crash-reporting-consent"
+description = "Enables the set_crash_reporting_consent command without any pre-configured scope."
+commands.allow = ["set_crash_reporting_consent"]
+
+[[permission]]
+identifier = "deny-set-crash-reporting-consent"
+description = "Denies the set_crash_reporting_consent command without any pre-configured scope."
+commands.deny = ["set_crash_reporting_consent"]

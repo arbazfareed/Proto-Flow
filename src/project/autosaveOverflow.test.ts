@@ -28,7 +28,9 @@ const storage = new MemoryStorage();
 const quotaError = () => new DOMException("Quota exceeded", "QuotaExceededError");
 
 /** Lets pending IndexedDB requests finish (fake-indexeddb runs on real timers). */
-const settle = () => new Promise((resolve) => setTimeout(resolve, 30));
+// A slow CI machine can take longer than 30 ms to finish an IndexedDB write; waiting too little made the
+// "does not write an unchanged project again" test flaky.
+const settle = () => new Promise((resolve) => setTimeout(resolve, 100));
 
 function readOverflowDirectly(): Promise<string | null> {
   return new Promise((resolve, reject) => {
