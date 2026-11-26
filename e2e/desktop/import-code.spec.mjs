@@ -127,12 +127,27 @@ describe("PF-T803 Windows desktop HTML canvas rendering", () => {
     const layerSearch = await $('[aria-label="Search layers"]');
     const findLayerRow = (name) =>
       $(`//div[contains(@class,"layer-row")][.//span[contains(@class,"layer-name") and normalize-space(.)="${name}"]]`);
-    await layerSearch.setValue("start-date");
+    // Typing into the search box while the editor re-renders can drop a key, or fail to clear the old text,
+    // on slow WebView2 runners ("start-date" + "document-title" became "start-datedocument-title"). Every
+    // search goes through here, so the box holds exactly the text before the results are checked.
+    const searchLayers = async (text) => {
+      for (let attempt = 0; attempt < 3; attempt += 1) {
+        await layerSearch.setValue(text);
+        try {
+          await browser.waitUntil(async () => (await layerSearch.getValue()) === text, { timeout: 3_000, interval: 100 });
+          return;
+        } catch {
+          // Retry the whole value.
+        }
+      }
+      throw new Error(`Search layers did not accept "${text}"; it holds ${JSON.stringify(await layerSearch.getValue())}`);
+    };
+    await searchLayers("start-date");
     const dateLayer = await findLayerRow("start-date");
     await expect(dateLayer.$(".layer-select svg:not(.layer-new-icon)")).toHaveElementClass("lucide-calendar");
     await dateLayer.$(".layer-select").click();
     await expect(dateLayer).toHaveAttribute("aria-selected", "true");
-    await layerSearch.setValue("document-title");
+    await searchLayers("document-title");
     const expectLayerVisible = async (name) => {
       const selector = `//*[contains(@class,"layer-name") and normalize-space(.)="${name}"]`;
       try {
@@ -147,20 +162,6 @@ describe("PF-T803 Windows desktop HTML canvas rendering", () => {
       }
       const matches = await $$(selector);
       await expect(matches[0]).toBeDisplayed();
-    };
-    // Typing into the search box while the editor re-renders can drop a key on slow
-    // WebView2 runners; make sure the box holds exactly the text before checking results.
-    const searchLayers = async (text) => {
-      for (let attempt = 0; attempt < 3; attempt += 1) {
-        await layerSearch.setValue(text);
-        try {
-          await browser.waitUntil(async () => (await layerSearch.getValue()) === text, { timeout: 3_000, interval: 100 });
-          return;
-        } catch {
-          // Retry the whole value.
-        }
-      }
-      throw new Error(`Search layers did not accept "${text}"; it holds ${JSON.stringify(await layerSearch.getValue())}`);
     };
     await expectLayerVisible("document-title");
     const titleLayer = await findLayerRow("document-title");
