@@ -18,6 +18,8 @@ on:
       - "scripts/canvas-benchmark.*"
       - "scripts/canvas-performance-baseline.json"
       - "scripts/run-canvas-benchmark.mjs"
+      - "e2e/performance/**"
+      - "playwright.performance.config.ts"
       - "reports/PERF-AXURE-PARITY.md"
       - "package.json"
       - "package-lock.json"
@@ -47,6 +49,7 @@ jobs:
             benchmarks/trends.json
             reports/PERF-AXURE-PARITY.md
             reports/axure-parity-latest.json
+            reports/editor-interactions-latest.json
             reports/bundle-map.html
           if-no-files-found: ignore
       - uses: actions/github-script@v7
