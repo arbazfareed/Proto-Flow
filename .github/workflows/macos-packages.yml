@@ -1,0 +1,74 @@
+name: macOS desktop packages
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - ".github/workflows/macos-packages.yml"
+      - "src-tauri/**"
+      - "src/**"
+      - "package.json"
+      - "package-lock.json"
+  push:
+    branches:
+      - feature/cross-platform-desktop-releases
+    tags:
+      - "v*"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Build macOS (${{ matrix.arch }})
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: macos-26
+            arch: arm64
+          - runner: macos-26-intel
+            arch: x86_64
+    env:
+      CARGO_TARGET_DIR: ${{ github.workspace }}/src-tauri/target
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+      - name: Install frontend dependencies
+        run: npm ci
+      - name: Build .app and .dmg
+        run: >-
+          npx tauri build --bundles app,dmg
+          --config '{"bundle":{"createUpdaterArtifacts":false}}'
+      - name: Verify and collect bundles
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p macos-packages
+          find src-tauri/target/release/bundle -type f -name '*.dmg' -exec cp {} macos-packages/ \;
+          while IFS= read -r -d '' app; do
+            ditto -c -k --sequesterRsrc --keepParent "$app" "macos-packages/$(basename "$app").zip"
+            /usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$app/Contents/Info.plist"
+          done < <(find src-tauri/target/release/bundle -type d -name '*.app' -print0)
+          test -n "$(find macos-packages -maxdepth 1 -name '*.dmg' -print -quit)"
+          test -n "$(find macos-packages -maxdepth 1 -name '*.app.zip' -print -quit)"
+          hdiutil verify macos-packages/*.dmg
+          printf 'Architecture: %s\nRunner: %s\n' "$(uname -m)" "${{ matrix.runner }}" > macos-packages/BUILD-INFO.txt
+          (cd macos-packages && shasum -a 256 * > SHA256SUMS.txt)
+      - uses: actions/upload-artifact@v4
+        with:
+          name: macos-${{ matrix.arch }}-packages
+          path: macos-packages/
+          if-no-files-found: error
+          retention-days: 14
