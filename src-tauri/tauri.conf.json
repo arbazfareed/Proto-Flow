@@ -23,14 +23,22 @@
     "security": {
       "csp": "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://challenges.cloudflare.com; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: http: https: asset: http://asset.localhost; media-src 'self' data: blob: http: https:; font-src 'self' data:; connect-src 'self' ipc: http://ipc.localhost https: wss:; frame-src 'self' about: blob: data: https://challenges.cloudflare.com; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'",
       "devCsp": null,
-      "dangerousDisableAssetCspModification": ["script-src", "style-src"],
-      "capabilities": ["default", "preview"]
+      "dangerousDisableAssetCspModification": [
+        "script-src",
+        "style-src"
+      ],
+      "capabilities": [
+        "default",
+        "preview"
+      ]
     }
   },
   "plugins": {
     "deep-link": {
       "desktop": {
-        "schemes": ["protoflow"]
+        "schemes": [
+          "protoflow"
+        ]
       }
     },
     "updater": {
@@ -44,18 +52,35 @@
   "bundle": {
     "active": true,
     "createUpdaterArtifacts": true,
-    "targets": ["msi", "nsis", "deb", "rpm", "appimage"],
+    "targets": [
+      "msi",
+      "nsis",
+      "deb",
+      "rpm",
+      "appimage",
+      "app",
+      "dmg"
+    ],
     "category": "GraphicsAndDesign",
     "shortDescription": "Free, local-first prototyping for apps and websites",
     "longDescription": "ProtoFlow is a free, local-first prototyping tool: design screens, link them into clickable prototypes, preview them on any device and export HTML, all on your own computer.",
     "linux": {
-      "deb": { "section": "graphics", "priority": "optional" },
-      "rpm": { "release": "1" },
-      "appimage": { "bundleMediaFramework": false }
+      "deb": {
+        "section": "graphics",
+        "priority": "optional"
+      },
+      "rpm": {
+        "release": "1"
+      },
+      "appimage": {
+        "bundleMediaFramework": false
+      }
     },
     "fileAssociations": [
       {
-        "ext": ["pflow"],
+        "ext": [
+          "pflow"
+        ],
         "name": "ProtoFlow project",
         "description": "ProtoFlow project file",
         "mimeType": "application/x-protoflow+json"
