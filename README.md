@@ -76,7 +76,7 @@ Open **Help & updates → Open tutorial project** for the 15-step interactive tu
 
 ## Desktop bundles
 
-`src-tauri/tauri.conf.json` targets Windows MSI/NSIS and Linux DEB, RPM and AppImage packages. The `.pflow` file association is declared as `application/x-protoflow+json`.
+`src-tauri/tauri.conf.json` targets Windows MSI/NSIS, Linux DEB/RPM/AppImage, and macOS APP/DMG bundles. macOS CI builds Apple Silicon and Intel artifacts; see [macOS desktop builds](./docs/macos-desktop-builds.md) for local build instructions and signing/notarization status. Current macOS CI artifacts are unsigned and not notarized, so they are for validation only and are not yet production-ready for public distribution. The `.pflow` file association is declared as `application/x-protoflow+json`.
 
 ## Install on Linux
 
