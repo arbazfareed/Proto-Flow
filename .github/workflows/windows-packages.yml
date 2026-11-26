@@ -53,6 +53,9 @@ jobs:
           $bundleRoot = 'src-tauri\target\x86_64-pc-windows-msvc\release\bundle'
           $out = 'windows-packages'
           New-Item -ItemType Directory -Force -Path $out | Out-Null
+          $appBinary = 'src-tauri\\target\\x86_64-pc-windows-msvc\\release\\proto-flow.exe'
+          if (-not (Test-Path $appBinary)) { throw 'Standalone ProtoFlow.exe application binary was not produced.' }
+          Copy-Item $appBinary (Join-Path $out 'ProtoFlow.exe')
           $files = Get-ChildItem -Path $bundleRoot -Recurse -File | Where-Object { $_.Extension -in @('.msi', '.exe') }
           if (-not ($files | Where-Object { $_.Extension -eq '.msi' })) { throw 'MSI installer was not produced.' }
           if (-not ($files | Where-Object { $_.Extension -eq '.exe' })) { throw 'NSIS installer was not produced.' }
