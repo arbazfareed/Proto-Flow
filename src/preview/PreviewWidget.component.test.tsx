@@ -509,6 +509,60 @@ describe("PreviewWidget carousel and data elements", () => {
   });
 });
 
+describe("PreviewWidget settings and gesture elements", () => {
+  function renderElement(type: string, props: Record<string, unknown> = {}) {
+    const project = createEmptyProject("Settings and gesture preview");
+    const runtime = new PreviewRuntime(project);
+    const widget: Widget = { ...makeWidget(), type, props };
+    const runEvent = vi.fn(() => 0);
+    const rendered = render(
+      <PreviewWidget
+        widget={widget}
+        runtime={runtime}
+        screenId={project.screens[0].id}
+        snapshot={runtime.snapshot()}
+        runEvent={runEvent}
+        onError={vi.fn()}
+        controlValues={{}}
+        onControlValueChange={vi.fn()}
+        onGestureFeedback={vi.fn()}
+        liteMode={false}
+      />,
+    );
+    return { ...rendered, widget, runEvent };
+  }
+
+  it("renders configured settings entries", () => {
+    const rendered = renderElement("settings", {
+      items: [{ label: "Notifications", description: "Manage alerts" }],
+    });
+    expect(rendered.getByText("Notifications")).toBeInTheDocument();
+    expect(rendered.getByText("Manage alerts")).toBeInTheDocument();
+  });
+
+  it("switches the theme preview between light and dark", () => {
+    const rendered = renderElement("theme", {});
+    const theme = rendered.getByRole("region", { name: "Theme preview" });
+    expect(theme).toHaveStyle({ background: "rgb(255, 255, 255)" });
+    fireEvent.change(rendered.getByRole("combobox", { name: "Theme appearance" }), { target: { value: "dark" } });
+    expect(theme).toHaveStyle({ background: "rgb(31, 41, 55)" });
+  });
+
+  it("triggers the pull-to-refresh gesture rule from its Preview control", () => {
+    const rendered = renderElement("pull-to-refresh", {});
+    fireEvent.click(rendered.getByRole("button", { name: "Refresh preview" }));
+    expect(rendered.getByText("Refresh interaction triggered")).toBeInTheDocument();
+    expect(rendered.runEvent).toHaveBeenCalledWith(rendered.widget, "onSwipeDown", undefined);
+  });
+
+  it("simulates directional swipe rules from accessible Preview controls", () => {
+    const rendered = renderElement("swipe-gesture", {});
+    fireEvent.click(rendered.getByRole("button", { name: "Swipe Left" }));
+    expect(rendered.getByText("Last gesture: swipe left")).toBeInTheDocument();
+    expect(rendered.runEvent).toHaveBeenCalledWith(rendered.widget, "onSwipeLeft", undefined);
+  });
+});
+
 describe("PreviewWidget media", () => {
   function renderMediaWidget(type: "image-gallery" | "audio", props: Record<string, unknown>) {
     const project = createEmptyProject("Media preview");
