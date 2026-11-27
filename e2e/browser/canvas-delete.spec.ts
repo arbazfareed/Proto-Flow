@@ -86,7 +86,7 @@ test("right-click Delete removes a widget from the active repeater template", as
   await page.getByRole("button", { name: "Add Repeater" }).click();
   await page.mouse.click(bounds.x + bounds.width / 2, bounds.y + bounds.height / 2);
   await page.getByRole("button", { name: "Edit row template" }).click();
-  const point = { x: bounds.x + bounds.width / 2, y: bounds.y + bounds.height / 2 + 90 };
+  const point = { x: bounds.x + bounds.width / 2, y: bounds.y + bounds.height / 2 + 20 };
   await page.getByRole("button", { name: "Add Rectangle" }).click();
   await page.mouse.click(point.x, point.y);
   await expect(page.getByRole("button", { name: /^Toggle visibility for/ })).toHaveCount(2);
@@ -104,7 +104,7 @@ test("right-click Delete removes a widget from the active dynamic-panel state", 
   const surface = page.locator(".canvas-stage-surface");
   const bounds = await surface.boundingBox();
   if (!bounds) throw new Error("Canvas surface is not visible.");
-  await page.getByRole("button", { name: "Add Dynamic Panel" }).click();
+  await page.getByRole("button", { name: /Add Dynamic panel/i }).click();
   await page.mouse.click(bounds.x + bounds.width / 2, bounds.y + bounds.height / 2);
   await page.getByRole("button", { name: "Edit active state" }).click();
   const point = { x: bounds.x + bounds.width / 2, y: bounds.y + bounds.height / 2 + 90 };
