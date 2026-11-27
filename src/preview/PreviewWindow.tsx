@@ -900,11 +900,14 @@ export function PreviewWidget({
                 <span>{interpolate(entry.title)}</span>
                 <span aria-hidden="true">{expanded ? "−" : "+"}</span>
               </button>
-              {expanded && (
-                <div id={panelId} role="region" style={{ padding: "6px 10px", fontSize: 12 }}>
-                  {entry.body ? interpolate(entry.body) : <span style={{ opacity: 0.65 }}>No content configured</span>}
-                </div>
-              )}
+              <div
+                id={panelId}
+                role="region"
+                hidden={!expanded}
+                style={{ padding: "6px 10px", fontSize: 12 }}
+              >
+                {entry.body ? interpolate(entry.body) : <span style={{ opacity: 0.65 }}>No content configured</span>}
+              </div>
             </div>
           );
         })}
