@@ -168,7 +168,6 @@ export function VirtualizedRepeater({
   commonHandlers,
   liteMode,
   symbols,
-  symbolDepth = 0,
 }: {
   widget: Widget;
   rows: RepeaterRecord[];
@@ -187,7 +186,6 @@ export function VirtualizedRepeater({
   commonHandlers: HTMLAttributes<HTMLDivElement>;
   liteMode: boolean;
   symbols?: SymbolDefinition[];
-  symbolDepth?: number;
 }) {
   const viewportRef = useRef<HTMLDivElement>(null);
   const [scrollOffset, setScrollOffset] = useState(0);
