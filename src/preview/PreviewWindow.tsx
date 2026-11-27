@@ -1040,7 +1040,10 @@ export function PreviewWidget({
   }
 
   if (widget.type === "navbar" || widget.type === "sidebar" || widget.type === "footer" || widget.type === "bottom-nav" || widget.type === "app-bar") {
-    const rawItems = Array.isArray(widget.props.items) ? widget.props.items : ["Home", "Explore", "Profile"];
+    const navigationLabel = stringProp(widget, "label", "").trim();
+    const rawItems = widget.type === "bottom-nav" && navigationLabel
+      ? navigationLabel.split("|").map((entry) => entry.trim()).filter(Boolean)
+      : Array.isArray(widget.props.items) ? widget.props.items : ["Home", "Explore", "Profile"];
     const items = rawItems.map((entry, index) => {
       const record = entry && typeof entry === "object" ? entry as Record<string, unknown> : {};
       const label = typeof entry === "string" ? entry : typeof record.label === "string" ? record.label : `Item ${index + 1}`;
