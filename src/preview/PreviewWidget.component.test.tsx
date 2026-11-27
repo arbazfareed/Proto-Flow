@@ -61,6 +61,58 @@ function touchEvent(
   fireEvent(element, event);
 }
 
+describe("PreviewWidget semantic and structural elements", () => {
+  it("renders heading, paragraph, label, and link as semantic elements", () => {
+    const project = createEmptyProject("Semantic preview");
+    const runtime = new PreviewRuntime(project);
+    const widgets: Widget[] = [
+      { ...makeWidget(), id: crypto.randomUUID(), type: "heading", props: { text: "Welcome", level: 3 } },
+      { ...makeWidget(), id: crypto.randomUUID(), type: "paragraph", props: { text: "Introductory text" } },
+      { ...makeWidget(), id: crypto.randomUUID(), type: "label", props: { text: "Email address" } },
+      { ...makeWidget(), id: crypto.randomUUID(), type: "link", props: { text: "Read documentation", href: "https://example.com/docs" } },
+    ];
+    const rendered = render(
+      <>
+        {widgets.map((widget) => (
+          <PreviewWidget
+            key={widget.id}
+            widget={widget}
+            runtime={runtime}
+            screenId={project.screens[0].id}
+            snapshot={runtime.snapshot()}
+            runEvent={vi.fn(() => 0)}
+            onError={vi.fn()}
+            controlValues={{}}
+            onControlValueChange={vi.fn()}
+            onGestureFeedback={vi.fn()}
+            liteMode={false}
+          />
+        ))}
+      </>,
+    );
+    expect(rendered.getByRole("heading", { level: 3, name: "Welcome" })).toBeInTheDocument();
+    expect(rendered.getByText("Introductory text").tagName).toBe("P");
+    expect(rendered.getByText("Email address").tagName).toBe("LABEL");
+    expect(rendered.getByRole("link", { name: "Read documentation" })).toHaveAttribute("href", "https://example.com/docs");
+  });
+
+  it("renders structural widgets as boxes rather than placeholder type names", () => {
+    const project = createEmptyProject("Structural preview");
+    const runtime = new PreviewRuntime(project);
+    const container: Widget = { ...makeWidget(), type: "container", props: {} };
+    const panel: Widget = { ...makeWidget(), type: "panel", props: { label: "Settings" } };
+    const rendered = render(
+      <>
+        <PreviewWidget widget={container} runtime={runtime} screenId={project.screens[0].id} snapshot={runtime.snapshot()} runEvent={vi.fn(() => 0)} onError={vi.fn()} controlValues={{}} onControlValueChange={vi.fn()} onGestureFeedback={vi.fn()} liteMode={false} />
+        <PreviewWidget widget={panel} runtime={runtime} screenId={project.screens[0].id} snapshot={runtime.snapshot()} runEvent={vi.fn(() => 0)} onError={vi.fn()} controlValues={{}} onControlValueChange={vi.fn()} onGestureFeedback={vi.fn()} liteMode={false} />
+      </>,
+    );
+    expect(rendered.getByRole("group", { name: "Settings" })).toHaveClass("preview-panel");
+    expect(rendered.queryByText("container")).not.toBeInTheDocument();
+    expect(rendered.queryByText("panel")).not.toBeInTheDocument();
+  });
+});
+
 describe("PreviewWidget reusable symbols", () => {
   it("renders a symbol instance using its master component contents", () => {
     const project = createEmptyProject("Symbol preview");
