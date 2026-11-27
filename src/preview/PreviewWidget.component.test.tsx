@@ -368,6 +368,77 @@ describe("PreviewWidget navigation and timeline elements", () => {
   });
 });
 
+describe("PreviewWidget app shell and integration elements", () => {
+  function renderElement(type: string, props: Record<string, unknown> = {}) {
+    const project = createEmptyProject("App shell preview");
+    const runtime = new PreviewRuntime(project);
+    const widget: Widget = { ...makeWidget(), type, props };
+    const runEvent = vi.fn(() => 0);
+    const rendered = render(
+      <PreviewWidget
+        widget={widget}
+        runtime={runtime}
+        screenId={project.screens[0].id}
+        snapshot={runtime.snapshot()}
+        runEvent={runEvent}
+        onError={vi.fn()}
+        controlValues={{}}
+        onControlValueChange={vi.fn()}
+        onGestureFeedback={vi.fn()}
+        liteMode={false}
+      />,
+    );
+    return { ...rendered, widget, runEvent };
+  }
+
+  it("renders navigation items for navbar and sidebar", () => {
+    const navbar = renderElement("navbar", { items: ["Home", "Docs"] });
+    expect(navbar.getByRole("navigation", { name: "navbar" })).toBeInTheDocument();
+    expect(navbar.getByRole("button", { name: "Docs" })).toBeInTheDocument();
+    cleanup();
+    const sidebar = renderElement("sidebar", { items: ["Overview", "Settings"] });
+    expect(sidebar.getByRole("navigation", { name: "sidebar" })).toBeInTheDocument();
+    expect(sidebar.getByRole("button", { name: "Settings" })).toBeInTheDocument();
+  });
+
+  it("renders configured form fields and handles submit without navigating", () => {
+    const rendered = renderElement("form", {
+      fields: [{ label: "Email", placeholder: "you@example.com" }],
+    });
+    expect(rendered.getByRole("textbox", { name: "Email" })).toHaveAttribute("placeholder", "you@example.com");
+    fireEvent.click(rendered.getByRole("button", { name: "Submit" }));
+    expect(rendered.runEvent).toHaveBeenCalledWith(rendered.widget, "onChange", undefined);
+  });
+
+  it("shows an honest non-connected state for cloud and websocket previews", () => {
+    const cloud = renderElement("cloud-sync", {});
+    expect(cloud.getByText("Not connected")).toBeInTheDocument();
+    expect(cloud.getByText(/Preview only/)).toBeInTheDocument();
+    cleanup();
+    const socket = renderElement("websocket", { url: "wss://example.test/socket" });
+    expect(socket.getByText("wss://example.test/socket")).toBeInTheDocument();
+    expect(socket.getByText(/no live service connection/i)).toBeInTheDocument();
+  });
+
+  it("shows the authentication preview state without claiming a live session", () => {
+    const rendered = renderElement("auth-state", {});
+    expect(rendered.getByText("Signed out")).toBeInTheDocument();
+    expect(rendered.getByText(/no live service connection/i)).toBeInTheDocument();
+  });
+
+  it("allows changing the responsive preview device", () => {
+    const rendered = renderElement("responsive-switch", {});
+    fireEvent.change(rendered.getByRole("combobox", { name: "Preview device" }), { target: { value: "Mobile" } });
+    expect(rendered.getByText("Selected: Mobile")).toBeInTheDocument();
+  });
+
+  it("renders a modal layer with its configured title and content", () => {
+    const rendered = renderElement("modal", { title: "Confirm", content: "Are you sure?" });
+    expect(rendered.getByRole("region", { name: "Confirm" })).toHaveTextContent("Are you sure?");
+    expect(rendered.getByRole("button", { name: "Close Confirm" })).toBeInTheDocument();
+  });
+});
+
 describe("PreviewWidget media", () => {
   function renderMediaWidget(type: "image-gallery" | "audio", props: Record<string, unknown>) {
     const project = createEmptyProject("Media preview");
