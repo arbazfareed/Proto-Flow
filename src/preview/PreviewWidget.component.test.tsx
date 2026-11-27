@@ -280,6 +280,71 @@ describe("PreviewWidget accordion", () => {
   });
 });
 
+describe("PreviewWidget media", () => {
+  function renderMediaWidget(type: "image-gallery" | "audio", props: Record<string, unknown>) {
+    const project = createEmptyProject("Media preview");
+    const runtime = new PreviewRuntime(project);
+    const widget: Widget = {
+      ...makeWidget(),
+      type,
+      props,
+    };
+    return render(
+      <PreviewWidget
+        widget={widget}
+        runtime={runtime}
+        screenId={project.screens[0].id}
+        snapshot={runtime.snapshot()}
+        runEvent={vi.fn()}
+        onError={vi.fn()}
+        controlValues={{}}
+        onControlValueChange={vi.fn()}
+        onGestureFeedback={vi.fn()}
+        liteMode={false}
+      />,
+    );
+  }
+
+  it("renders configured gallery images with their URLs and accessible alt text", () => {
+    const rendered = renderMediaWidget("image-gallery", {
+      label: "Product photos",
+      images: [
+        "https://example.com/front.png",
+        { url: "https://example.com/side.png", alt: "Side view" },
+      ],
+    });
+
+    expect(rendered.getByRole("region", { name: "Product photos" })).toBeInTheDocument();
+    expect(rendered.getByAltText("Image 1")).toHaveAttribute("src", "https://example.com/front.png");
+    expect(rendered.getByAltText("Side view")).toHaveAttribute("src", "https://example.com/side.png");
+  });
+
+  it("shows a clear empty state when no gallery images are configured", () => {
+    const rendered = renderMediaWidget("image-gallery", { images: [] });
+    expect(rendered.getByText("No gallery images configured")).toBeInTheDocument();
+  });
+
+  it("renders a native audio control for a configured source", () => {
+    const rendered = renderMediaWidget("audio", {
+      label: "Demo track",
+      src: "https://example.com/demo.mp3",
+    });
+    const audio = rendered.container.querySelector("audio");
+
+    expect(audio).not.toBeNull();
+    expect(audio).toHaveAttribute("src", "https://example.com/demo.mp3");
+    expect(audio).toHaveAttribute("controls");
+    expect(audio).toHaveAttribute("preload", "metadata");
+    expect(rendered.getByText("Demo track")).toBeInTheDocument();
+  });
+
+  it("shows a clear empty state when no audio source is configured", () => {
+    const rendered = renderMediaWidget("audio", { label: "Voice note" });
+    expect(rendered.getByText("Audio source not configured")).toBeInTheDocument();
+    expect(rendered.container.querySelector("audio")).toBeNull();
+  });
+});
+
 describe("PreviewWidget colours", () => {
   it("applies fill and stroke opacity like the canvas, so a 10% container stays pale", () => {
     const project = createEmptyProject("Colour preview");
