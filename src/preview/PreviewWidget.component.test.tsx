@@ -637,6 +637,22 @@ describe("PreviewWidget form controls and data components", () => {
     expect(rendered.queryByText("New message")).not.toBeInTheDocument();
   });
 
+  it("renders geometric primitives as actual shapes rather than labels", () => {
+    const polygon = renderElement("polygon", {});
+    expect(polygon.getByRole("img", { name: "polygon" })).toHaveStyle({ clipPath: expect.stringContaining("polygon(") });
+    polygon.unmount();
+    const star = renderElement("star", {});
+    expect(star.getByRole("img", { name: "star" })).toHaveStyle({ clipPath: expect.stringContaining("polygon(") });
+    star.unmount();
+    const divider = renderElement("divider", { orientation: "vertical" });
+    expect(divider.getByRole("separator")).toHaveAttribute("aria-orientation", "vertical");
+  });
+
+  it("renders configured vector path data in SVG Preview", () => {
+    const rendered = renderElement("vector", { pathData: "M0 0 L20 20" });
+    expect(rendered.container.querySelector("svg path")).toHaveAttribute("d", "M0 0 L20 20");
+  });
+
   it("shows the selected file name in the upload control", () => {
     const rendered = renderElement("file-upload", { label: "Attachment" });
     const file = new File(["hello"], "notes.txt", { type: "text/plain" });
