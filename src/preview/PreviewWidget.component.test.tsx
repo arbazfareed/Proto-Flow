@@ -637,6 +637,27 @@ describe("PreviewWidget form controls and data components", () => {
     expect(rendered.queryByText("New message")).not.toBeInTheDocument();
   });
 
+  it("renders avatar initials and grouped avatars", () => {
+    const avatar = renderElement("avatar", { label: "Ada Lovelace" });
+    expect(avatar.getByRole("img", { name: "Ada Lovelace" })).toHaveTextContent("AL");
+    avatar.unmount();
+    const group = renderElement("avatar-group", { items: ["Ada Lovelace", "Grace Hopper"] });
+    expect(group.getByRole("img", { name: "Ada Lovelace" })).toBeInTheDocument();
+    expect(group.getByRole("img", { name: "Grace Hopper" })).toBeInTheDocument();
+  });
+
+  it("changes the selected segmented-control option", () => {
+    const rendered = renderElement("segmented-control", { items: ["Overview", "Activity"] });
+    fireEvent.click(rendered.getByRole("button", { name: "Activity" }));
+    expect(rendered.getByRole("button", { name: "Activity" })).toHaveAttribute("aria-pressed", "true");
+    expect(rendered.runEvent).toHaveBeenCalledWith(rendered.widget, "onChange", undefined);
+  });
+
+  it("marks the configured current step in a step indicator", () => {
+    const rendered = renderElement("step-indicator", { items: ["Details", "Shipping", "Review"], step: 2 });
+    expect(rendered.getByText("Shipping").closest("li")).toHaveAttribute("aria-current", "step");
+  });
+
   it("renders geometric primitives as actual shapes rather than labels", () => {
     const polygon = renderElement("polygon", {});
     expect(polygon.getByRole("img", { name: "polygon" })).toHaveStyle({ clipPath: expect.stringContaining("polygon(") });
