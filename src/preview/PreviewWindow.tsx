@@ -344,8 +344,19 @@ export function PreviewWidget({
   const [previewThemeMode, setPreviewThemeMode] = useState<"light" | "dark">("light");
   const [refreshPreviewTriggered, setRefreshPreviewTriggered] = useState(false);
   const [lastSimulatedSwipe, setLastSimulatedSwipe] = useState("");
-  const [stepperValue, setStepperValue] = useState(Math.max(1, Number(widget.props.value) || 1));
-  const [ratingValue, setRatingValue] = useState(Math.max(0, Math.min(5, Number(widget.props.value) || 0)));
+  const stepperMin = Number.isFinite(Number(widget.props.min)) ? Number(widget.props.min) : 1;
+  const stepperMax = Math.max(stepperMin, Number.isFinite(Number(widget.props.max)) ? Number(widget.props.max) : 99);
+  const configuredStepperValue = Number(widget.props.value);
+  const [stepperValue, setStepperValue] = useState(() => Math.min(
+    stepperMax,
+    Math.max(stepperMin, Number.isFinite(configuredStepperValue) ? configuredStepperValue : stepperMin),
+  ));
+  const ratingMax = Math.max(1, Math.min(10, Number(widget.props.max) || 5));
+  const configuredRatingValue = Number(widget.props.value);
+  const [ratingValue, setRatingValue] = useState(() => Math.max(
+    0,
+    Math.min(ratingMax, Number.isFinite(configuredRatingValue) ? configuredRatingValue : 0),
+  ));
   const [popoverOpen, setPopoverOpen] = useState(false);
   const [selectedFileName, setSelectedFileName] = useState("");
   const [toastVisible, setToastVisible] = useState(true);
@@ -760,9 +771,7 @@ export function PreviewWidget({
   }
 
   if (widget.type === "stepper") {
-    const min = Number(widget.props.min ?? 1);
-    const max = Number(widget.props.max ?? 99);
-    const change = (next: number) => { const value = Math.max(min, Math.min(max, next)); setStepperValue(value); runEvent(widget, "onChange", item); };
+    const change = (next: number) => { const value = Math.max(stepperMin, Math.min(stepperMax, next)); setStepperValue(value); runEvent(widget, "onChange", item); };
     return <section className="preview-widget preview-stepper" aria-label={stringProp(widget, "label", "Stepper")} style={{ ...style, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, padding: 8 }}><strong>{stringProp(widget, "label", "Quantity")}</strong><button type="button" aria-label="Decrease value" disabled={stepperValue <= min} onClick={() => change(stepperValue - 1)}>−</button><output aria-live="polite">{stepperValue}</output><button type="button" aria-label="Increase value" disabled={stepperValue >= max} onClick={() => change(stepperValue + 1)}>+</button></section>;
   }
 
@@ -775,7 +784,7 @@ export function PreviewWidget({
   }
 
   if (widget.type === "rating") {
-    const max = Math.max(1, Math.min(10, Number(widget.props.max ?? 5)));
+    const max = ratingMax;
     return <div className="preview-widget preview-rating" role="group" aria-label={stringProp(widget, "label", "Rating")} style={{ ...style, display: "flex", alignItems: "center", gap: 4, padding: 6 }}>{Array.from({ length: max }, (_, index) => <button key={index} type="button" aria-label={`Rate ${index + 1} of ${max}`} aria-pressed={ratingValue === index + 1} onClick={() => { setRatingValue(index + 1); runEvent(widget, "onChange", item); }}>{index < ratingValue ? "★" : "☆"}</button>)}<output>{ratingValue}/{max}</output></div>;
   }
 
