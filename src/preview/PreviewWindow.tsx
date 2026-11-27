@@ -161,6 +161,7 @@ export function VirtualizedRepeater({
   snapshot,
   runEvent,
   onError,
+  onNavigate,
   inputMode,
   controlValues,
   onControlValueChange,
@@ -179,6 +180,7 @@ export function VirtualizedRepeater({
   snapshot: PreviewRuntimeSnapshot;
   runEvent: (widget: Widget, event: PreviewEvent, item?: RepeaterRecord) => number;
   onError: (error: unknown) => void;
+  onNavigate: (screenId: string) => void;
   inputMode: Project["screens"][number]["inputMode"];
   controlValues: Record<string, string | boolean>;
   onControlValueChange: (key: string, value: string | boolean) => void;
@@ -278,6 +280,7 @@ export function VirtualizedRepeater({
                       snapshot={snapshot}
                       runEvent={runEvent}
                       onError={onError}
+                      onNavigate={onNavigate}
                       item={record}
                       controlValues={controlValues}
                       onControlValueChange={onControlValueChange}
@@ -302,6 +305,7 @@ export function PreviewWidget({
   snapshot,
   runEvent,
   onError,
+  onNavigate = () => {},
   transitionStyle,
   item,
   layoutPosition,
@@ -318,6 +322,7 @@ export function PreviewWidget({
   snapshot: PreviewRuntimeSnapshot;
   runEvent: (widget: Widget, event: PreviewEvent, item?: RepeaterRecord) => number;
   onError: (error: unknown) => void;
+  onNavigate?: (screenId: string) => void;
   transitionStyle?: CSSProperties;
   item?: RepeaterRecord;
   layoutPosition?: WidgetPosition;
@@ -676,14 +681,31 @@ export function PreviewWidget({
           const label = typeof entry === "string" ? entry : typeof record.label === "string" ? record.label : `Setting ${index + 1}`;
           const description = typeof record.description === "string" ? record.description : "";
           const key = typeof record.name === "string" ? record.name : `setting-${index}`;
-          const value = settingsValues[key] ?? (typeof record.value === "boolean" ? record.value : typeof record.value === "string" ? record.value : record.type === "toggle" ? false : "");
+          const variableName = typeof record.variableName === "string" ? record.variableName : "";
+          const boundValue = variableName ? runtime.getVariable(variableName, screenId) : undefined;
+          const initialValue = typeof boundValue === "boolean" || typeof boundValue === "number" || typeof boundValue === "string"
+            ? boundValue
+            : typeof record.value === "boolean" || typeof record.value === "string" ? record.value : record.type === "toggle" ? false : "";
+          const value = settingsValues[key] ?? initialValue;
+          const updateSetting = (nextValue: boolean | string) => {
+            setSettingsValues((current) => ({ ...current, [key]: nextValue }));
+            if (variableName && boundValue !== undefined) {
+              const typedValue = typeof boundValue === "number" ? Number(nextValue)
+                : typeof boundValue === "boolean" ? Boolean(nextValue)
+                : String(nextValue);
+              if (typeof typedValue !== "number" || Number.isFinite(typedValue)) {
+                runtime.setVariable(variableName, typedValue, screenId);
+              }
+            }
+            runEvent(widget, "onChange", item);
+          };
           return <div key={key} className="preview-setting">
             <label>
               <strong>{interpolate(label)}</strong>
               {description && <small>{interpolate(description)}</small>}
-              {record.type === "toggle" || typeof record.value === "boolean"
-                ? <input aria-label={label} type="checkbox" checked={Boolean(value)} onChange={(event) => setSettingsValues((current) => ({ ...current, [key]: event.target.checked }))} />
-                : <input aria-label={label} type={record.type === "number" ? "number" : "text"} value={String(value)} onChange={(event) => setSettingsValues((current) => ({ ...current, [key]: event.target.value }))} />}
+              {record.type === "toggle" || typeof initialValue === "boolean"
+                ? <input aria-label={label} type="checkbox" checked={Boolean(value)} onChange={(event) => updateSetting(event.target.checked)} />
+                : <input aria-label={label} type={record.type === "number" || typeof initialValue === "number" ? "number" : "text"} value={String(value)} onChange={(event) => updateSetting(event.target.value)} />}
             </label>
           </div>;
         }) : <p>No settings configured</p>}
@@ -1028,7 +1050,9 @@ export function PreviewWidget({
       const record = entry && typeof entry === "object" ? entry as Record<string, unknown> : {};
       const label = typeof entry === "string" ? entry : typeof record.label === "string" ? record.label : `Item ${index + 1}`;
       const href = typeof record.href === "string" ? sanitizeRichTextHref(record.href) : null;
-      return { label, href };
+      const screenId = typeof record.screenId === "string" ? record.screenId
+        : typeof record.targetScreenId === "string" ? record.targetScreenId : null;
+      return { label, href, screenId };
     });
     const vertical = widget.type === "sidebar";
     const title = widget.type === "app-bar" ? stringProp(widget, "label", "") : "";
@@ -1037,7 +1061,11 @@ export function PreviewWidget({
         {title && <strong>{interpolate(title)}</strong>}
         {items.map((entry, index) => entry.href
           ? <a key={index} href={entry.href} onClick={() => { setActiveNavigationItem(index); runEvent(widget, "onClick", item); }}>{interpolate(entry.label)}</a>
-          : <button key={index} type="button" aria-current={activeNavigationItem === index ? "page" : undefined} onClick={() => { setActiveNavigationItem(index); runEvent(widget, "onClick", item); }}>{interpolate(entry.label)}</button>)}
+          : <button key={index} type="button" aria-current={activeNavigationItem === index ? "page" : undefined} onClick={() => {
+            setActiveNavigationItem(index);
+            runEvent(widget, "onClick", item);
+            if (entry.screenId) onNavigate(entry.screenId);
+          }}>{interpolate(entry.label)}</button>)}
       </nav>
     );
   }
@@ -1049,6 +1077,23 @@ export function PreviewWidget({
         event.preventDefault();
         const formData = new FormData(event.currentTarget);
         const submitted = Object.fromEntries(Array.from(formData.entries()).map(([key, value]) => [key, String(value)]));
+        fields.forEach((entry, index) => {
+          if (!entry || typeof entry !== "object") return;
+          const field = entry as Record<string, unknown>;
+          if (typeof field.variableName !== "string") return;
+          const fieldName = typeof field.name === "string" ? field.name : `field-${index + 1}`;
+          const isCheckbox = field.type === "checkbox";
+          if (!Object.prototype.hasOwnProperty.call(submitted, fieldName) && !isCheckbox) return;
+          const currentValue = runtime.getVariable(field.variableName, screenId);
+          if (currentValue === undefined) return;
+          const rawValue = submitted[fieldName] ?? "false";
+          const typedValue = typeof currentValue === "number" ? Number(rawValue)
+            : typeof currentValue === "boolean" ? isCheckbox ? rawValue !== "false" : rawValue === "true" || rawValue === "on"
+            : rawValue;
+          if (typeof typedValue !== "number" || Number.isFinite(typedValue)) {
+            runtime.setVariable(field.variableName, typedValue, screenId);
+          }
+        });
         setFormSubmission(submitted);
         runEvent(widget, "onClick", item);
       }}>
@@ -1056,13 +1101,16 @@ export function PreviewWidget({
           const record = entry && typeof entry === "object" ? entry as Record<string, unknown> : {};
           const label = typeof record.label === "string" ? record.label : `Field ${index + 1}`;
           const placeholder = typeof record.placeholder === "string" ? record.placeholder : "";
-          const allowedTypes = ["text", "email", "number", "date", "tel", "url", "password"] as const;
+          const allowedTypes = ["text", "email", "number", "date", "tel", "url", "password", "checkbox"] as const;
           const requestedType = typeof record.type === "string" ? record.type : "text";
           const fieldType = allowedTypes.includes(requestedType as typeof allowedTypes[number]) ? requestedType : "text";
           return <label key={index}>{label}<input aria-label={label} name={typeof record.name === "string" ? record.name : `field-${index + 1}`} type={fieldType} placeholder={placeholder} required={record.required === true} /></label>;
         }) : <p>No form fields configured</p>}
         <button type="submit">{stringProp(widget, "submitLabel", "Submit")}</button>
-        {formSubmission && <output aria-live="polite">Submitted {Object.keys(formSubmission).length} field(s)</output>}
+        {formSubmission && <output aria-live="polite">
+          <strong>Submitted {Object.keys(formSubmission).length} field(s)</strong>
+          <ul>{Object.entries(formSubmission).map(([name, value]) => <li key={name}><span>{name}:</span> {value || "—"}</li>)}</ul>
+        </output>}
       </form>
     );
   }
@@ -1100,58 +1148,56 @@ export function PreviewWidget({
   }
 
   if (widget.type === "chart") {
-    const values = (Array.isArray(widget.props.values) ? widget.props.values : [38, 68, 50, 88, 62])
-      .slice(0, 8)
-      .map((value) => typeof value === "number" && Number.isFinite(value) ? Math.max(0, value) : 0);
-    const maxValue = Math.max(1, ...values);
+    const rawValues = Array.isArray(widget.props.values) ? widget.props.values.slice(0, 8) : [];
+    const values = rawValues.map((value) => {
+      const resolved = typeof value === "string" ? interpolate(value) : value;
+      if (typeof resolved === "number") return Number.isFinite(resolved) ? resolved : null;
+      if (typeof resolved === "string" && resolved.trim() !== "") {
+        const parsed = Number(resolved);
+        return Number.isFinite(parsed) ? parsed : null;
+      }
+      return null;
+    });
+    const labels = Array.isArray(widget.props.labels)
+      ? widget.props.labels.slice(0, values.length).map((label, index) => typeof label === "string" ? interpolate(label) : `Item ${index + 1}`)
+      : values.map((_, index) => `Item ${index + 1}`);
     const titleId = `${widget.id}-chart-title`;
     const chartType = stringProp(widget, "chartType", "bar");
-    const points = values.map((value, index) =>
-      `${12 + index * (176 / Math.max(1, values.length - 1))},${88 - value / maxValue * 70}`,
-    ).join(" ");
-    const total = values.reduce((sum, value) => sum + value, 0) || 1;
+    const validValues = values.filter((value): value is number => value !== null);
+    const maxAbs = Math.max(1, ...validValues.map(Math.abs));
+    const positiveTotal = validValues.reduce((sum, value) => sum + Math.max(0, value), 0) || 1;
+    const baseline = validValues.some((value) => value < 0) ? 52 : 88;
+    const points = values.map((value, index) => value === null ? null
+      : `${12 + index * (176 / Math.max(1, values.length - 1))},${baseline - value / maxAbs * (baseline === 52 ? 40 : 70)}`)
+      .filter((point): point is string => point !== null).join(" ");
     let pieOffset = 0;
     return (
       <figure className="preview-widget preview-chart" style={style} {...commonHandlers}>
         <figcaption id={titleId}>{text || "Chart"}</figcaption>
-        <svg viewBox="0 0 200 100" role="img" aria-labelledby={titleId}>
-          {chartType === "line"
-            ? <polyline points={points} fill="none" stroke="currentColor" strokeWidth="3" strokeLinejoin="round" strokeLinecap="round" />
-            : chartType === "pie"
-              ? values.map((value, index) => {
-                  const segment = (
-                    <circle
-                      key={index}
-                      cx="100"
-                      cy="52"
-                      r="34"
-                      fill="none"
-                      stroke={["#8b69ed", "#55b6a8", "#e39b54", "#6579d8", "#ce6b83"][index % 5]}
-                      strokeWidth="22"
-                      strokeDasharray={`${value / total * 214} 214`}
-                      strokeDashoffset={-pieOffset}
-                      transform="rotate(-90 100 52)"
-                    />
-                  );
-                  pieOffset += value / total * 214;
-                  return segment;
-                })
-              : values.map((value, index) => {
-                  const width = 18;
-                  const height = value / maxValue * 70;
-                  return (
-                    <rect
-                      key={index}
-                      x={12 + index * 23}
-                      y={88 - height}
-                      width={width}
-                      height={height}
-                      rx="3"
-                      fill={index === 0 ? "#8b69ed" : "#55b6a8"}
-                    />
-                  );
-                })}
-        </svg>
+        {validValues.length ? <>
+          <svg viewBox="0 0 200 100" role="img" aria-labelledby={titleId}>
+            {chartType === "line"
+              ? <polyline points={points} fill="none" stroke="currentColor" strokeWidth="3" strokeLinejoin="round" strokeLinecap="round" />
+              : chartType === "pie"
+                ? values.map((value, index) => {
+                    if (value === null || value <= 0) return null;
+                    const segment = <circle key={index} cx="100" cy="52" r="34" fill="none" stroke={["#8b69ed", "#55b6a8", "#e39b54", "#6579d8", "#ce6b83"][index % 5]} strokeWidth="22" strokeDasharray={`${value / positiveTotal * 214} 214`} strokeDashoffset={-pieOffset} transform="rotate(-90 100 52)" />;
+                    pieOffset += value / positiveTotal * 214;
+                    return segment;
+                  })
+                : <>
+                    {baseline === 52 && <line x1="8" x2="192" y1="52" y2="52" stroke="currentColor" opacity=".45" />}
+                    {values.map((value, index) => {
+                      if (value === null) return null;
+                      const barHeight = Math.abs(value) / maxAbs * (baseline === 52 ? 40 : 70);
+                      return <rect key={index} x={12 + index * 23} y={value >= 0 ? baseline - barHeight : baseline} width="18" height={barHeight} rx="3" fill={index === 0 ? "#8b69ed" : "#55b6a8"} />;
+                    })}
+                  </>}
+          </svg>
+          <ul aria-label="Chart data" style={{ display: "flex", flexWrap: "wrap", gap: 8, listStyle: "none", padding: 0, margin: 0, fontSize: 11 }}>
+            {values.map((value, index) => <li key={index}>{labels[index]}: {value === null ? "—" : value}</li>)}
+          </ul>
+        </> : <p role="note">No valid chart data configured</p>}
       </figure>
     );
   }
@@ -1185,8 +1231,10 @@ export function PreviewWidget({
   }
 
   if (widget.type === "video") {
-    const source = stringProp(widget, "src");
-    const poster = stringProp(widget, "poster");
+    const rawSource = stringProp(widget, "src");
+    const rawPoster = stringProp(widget, "poster");
+    const source = rawSource ? sanitizeRichTextHref(interpolate(rawSource)) : null;
+    const poster = rawPoster ? sanitizeRichTextHref(interpolate(rawPoster)) : null;
     return (
       <figure className="preview-widget preview-video" style={style} {...commonHandlers}>
         {source
@@ -1308,7 +1356,7 @@ export function PreviewWidget({
 
   if (widget.type === "image") {
     const source = stringProp(widget, "src", stringProp(widget, "url"));
-    const src = interpolate(source);
+    const src = source ? sanitizeRichTextHref(interpolate(source)) : null;
     return (
       <div className="preview-widget" style={style} {...commonHandlers}>
         {src ? <img src={src} alt={interpolate(stringProp(widget, "alt", text))} style={{ objectFit: stringProp(widget, "fit") === "cover" ? "cover" : "contain" }} /> : text || "Image"}
@@ -1375,6 +1423,7 @@ export function PreviewWidget({
                 snapshot={snapshot}
                 runEvent={runEvent}
                 onError={onError}
+                onNavigate={onNavigate}
                 item={item}
                 controlValues={controlValues}
                 onControlValueChange={onControlValueChange}
@@ -1557,13 +1606,14 @@ export function PreviewWidget({
     }).filter(entry => entry.src.length > 0);
     return (
       <section className="preview-widget preview-image-gallery" aria-label={stringProp(widget, "label", "Image gallery")} data-widget-type="image-gallery" style={{ ...style, display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: 4, padding: 4, overflow: "auto" }} {...commonHandlers}>
-        {images.length ? images.map((entry, index) => <img key={index} src={interpolate(entry.src)} alt={interpolate(entry.alt)} style={{ width: "100%", height: "100%", minHeight: 40, objectFit: "cover", borderRadius: 4 }} />) : <p role="note" style={{ margin: 4, fontSize: 12, opacity: 0.7 }}>No gallery images configured</p>}
+        {images.length ? images.map((entry, index) => <img key={index} src={sanitizeRichTextHref(interpolate(entry.src)) ?? undefined} alt={interpolate(entry.alt)} style={{ width: "100%", height: "100%", minHeight: 40, objectFit: "cover", borderRadius: 4 }} />) : <p role="note" style={{ margin: 4, fontSize: 12, opacity: 0.7 }}>No gallery images configured</p>}
       </section>
     );
   }
 
   if (widget.type === "audio") {
-    const source = interpolate(stringProp(widget, "src", ""));
+    const rawSource = stringProp(widget, "src", "");
+    const source = rawSource ? sanitizeRichTextHref(interpolate(rawSource)) : null;
     return (
       <section className="preview-widget preview-audio" aria-label={stringProp(widget, "label", "Audio player")} data-widget-type="audio" style={{ ...style, display: "flex", flexDirection: "column", justifyContent: "center", padding: 8, gap: 4 }} {...commonHandlers}>
         {source ? <audio controls preload="metadata" src={source} style={{ width: "100%" }} /> : <p role="note" style={{ margin: 4, fontSize: 12, opacity: 0.7 }}>Audio source not configured</p>}
@@ -1592,6 +1642,7 @@ export function PreviewWidget({
         snapshot={snapshot}
         runEvent={runEvent}
         onError={onError}
+        onNavigate={onNavigate}
         inputMode={inputMode}
         controlValues={controlValues}
         onControlValueChange={onControlValueChange}
@@ -2030,6 +2081,7 @@ export function PreviewWindow() {
                 snapshot={runtimeSnapshot}
                 runEvent={runEvent}
                 onError={(error) => setToast(error instanceof Error ? error.message : "Preview control failed.")}
+                onNavigate={changeScreen}
                 transitionStyle={transitionStyle}
                 layoutPosition={layoutPositions.get(widget.id)}
                 controlValues={controlValues}

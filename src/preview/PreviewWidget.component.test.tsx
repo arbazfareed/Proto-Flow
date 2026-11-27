@@ -1,6 +1,6 @@
 import { cleanup, fireEvent, render } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
-import { createEmptyProject, type Widget } from "../project/schema";
+import { createEmptyProject, type Project, type Widget } from "../project/schema";
 import { PreviewWidget } from "./PreviewWindow";
 import { PreviewRuntime } from "./runtime";
 
@@ -1052,9 +1052,11 @@ describe("PreviewWidget component masters", () => {
 
 
 describe("PreviewWidget form, card, navigation, and settings behavior", () => {
-  function renderConfiguredWidget(widget: Widget, runEvent = vi.fn(() => 0)) {
+  function renderConfiguredWidget(widget: Widget, runEvent = vi.fn(() => 0), variables: Project["variables"] = []) {
     const project = createEmptyProject("Configured widget preview");
+    project.variables = variables;
     const runtime = new PreviewRuntime(project);
+    const onNavigate = vi.fn();
     const rendered = render(
       <PreviewWidget
         widget={widget}
@@ -1063,13 +1065,14 @@ describe("PreviewWidget form, card, navigation, and settings behavior", () => {
         snapshot={runtime.snapshot()}
         runEvent={runEvent}
         onError={vi.fn()}
+        onNavigate={onNavigate}
         controlValues={{}}
         onControlValueChange={vi.fn()}
         onGestureFeedback={vi.fn()}
         liteMode={false}
       />,
     );
-    return { ...rendered, runEvent };
+    return { ...rendered, runEvent, runtime, onNavigate };
   }
 
   it("collects configured form values on submit and reports the submitted field count", () => {
@@ -1086,6 +1089,25 @@ describe("PreviewWidget form, card, navigation, and settings behavior", () => {
     fireEvent.submit(rendered.getByRole("form", { name: "Contact form" }));
     expect(rendered.getByRole("status")).toHaveTextContent("Submitted 2 field(s)");
     expect(rendered.runEvent).toHaveBeenCalledWith(widget, "onClick", undefined);
+  });
+
+  it("writes submitted form values into configured runtime variables", () => {
+    const widget: Widget = { ...makeWidget(), type: "form", props: {
+      label: "Profile form",
+      fields: [{ name: "displayName", label: "Display name", type: "text", variableName: "displayName" }],
+    } };
+    const rendered = renderConfiguredWidget(widget, vi.fn(() => 0), [{
+      id: "00000000-0000-4000-8000-000000000001",
+      name: "displayName",
+      scope: "project",
+      type: "string",
+      initial: "Guest",
+    }]);
+    fireEvent.change(rendered.getByRole("textbox", { name: "Display name" }), { target: { value: "Ada" } });
+    fireEvent.submit(rendered.getByRole("form", { name: "Profile form" }));
+    expect(rendered.runtime.getVariable("displayName")).toBe("Ada");
+    expect(rendered.getByRole("status")).toHaveTextContent("displayName:");
+    expect(rendered.getByRole("status")).toHaveTextContent("Ada");
   });
 
   it("makes the card action button keyboard accessible and interactive", () => {
@@ -1109,6 +1131,22 @@ describe("PreviewWidget form, card, navigation, and settings behavior", () => {
     const displayName = rendered.getByRole("textbox", { name: /Display name/ });
     fireEvent.change(displayName, { target: { value: "Alex" } });
     expect(displayName).toHaveValue("Alex");
+  });
+
+  it("keeps Settings controls bound to runtime variables and fires change interactions", () => {
+    const widget: Widget = { ...makeWidget(), type: "settings", props: { items: [
+      { name: "notifications", label: "Notifications", type: "toggle", variableName: "notifications" },
+    ] } };
+    const rendered = renderConfiguredWidget(widget, vi.fn(() => 0), [{
+      id: "00000000-0000-4000-8000-000000000002",
+      name: "notifications",
+      scope: "project",
+      type: "boolean",
+      initial: false,
+    }]);
+    fireEvent.click(rendered.getByRole("checkbox", { name: "Notifications" }));
+    expect(rendered.runtime.getVariable("notifications")).toBe(true);
+    expect(rendered.runEvent).toHaveBeenCalledWith(widget, "onChange", undefined);
   });
 
   it("uses configured navigation destinations and marks the selected local item", () => {
@@ -1137,5 +1175,80 @@ describe("PreviewWidget form, card, navigation, and settings behavior", () => {
     const rendered = renderConfiguredWidget(widget);
     expect(rendered.queryByRole("link", { name: "Unsafe" })).not.toBeInTheDocument();
     expect(rendered.getByRole("button", { name: "Unsafe" })).toBeInTheDocument();
+  });
+  it("navigates to the screen configured on an individual navigation item", () => {
+    const widget: Widget = { ...makeWidget(), type: "navbar", props: { items: [
+      { label: "Dashboard", screenId: "screen-dashboard" },
+    ] } };
+    const rendered = renderConfiguredWidget(widget);
+    fireEvent.click(rendered.getByRole("button", { name: "Dashboard" }));
+    expect(rendered.onNavigate).toHaveBeenCalledWith("screen-dashboard");
+    expect(rendered.runEvent).toHaveBeenCalledWith(widget, "onClick", undefined);
+  });
+
+});
+
+describe("PreviewWidget charts and media sources", () => {
+  function renderConfigured(widget: Widget, runtime = new PreviewRuntime(createEmptyProject("Chart/media preview"))) {
+    const screenId = runtime.snapshot().screenId;
+    return render(
+      <PreviewWidget
+        widget={widget}
+        runtime={runtime}
+        screenId={screenId}
+        snapshot={runtime.snapshot()}
+        runEvent={vi.fn(() => 0)}
+        onError={vi.fn()}
+        controlValues={{}}
+        onControlValueChange={vi.fn()}
+        onGestureFeedback={vi.fn()}
+        liteMode={false}
+      />,
+    );
+  }
+
+  it("resolves chart values from runtime variables and displays configured labels", () => {
+    const project = createEmptyProject("Bound chart");
+    project.variables.push({ id: crypto.randomUUID(), name: "revenue", type: "number", initial: 42, scope: "project" });
+    const runtime = new PreviewRuntime(project);
+    const widget: Widget = { ...makeWidget(), type: "chart", props: {
+      title: "Revenue",
+      values: ["[[revenue]]", -12],
+      labels: ["Current", "Previous"],
+      chartType: "bar",
+    } };
+    const rendered = renderConfigured(widget, runtime);
+    expect(rendered.getByText("Current: 42")).toBeInTheDocument();
+    expect(rendered.getByText("Previous: -12")).toBeInTheDocument();
+    expect(rendered.getByRole("img")).toBeInTheDocument();
+  });
+
+  it("does not invent sample chart data when no values are configured", () => {
+    const widget: Widget = { ...makeWidget(), type: "chart", props: { title: "Empty chart" } };
+    const rendered = renderConfigured(widget);
+    expect(rendered.getByText("No valid chart data configured")).toBeInTheDocument();
+    expect(rendered.queryByRole("img")).not.toBeInTheDocument();
+  });
+
+  it("rejects unsafe image source protocols", () => {
+    const widget: Widget = { ...makeWidget(), type: "image", props: { src: "javascript:alert(1)", alt: "Unsafe image" } };
+    const rendered = renderConfigured(widget);
+    expect(rendered.queryByRole("img", { name: "Unsafe image" })).not.toBeInTheDocument();
+  });
+
+  it("rejects unsafe audio and video source protocols", () => {
+    const audio: Widget = { ...makeWidget(), type: "audio", props: { src: "javascript:alert(1)" } };
+    const video: Widget = { ...makeWidget(), id: crypto.randomUUID(), type: "video", props: { src: "javascript:alert(1)" } };
+    const project = createEmptyProject("Unsafe media");
+    const runtime = new PreviewRuntime(project);
+    const rendered = render(
+      <>
+        <PreviewWidget widget={audio} runtime={runtime} screenId={project.screens[0].id} snapshot={runtime.snapshot()} runEvent={vi.fn(() => 0)} onError={vi.fn()} controlValues={{}} onControlValueChange={vi.fn()} onGestureFeedback={vi.fn()} liteMode={false} />
+        <PreviewWidget widget={video} runtime={runtime} screenId={project.screens[0].id} snapshot={runtime.snapshot()} runEvent={vi.fn(() => 0)} onError={vi.fn()} controlValues={{}} onControlValueChange={vi.fn()} onGestureFeedback={vi.fn()} liteMode={false} />
+      </>,
+    );
+    expect(rendered.container.querySelector("audio")).not.toBeInTheDocument();
+    expect(rendered.container.querySelector("video")).not.toBeInTheDocument();
+    expect(rendered.getByText("Audio source not configured")).toBeInTheDocument();
   });
 });
