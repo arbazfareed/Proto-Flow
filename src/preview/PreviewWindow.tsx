@@ -339,6 +339,11 @@ export function PreviewWidget({
   const [previewThemeMode, setPreviewThemeMode] = useState<"light" | "dark">("light");
   const [refreshPreviewTriggered, setRefreshPreviewTriggered] = useState(false);
   const [lastSimulatedSwipe, setLastSimulatedSwipe] = useState("");
+  const [stepperValue, setStepperValue] = useState(Math.max(1, Number(widget.props.value) || 1));
+  const [ratingValue, setRatingValue] = useState(Math.max(0, Math.min(5, Number(widget.props.value) || 0)));
+  const [popoverOpen, setPopoverOpen] = useState(false);
+  const [selectedFileName, setSelectedFileName] = useState("");
+  const [toastVisible, setToastVisible] = useState(true);
   // Icons beyond the built-in set appear once the full set has loaded.
   useFullIconSet();
   useEffect(() => () => {
@@ -687,6 +692,88 @@ export function PreviewWidget({
         </div>
       </section>
     );
+  }
+
+  if (widget.type === "select") {
+    const options = Array.isArray(widget.props.options) ? widget.props.options.filter((option): option is string => typeof option === "string") : [];
+    return <label className="preview-widget-label" style={{ ...style, display: "flex", flexDirection: "column", gap: 4, overflow: "visible" }}><span>{stringProp(widget, "label", "Select")}</span><select aria-label={stringProp(widget, "label", "Select")} value={inputValue} onChange={handleChange}><option value="">{stringProp(widget, "placeholder", "Choose an option")}</option>{options.map((option) => <option key={option} value={option}>{interpolate(option)}</option>)}</select></label>;
+  }
+
+  if (widget.type === "slider") {
+    const min = Number(widget.props.min ?? 0);
+    const max = Math.max(min, Number(widget.props.max ?? 100));
+    const value = Math.max(min, Math.min(max, Number(inputValue || widget.props.value) || min));
+    return <label className="preview-widget-label" style={{ ...style, display: "flex", flexDirection: "column", gap: 4 }}><span>{stringProp(widget, "label", "Slider")}: {value}</span><input aria-label={stringProp(widget, "label", "Slider")} type="range" min={min} max={max} step={Math.max(0.01, Number(widget.props.step) || 1)} value={value} onChange={handleChange} /></label>;
+  }
+
+  if (widget.type === "stepper") {
+    const min = Number(widget.props.min ?? 1);
+    const max = Number(widget.props.max ?? 99);
+    const change = (next: number) => { const value = Math.max(min, Math.min(max, next)); setStepperValue(value); runEvent(widget, "onChange", item); };
+    return <section className="preview-widget preview-stepper" aria-label={stringProp(widget, "label", "Stepper")} style={{ ...style, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, padding: 8 }}><strong>{stringProp(widget, "label", "Quantity")}</strong><button type="button" aria-label="Decrease value" disabled={stepperValue <= min} onClick={() => change(stepperValue - 1)}>−</button><output aria-live="polite">{stepperValue}</output><button type="button" aria-label="Increase value" disabled={stepperValue >= max} onClick={() => change(stepperValue + 1)}>+</button></section>;
+  }
+
+  if (widget.type === "date-picker") {
+    return <label className="preview-widget-label" style={{ ...style, display: "flex", flexDirection: "column", gap: 4 }}><span>{stringProp(widget, "label", "Date")}</span><input aria-label={stringProp(widget, "label", "Date")} type="date" value={inputValue} onChange={handleChange} /></label>;
+  }
+
+  if (widget.type === "file-upload") {
+    return <label className="preview-widget-label preview-file-upload" style={{ ...style, display: "flex", flexDirection: "column", justifyContent: "center", gap: 6, padding: 8 }}><span>{stringProp(widget, "label", "Upload file")}</span><input aria-label={stringProp(widget, "label", "Upload file")} type="file" accept={stringProp(widget, "accept", "") || undefined} multiple={widget.props.multiple === true} onChange={(event) => { const files = Array.from(event.currentTarget.files ?? []); setSelectedFileName(files.map((file) => file.name).join(", ")); runEvent(widget, "onChange", item); }} /><small>{selectedFileName || stringProp(widget, "placeholder", "Choose a file")}</small></label>;
+  }
+
+  if (widget.type === "rating") {
+    const max = Math.max(1, Math.min(10, Number(widget.props.max ?? 5)));
+    return <div className="preview-widget preview-rating" role="group" aria-label={stringProp(widget, "label", "Rating")} style={{ ...style, display: "flex", alignItems: "center", gap: 4, padding: 6 }}>{Array.from({ length: max }, (_, index) => <button key={index} type="button" aria-label={`Rate ${index + 1} of ${max}`} aria-pressed={ratingValue === index + 1} onClick={() => { setRatingValue(index + 1); runEvent(widget, "onChange", item); }}>{index < ratingValue ? "★" : "☆"}</button>)}<output>{ratingValue}/{max}</output></div>;
+  }
+
+  if (widget.type === "progress-bar") {
+    const progress = Math.max(0, Math.min(100, Number(widget.props.value ?? widget.props.progress ?? 45) || 0));
+    return <div className="preview-widget preview-progress" style={{ ...style, display: "flex", flexDirection: "column", justifyContent: "center", gap: 6, padding: 8 }}><span>{stringProp(widget, "label", "Progress")}: {progress}%</span><progress aria-label={stringProp(widget, "label", "Progress")} max={100} value={progress} style={{ width: "100%" }} /></div>;
+  }
+
+  if (widget.type === "spinner") {
+    return <div className="preview-widget preview-spinner" role="status" aria-label={stringProp(widget, "label", "Loading")} style={{ ...style, display: "grid", placeItems: "center" }}><span aria-hidden="true" style={{ fontSize: 24 }}>◌</span><span>{stringProp(widget, "label", "Loading")}</span></div>;
+  }
+
+  if (widget.type === "popover" || widget.type === "tooltip") {
+    const trigger = stringProp(widget, "triggerLabel", widget.type === "tooltip" ? "Hover or focus for help" : "Open details");
+    const content = stringProp(widget, "content", stringProp(widget, "description", "Add explanatory content in the properties panel."));
+    return <section className={`preview-widget preview-${widget.type}`} style={{ ...style, display: "flex", flexDirection: "column", alignItems: "flex-start", justifyContent: "center", gap: 6, padding: 8 }} data-widget-type={widget.type}><button type="button" aria-expanded={popoverOpen} onClick={() => setPopoverOpen((open) => !open)} onMouseEnter={() => { if (widget.type === "tooltip") setPopoverOpen(true); }} onMouseLeave={() => { if (widget.type === "tooltip") setPopoverOpen(false); }} onFocus={() => { if (widget.type === "tooltip") setPopoverOpen(true); }} onBlur={() => { if (widget.type === "tooltip") setPopoverOpen(false); }}>{trigger}</button>{popoverOpen && <div role="status">{interpolate(content)}</div>}</section>;
+  }
+
+  if (widget.type === "toast" || widget.type === "notification" || widget.type === "banner") {
+    if (!toastVisible) return null;
+    const heading = stringProp(widget, "label", widget.type === "toast" ? "Changes saved" : widget.type === "banner" ? "Announcement" : "New notification");
+    return <aside className={`preview-widget preview-${widget.type}`} role="status" style={{ ...style, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, padding: 8 }}><span><strong>{interpolate(heading)}</strong>{stringProp(widget, "subtitle") && <small>{interpolate(stringProp(widget, "subtitle"))}</small>}</span><button type="button" aria-label={`Dismiss ${widget.type}`} onClick={(event) => { event.stopPropagation(); setToastVisible(false); }}>×</button></aside>;
+  }
+
+  if (widget.type === "badge" || widget.type === "chip" || widget.type === "tag") {
+    return <span className={`preview-widget preview-${widget.type}`} style={{ ...style, display: "inline-flex", alignItems: "center", justifyContent: "center", padding: "4px 10px", borderRadius: 999, whiteSpace: "nowrap" }}>{interpolate(stringProp(widget, "label", text || widget.type))}</span>;
+  }
+
+  if (widget.type === "stat" || widget.type === "metric-card") {
+    return <section className="preview-widget preview-stat" aria-label={stringProp(widget, "label", "Statistic")} style={{ ...style, display: "flex", flexDirection: "column", justifyContent: "center", gap: 5, padding: 10 }}><span>{interpolate(stringProp(widget, "label", "Revenue"))}</span><strong style={{ fontSize: 22 }}>{interpolate(stringProp(widget, "value", "—"))}</strong>{stringProp(widget, "trend") && <small>{interpolate(stringProp(widget, "trend"))}</small>}</section>;
+  }
+
+  if (widget.type === "profile-card" || widget.type === "testimonial-card" || widget.type === "feature-card" || widget.type === "pricing-card" || widget.type === "empty-state") {
+    const heading = stringProp(widget, "label", widget.type.replaceAll("-", " "));
+    const detail = stringProp(widget, "subtitle", widget.type === "empty-state" ? "New items will appear here." : "");
+    return <article className={`preview-widget preview-${widget.type}`} style={{ ...style, display: "flex", flexDirection: "column", alignItems: "flex-start", justifyContent: "center", gap: 6, padding: 10 }} {...commonHandlers}><strong>{interpolate(heading)}</strong>{detail && <p>{interpolate(detail)}</p>}{widget.type === "profile-card" && <small>{stringProp(widget, "initials", avatarInitials(heading))}</small>}{widget.type === "testimonial-card" && <span aria-label={`Rating ${Number(widget.props.value) || 5} out of 5`}>{"★".repeat(Math.max(0, Math.min(5, Number(widget.props.value) || 5)))}</span>}{widget.type === "pricing-card" && <button type="button" onClick={(event) => { event.stopPropagation(); runEvent(widget, "onClick", item); }}>{stringProp(widget, "actionLabel", "Choose plan")}</button>}</article>;
+  }
+
+  if (widget.type === "table" || widget.type === "grid") {
+    const columns = Array.isArray(widget.props.columns) ? widget.props.columns.filter((entry): entry is string => typeof entry === "string") : [];
+    const rows = Array.isArray(widget.props.rows) ? widget.props.rows.filter((entry) => entry && typeof entry === "object" && !Array.isArray(entry)) as Record<string, unknown>[] : [];
+    return <div className={`preview-widget preview-${widget.type}`} style={{ ...style, overflow: "auto", padding: 8 }} data-widget-type={widget.type}>{rows.length && columns.length ? <table><thead><tr>{columns.map((column) => <th key={column}>{column}</th>)}</tr></thead><tbody>{rows.map((row, index) => <tr key={index}>{columns.map((column) => <td key={column}>{String(row[column] ?? "")}</td>)}</tr>)}</tbody></table> : <p>No {widget.type} data configured</p>}</div>;
+  }
+
+  if (widget.type === "calendar") {
+    const events = Array.isArray(widget.props.events) ? widget.props.events : [];
+    return <section className="preview-widget preview-calendar" aria-label={stringProp(widget, "label", "Calendar")} style={{ ...style, display: "flex", flexDirection: "column", gap: 6, padding: 8, overflow: "auto" }}><strong>{stringProp(widget, "title", "Calendar")}</strong>{events.length ? events.map((entry, index) => { const record = entry && typeof entry === "object" ? entry as Record<string, unknown> : {}; return <div key={index}><time>{typeof record.date === "string" ? record.date : ""}</time> {typeof record.title === "string" ? record.title : `Event ${index + 1}`}</div>; }) : <p>No calendar events configured</p>}</section>;
+  }
+
+  if (widget.type === "code-block") {
+    return <pre className="preview-widget preview-code-block" style={{ ...style, overflow: "auto", padding: 8, whiteSpace: "pre-wrap" }}><code>{stringProp(widget, "label", "Add code in the properties panel.")}</code></pre>;
   }
 
   if (widget.type === "pagination") {
