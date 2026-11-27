@@ -31,7 +31,9 @@
 .icon-button:hover:not(:disabled) { color:#eeeef2; background:var(--surface-hover); }
 .icon-button:disabled { opacity:.34; cursor:default; }
 .small-icon { width:25px; height:25px; }
+.topbar-actions { gap:5px; min-width:0; flex:0 1 auto; }
 .topbar-icon { width:28px; height:28px; }
+.topbar-settings-trigger { flex:0 0 28px; position:relative; z-index:1; }
 .button { min-height:31px; padding:0 11px; border-radius:6px; font-size:11px; font-weight:550; white-space:nowrap; }
 .button-primary { color:#fff; border-color:#795ed0; background:#795ed0; box-shadow:0 1px 2px #0003; }
 /* Share: a clear, always-visible call to action beside Save (B58). */
