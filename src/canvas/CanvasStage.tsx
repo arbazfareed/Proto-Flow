@@ -84,6 +84,7 @@ import {
   isWidgetContainer,
   syncWidgetGroupIdsToContainment,
 } from "../project/layers";
+import { getDeletableWidgetIds } from "../project/widgetSelection";
 import {
   copyWidgetStyle,
   copyWidgetsToClipboard,
@@ -2290,7 +2291,7 @@ export function CanvasStage({
 
     // Deleting a container also removes its unlocked descendants. Locked children
     // are intentionally retained and become independent instead of being deleted.
-    const deletable = new Set(withNestedWidgets(canvasWidgets, deletableRoots));
+    const deletable = getDeletableWidgetIds(canvasWidgets, deletableRoots);
     transformerRef.current?.nodes([]);
     contentLayerRef.current?.batchDraw();
     updateActiveScreenWidgets(canvasWidgets.filter((widget) => !deletable.has(widget.id)));
