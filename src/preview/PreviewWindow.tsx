@@ -912,6 +912,33 @@ export function PreviewWidget({
     );
   }
 
+  if (widget.type === "image-gallery") {
+    const rawImages = Array.isArray(widget.props.images) ? widget.props.images : [];
+    const images = rawImages.map((entry, index) => {
+      if (typeof entry === "string") return { src: entry, alt: `Image ${index + 1}` };
+      if (typeof entry === "object" && entry !== null) {
+        const record = entry as Record<string, unknown>;
+        return { src: typeof record.src === "string" ? record.src : typeof record.url === "string" ? record.url : "", alt: typeof record.alt === "string" ? record.alt : `Image ${index + 1}` };
+      }
+      return { src: "", alt: `Image ${index + 1}` };
+    }).filter(entry => entry.src.length > 0);
+    return (
+      <section className="preview-widget preview-image-gallery" aria-label={stringProp(widget, "label", "Image gallery")} data-widget-type="image-gallery" style={{ ...style, display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: 4, padding: 4, overflow: "auto" }} {...commonHandlers}>
+        {images.length ? images.map((entry, index) => <img key={index} src={interpolate(entry.src)} alt={interpolate(entry.alt)} style={{ width: "100%", height: "100%", minHeight: 40, objectFit: "cover", borderRadius: 4 }} />) : <p role="note" style={{ margin: 4, fontSize: 12, opacity: 0.7 }}>No gallery images configured</p>}
+      </section>
+    );
+  }
+
+  if (widget.type === "audio") {
+    const source = interpolate(stringProp(widget, "src", ""));
+    return (
+      <section className="preview-widget preview-audio" aria-label={stringProp(widget, "label", "Audio player")} data-widget-type="audio" style={{ ...style, display: "flex", flexDirection: "column", justifyContent: "center", padding: 8, gap: 4 }} {...commonHandlers}>
+        {source ? <audio controls preload="metadata" src={source} style={{ width: "100%" }} /> : <p role="note" style={{ margin: 4, fontSize: 12, opacity: 0.7 }}>Audio source not configured</p>}
+        <span style={{ fontSize: 12 }}>{stringProp(widget, "label", "Audio player")}</span>
+      </section>
+    );
+  }
+
   if (widget.type === "repeater") {
     const activeData = snapshot.repeaterData[widget.id];
     const rows = Array.isArray(activeData) ? activeData as RepeaterRecord[] : getRepeaterDataset(widget);
