@@ -836,7 +836,7 @@ export function PreviewWidget({
   if (widget.type === "profile-card" || widget.type === "testimonial-card" || widget.type === "feature-card" || widget.type === "pricing-card" || widget.type === "empty-state") {
     const heading = stringProp(widget, "label", widget.type.replaceAll("-", " "));
     const detail = stringProp(widget, "subtitle", widget.type === "empty-state" ? "New items will appear here." : "");
-    return <article className={`preview-widget preview-${widget.type}`} style={{ ...style, display: "flex", flexDirection: "column", alignItems: "flex-start", justifyContent: "center", gap: 6, padding: 10 }} {...commonHandlers}><strong>{interpolate(heading)}</strong>{detail && <p>{interpolate(detail)}</p>}{widget.type === "profile-card" && <small>{stringProp(widget, "initials", avatarInitials(heading))}</small>}{widget.type === "testimonial-card" && <span aria-label={`Rating ${Number(widget.props.value) || 5} out of 5`}>{"★".repeat(Math.max(0, Math.min(5, Number(widget.props.value) || 5)))}</span>}{widget.type === "pricing-card" && <button type="button" onClick={(event) => { event.stopPropagation(); runEvent(widget, "onClick", item); }}>{stringProp(widget, "actionLabel", "Choose plan")}</button>}</article>;
+    return <article className={`preview-widget preview-${widget.type}`} style={{ ...style, display: "flex", flexDirection: "column", alignItems: "flex-start", justifyContent: "center", gap: 6, padding: 10 }} {...commonHandlers}><strong>{interpolate(heading)}</strong>{detail && <p>{interpolate(detail)}</p>}{widget.type === "profile-card" && <small>{stringProp(widget, "initials", avatarInitials({ label: heading }))}</small>}{widget.type === "testimonial-card" && <span aria-label={`Rating ${Number(widget.props.value) || 5} out of 5`}>{"★".repeat(Math.max(0, Math.min(5, Number(widget.props.value) || 5)))}</span>}{widget.type === "pricing-card" && <button type="button" onClick={(event) => { event.stopPropagation(); runEvent(widget, "onClick", item); }}>{stringProp(widget, "actionLabel", "Choose plan")}</button>}</article>;
   }
 
   if (widget.type === "table") {
@@ -1334,8 +1334,7 @@ export function PreviewWidget({
   }
 
   if (widget.type === "symbol-instance") {
-    const symbol = symbols?.find((entry) => entry.id === widget.symbolId)
-      ;
+    const symbol = symbols?.find((entry) => entry.id === widget.symbolId);
     if (!symbol) {
       return <div className="preview-widget preview-symbol-instance preview-symbol-missing" role="group" aria-label={`Missing component: ${widget.name ?? "Symbol"}`} style={{ ...style, display: "grid", placeItems: "center", border: "1px dashed currentColor" }} {...commonHandlers}>Missing component</div>;
     }
