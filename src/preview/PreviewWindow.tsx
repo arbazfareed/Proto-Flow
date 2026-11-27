@@ -1018,7 +1018,12 @@ export function PreviewWidget({
   }
 
   if (widget.type === "navbar" || widget.type === "sidebar" || widget.type === "footer" || widget.type === "bottom-nav" || widget.type === "app-bar") {
-    const rawItems = Array.isArray(widget.props.items) ? widget.props.items : ["Home", "Explore", "Profile"];
+    const bottomNavItems = widget.type === "bottom-nav"
+      ? stringProp(widget, "label").split("|").map((entry) => entry.trim()).filter(Boolean)
+      : [];
+    const rawItems = bottomNavItems.length > 0
+      ? bottomNavItems
+      : Array.isArray(widget.props.items) ? widget.props.items : ["Home", "Explore", "Profile"];
     const items = rawItems.map((entry, index) => {
       const record = entry && typeof entry === "object" ? entry as Record<string, unknown> : {};
       const label = typeof entry === "string" ? entry : typeof record.label === "string" ? record.label : `Item ${index + 1}`;
