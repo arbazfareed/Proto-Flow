@@ -400,8 +400,9 @@ export function PreviewWidget({
   ) => liteMode
     ? value
     : runtime.interpolate(value, targetScreenId, targetItem, targetWidget);
-  const text = snapshot.widgetTexts[widget.id] ??
-    getWidgetText(widget, runtime, screenId, item, liteMode);
+  const text = widget.type === "avatar"
+    ? getWidgetText(widget, runtime, screenId, item, liteMode)
+    : snapshot.widgetTexts[widget.id] ?? getWidgetText(widget, runtime, screenId, item, liteMode);
   const richRuns = widget.type === "text" && widget.props.richText === true
     ? Array.isArray(widget.props.richTextRuns)
       ? normalizeRichTextRuns(widget.props.richTextRuns)
