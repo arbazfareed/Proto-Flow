@@ -280,6 +280,7 @@ export function VirtualizedRepeater({
                       snapshot={snapshot}
                       runEvent={runEvent}
                       onError={onError}
+                      onNavigate={onNavigate}
                       item={record}
                       controlValues={controlValues}
                       onControlValueChange={onControlValueChange}
@@ -304,6 +305,7 @@ export function PreviewWidget({
   snapshot,
   runEvent,
   onError,
+  onNavigate,
   transitionStyle,
   item,
   layoutPosition,
@@ -319,6 +321,7 @@ export function PreviewWidget({
   snapshot: PreviewRuntimeSnapshot;
   runEvent: (widget: Widget, event: PreviewEvent, item?: RepeaterRecord) => number;
   onError: (error: unknown) => void;
+  onNavigate: (screenId: string) => void;
   transitionStyle?: CSSProperties;
   item?: RepeaterRecord;
   layoutPosition?: WidgetPosition;
@@ -1040,14 +1043,20 @@ export function PreviewWidget({
       const record = entry && typeof entry === "object" ? entry as Record<string, unknown> : {};
       const label = typeof entry === "string" ? entry : typeof record.label === "string" ? record.label : `Item ${index + 1}`;
       const href = typeof record.href === "string" ? sanitizeRichTextHref(record.href) : null;
-      return { label, href };
+      const screenId = typeof record.screenId === "string" ? record.screenId
+        : typeof record.targetScreenId === "string" ? record.targetScreenId : null;
+      return { label, href, screenId };
     });
     const vertical = widget.type === "sidebar";
     return (
       <nav className={`preview-widget preview-${widget.type}`} aria-label={stringProp(widget, "label", widget.type)} style={{ ...style, display: "flex", flexDirection: vertical ? "column" : "row", alignItems: "center", justifyContent: "space-around", gap: 6, padding: 8 }} data-widget-type={widget.type}>
         {items.map((entry, index) => entry.href
           ? <a key={index} href={entry.href} onClick={() => { setActiveNavigationItem(index); runEvent(widget, "onClick", item); }}>{interpolate(entry.label)}</a>
-          : <button key={index} type="button" aria-current={activeNavigationItem === index ? "page" : undefined} onClick={() => { setActiveNavigationItem(index); runEvent(widget, "onClick", item); }}>{interpolate(entry.label)}</button>)}
+          : <button key={index} type="button" aria-current={activeNavigationItem === index ? "page" : undefined} onClick={() => {
+            setActiveNavigationItem(index);
+            runEvent(widget, "onClick", item);
+            if (entry.screenId) onNavigate(entry.screenId);
+          }}>{interpolate(entry.label)}</button>)}
       </nav>
     );
   }
@@ -1404,6 +1413,7 @@ export function PreviewWidget({
                 snapshot={snapshot}
                 runEvent={runEvent}
                 onError={onError}
+                onNavigate={onNavigate}
                 item={item}
                 controlValues={controlValues}
                 onControlValueChange={onControlValueChange}
@@ -2060,6 +2070,7 @@ export function PreviewWindow() {
                 snapshot={runtimeSnapshot}
                 runEvent={runEvent}
                 onError={(error) => setToast(error instanceof Error ? error.message : "Preview control failed.")}
+                onNavigate={changeScreen}
                 transitionStyle={transitionStyle}
                 layoutPosition={layoutPositions.get(widget.id)}
                 controlValues={controlValues}
