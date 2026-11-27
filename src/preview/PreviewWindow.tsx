@@ -1094,7 +1094,7 @@ export function PreviewWidget({
           const record = entry && typeof entry === "object" ? entry as Record<string, unknown> : {};
           const label = typeof record.label === "string" ? record.label : `Field ${index + 1}`;
           const placeholder = typeof record.placeholder === "string" ? record.placeholder : "";
-          const allowedTypes = ["text", "email", "number", "date", "tel", "url", "password"] as const;
+          const allowedTypes = ["text", "email", "number", "date", "tel", "url", "password", "checkbox"] as const;
           const requestedType = typeof record.type === "string" ? record.type : "text";
           const fieldType = allowedTypes.includes(requestedType as typeof allowedTypes[number]) ? requestedType : "text";
           return <label key={index}>{label}<input aria-label={label} name={typeof record.name === "string" ? record.name : `field-${index + 1}`} type={fieldType} placeholder={placeholder} required={record.required === true} /></label>;
