@@ -2646,6 +2646,24 @@ function NavigationElementShape({ widget, fill, stroke, strokeWidth }: ShapeComp
             return <Group key={index}><Circle x={18} y={y} radius={4} fill="#8b69ed" perfectDrawEnabled={false} /><KonvaText x={30} y={y - 9} width={Math.max(1, widget.width - 40)} height={18} text={label} fontSize={11} fill="#334155" verticalAlign="middle" ellipsis perfectDrawEnabled={false} /></Group>;
           })}
         </Group>
+      ) : type === "form" ? (
+        <Group>
+          <KonvaText x={10} y={5} width={widget.width - 20} height={22} text={title} fontSize={12} fontStyle="bold" fill="#334155" verticalAlign="middle" ellipsis perfectDrawEnabled={false} />
+          {[0, 1].map((index) => <Group key={index}><Rect x={10} y={34 + index * 30} width={Math.max(1, widget.width - 20)} height={22} fill="#f8fafc" stroke="#d7d7e0" strokeWidth={1} cornerRadius={4} perfectDrawEnabled={false} /><KonvaText x={16} y={34 + index * 30} width={widget.width - 32} height={22} text={labels[index] ?? `Field ${index + 1}`} fontSize={10} fill="#64748b" verticalAlign="middle" perfectDrawEnabled={false} /></Group>)}
+        </Group>
+      ) : ["modal", "overlay", "drawer"].includes(type) ? (
+        <Group>
+          <Rect x={5} y={5} width={Math.max(1, widget.width - 10)} height={Math.max(1, widget.height - 10)} fill="#ffffff" stroke="#cbd5e1" strokeWidth={1} cornerRadius={6} perfectDrawEnabled={false} />
+          <KonvaText x={14} y={10} width={widget.width - 28} height={22} text={getWidgetProp(widget, "title", title)} fontSize={12} fontStyle="bold" fill="#334155" verticalAlign="middle" ellipsis perfectDrawEnabled={false} />
+          <Line points={[12, 36, widget.width - 12, 36]} stroke="#e2e8f0" strokeWidth={1} perfectDrawEnabled={false} />
+          <KonvaText x={14} y={42} width={widget.width - 28} height={Math.max(1, widget.height - 50)} text={getWidgetProp(widget, "content", "Layer content")} fontSize={10} fill="#64748b" verticalAlign="top" ellipsis perfectDrawEnabled={false} />
+        </Group>
+      ) : ["cloud-sync", "websocket", "auth-state", "responsive-switch"].includes(type) ? (
+        <Group>
+          <KonvaText x={10} y={6} width={widget.width - 20} height={20} text={title} fontSize={11} fontStyle="bold" fill="#334155" verticalAlign="middle" ellipsis perfectDrawEnabled={false} />
+          <KonvaText x={10} y={28} width={widget.width - 20} height={18} text={type === "auth-state" ? getWidgetProp(widget, "status", "Signed out") : getWidgetProp(widget, "status", "Not connected")} fontSize={10} fill="#64748b" verticalAlign="middle" ellipsis perfectDrawEnabled={false} />
+          <KonvaText x={10} y={46} width={widget.width - 20} height={18} text="Preview only" fontSize={9} fill="#94a3b8" verticalAlign="middle" ellipsis perfectDrawEnabled={false} />
+        </Group>
       ) : (
         <Group>
           <KonvaText x={10} y={5} width={widget.width - 20} height={22} text={title} fontSize={12} fontStyle="bold" fill="#334155" verticalAlign="middle" ellipsis perfectDrawEnabled={false} />
@@ -2745,7 +2763,7 @@ function GenericElementShape({
   if (widget.type === "flex-row" || widget.type === "flex-column") {
     return <LayoutShape widget={widget} fill={fill} stroke={stroke} strokeWidth={strokeWidth} />;
   }
-  if (["pagination", "breadcrumb", "timeline", "fab", "tabs", "tabs-container", "menu", "dropdown-menu"].includes(widget.type)) return <NavigationElementShape widget={widget} fill={fill} stroke={stroke} strokeWidth={strokeWidth} />;
+  if (["pagination", "breadcrumb", "timeline", "fab", "tabs", "tabs-container", "menu", "dropdown-menu", "navbar", "sidebar", "footer", "bottom-nav", "app-bar", "form", "modal", "overlay", "drawer", "cloud-sync", "websocket", "auth-state", "responsive-switch"].includes(widget.type)) return <NavigationElementShape widget={widget} fill={fill} stroke={stroke} strokeWidth={strokeWidth} />;
   if (widget.type === "repeater") return <RepeaterShape widget={widget} fill={fill} stroke={stroke} strokeWidth={strokeWidth} />;
   if (widget.type === "accordion") return <AccordionShape widget={widget} fill={fill} stroke={stroke} strokeWidth={strokeWidth} />;
   if (widget.type === "api-request") return <ApiRequestShape widget={widget} fill={fill} stroke={stroke} strokeWidth={strokeWidth} />;
