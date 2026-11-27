@@ -1005,13 +1005,17 @@ export function PreviewWidget({
   }
 
   if (widget.type === "navbar" || widget.type === "sidebar" || widget.type === "footer" || widget.type === "bottom-nav" || widget.type === "app-bar") {
-    const rawItems = Array.isArray(widget.props.items) ? widget.props.items : ["Home", "Explore", "Profile"];
+    const label = stringProp(widget, "label", "").trim();
+    const rawItems = widget.type === "bottom-nav" && label
+      ? label.split("|").map((entry) => entry.trim()).filter(Boolean)
+      : Array.isArray(widget.props.items) ? widget.props.items : ["Home", "Explore", "Profile"];
     const items = rawItems.map((entry, index) => typeof entry === "string" ? entry
       : entry && typeof entry === "object" && typeof (entry as Record<string, unknown>).label === "string"
         ? String((entry as Record<string, unknown>).label) : `Item ${index + 1}`);
     const vertical = widget.type === "sidebar";
     return (
-      <nav className={`preview-widget preview-${widget.type}`} aria-label={stringProp(widget, "label", widget.type)} style={{ ...style, display: "flex", flexDirection: vertical ? "column" : "row", alignItems: "center", justifyContent: "space-around", gap: 6, padding: 8 }} data-widget-type={widget.type}>
+      <nav className={`preview-widget preview-${widget.type}`} aria-label={label || widget.type} style={{ ...style, display: "flex", flexDirection: vertical ? "column" : "row", alignItems: "center", justifyContent: "space-around", gap: 6, padding: 8 }} data-widget-type={widget.type}>
+        {widget.type === "app-bar" && label ? <strong>{interpolate(label)}</strong> : null}
         {items.map((entry, index) => <button key={index} type="button" onClick={() => runEvent(widget, "onClick", item)}>{interpolate(entry)}</button>)}
       </nav>
     );
