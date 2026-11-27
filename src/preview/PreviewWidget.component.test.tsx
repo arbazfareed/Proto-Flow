@@ -1036,6 +1036,7 @@ describe("PreviewWidget form, card, navigation, and settings behavior", () => {
     const project = createEmptyProject("Configured widget preview");
     project.variables = variables;
     const runtime = new PreviewRuntime(project);
+    const onNavigate = vi.fn();
     const rendered = render(
       <PreviewWidget
         widget={widget}
@@ -1044,13 +1045,14 @@ describe("PreviewWidget form, card, navigation, and settings behavior", () => {
         snapshot={runtime.snapshot()}
         runEvent={runEvent}
         onError={vi.fn()}
+        onNavigate={onNavigate}
         controlValues={{}}
         onControlValueChange={vi.fn()}
         onGestureFeedback={vi.fn()}
         liteMode={false}
       />,
     );
-    return { ...rendered, runEvent, runtime };
+    return { ...rendered, runEvent, runtime, onNavigate };
   }
 
   it("collects configured form values on submit and reports the submitted field count", () => {
@@ -1136,6 +1138,16 @@ describe("PreviewWidget form, card, navigation, and settings behavior", () => {
     expect(rendered.getByRole("link", { name: "Home" })).toHaveAttribute("href", "https://example.com/home");
     fireEvent.click(rendered.getByRole("button", { name: "Profile" }));
     expect(rendered.getByRole("button", { name: "Profile" })).toHaveAttribute("aria-current", "page");
+  });
+
+  it("navigates to the screen configured on an individual navigation item", () => {
+    const widget: Widget = { ...makeWidget(), type: "navbar", props: { items: [
+      { label: "Dashboard", screenId: "screen-dashboard" },
+    ] } };
+    const rendered = renderConfiguredWidget(widget);
+    fireEvent.click(rendered.getByRole("button", { name: "Dashboard" }));
+    expect(rendered.onNavigate).toHaveBeenCalledWith("screen-dashboard");
+    expect(rendered.runEvent).toHaveBeenCalledWith(widget, "onClick", undefined);
   });
 
   it("rejects unsafe navigation destinations", () => {
