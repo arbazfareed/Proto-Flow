@@ -826,11 +826,11 @@ export function PreviewWidget({
   }
 
   if (widget.type === "badge" || widget.type === "chip" || widget.type === "tag") {
-    return <span className={`preview-widget preview-${widget.type}`} style={{ ...style, display: "inline-flex", alignItems: "center", justifyContent: "center", padding: "4px 10px", borderRadius: 999, whiteSpace: "nowrap" }}>{interpolate(stringProp(widget, "label", text || widget.type))}</span>;
+    return <span className={`preview-widget preview-${widget.type}`} data-widget-type={widget.type} style={{ ...style, display: "inline-flex", alignItems: "center", justifyContent: "center", padding: "4px 10px", borderRadius: 999, whiteSpace: "nowrap" }}>{interpolate(stringProp(widget, "label", text || widget.type))}</span>;
   }
 
   if (widget.type === "stat" || widget.type === "metric-card") {
-    return <section className="preview-widget preview-stat" aria-label={stringProp(widget, "label", "Statistic")} style={{ ...style, display: "flex", flexDirection: "column", justifyContent: "center", gap: 5, padding: 10 }}><span>{interpolate(stringProp(widget, "label", "Revenue"))}</span><strong style={{ fontSize: 22 }}>{interpolate(stringProp(widget, "value", "—"))}</strong>{stringProp(widget, "trend") && <small>{interpolate(stringProp(widget, "trend"))}</small>}</section>;
+    return <section data-widget-type={widget.type} className="preview-widget preview-stat" aria-label={stringProp(widget, "label", "Statistic")} style={{ ...style, display: "flex", flexDirection: "column", justifyContent: "center", gap: 5, padding: 10 }}><span>{interpolate(stringProp(widget, "label", "Revenue"))}</span><strong style={{ fontSize: 22 }}>{interpolate(stringProp(widget, "value", "—"))}</strong>{stringProp(widget, "trend") && <small>{interpolate(stringProp(widget, "trend"))}</small>}</section>;
   }
 
   if (widget.type === "profile-card" || widget.type === "testimonial-card" || widget.type === "feature-card" || widget.type === "pricing-card" || widget.type === "empty-state") {
