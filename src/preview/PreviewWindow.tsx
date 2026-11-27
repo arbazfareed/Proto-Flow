@@ -794,6 +794,23 @@ export function PreviewWidget({
     return <pre className="preview-widget preview-code-block" style={{ ...style, overflow: "auto", padding: 8, whiteSpace: "pre-wrap" }}><code>{stringProp(widget, "label", "Add code in the properties panel.")}</code></pre>;
   }
 
+  if (widget.type === "polygon" || widget.type === "star") {
+    const shape = widget.type === "star"
+      ? "polygon(50% 0%, 61% 35%, 98% 35%, 68% 57%, 79% 91%, 50% 70%, 21% 91%, 32% 57%, 2% 35%, 39% 35%)"
+      : "polygon(25% 7%, 75% 7%, 100% 50%, 75% 93%, 25% 93%, 0% 50%)";
+    return <div className={`preview-widget preview-${widget.type}`} role="img" aria-label={stringProp(widget, "label", widget.type)} style={{ ...style, clipPath: shape }} data-widget-type={widget.type} />;
+  }
+
+  if (widget.type === "divider") {
+    const vertical = widget.props.orientation === "vertical";
+    return <div className="preview-widget preview-divider" role="separator" aria-orientation={vertical ? "vertical" : "horizontal"} style={{ ...style, minHeight: vertical ? style.minHeight : 1, minWidth: vertical ? 1 : style.minWidth, backgroundColor: widget.style.stroke ?? widget.style.fill ?? "currentColor" }} data-widget-type="divider" />;
+  }
+
+  if (widget.type === "path" || widget.type === "vector") {
+    const pathData = stringProp(widget, "pathData");
+    return <svg className="preview-widget preview-vector" viewBox={`0 0 ${Math.max(1, Number(widget.props.pathViewBoxWidth ?? widget.props.viewBoxWidth) || widget.width)} ${Math.max(1, Number(widget.props.pathViewBoxHeight ?? widget.props.viewBoxHeight) || widget.height)}`} role="img" aria-label={stringProp(widget, "label", widget.type)} style={{ ...style, overflow: "visible" }} data-widget-type={widget.type}><path d={pathData} fill={widget.style.fill ?? "none"} stroke={widget.style.stroke ?? "currentColor"} strokeWidth={widget.style.strokeWidth ?? 1} /></svg>;
+  }
+
   if (widget.type === "pagination") {
     const pageCount = Math.max(1, Math.min(99, Number(widget.props.pageCount ?? widget.props.pages ?? 5) || 5));
     const page = Math.min(activePaginationPage, pageCount);
