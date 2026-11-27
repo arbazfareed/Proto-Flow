@@ -161,6 +161,7 @@ export function VirtualizedRepeater({
   snapshot,
   runEvent,
   onError,
+  onNavigate,
   inputMode,
   controlValues,
   onControlValueChange,
@@ -180,6 +181,7 @@ export function VirtualizedRepeater({
   snapshot: PreviewRuntimeSnapshot;
   runEvent: (widget: Widget, event: PreviewEvent, item?: RepeaterRecord) => number;
   onError: (error: unknown) => void;
+  onNavigate: (screenId: string) => void;
   inputMode: Project["screens"][number]["inputMode"];
   controlValues: Record<string, string | boolean>;
   onControlValueChange: (key: string, value: string | boolean) => void;
@@ -1634,6 +1636,7 @@ export function PreviewWidget({
         snapshot={snapshot}
         runEvent={runEvent}
         onError={onError}
+        onNavigate={onNavigate}
         inputMode={inputMode}
         controlValues={controlValues}
         onControlValueChange={onControlValueChange}
