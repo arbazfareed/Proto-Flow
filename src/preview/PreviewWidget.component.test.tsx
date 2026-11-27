@@ -1021,7 +1021,27 @@ describe("PreviewWidget colours", () => {
 
 describe("PreviewWidget component masters", () => {
   it("renders Component Master as a labeled master container instead of a fake type-name placeholder", () => {
-    const rendered = renderElement("component-master", { label: "Primary Button" });
+    const project = createEmptyProject("Component master preview");
+    const runtime = new PreviewRuntime(project);
+    const widget: Widget = {
+      ...makeWidget(),
+      type: "component-master",
+      props: { label: "Primary Button" },
+    };
+    const rendered = render(
+      <PreviewWidget
+        widget={widget}
+        runtime={runtime}
+        screenId={project.screens[0].id}
+        snapshot={runtime.snapshot()}
+        runEvent={vi.fn(() => 0)}
+        onError={vi.fn()}
+        controlValues={{}}
+        onControlValueChange={vi.fn()}
+        onGestureFeedback={vi.fn()}
+        liteMode={false}
+      />,
+    );
     const master = rendered.getByRole("group", { name: "Primary Button" });
     expect(master).toHaveAttribute("data-widget-type", "component-master");
     expect(rendered.getByText("MASTER COMPONENT")).toBeInTheDocument();
