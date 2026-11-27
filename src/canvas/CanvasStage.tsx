@@ -151,7 +151,7 @@ import {
   type ImportedImage,
 } from "./images";
 import { getVariableCompletions } from "../project/variables";
-import { removeSelectedWidgets } from "../project/widgetSelection";
+import { getDeletableWidgetIds } from "../project/widgetSelection";
 
 interface CanvasSize {
   width: number;
@@ -2283,13 +2283,21 @@ export function CanvasStage({
       (item) => item.id === current.getActiveScreenId(),
     );
     if (!screen || current.selectedIds.length === 0) return;
-    const activeWidgets = getCanvasWidgets(screen, current.activeRepeaterEdit);
-    const result = removeSelectedWidgets(activeWidgets, current.selectedIds);
-    if (result.deletedIds.length === 0) return;
+    const canvasWidgets = getCanvasWidgets(screen, current.activeRepeaterEdit);
+    const deletableRoots = canvasWidgets
+      .filter((widget) => current.selectedIds.includes(widget.id) && !widget.locked)
+      .map((widget) => widget.id);
+    if (deletableRoots.length === 0) return;
+
+    // Deleting a container also removes its unlocked descendants. Locked children
+    // are intentionally retained and become independent instead of being deleted.
+    const deletable = getDeletableWidgetIds(canvasWidgets, deletableRoots);
     transformerRef.current?.nodes([]);
     contentLayerRef.current?.batchDraw();
-    updateActiveScreenWidgets(result.widgets);
-    current.clearSelection();
+    updateActiveScreenWidgets(canvasWidgets.filter((widget) => !deletable.has(widget.id)));
+
+    // Keep locked selections selected so the user can see why they were not removed.
+    current.select(current.selectedIds.filter((id) => !deletable.has(id)));
   }, [updateActiveScreenWidgets]);
 
   const changeSelectionZOrder = useCallback((
