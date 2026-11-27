@@ -230,8 +230,8 @@
 @keyframes layer-drop-before { from { box-shadow:inset 0 0 #a78bfa; } to { box-shadow:inset 0 2px #a78bfa; } }
 @keyframes layer-drop-after { from { box-shadow:inset 0 0 #a78bfa; } to { box-shadow:inset 0 -2px #a78bfa; } }
 @media (prefers-reduced-motion: reduce) { .layer-row.is-new,.layer-row.is-nested,.layer-group-row.is-nested,.layer-row[data-depth="1"],.layer-group-row[data-depth="1"],.layer-new-icon,.layer-row.drop-before,.layer-row.drop-after,.layer-group-row.drop-before,.layer-group-row.drop-after { animation:none; } }
-.tree-context-menu { position:fixed; z-index:30; min-width:178px; padding:4px; border:1px solid #383840; border-radius:7px; background:#1c1d21; box-shadow:0 8px 26px #0009; }
-.tree-context-menu button { display:flex; width:100%; align-items:center; gap:8px; padding:7px 8px; border:0; border-radius:4px; color:#c9c8d0; background:transparent; text-align:left; cursor:pointer; font-size:10px; }
+.tree-context-menu { position:fixed; z-index:30; min-width:178px; max-width:min(220px,calc(100vw - 16px)); max-height:min(420px,calc(100dvh - 16px)); overflow-x:hidden; overflow-y:auto; overscroll-behavior:contain; scrollbar-width:thin; scrollbar-color:#484650 transparent; padding:3px; border:1px solid #383840; border-radius:7px; background:#1c1d21; box-shadow:0 8px 26px #0009; }
+.tree-context-menu button { display:flex; width:100%; min-height:0; align-items:center; gap:6px; padding:4px 7px; border:0; border-radius:4px; color:#c9c8d0; background:transparent; text-align:left; cursor:pointer; font-size:10px; line-height:1.25; }
 .tree-context-menu button:hover:not(:disabled) { color:#f0ecff; background:#2a2830; }
 .tree-context-menu button:disabled { opacity:.4; cursor:default; }
 .tree-context-menu-levels { max-height:min(220px,50vh); overflow-y:auto; border-top:1px solid #34353b; margin-top:3px; padding-top:3px; scrollbar-color:#383940 transparent; scrollbar-width:thin; }
