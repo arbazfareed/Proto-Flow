@@ -676,14 +676,31 @@ export function PreviewWidget({
           const label = typeof entry === "string" ? entry : typeof record.label === "string" ? record.label : `Setting ${index + 1}`;
           const description = typeof record.description === "string" ? record.description : "";
           const key = typeof record.name === "string" ? record.name : `setting-${index}`;
-          const value = settingsValues[key] ?? (typeof record.value === "boolean" ? record.value : typeof record.value === "string" ? record.value : record.type === "toggle" ? false : "");
+          const variableName = typeof record.variableName === "string" ? record.variableName : "";
+          const boundValue = variableName ? runtime.getVariable(variableName, screenId) : undefined;
+          const initialValue = typeof boundValue === "boolean" || typeof boundValue === "number" || typeof boundValue === "string"
+            ? boundValue
+            : typeof record.value === "boolean" || typeof record.value === "string" ? record.value : record.type === "toggle" ? false : "";
+          const value = settingsValues[key] ?? initialValue;
+          const updateSetting = (nextValue: boolean | string) => {
+            setSettingsValues((current) => ({ ...current, [key]: nextValue }));
+            if (variableName && boundValue !== undefined) {
+              const typedValue = typeof boundValue === "number" ? Number(nextValue)
+                : typeof boundValue === "boolean" ? Boolean(nextValue)
+                : String(nextValue);
+              if (typeof typedValue !== "number" || Number.isFinite(typedValue)) {
+                runtime.setVariable(variableName, typedValue, screenId);
+              }
+            }
+            runEvent(widget, "onChange", item);
+          };
           return <div key={key} className="preview-setting">
             <label>
               <strong>{interpolate(label)}</strong>
               {description && <small>{interpolate(description)}</small>}
-              {record.type === "toggle" || typeof record.value === "boolean"
-                ? <input aria-label={label} type="checkbox" checked={Boolean(value)} onChange={(event) => setSettingsValues((current) => ({ ...current, [key]: event.target.checked }))} />
-                : <input aria-label={label} type={record.type === "number" ? "number" : "text"} value={String(value)} onChange={(event) => setSettingsValues((current) => ({ ...current, [key]: event.target.value }))} />}
+              {record.type === "toggle" || typeof initialValue === "boolean"
+                ? <input aria-label={label} type="checkbox" checked={Boolean(value)} onChange={(event) => updateSetting(event.target.checked)} />
+                : <input aria-label={label} type={record.type === "number" || typeof initialValue === "number" ? "number" : "text"} value={String(value)} onChange={(event) => updateSetting(event.target.value)} />}
             </label>
           </div>;
         }) : <p>No settings configured</p>}
@@ -1042,6 +1059,21 @@ export function PreviewWidget({
         event.preventDefault();
         const formData = new FormData(event.currentTarget);
         const submitted = Object.fromEntries(Array.from(formData.entries()).map(([key, value]) => [key, String(value)]));
+        for (const entry of fields) {
+          if (!entry || typeof entry !== "object") continue;
+          const field = entry as Record<string, unknown>;
+          if (typeof field.variableName !== "string" || !Object.prototype.hasOwnProperty.call(submitted, String(field.name ?? ""))) continue;
+          const variableName = field.variableName;
+          const currentValue = runtime.getVariable(variableName, screenId);
+          if (currentValue === undefined) continue;
+          const rawValue = submitted[String(field.name ?? "")];
+          const typedValue = typeof currentValue === "number" ? Number(rawValue)
+            : typeof currentValue === "boolean" ? rawValue === "true" || rawValue === "on"
+            : rawValue;
+          if (typeof typedValue !== "number" || Number.isFinite(typedValue)) {
+            runtime.setVariable(variableName, typedValue, screenId);
+          }
+        }
         setFormSubmission(submitted);
         runEvent(widget, "onClick", item);
       }}>
@@ -1055,7 +1087,10 @@ export function PreviewWidget({
           return <label key={index}>{label}<input aria-label={label} name={typeof record.name === "string" ? record.name : `field-${index + 1}`} type={fieldType} placeholder={placeholder} required={record.required === true} /></label>;
         }) : <p>No form fields configured</p>}
         <button type="submit">{stringProp(widget, "submitLabel", "Submit")}</button>
-        {formSubmission && <output aria-live="polite">Submitted {Object.keys(formSubmission).length} field(s)</output>}
+        {formSubmission && <output aria-live="polite">
+          <strong>Submitted {Object.keys(formSubmission).length} field(s)</strong>
+          <ul>{Object.entries(formSubmission).map(([name, value]) => <li key={name}><span>{name}:</span> {value || "—"}</li>)}</ul>
+        </output>}
       </form>
     );
   }
