@@ -669,7 +669,7 @@ export function PreviewWidget({
     return (
       <section className="preview-widget preview-pull-to-refresh" aria-label={stringProp(widget, "label", "Pull to refresh")} style={{ ...style, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 8, padding: 10 }} data-widget-type="pull-to-refresh" {...commonHandlers}>
         <span>{refreshPreviewTriggered ? "Refresh interaction triggered" : "Pull down or use the button to refresh"}</span>
-        <button type="button" onClick={() => { setRefreshPreviewTriggered(true); runEvent(widget, "onSwipeDown", item); }}>Refresh preview</button>
+        <button type="button" onClick={(event) => { event.stopPropagation(); setRefreshPreviewTriggered(true); runEvent(widget, "onSwipeDown", item); }}>Refresh preview</button>
       </section>
     );
   }
@@ -683,7 +683,7 @@ export function PreviewWidget({
       <section className="preview-widget preview-swipe-gesture" aria-label={stringProp(widget, "label", "Swipe gesture")} style={{ ...style, display: "flex", flexDirection: "column", alignItems: "stretch", justifyContent: "center", gap: 6, padding: 8 }} data-widget-type="swipe-gesture" {...commonHandlers}>
         <span>{lastSimulatedSwipe ? `Last gesture: swipe ${lastSimulatedSwipe}` : "Swipe here or choose a direction"}</span>
         <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: 4 }}>
-          {gestures.map(([label, event]) => <button key={event} type="button" onClick={() => { setLastSimulatedSwipe(label.toLowerCase()); runEvent(widget, event, item); }}>Swipe {label}</button>)}
+          {gestures.map(([label, event]) => <button key={event} type="button" onClick={(clickEvent) => { clickEvent.stopPropagation(); setLastSimulatedSwipe(label.toLowerCase()); runEvent(widget, event, item); }}>Swipe {label}</button>)}
         </div>
       </section>
     );
