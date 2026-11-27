@@ -1023,11 +1023,24 @@ describe("PreviewWidget component masters", () => {
   it("renders Component Master as a labeled master container instead of a fake type-name placeholder", () => {
     const project = createEmptyProject("Component master preview");
     const runtime = new PreviewRuntime(project);
-    const widget: Widget = { ...makeWidget(), type: "component-master", props: { label: "Primary Button" } };
+    const widget: Widget = {
+      ...makeWidget(),
+      type: "component-master",
+      props: { label: "Primary Button" },
+    };
     const rendered = render(
-      <PreviewWidget widget={widget} runtime={runtime} screenId={project.screens[0].id}
-        snapshot={runtime.snapshot()} runEvent={vi.fn(() => 0)} onError={vi.fn()}
-        controlValues={{}} onControlValueChange={vi.fn()} onGestureFeedback={vi.fn()} liteMode={false} />,
+      <PreviewWidget
+        widget={widget}
+        runtime={runtime}
+        screenId={project.screens[0].id}
+        snapshot={runtime.snapshot()}
+        runEvent={vi.fn(() => 0)}
+        onError={vi.fn()}
+        controlValues={{}}
+        onControlValueChange={vi.fn()}
+        onGestureFeedback={vi.fn()}
+        liteMode={false}
+      />,
     );
     const master = rendered.getByRole("group", { name: "Primary Button" });
     expect(master).toHaveAttribute("data-widget-type", "component-master");
@@ -1060,6 +1073,24 @@ describe("PreviewWidget form, card, navigation, and settings behavior", () => {
       />,
     );
     return { ...rendered, runEvent, runtime, onNavigate };
+  }
+    const project = createEmptyProject("Configured widget preview");
+    const runtime = new PreviewRuntime(project);
+    const rendered = render(
+      <PreviewWidget
+        widget={widget}
+        runtime={runtime}
+        screenId={project.screens[0].id}
+        snapshot={runtime.snapshot()}
+        runEvent={runEvent}
+        onError={vi.fn()}
+        controlValues={{}}
+        onControlValueChange={vi.fn()}
+        onGestureFeedback={vi.fn()}
+        liteMode={false}
+      />,
+    );
+    return { ...rendered, runEvent };
   }
 
   it("collects configured form values on submit and reports the submitted field count", () => {
@@ -1147,6 +1178,22 @@ describe("PreviewWidget form, card, navigation, and settings behavior", () => {
     expect(rendered.getByRole("button", { name: "Profile" })).toHaveAttribute("aria-current", "page");
   });
 
+  it("renders edited bottom navigation labels from its label field", () => {
+    const widget: Widget = { ...makeWidget(), type: "bottom-nav", props: { label: "Chats | Calls | Settings", selected: 0 } };
+    const rendered = renderConfiguredWidget(widget);
+    expect(rendered.getByRole("button", { name: "Chats" })).toBeInTheDocument();
+    expect(rendered.getByRole("button", { name: "Calls" })).toBeInTheDocument();
+    expect(rendered.getByRole("button", { name: "Settings" })).toBeInTheDocument();
+  });
+
+  it("rejects unsafe navigation destinations", () => {
+    const widget: Widget = { ...makeWidget(), type: "navbar", props: { items: [
+      { label: "Unsafe", href: "javascript:alert(1)" },
+    ] } };
+    const rendered = renderConfiguredWidget(widget);
+    expect(rendered.queryByRole("link", { name: "Unsafe" })).not.toBeInTheDocument();
+    expect(rendered.getByRole("button", { name: "Unsafe" })).toBeInTheDocument();
+  });
   it("navigates to the screen configured on an individual navigation item", () => {
     const widget: Widget = { ...makeWidget(), type: "navbar", props: { items: [
       { label: "Dashboard", screenId: "screen-dashboard" },
@@ -1166,7 +1213,6 @@ describe("PreviewWidget form, card, navigation, and settings behavior", () => {
     expect(rendered.getByRole("button", { name: "Unsafe" })).toBeInTheDocument();
   });
 });
-
 
 describe("PreviewWidget charts and media sources", () => {
   function renderConfigured(widget: Widget, runtime = new PreviewRuntime(createEmptyProject("Chart/media preview"))) {
