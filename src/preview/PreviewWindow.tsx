@@ -772,7 +772,7 @@ export function PreviewWidget({
 
   if (widget.type === "avatar") {
     const name = stringProp(widget, "label", stringProp(widget, "name", "User"));
-    const initials = stringProp(widget, "initials", "") || avatarInitials({ label: name });
+    const initials = avatarInitials({ initials: widget.props.initials, label: name });
     const imageSource = stringProp(widget, "src", stringProp(widget, "image"));
     return <div className="preview-widget preview-avatar" role="img" aria-label={name} style={{ ...style, display: "grid", placeItems: "center", borderRadius: "50%", overflow: "hidden" }} data-widget-type="avatar">{imageSource ? <img src={interpolate(imageSource)} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : <strong>{initials}</strong>}</div>;
   }
@@ -1040,9 +1040,11 @@ export function PreviewWidget({
   }
 
   if (widget.type === "navbar" || widget.type === "sidebar" || widget.type === "footer" || widget.type === "bottom-nav" || widget.type === "app-bar") {
-    const navigationLabel = stringProp(widget, "label", "").trim();
-    const rawItems = widget.type === "bottom-nav" && navigationLabel
-      ? navigationLabel.split("|").map((entry) => entry.trim()).filter(Boolean)
+    const bottomNavItems = widget.type === "bottom-nav"
+      ? stringProp(widget, "label").split("|").map((entry) => entry.trim()).filter(Boolean)
+      : [];
+    const rawItems = bottomNavItems.length > 0
+      ? bottomNavItems
       : Array.isArray(widget.props.items) ? widget.props.items : ["Home", "Explore", "Profile"];
     const items = rawItems.map((entry, index) => {
       const record = entry && typeof entry === "object" ? entry as Record<string, unknown> : {};
@@ -1354,7 +1356,7 @@ export function PreviewWidget({
 
   if (widget.type === "image") {
     const source = stringProp(widget, "src", stringProp(widget, "url"));
-    const src = source ? sanitizeRichTextHref(interpolate(source)) : null;
+    const src = interpolate(source);
     return (
       <div className="preview-widget" style={style} {...commonHandlers}>
         {src ? <img src={src} alt={interpolate(stringProp(widget, "alt", text))} style={{ objectFit: stringProp(widget, "fit") === "cover" ? "cover" : "contain" }} /> : text || "Image"}
