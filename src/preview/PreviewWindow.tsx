@@ -8,7 +8,7 @@ import { emit, listen } from "@tauri-apps/api/event";
 import { isTauri } from "@tauri-apps/api/core";
 import { currentMonitor, getCurrentWindow } from "@tauri-apps/api/window";
 import { LogicalSize } from "@tauri-apps/api/dpi";
-import type { Project, Widget } from "../project/schema";
+import type { Project, SymbolDefinition, Widget } from "../project/schema";
 import { parseProject } from "../project/schema";
 import {
   normalizeRichTextRuns,
@@ -1288,6 +1288,57 @@ export function PreviewWidget({
           focusable="false"
         />
       </button>
+    );
+  }
+
+  if (widget.type === "symbol-instance") {
+    const symbol = (runtime.currentScreen as Project["screens"][number]).widgets && runtime.project.symbols.find((entry) => entry.id === widget.symbolId);
+    if (!symbol) {
+      return <div className="preview-widget preview-symbol-instance preview-symbol-missing" role="group" aria-label={`Missing component: ${widget.name ?? "Symbol"}`} style={{ ...style, display: "grid", placeItems: "center", border: "1px dashed currentColor" }} {...commonHandlers}>Missing component</div>;
+    }
+    const scaleX = widget.width / Math.max(1, symbol.width);
+    const scaleY = widget.height / Math.max(1, symbol.height);
+    return (
+      <div className="preview-widget preview-symbol-instance" role="group" aria-label={symbol.name} style={{ ...style, overflow: "hidden" }} {...commonHandlers} data-symbol-id={symbol.id}>
+        <div style={{ position: "absolute", left: 0, top: 0, width: symbol.width, height: symbol.height, transform: `scale(${scaleX}, ${scaleY})`, transformOrigin: "top left" }}>
+          {symbol.widgets.filter((child) => child.visible).sort((a, b) => a.zIndex - b.zIndex).map((child) => {
+            const childStyle: CSSProperties = {
+              position: "absolute",
+              left: child.x,
+              top: child.y,
+              width: child.width,
+              height: child.height,
+              opacity: child.opacity,
+              transform: child.rotation ? `rotate(${child.rotation}deg)` : undefined,
+              transformOrigin: "center",
+              boxSizing: "border-box",
+              color: typeof child.style.color === "string" ? child.style.color : "inherit",
+              background: typeof child.style.fill === "string" ? child.style.fill : "transparent",
+              border: typeof child.style.stroke === "string" ? `1px solid ${child.style.stroke}` : undefined,
+              borderRadius: child.type === "ellipse" ? "50%" : typeof child.style.radius === "number" ? child.style.radius : undefined,
+              overflow: "hidden",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              fontSize: typeof child.style.fontSize === "number" ? child.style.fontSize : 12,
+              textAlign: "center",
+              whiteSpace: "pre-wrap",
+            };
+            const label = typeof child.props.text === "string" ? child.props.text
+              : typeof child.props.label === "string" ? child.props.label
+              : typeof child.name === "string" ? child.name : child.type.replaceAll("-", " ");
+            if (child.type === "image" && typeof child.props.src === "string") {
+              return <img key={child.id} src={child.props.src} alt={typeof child.props.alt === "string" ? child.props.alt : ""} style={{ ...childStyle, objectFit: "cover" }} />;
+            }
+            if (child.type === "input" || child.type === "textarea") {
+              return child.type === "textarea"
+                ? <textarea key={child.id} aria-label={label} placeholder={typeof child.props.placeholder === "string" ? child.props.placeholder : ""} style={childStyle} readOnly />
+                : <input key={child.id} aria-label={label} placeholder={typeof child.props.placeholder === "string" ? child.props.placeholder : label} style={childStyle} readOnly />;
+            }
+            return <div key={child.id} style={childStyle} data-symbol-child-type={child.type}>{label}</div>;
+          })}
+        </div>
+      </div>
     );
   }
 
