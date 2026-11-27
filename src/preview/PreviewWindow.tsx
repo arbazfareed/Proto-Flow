@@ -1328,7 +1328,7 @@ export function PreviewWidget({
               transform: child.rotation ? `rotate(${child.rotation}deg)` : undefined,
               transformOrigin: "center",
               boxSizing: "border-box",
-              color: typeof child.style.color === "string" ? child.style.color : "inherit",
+              color: "inherit",
               background: typeof child.style.fill === "string" ? child.style.fill : "transparent",
               border: typeof child.style.stroke === "string" ? `1px solid ${child.style.stroke}` : undefined,
               borderRadius: child.type === "ellipse" ? "50%" : typeof child.style.cornerRadius === "number" ? child.style.cornerRadius : undefined,
@@ -1336,7 +1336,7 @@ export function PreviewWidget({
               display: "flex",
               alignItems: "center",
               justifyContent: "center",
-              fontSize: typeof child.style.fontSize === "number" ? child.style.fontSize : 12,
+              fontSize: 12,
               textAlign: "center",
               whiteSpace: "pre-wrap",
             };
