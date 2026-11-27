@@ -344,6 +344,7 @@ export function PreviewWidget({
   const [popoverOpen, setPopoverOpen] = useState(false);
   const [selectedFileName, setSelectedFileName] = useState("");
   const [toastVisible, setToastVisible] = useState(true);
+  const [selectedSegmentIndex, setSelectedSegmentIndex] = useState(0);
   // Icons beyond the built-in set appear once the full set has loaded.
   useFullIconSet();
   useEffect(() => () => {
@@ -711,6 +712,31 @@ export function PreviewWidget({
     }
     runEvent(widget, "onChange", item);
   };
+
+  if (widget.type === "avatar") {
+    const name = stringProp(widget, "label", stringProp(widget, "name", "User"));
+    const initials = avatarInitials(name);
+    const imageSource = stringProp(widget, "src", stringProp(widget, "image"));
+    return <div className="preview-widget preview-avatar" role="img" aria-label={name} style={{ ...style, display: "grid", placeItems: "center", borderRadius: "50%", overflow: "hidden" }} data-widget-type="avatar">{imageSource ? <img src={interpolate(imageSource)} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : <strong>{initials}</strong>}</div>;
+  }
+
+  if (widget.type === "avatar-group") {
+    const rawPeople = Array.isArray(widget.props.items) ? widget.props.items : stringProp(widget, "label", "AM | JR | SK").split("|").map((name) => name.trim());
+    return <div className="preview-widget preview-avatar-group" role="group" aria-label={stringProp(widget, "label", "Avatar group")} style={{ ...style, display: "flex", alignItems: "center", padding: 4, overflow: "visible" }}>{rawPeople.slice(0, 6).map((person, index) => { const name = typeof person === "string" ? person : person && typeof person === "object" && typeof (person as Record<string, unknown>).name === "string" ? String((person as Record<string, unknown>).name) : `User ${index + 1}`; return <span key={index} role="img" aria-label={name} style={{ width: 32, height: 32, borderRadius: "50%", display: "grid", placeItems: "center", marginLeft: index ? -7 : 0, border: "2px solid white", background: "#e9e2ff", color: "#49377b", fontSize: 10 }}>{avatarInitials(name)}</span>; })}</div>;
+  }
+
+  if (widget.type === "segmented-control") {
+    const raw = Array.isArray(widget.props.items) ? widget.props.items : stringProp(widget, "label", "Overview | Activity | Settings").split("|");
+    const labels = raw.map((entry) => typeof entry === "string" ? entry.trim() : entry && typeof entry === "object" && typeof (entry as Record<string, unknown>).label === "string" ? String((entry as Record<string, unknown>).label) : "Option");
+    return <div className="preview-widget preview-segmented-control" role="group" aria-label={stringProp(widget, "ariaLabel", "View options")} style={{ ...style, display: "flex", alignItems: "center", gap: 3, padding: 4 }}>{labels.map((label, index) => <button key={index} type="button" aria-pressed={selectedSegmentIndex === index} onClick={() => { setSelectedSegmentIndex(index); runEvent(widget, "onChange", item); }}>{interpolate(label)}</button>)}</div>;
+  }
+
+  if (widget.type === "step-indicator") {
+    const raw = Array.isArray(widget.props.items) ? widget.props.items : stringProp(widget, "label", "Details | Shipping | Review").split("|");
+    const labels = raw.map((entry) => typeof entry === "string" ? entry.trim() : entry && typeof entry === "object" && typeof (entry as Record<string, unknown>).label === "string" ? String((entry as Record<string, unknown>).label) : "Step");
+    const active = Math.max(0, Math.min(labels.length - 1, Number(widget.props.step ?? 1) - 1));
+    return <ol className="preview-widget preview-step-indicator" aria-label={stringProp(widget, "label", "Steps")} style={{ ...style, display: "flex", alignItems: "center", justifyContent: "space-around", gap: 4, padding: 6, listStyle: "none" }}>{labels.map((label, index) => <li key={index} aria-current={index === active ? "step" : undefined} style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 3, opacity: index <= active ? 1 : 0.55 }}><span>{index < active ? "✓" : index + 1}</span><small>{interpolate(label)}</small></li>)}</ol>;
+  }
 
   if (widget.type === "select") {
     const options = Array.isArray(widget.props.options) ? widget.props.options.filter((option): option is string => typeof option === "string") : [];
