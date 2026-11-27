@@ -1,6 +1,6 @@
 import { cleanup, fireEvent, render } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
-import { createEmptyProject, type Widget } from "../project/schema";
+import { createEmptyProject, type Project, type Widget } from "../project/schema";
 import { PreviewWidget } from "./PreviewWindow";
 import { PreviewRuntime } from "./runtime";
 
@@ -1032,8 +1032,9 @@ describe("PreviewWidget component masters", () => {
 
 
 describe("PreviewWidget form, card, navigation, and settings behavior", () => {
-  function renderConfiguredWidget(widget: Widget, runEvent = vi.fn(() => 0)) {
+  function renderConfiguredWidget(widget: Widget, runEvent = vi.fn(() => 0), variables: Project["variables"] = []) {
     const project = createEmptyProject("Configured widget preview");
+    project.variables = variables;
     const runtime = new PreviewRuntime(project);
     const rendered = render(
       <PreviewWidget
@@ -1049,7 +1050,7 @@ describe("PreviewWidget form, card, navigation, and settings behavior", () => {
         liteMode={false}
       />,
     );
-    return { ...rendered, runEvent };
+    return { ...rendered, runEvent, runtime };
   }
 
   it("collects configured form values on submit and reports the submitted field count", () => {
@@ -1066,6 +1067,25 @@ describe("PreviewWidget form, card, navigation, and settings behavior", () => {
     fireEvent.submit(rendered.getByRole("form", { name: "Contact form" }));
     expect(rendered.getByRole("status")).toHaveTextContent("Submitted 2 field(s)");
     expect(rendered.runEvent).toHaveBeenCalledWith(widget, "onClick", undefined);
+  });
+
+  it("writes submitted form values into configured runtime variables", () => {
+    const widget: Widget = { ...makeWidget(), type: "form", props: {
+      label: "Profile form",
+      fields: [{ name: "displayName", label: "Display name", type: "text", variableName: "displayName" }],
+    } };
+    const rendered = renderConfiguredWidget(widget, vi.fn(() => 0), [{
+      id: "00000000-0000-4000-8000-000000000001",
+      name: "displayName",
+      scope: "project",
+      type: "string",
+      initial: "Guest",
+    }]);
+    fireEvent.change(rendered.getByRole("textbox", { name: "Display name" }), { target: { value: "Ada" } });
+    fireEvent.submit(rendered.getByRole("form", { name: "Profile form" }));
+    expect(rendered.runtime.getVariable("displayName")).toBe("Ada");
+    expect(rendered.getByRole("status")).toHaveTextContent("displayName:");
+    expect(rendered.getByRole("status")).toHaveTextContent("Ada");
   });
 
   it("makes the card action button keyboard accessible and interactive", () => {
@@ -1089,6 +1109,22 @@ describe("PreviewWidget form, card, navigation, and settings behavior", () => {
     const displayName = rendered.getByRole("textbox", { name: /Display name/ });
     fireEvent.change(displayName, { target: { value: "Alex" } });
     expect(displayName).toHaveValue("Alex");
+  });
+
+  it("keeps Settings controls bound to runtime variables and fires change interactions", () => {
+    const widget: Widget = { ...makeWidget(), type: "settings", props: { items: [
+      { name: "notifications", label: "Notifications", type: "toggle", variableName: "notifications" },
+    ] } };
+    const rendered = renderConfiguredWidget(widget, vi.fn(() => 0), [{
+      id: "00000000-0000-4000-8000-000000000002",
+      name: "notifications",
+      scope: "project",
+      type: "boolean",
+      initial: false,
+    }]);
+    fireEvent.click(rendered.getByRole("checkbox", { name: "Notifications" }));
+    expect(rendered.runtime.getVariable("notifications")).toBe(true);
+    expect(rendered.runEvent).toHaveBeenCalledWith(widget, "onChange", undefined);
   });
 
   it("uses configured navigation destinations and marks the selected local item", () => {
