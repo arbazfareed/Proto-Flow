@@ -305,7 +305,7 @@ export function PreviewWidget({
   snapshot,
   runEvent,
   onError,
-  onNavigate,
+  onNavigate = () => {},
   transitionStyle,
   item,
   layoutPosition,
@@ -321,7 +321,7 @@ export function PreviewWidget({
   snapshot: PreviewRuntimeSnapshot;
   runEvent: (widget: Widget, event: PreviewEvent, item?: RepeaterRecord) => number;
   onError: (error: unknown) => void;
-  onNavigate: (screenId: string) => void;
+  onNavigate?: (screenId: string) => void;
   transitionStyle?: CSSProperties;
   item?: RepeaterRecord;
   layoutPosition?: WidgetPosition;
