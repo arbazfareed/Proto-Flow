@@ -345,6 +345,10 @@ export function PreviewWidget({
   const [selectedFileName, setSelectedFileName] = useState("");
   const [toastVisible, setToastVisible] = useState(true);
   const [selectedSegmentIndex, setSelectedSegmentIndex] = useState(0);
+  const initialCalendarMonth = /^\d{4}-\d{2}$/.test(stringProp(widget, "month"))
+    ? new Date(`${stringProp(widget, "month")}-01T12:00:00`)
+    : new Date();
+  const [calendarMonth, setCalendarMonth] = useState(() => new Date(initialCalendarMonth.getFullYear(), initialCalendarMonth.getMonth(), 1));
   // Icons beyond the built-in set appear once the full set has loaded.
   useFullIconSet();
   useEffect(() => () => {
@@ -805,15 +809,48 @@ export function PreviewWidget({
     return <article className={`preview-widget preview-${widget.type}`} style={{ ...style, display: "flex", flexDirection: "column", alignItems: "flex-start", justifyContent: "center", gap: 6, padding: 10 }} {...commonHandlers}><strong>{interpolate(heading)}</strong>{detail && <p>{interpolate(detail)}</p>}{widget.type === "profile-card" && <small>{stringProp(widget, "initials", avatarInitials(heading))}</small>}{widget.type === "testimonial-card" && <span aria-label={`Rating ${Number(widget.props.value) || 5} out of 5`}>{"★".repeat(Math.max(0, Math.min(5, Number(widget.props.value) || 5)))}</span>}{widget.type === "pricing-card" && <button type="button" onClick={(event) => { event.stopPropagation(); runEvent(widget, "onClick", item); }}>{stringProp(widget, "actionLabel", "Choose plan")}</button>}</article>;
   }
 
-  if (widget.type === "table" || widget.type === "grid") {
+  if (widget.type === "table") {
     const columns = Array.isArray(widget.props.columns) ? widget.props.columns.filter((entry): entry is string => typeof entry === "string") : [];
     const rows = Array.isArray(widget.props.rows) ? widget.props.rows.filter((entry) => entry && typeof entry === "object" && !Array.isArray(entry)) as Record<string, unknown>[] : [];
-    return <div className={`preview-widget preview-${widget.type}`} style={{ ...style, overflow: "auto", padding: 8 }} data-widget-type={widget.type}>{rows.length && columns.length ? <table><thead><tr>{columns.map((column) => <th key={column}>{column}</th>)}</tr></thead><tbody>{rows.map((row, index) => <tr key={index}>{columns.map((column) => <td key={column}>{String(row[column] ?? "")}</td>)}</tr>)}</tbody></table> : <p>No {widget.type} data configured</p>}</div>;
+    return <div className="preview-widget preview-table" style={{ ...style, overflow: "auto", padding: 8 }} data-widget-type="table">{rows.length && columns.length ? <table><thead><tr>{columns.map((column) => <th key={column}>{column}</th>)}</tr></thead><tbody>{rows.map((row, index) => <tr key={index}>{columns.map((column) => <td key={column}>{String(row[column] ?? "")}</td>)}</tr>)}</tbody></table> : <p>No table data configured</p>}</div>;
+  }
+
+  if (widget.type === "grid") {
+    const rawItems = Array.isArray(widget.props.items) ? widget.props.items : Array.isArray(widget.props.rows) ? widget.props.rows : [];
+    const columns = Math.max(1, Math.min(12, Math.floor(Number(widget.props.columns) || 2)));
+    return <div className="preview-widget preview-grid" role="list" aria-label={stringProp(widget, "label", "Grid")} style={{ ...style, display: "grid", gridTemplateColumns: `repeat(${columns}, minmax(0, 1fr))`, gridAutoRows: "minmax(0, 1fr)", alignContent: "start", gap: typeof widget.props.gap === "number" ? Math.max(0, widget.props.gap) : 8, overflow: "auto", padding: 8 }} data-widget-type="grid">{rawItems.length ? rawItems.map((entry, index) => { const record = entry && typeof entry === "object" && !Array.isArray(entry) ? entry as Record<string, unknown> : {}; const label = typeof entry === "string" ? entry : String(record.label ?? record.title ?? record.name ?? `Item ${index + 1}`); return <div key={index} role="listitem" style={{ minWidth: 0, minHeight: 36, display: "grid", placeItems: "center", padding: 6, border: "1px solid rgba(127,127,127,.35)", borderRadius: 5, overflowWrap: "anywhere" }}>{interpolate(label)}</div>; }) : <p style={{ gridColumn: "1 / -1" }}>No grid items configured</p>}</div>;
   }
 
   if (widget.type === "calendar") {
     const events = Array.isArray(widget.props.events) ? widget.props.events : [];
-    return <section className="preview-widget preview-calendar" aria-label={stringProp(widget, "label", "Calendar")} style={{ ...style, display: "flex", flexDirection: "column", gap: 6, padding: 8, overflow: "auto" }}><strong>{stringProp(widget, "title", "Calendar")}</strong>{events.length ? events.map((entry, index) => { const record = entry && typeof entry === "object" ? entry as Record<string, unknown> : {}; return <div key={index}><time>{typeof record.date === "string" ? record.date : ""}</time> {typeof record.title === "string" ? record.title : `Event ${index + 1}`}</div>; }) : <p>No calendar events configured</p>}</section>;
+    const year = calendarMonth.getFullYear();
+    const month = calendarMonth.getMonth();
+    const firstWeekday = new Date(year, month, 1).getDay();
+    const daysInMonth = new Date(year, month + 1, 0).getDate();
+    const monthLabel = calendarMonth.toLocaleDateString(undefined, { month: "long", year: "numeric" });
+    const eventsByDate = new Map<string, string[]>();
+    for (const [index, entry] of events.entries()) {
+      const record = entry && typeof entry === "object" ? entry as Record<string, unknown> : {};
+      if (typeof record.date !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(record.date)) continue;
+      const labels = eventsByDate.get(record.date) ?? [];
+      labels.push(typeof record.title === "string" ? record.title : `Event ${index + 1}`);
+      eventsByDate.set(record.date, labels);
+    }
+    const moveMonth = (offset: number) => setCalendarMonth(new Date(year, month + offset, 1));
+    return <section className="preview-widget preview-calendar" aria-label={stringProp(widget, "label", "Calendar")} style={{ ...style, display: "flex", flexDirection: "column", gap: 6, padding: 8, overflow: "auto" }} data-widget-type="calendar">
+      <header style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 6 }}><button type="button" aria-label="Previous month" onClick={() => moveMonth(-1)}>‹</button><strong aria-live="polite">{monthLabel}</strong><button type="button" aria-label="Next month" onClick={() => moveMonth(1)}>›</button></header>
+      <div role="grid" aria-label={monthLabel} style={{ display: "grid", gridTemplateColumns: "repeat(7, minmax(0, 1fr))", gap: 2, minHeight: 0, flex: 1 }}>
+        {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map((day) => <div role="columnheader" key={day} style={{ textAlign: "center", fontSize: 10, fontWeight: 700 }}>{day}</div>)}
+        {Array.from({ length: 42 }, (_, index) => {
+          const day = index - firstWeekday + 1;
+          const inMonth = day >= 1 && day <= daysInMonth;
+          const dateKey = inMonth ? `${year}-${String(month + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}` : "";
+          const dayEvents = dateKey ? eventsByDate.get(dateKey) ?? [] : [];
+          return <div role="gridcell" aria-label={inMonth ? `${dateKey}${dayEvents.length ? `: ${dayEvents.join(", ")}` : ""}` : undefined} key={index} aria-disabled={!inMonth} style={{ minWidth: 0, minHeight: 0, padding: 2, border: "1px solid rgba(127,127,127,.2)", borderRadius: 3, opacity: inMonth ? 1 : .25, overflow: "hidden", fontSize: 10 }}><span>{inMonth ? day : ""}</span>{dayEvents.slice(0, 1).map((eventTitle) => <small key={eventTitle} style={{ display: "block", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{eventTitle}</small>)}</div>;
+        })}
+      </div>
+      {events.length === 0 && <p>No calendar events configured</p>}
+    </section>;
   }
 
   if (widget.type === "code-block") {
