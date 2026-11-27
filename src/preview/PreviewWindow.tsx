@@ -1316,7 +1316,7 @@ export function PreviewWidget({
             const child: Widget = {
               ...sourceChild,
               props: { ...sourceChild.props, ...overrideProps },
-              style: { ...sourceChild.style, ...overrideStyle },
+              style: { ...sourceChild.style, ...overrideStyle } as Widget["style"],
             };
             const childStyle: CSSProperties = {
               position: "absolute",
