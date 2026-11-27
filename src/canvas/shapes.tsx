@@ -2704,6 +2704,48 @@ function GenericElementShape({
     typeof widget.props.label === "string"
       ? widget.props.label
       : fallbackLabel;
+  if (widget.type === "component-master") {
+    return (
+      <Group>
+        <Rect
+          width={widget.width}
+          height={widget.height}
+          fill={fill ?? "rgba(139, 105, 237, 0.08)"}
+          stroke={stroke ?? "#8b69ed"}
+          strokeWidth={strokeWidth}
+          dash={[6, 4]}
+          cornerRadius={7}
+          perfectDrawEnabled={false}
+        />
+        <KonvaText
+          x={10}
+          y={6}
+          width={Math.max(1, widget.width - 20)}
+          height={12}
+          text="MASTER COMPONENT"
+          fontSize={8}
+          fontStyle="bold"
+          letterSpacing={0.8}
+          fill="#a78bfa"
+          ellipsis
+          perfectDrawEnabled={false}
+        />
+        <KonvaText
+          x={10}
+          y={20}
+          width={Math.max(1, widget.width - 20)}
+          height={Math.max(1, widget.height - 26)}
+          text={label}
+          fontSize={12}
+          fontStyle="bold"
+          fill={readableLabel(widget)}
+          verticalAlign="middle"
+          ellipsis
+          perfectDrawEnabled={false}
+        />
+      </Group>
+    );
+  }
   if (widget.type === "polygon") {
     const sides = Math.max(3, Math.min(12, Math.floor(Number(widget.props.sides) || 6)));
     return <KonvaRegularPolygon x={widget.width / 2} y={widget.height / 2} sides={sides} radius={Math.max(1, Math.min(widget.width, widget.height) / 2 - strokeWidth)} fill={fill} stroke={stroke} strokeWidth={strokeWidth} perfectDrawEnabled={false} />;
