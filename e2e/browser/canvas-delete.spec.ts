@@ -5,12 +5,17 @@ async function addRectangle(page: import("playwright/test").Page, xOffset = 0): 
   const surface = page.locator(".canvas-stage-surface");
   const bounds = await surface.boundingBox();
   if (!bounds) throw new Error("Canvas surface is not visible.");
-  const point = { x: bounds.x + bounds.width / 2 + xOffset, y: bounds.y + bounds.height / 2 };
+  const point = { x: bounds.x + bounds.width / 2 + xOffset, y: bounds.y + bounds.height / 2 - 100 };
   await page.keyboard.press("Escape");
   await page.getByRole("button", { name: "Add Rectangle" }).click();
   await page.mouse.click(point.x, point.y);
   await expect(page.getByText("1 selected")).toBeVisible();
   return point;
+}
+
+async function ensureInspectorOpen(page: import("playwright/test").Page): Promise<void> {
+  const showInspector = page.getByRole("button", { name: "Show inspector panel" });
+  if (await showInspector.count()) await showInspector.click();
 }
 
 test("right-click Delete removes a normal canvas element", async ({ page }) => {
@@ -34,39 +39,46 @@ test("right-click Delete removes a normal canvas element", async ({ page }) => {
 test("right-click Delete removes all selected elements together", async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 900 });
   await startWorkspace(page, "Blank project");
-  const first = await addRectangle(page, -90);
-  const second = await addRectangle(page, 90);
+  const first = await addRectangle(page, -250);
+  await addRectangle(page, 50);
   const visibility = page.getByRole("button", { name: /^Toggle visibility for/ });
   await expect(visibility).toHaveCount(2);
 
-  await page.keyboard.press("Control+a");
+  // Select through the layer tree rather than relying on browser Select All focus.
+  const rectangleLayers = page.getByRole("button", { name: "Screen child Rectangle", exact: true });
+  await rectangleLayers.nth(0).click();
+  await rectangleLayers.nth(1).click({ modifiers: ["Shift"] });
   await expect(page.getByText("2 selected")).toBeVisible();
+
   await page.mouse.click(first.x, first.y, { button: "right" });
   const menu = page.getByRole("menu", { name: "Element actions" });
+  await expect(menu.getByRole("menuitem", { name: "Delete selected element" })).toBeEnabled();
   await menu.getByRole("menuitem", { name: "Delete selected element" }).click();
 
   await expect(page.getByText("0 selected")).toBeVisible();
   await expect(visibility).toHaveCount(0);
   await expect(menu).toHaveCount(0);
-  void second;
 });
 
 test("right-click Delete preserves locked elements in a mixed selection", async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 900 });
   await startWorkspace(page, "Blank project");
-  const first = await addRectangle(page, -90);
-  const second = await addRectangle(page, 90);
+  await addRectangle(page, -250);
+  const second = await addRectangle(page, 50);
   const visibility = page.getByRole("button", { name: /^Toggle visibility for/ });
   const lock = page.getByRole("button", { name: /^Toggle lock for/ });
   await expect(visibility).toHaveCount(2);
-  await page.keyboard.press("Control+a");
+
+  const rectangleLayers = page.getByRole("button", { name: "Screen child Rectangle", exact: true });
+  await rectangleLayers.nth(0).click();
+  await rectangleLayers.nth(1).click({ modifiers: ["Shift"] });
   await expect(page.getByText("2 selected")).toBeVisible();
 
   await lock.first().click();
   await expect(lock.first()).toHaveAttribute("aria-pressed", "true");
-  await expect(visibility).toHaveCount(2);
+  // Locking deliberately removes the locked item from the current selection.
+  await expect(page.getByText("1 selected")).toBeVisible();
 
-  // The remaining unlocked item is still selected; deleting it must not remove the locked one.
   await page.mouse.click(second.x, second.y, { button: "right" });
   const menu = page.getByRole("menu", { name: "Element actions" });
   await expect(menu.getByRole("menuitem", { name: "Delete selected element" })).toBeEnabled();
@@ -75,13 +87,13 @@ test("right-click Delete preserves locked elements in a mixed selection", async 
   await expect(visibility).toHaveCount(1);
   await expect(lock).toHaveCount(1);
   await expect(lock).toHaveAttribute("aria-pressed", "true");
-  await expect(page.getByText("1 selected")).toBeVisible();
-  void first;
+  await expect(page.getByText("0 selected")).toBeVisible();
 });
 
 test("right-click Delete removes a widget from the active repeater template", async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 900 });
   await startWorkspace(page, "Blank project");
+  await ensureInspectorOpen(page);
   const surface = page.locator(".canvas-stage-surface");
   const bounds = await surface.boundingBox();
   if (!bounds) throw new Error("Canvas surface is not visible.");
@@ -106,6 +118,7 @@ test("right-click Delete removes a widget from the active repeater template", as
 test("right-click Delete removes a widget from the active dynamic-panel state", async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 900 });
   await startWorkspace(page, "Blank project");
+  await ensureInspectorOpen(page);
   const surface = page.locator(".canvas-stage-surface");
   const bounds = await surface.boundingBox();
   if (!bounds) throw new Error("Canvas surface is not visible.");
