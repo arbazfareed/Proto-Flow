@@ -2536,9 +2536,17 @@ function RepeaterShape({ widget, fill, stroke, strokeWidth }: ShapeComponentProp
 function AccordionShape({ widget, fill, stroke, strokeWidth }: ShapeComponentProps) {
   const rawItems = widget.props.items;
   const items = Array.isArray(rawItems)
-    ? rawItems.slice(0, 3).map((item, index) => typeof item === "string" ? item
-      : item && typeof item === "object" && typeof (item as Record<string, unknown>).title === "string"
-        ? String((item as Record<string, unknown>).title) : `Section ${index + 1}`)
+    ? rawItems.slice(0, 3).map((item, index) => {
+        if (typeof item === "string") return item;
+        if (item && typeof item === "object") {
+          const record = item as Record<string, unknown>;
+          return typeof record.title === "string" ? record.title
+            : typeof record.label === "string" ? record.label
+            : typeof record.question === "string" ? record.question
+            : `Section ${index + 1}`;
+        }
+        return `Section ${index + 1}`;
+      })
     : ["What is included?", "How does it work?", "Can I customize it?"];
   const rowHeight = Math.max(22, (widget.height - 16) / 3);
   return (
