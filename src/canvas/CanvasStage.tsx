@@ -151,6 +151,7 @@ import {
   type ImportedImage,
 } from "./images";
 import { getVariableCompletions } from "../project/variables";
+import { removeSelectedWidgets } from "../project/widgetSelection";
 
 interface CanvasSize {
   width: number;
@@ -2282,15 +2283,12 @@ export function CanvasStage({
       (item) => item.id === current.getActiveScreenId(),
     );
     if (!screen || current.selectedIds.length === 0) return;
-    const deletable = new Set(
-      getCanvasWidgets(screen, current.activeRepeaterEdit)
-        .filter((widget) => current.selectedIds.includes(widget.id) && !widget.locked)
-        .map((widget) => widget.id),
-    );
-    if (deletable.size === 0) return;
+    const activeWidgets = getCanvasWidgets(screen, current.activeRepeaterEdit);
+    const result = removeSelectedWidgets(activeWidgets, current.selectedIds);
+    if (result.deletedIds.length === 0) return;
     transformerRef.current?.nodes([]);
     contentLayerRef.current?.batchDraw();
-    updateActiveScreenWidgets(getCanvasWidgets(screen, current.activeRepeaterEdit).filter((widget) => !deletable.has(widget.id)));
+    updateActiveScreenWidgets(result.widgets);
     current.clearSelection();
   }, [updateActiveScreenWidgets]);
 
