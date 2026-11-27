@@ -11,6 +11,7 @@ import {
   Path as KonvaPath,
   Rect,
   Star as KonvaStar,
+  RegularPolygon as KonvaRegularPolygon,
   Text as BaseKonvaText,
 } from "react-konva";
 import type Konva from "konva";
@@ -2717,6 +2718,25 @@ function GenericElementShape({
     typeof widget.props.label === "string"
       ? widget.props.label
       : fallbackLabel;
+  if (widget.type === "polygon") {
+    const sides = Math.max(3, Math.min(12, Math.floor(Number(widget.props.sides) || 6)));
+    return <KonvaRegularPolygon x={widget.width / 2} y={widget.height / 2} sides={sides} radius={Math.max(1, Math.min(widget.width, widget.height) / 2 - strokeWidth)} fill={fill} stroke={stroke} strokeWidth={strokeWidth} perfectDrawEnabled={false} />;
+  }
+  if (widget.type === "star") {
+    const points = Math.max(3, Math.min(12, Math.floor(Number(widget.props.points) || 5)));
+    return <KonvaStar x={widget.width / 2} y={widget.height / 2} numPoints={points} innerRadius={Math.max(1, Math.min(widget.width, widget.height) * 0.2)} outerRadius={Math.max(1, Math.min(widget.width, widget.height) / 2 - strokeWidth)} fill={fill} stroke={stroke} strokeWidth={strokeWidth} perfectDrawEnabled={false} />;
+  }
+  if (widget.type === "divider") {
+    const vertical = widget.props.orientation === "vertical";
+    return <Line points={vertical ? [widget.width / 2, 0, widget.width / 2, widget.height] : [0, widget.height / 2, widget.width, widget.height / 2]} stroke={stroke ?? fill ?? "#94a3b8"} strokeWidth={Math.max(1, strokeWidth)} dash={widget.style.dash} perfectDrawEnabled={false} />;
+  }
+  if (widget.type === "vector") {
+    const data = typeof widget.props.pathData === "string" ? widget.props.pathData : "";
+    if (data && data.length <= 20_000 && /^[MmZzLlHhVvCcSsQqTtAa0-9eE+.,\-\s]+$/.test(data)) {
+      return <KonvaPath data={data} scaleX={widget.width / Math.max(1, Number(widget.props.viewBoxWidth) || widget.width)} scaleY={widget.height / Math.max(1, Number(widget.props.viewBoxHeight) || widget.height)} fill={fill} stroke={stroke} strokeWidth={strokeWidth} perfectDrawEnabled={false} />;
+    }
+    return <Rect width={widget.width} height={widget.height} fill={fill} stroke={stroke} strokeWidth={strokeWidth} dash={[4, 3]} perfectDrawEnabled={false} />;
+  }
   if (widget.type === "path") {
     const data = typeof widget.props.pathData === "string" ? widget.props.pathData : "";
     if (!data || data.length > 20_000 || !/^[MmZzLlHhVvCcSsQqTtAa0-9eE+.,\-\s]+$/.test(data)) {
@@ -2885,25 +2905,16 @@ function GenericElementShape({
         </Group>
       ) : (
         <Group>
-          <CanvasIcon
-            name={GENERIC_ICON_NAMES[widget.type] ?? "Sparkles"}
-            color={readableLabel(widget)}
-            strokeWidth={1.8}
-            x={10}
-            y={Math.max(6, (widget.height - 20) / 2)}
-            width={20}
-            height={20}
-          />
           <KonvaText
-            x={38}
+            x={8}
             y={4}
-            width={Math.max(1, widget.width - 46)}
+            width={Math.max(1, widget.width - 16)}
             height={Math.max(1, widget.height - 8)}
             text={label}
             fontSize={Math.min(14, Math.max(10, widget.height * 0.32))}
             fontFamily="Arial"
             fill={readableLabel(widget)}
-            align="left"
+            align="center"
             verticalAlign="middle"
             ellipsis
             wrap="none"
