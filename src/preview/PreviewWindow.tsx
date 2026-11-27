@@ -1304,7 +1304,20 @@ export function PreviewWidget({
     return (
       <div className="preview-widget preview-symbol-instance" role="group" aria-label={symbol.name} style={{ ...style, overflow: "hidden" }} {...commonHandlers} data-symbol-id={symbol.id}>
         <div style={{ position: "absolute", left: 0, top: 0, width: symbol.width, height: symbol.height, transform: `scale(${scaleX}, ${scaleY})`, transformOrigin: "top left" }}>
-          {symbol.widgets.filter((child) => child.visible).sort((a, b) => a.zIndex - b.zIndex).map((child) => {
+          {symbol.widgets.filter((child) => child.visible).sort((a, b) => a.zIndex - b.zIndex).map((sourceChild) => {
+            const overrideRoot = widget.props.symbolOverrides && typeof widget.props.symbolOverrides === "object" && !Array.isArray(widget.props.symbolOverrides)
+              ? widget.props.symbolOverrides as Record<string, unknown> : {};
+            const override = overrideRoot[sourceChild.id] && typeof overrideRoot[sourceChild.id] === "object" && !Array.isArray(overrideRoot[sourceChild.id])
+              ? overrideRoot[sourceChild.id] as Record<string, unknown> : {};
+            const overrideProps = override.props && typeof override.props === "object" && !Array.isArray(override.props)
+              ? override.props as Record<string, unknown> : {};
+            const overrideStyle = override.style && typeof override.style === "object" && !Array.isArray(override.style)
+              ? override.style as Record<string, unknown> : {};
+            const child: Widget = {
+              ...sourceChild,
+              props: { ...sourceChild.props, ...overrideProps },
+              style: { ...sourceChild.style, ...overrideStyle },
+            };
             const childStyle: CSSProperties = {
               position: "absolute",
               left: child.x,
