@@ -750,7 +750,7 @@ export function PreviewWidget({
 
   if (widget.type === "avatar") {
     const name = stringProp(widget, "label", stringProp(widget, "name", "User"));
-    const initials = avatarInitials({ label: name });
+    const initials = stringProp(widget, "initials", "") || avatarInitials({ label: name });
     const imageSource = stringProp(widget, "src", stringProp(widget, "image"));
     return <div className="preview-widget preview-avatar" role="img" aria-label={name} style={{ ...style, display: "grid", placeItems: "center", borderRadius: "50%", overflow: "hidden" }} data-widget-type="avatar">{imageSource ? <img src={interpolate(imageSource)} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : <strong>{initials}</strong>}</div>;
   }
@@ -1026,8 +1026,10 @@ export function PreviewWidget({
       return { label, href };
     });
     const vertical = widget.type === "sidebar";
+    const title = widget.type === "app-bar" ? stringProp(widget, "label", "") : "";
     return (
       <nav className={`preview-widget preview-${widget.type}`} aria-label={stringProp(widget, "label", widget.type)} style={{ ...style, display: "flex", flexDirection: vertical ? "column" : "row", alignItems: "center", justifyContent: "space-around", gap: 6, padding: 8 }} data-widget-type={widget.type}>
+        {title && <strong>{interpolate(title)}</strong>}
         {items.map((entry, index) => entry.href
           ? <a key={index} href={entry.href} onClick={() => { setActiveNavigationItem(index); runEvent(widget, "onClick", item); }}>{interpolate(entry.label)}</a>
           : <button key={index} type="button" aria-current={activeNavigationItem === index ? "page" : undefined} onClick={() => { setActiveNavigationItem(index); runEvent(widget, "onClick", item); }}>{interpolate(entry.label)}</button>)}
