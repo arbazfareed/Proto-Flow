@@ -16,6 +16,11 @@
 .topbar-divider { height:25px; width:1px; margin:0 5px; background:var(--border); }
 .document-heading { position:static; min-width:0; margin-left:auto; align-items:flex-start; flex-direction:column; gap:2px; }
 .document-name { max-width:190px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:#f0eff4; font-size:12px; font-weight:600; }
+.document-name-button { display:inline-flex; align-items:center; gap:6px; max-width:240px; padding:0; border:0; background:transparent; text-align:left; cursor:text; }
+.document-name-button:hover { color:#ffffff; }
+.document-name-button svg { flex-shrink:0; opacity:0; color:var(--muted); transition:opacity .15s ease; }
+.document-name-button:hover svg,.document-name-button:focus-visible svg { opacity:1; }
+.document-name-input { width:min(240px,35vw); min-width:100px; padding:2px 5px; border:1px solid var(--accent); border-radius:5px; outline:none; background:#211e29; color:#f0eff4; font:600 12px inherit; }
 .save-state { display:flex; align-items:center; gap:5px; min-width:0; color:#a2a2aa; font-size:10px; white-space:nowrap; }
 .save-state-label { min-width:0; overflow:hidden; text-overflow:ellipsis; }
 .state-dot,.status-indicator,.mode-dot,.version-pulse { width:6px; height:6px; border-radius:50%; background:var(--success); }
