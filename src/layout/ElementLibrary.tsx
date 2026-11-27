@@ -112,11 +112,13 @@ function ElementLibraryContents({
   const suppressClickAfterDragRef = useRef(false);
   const [query, setQuery] = useState("");
   const [selectedGuide, setSelectedGuide] = useState<string | null>(null);
-  const matchingToolTypes = ELEMENT_LIBRARY_TOOL_TYPES.filter((tool) =>
-    `${tool} ${getShapeToolDefinition(tool)?.label ?? tool} ${plainElementHint(tool) ?? ""}`
-      .toLowerCase()
-      .includes(query.trim().toLowerCase()),
-  );
+  const matchesTool = (tool: ShapeTool) =>
+    matchesElementQuery(
+      `${tool} ${getShapeToolDefinition(tool)?.label ?? tool} ${plainElementHint(tool) ?? ""}`,
+      query,
+    );
+  const matchingToolTypes = ELEMENT_LIBRARY_TOOL_TYPES.filter(matchesTool);
+  const matchingUnlockedTools = unlockedTools.filter(matchesTool);
   const [placement, setPlacement] = useState({ left: 12, top: 80, width: 760 });
   // B14: the search also filters the Screens, Import and Status groups.
   const screenTools = SCREEN_TOOLS.filter(({ category, label }) =>
@@ -125,7 +127,8 @@ function ElementLibraryContents({
   const statusItems = STATUS_INDICATORS.filter(({ label }) =>
     matchesElementQuery(`status indicators ${label}`, query));
   const searching = query.trim() !== "";
-  const nothingMatches = searching && matchingToolTypes.length === 0 && screenTools.length === 0
+  const nothingMatches = searching && matchingToolTypes.length === 0
+    && matchingUnlockedTools.length === 0 && screenTools.length === 0
     && !showImport && statusItems.length === 0;
   const groupedTools = new Map<string, ShapeTool[]>();
   for (const tool of matchingToolTypes) {
@@ -133,7 +136,7 @@ function ElementLibraryContents({
     groupedTools.set(group, [...(groupedTools.get(group) ?? []), tool]);
   }
   const importedToolsByGroup = new Map<string, ShapeTool[]>();
-  for (const tool of unlockedTools) {
+  for (const tool of matchingUnlockedTools) {
     const group = getToolGroup(tool);
     importedToolsByGroup.set(group, [...(importedToolsByGroup.get(group) ?? []), tool]);
   }
@@ -274,23 +277,6 @@ function ElementLibraryContents({
         </div>
       </div>
 
-      <label className="element-library-search">
-        <Search size={14} aria-hidden="true" />
-        <input
-          ref={searchRef}
-          type="search"
-          value={query}
-          aria-label="Search elements"
-          placeholder="Search elements"
-          onChange={(event) => setQuery(event.currentTarget.value)}
-        />
-        {query && (
-          <button type="button" aria-label="Clear element search" onClick={() => setQuery("")}>
-            <X size={12} />
-          </button>
-        )}
-      </label>
-
       {nothingMatches && (
         <p className="element-library-empty" role="status">No elements match “{query.trim()}”.</p>
       )}
@@ -319,6 +305,23 @@ function ElementLibraryContents({
       </section>
       )}
 
+      <label className="element-library-search">
+        <Search size={14} aria-hidden="true" />
+        <input
+          ref={searchRef}
+          type="search"
+          value={query}
+          aria-label="Search elements"
+          placeholder="Search elements"
+          onChange={(event) => setQuery(event.currentTarget.value)}
+        />
+        {query && (
+          <button type="button" aria-label="Clear element search" onClick={() => setQuery("")}>
+            <X size={12} />
+          </button>
+        )}
+      </label>
+
       {showImport && (
       <section className="element-library-section" aria-label="Import image">
         <h3>Import</h3>
@@ -337,14 +340,14 @@ function ElementLibraryContents({
       </section>
       )}
 
-      {unlockedTools.length > 0 && (
+      {matchingUnlockedTools.length > 0 && (
         <section
           className="element-library-section element-library-imported"
           aria-label="Detected in imported code"
         >
           <h3>
             From imported code
-            <span>{unlockedTools.length}</span>
+            <span>{matchingUnlockedTools.length}</span>
           </h3>
           {TOOL_GROUPS.map(({ id, label }) => {
             const tools = importedToolsByGroup.get(id);

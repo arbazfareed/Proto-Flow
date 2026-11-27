@@ -344,6 +344,9 @@ export function PreviewWidget({
   const [activeCarouselIndex, setActiveCarouselIndex] = useState(0);
   const [requestPreviewAttempted, setRequestPreviewAttempted] = useState(false);
   const [previewThemeMode, setPreviewThemeMode] = useState<"light" | "dark">("light");
+  const [formSubmission, setFormSubmission] = useState<Record<string, string> | null>(null);
+  const [settingsValues, setSettingsValues] = useState<Record<string, boolean | string>>({});
+  const [activeNavigationItem, setActiveNavigationItem] = useState<number | null>(null);
   const [refreshPreviewTriggered, setRefreshPreviewTriggered] = useState(false);
   const [lastSimulatedSwipe, setLastSimulatedSwipe] = useState("");
   const stepperMin = Number.isFinite(Number(widget.props.min)) ? Number(widget.props.min) : 1;
@@ -672,7 +675,17 @@ export function PreviewWidget({
           const record = entry && typeof entry === "object" ? entry as Record<string, unknown> : {};
           const label = typeof entry === "string" ? entry : typeof record.label === "string" ? record.label : `Setting ${index + 1}`;
           const description = typeof record.description === "string" ? record.description : "";
-          return <div key={index}><strong>{interpolate(label)}</strong>{description && <small>{interpolate(description)}</small>}</div>;
+          const key = typeof record.name === "string" ? record.name : `setting-${index}`;
+          const value = settingsValues[key] ?? (typeof record.value === "boolean" ? record.value : typeof record.value === "string" ? record.value : record.type === "toggle" ? false : "");
+          return <div key={key} className="preview-setting">
+            <label>
+              <strong>{interpolate(label)}</strong>
+              {description && <small>{interpolate(description)}</small>}
+              {record.type === "toggle" || typeof record.value === "boolean"
+                ? <input aria-label={label} type="checkbox" checked={Boolean(value)} onChange={(event) => setSettingsValues((current) => ({ ...current, [key]: event.target.checked }))} />
+                : <input aria-label={label} type={record.type === "number" ? "number" : "text"} value={String(value)} onChange={(event) => setSettingsValues((current) => ({ ...current, [key]: event.target.value }))} />}
+            </label>
+          </div>;
         }) : <p>No settings configured</p>}
       </section>
     );
@@ -737,7 +750,7 @@ export function PreviewWidget({
 
   if (widget.type === "avatar") {
     const name = stringProp(widget, "label", stringProp(widget, "name", "User"));
-    const initials = avatarInitials(widget.props);
+    const initials = avatarInitials({ initials: widget.props.initials, label: name });
     const imageSource = stringProp(widget, "src", stringProp(widget, "image"));
     return <div className="preview-widget preview-avatar" role="img" aria-label={name} style={{ ...style, display: "grid", placeItems: "center", borderRadius: "50%", overflow: "hidden" }} data-widget-type="avatar">{imageSource ? <img src={interpolate(imageSource)} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : <strong>{initials}</strong>}</div>;
   }
@@ -1005,18 +1018,26 @@ export function PreviewWidget({
   }
 
   if (widget.type === "navbar" || widget.type === "sidebar" || widget.type === "footer" || widget.type === "bottom-nav" || widget.type === "app-bar") {
-    const label = stringProp(widget, "label", "").trim();
-    const rawItems = widget.type === "bottom-nav" && label
-      ? label.split("|").map((entry) => entry.trim()).filter(Boolean)
+    const bottomNavItems = widget.type === "bottom-nav"
+      ? stringProp(widget, "label").split("|").map((entry) => entry.trim()).filter(Boolean)
+      : [];
+    const rawItems = bottomNavItems.length > 0
+      ? bottomNavItems
       : Array.isArray(widget.props.items) ? widget.props.items : ["Home", "Explore", "Profile"];
-    const items = rawItems.map((entry, index) => typeof entry === "string" ? entry
-      : entry && typeof entry === "object" && typeof (entry as Record<string, unknown>).label === "string"
-        ? String((entry as Record<string, unknown>).label) : `Item ${index + 1}`);
+    const items = rawItems.map((entry, index) => {
+      const record = entry && typeof entry === "object" ? entry as Record<string, unknown> : {};
+      const label = typeof entry === "string" ? entry : typeof record.label === "string" ? record.label : `Item ${index + 1}`;
+      const href = typeof record.href === "string" ? sanitizeRichTextHref(record.href) : null;
+      return { label, href };
+    });
     const vertical = widget.type === "sidebar";
+    const title = widget.type === "app-bar" ? stringProp(widget, "label", "") : "";
     return (
-      <nav className={`preview-widget preview-${widget.type}`} aria-label={label || widget.type} style={{ ...style, display: "flex", flexDirection: vertical ? "column" : "row", alignItems: "center", justifyContent: "space-around", gap: 6, padding: 8 }} data-widget-type={widget.type}>
-        {widget.type === "app-bar" && label ? <strong>{interpolate(label)}</strong> : null}
-        {items.map((entry, index) => <button key={index} type="button" onClick={() => runEvent(widget, "onClick", item)}>{interpolate(entry)}</button>)}
+      <nav className={`preview-widget preview-${widget.type}`} aria-label={stringProp(widget, "label", widget.type)} style={{ ...style, display: "flex", flexDirection: vertical ? "column" : "row", alignItems: "center", justifyContent: "space-around", gap: 6, padding: 8 }} data-widget-type={widget.type}>
+        {title && <strong>{interpolate(title)}</strong>}
+        {items.map((entry, index) => entry.href
+          ? <a key={index} href={entry.href} onClick={() => { setActiveNavigationItem(index); runEvent(widget, "onClick", item); }}>{interpolate(entry.label)}</a>
+          : <button key={index} type="button" aria-current={activeNavigationItem === index ? "page" : undefined} onClick={() => { setActiveNavigationItem(index); runEvent(widget, "onClick", item); }}>{interpolate(entry.label)}</button>)}
       </nav>
     );
   }
@@ -1024,7 +1045,13 @@ export function PreviewWidget({
   if (widget.type === "form") {
     const fields = Array.isArray(widget.props.fields) ? widget.props.fields : [];
     return (
-      <form className="preview-widget preview-form" aria-label={stringProp(widget, "label", "Form")} style={{ ...style, display: "flex", flexDirection: "column", alignItems: "stretch", gap: 8, padding: 10, overflow: "auto" }} data-widget-type="form" onSubmit={(event) => { event.preventDefault(); runEvent(widget, "onClick", item); }}>
+      <form className="preview-widget preview-form" aria-label={stringProp(widget, "label", "Form")} style={{ ...style, display: "flex", flexDirection: "column", alignItems: "stretch", gap: 8, padding: 10, overflow: "auto" }} data-widget-type="form" onSubmit={(event) => {
+        event.preventDefault();
+        const formData = new FormData(event.currentTarget);
+        const submitted = Object.fromEntries(Array.from(formData.entries()).map(([key, value]) => [key, String(value)]));
+        setFormSubmission(submitted);
+        runEvent(widget, "onClick", item);
+      }}>
         {fields.length ? fields.map((entry, index) => {
           const record = entry && typeof entry === "object" ? entry as Record<string, unknown> : {};
           const label = typeof record.label === "string" ? record.label : `Field ${index + 1}`;
@@ -1035,6 +1062,7 @@ export function PreviewWidget({
           return <label key={index}>{label}<input aria-label={label} name={typeof record.name === "string" ? record.name : `field-${index + 1}`} type={fieldType} placeholder={placeholder} required={record.required === true} /></label>;
         }) : <p>No form fields configured</p>}
         <button type="submit">{stringProp(widget, "submitLabel", "Submit")}</button>
+        {formSubmission && <output aria-live="polite">Submitted {Object.keys(formSubmission).length} field(s)</output>}
       </form>
     );
   }
@@ -1065,7 +1093,7 @@ export function PreviewWidget({
         <div className="preview-card-copy">
           <h3>{title}</h3>
           <p>{subtitle}</p>
-          <button type="button" tabIndex={-1}>{actionLabel}</button>
+          <button type="button" onClick={(event) => { event.stopPropagation(); runEvent(widget, "onClick", item); }}>{actionLabel}</button>
         </div>
       </article>
     );
