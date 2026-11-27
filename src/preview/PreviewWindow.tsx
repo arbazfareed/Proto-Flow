@@ -1356,7 +1356,7 @@ export function PreviewWidget({
 
   if (widget.type === "image") {
     const source = stringProp(widget, "src", stringProp(widget, "url"));
-    const src = interpolate(source);
+    const src = source ? sanitizeRichTextHref(interpolate(source)) : null;
     return (
       <div className="preview-widget" style={style} {...commonHandlers}>
         {src ? <img src={src} alt={interpolate(stringProp(widget, "alt", text))} style={{ objectFit: stringProp(widget, "fit") === "cover" ? "cover" : "contain" }} /> : text || "Image"}
