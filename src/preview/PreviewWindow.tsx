@@ -185,7 +185,7 @@ export function VirtualizedRepeater({
   onGestureFeedback: (event: PreviewEvent, x: number, y: number) => void;
   commonHandlers: HTMLAttributes<HTMLDivElement>;
   liteMode: boolean;
-  symbols: SymbolDefinition[];
+  symbols?: SymbolDefinition[];
 }) {
   const viewportRef = useRef<HTMLDivElement>(null);
   const [scrollOffset, setScrollOffset] = useState(0);
@@ -1318,7 +1318,7 @@ export function PreviewWidget({
               color: typeof child.style.color === "string" ? child.style.color : "inherit",
               background: typeof child.style.fill === "string" ? child.style.fill : "transparent",
               border: typeof child.style.stroke === "string" ? `1px solid ${child.style.stroke}` : undefined,
-              borderRadius: child.type === "ellipse" ? "50%" : typeof child.style.radius === "number" ? child.style.radius : undefined,
+              borderRadius: child.type === "ellipse" ? "50%" : typeof child.style.cornerRadius === "number" ? child.style.cornerRadius : undefined,
               overflow: "hidden",
               display: "flex",
               alignItems: "center",
