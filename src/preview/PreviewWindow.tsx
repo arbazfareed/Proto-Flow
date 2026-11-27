@@ -1364,8 +1364,8 @@ export function PreviewWidget({
   }
 
   if (widget.type === "heading") {
-    const level = Math.max(1, Math.min(6, Number(widget.props.level) || 2)) as 1 | 2 | 3 | 4 | 5 | 6;
-    const HeadingTag = `h${level}` as keyof JSX.IntrinsicElements;
+    const level = Math.max(1, Math.min(6, Number(widget.props.level) || 2));
+    const HeadingTag = level === 1 ? "h1" : level === 2 ? "h2" : level === 3 ? "h3" : level === 4 ? "h4" : level === 5 ? "h5" : "h6";
     return <HeadingTag className="preview-widget preview-heading" style={{ ...style, margin: 0, fontSize: typeof widget.props.fontSize === "number" ? widget.props.fontSize : style.fontSize, fontWeight: typeof widget.props.fontWeight === "number" || typeof widget.props.fontWeight === "string" ? widget.props.fontWeight : 700 }} {...commonHandlers}>{text}</HeadingTag>;
   }
 
