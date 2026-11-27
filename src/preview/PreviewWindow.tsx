@@ -415,7 +415,7 @@ export function PreviewWidget({
       if (event.detail === 0) {
         suppressCompatibilityClick.current = false;
         window.clearTimeout(touchClickTimer.current);
-        runEvent(widget, "onClick", item);
+        runEvent(widget, "onClick", undefined);
         return;
       }
       const pointerType = "pointerType" in event.nativeEvent
