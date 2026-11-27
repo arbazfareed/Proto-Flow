@@ -168,7 +168,6 @@ export function VirtualizedRepeater({
   commonHandlers,
   liteMode,
   symbols,
-  symbolDepth = 0,
 }: {
   widget: Widget;
   rows: RepeaterRecord[];
@@ -312,6 +311,7 @@ export function PreviewWidget({
   onGestureFeedback,
   liteMode,
   symbols,
+  symbolDepth = 0,
 }: {
   widget: Widget;
   runtime: PreviewRuntime;
@@ -327,6 +327,7 @@ export function PreviewWidget({
   onGestureFeedback: (event: PreviewEvent, x: number, y: number) => void;
   liteMode: boolean;
   symbols?: SymbolDefinition[];
+  symbolDepth?: number;
 }) {
   const touchStart = useRef<{ x: number; y: number; distance?: number; centerX?: number; centerY?: number } | null>(null);
   const longPressTimer = useRef<number | undefined>(undefined);
@@ -750,14 +751,14 @@ export function PreviewWidget({
 
   if (widget.type === "avatar") {
     const name = stringProp(widget, "label", stringProp(widget, "name", "User"));
-    const initials = avatarInitials(name);
+    const initials = avatarInitials({ label: name });
     const imageSource = stringProp(widget, "src", stringProp(widget, "image"));
     return <div className="preview-widget preview-avatar" role="img" aria-label={name} style={{ ...style, display: "grid", placeItems: "center", borderRadius: "50%", overflow: "hidden" }} data-widget-type="avatar">{imageSource ? <img src={interpolate(imageSource)} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : <strong>{initials}</strong>}</div>;
   }
 
   if (widget.type === "avatar-group") {
     const rawPeople = Array.isArray(widget.props.items) ? widget.props.items : stringProp(widget, "label", "AM | JR | SK").split("|").map((name) => name.trim());
-    return <div className="preview-widget preview-avatar-group" role="group" aria-label={stringProp(widget, "label", "Avatar group")} style={{ ...style, display: "flex", alignItems: "center", padding: 4, overflow: "visible" }}>{rawPeople.slice(0, 6).map((person, index) => { const name = typeof person === "string" ? person : person && typeof person === "object" && typeof (person as Record<string, unknown>).name === "string" ? String((person as Record<string, unknown>).name) : `User ${index + 1}`; return <span key={index} role="img" aria-label={name} style={{ width: 32, height: 32, borderRadius: "50%", display: "grid", placeItems: "center", marginLeft: index ? -7 : 0, border: "2px solid white", background: "#e9e2ff", color: "#49377b", fontSize: 10 }}>{avatarInitials(name)}</span>; })}</div>;
+    return <div className="preview-widget preview-avatar-group" role="group" aria-label={stringProp(widget, "label", "Avatar group")} style={{ ...style, display: "flex", alignItems: "center", padding: 4, overflow: "visible" }}>{rawPeople.slice(0, 6).map((person, index) => { const name = typeof person === "string" ? person : person && typeof person === "object" && typeof (person as Record<string, unknown>).name === "string" ? String((person as Record<string, unknown>).name) : `User ${index + 1}`; return <span key={index} role="img" aria-label={name} style={{ width: 32, height: 32, borderRadius: "50%", display: "grid", placeItems: "center", marginLeft: index ? -7 : 0, border: "2px solid white", background: "#e9e2ff", color: "#49377b", fontSize: 10 }}>{avatarInitials({ label: name })}</span>; })}</div>;
   }
 
   if (widget.type === "segmented-control") {
@@ -787,7 +788,7 @@ export function PreviewWidget({
 
   if (widget.type === "stepper") {
     const change = (next: number) => { const value = Math.max(stepperMin, Math.min(stepperMax, next)); setStepperValue(value); runEvent(widget, "onChange", item); };
-    return <section className="preview-widget preview-stepper" aria-label={stringProp(widget, "label", "Stepper")} style={{ ...style, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, padding: 8 }}><strong>{stringProp(widget, "label", "Quantity")}</strong><button type="button" aria-label="Decrease value" disabled={stepperValue <= min} onClick={() => change(stepperValue - 1)}>−</button><output aria-live="polite">{stepperValue}</output><button type="button" aria-label="Increase value" disabled={stepperValue >= max} onClick={() => change(stepperValue + 1)}>+</button></section>;
+    return <section className="preview-widget preview-stepper" aria-label={stringProp(widget, "label", "Stepper")} style={{ ...style, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, padding: 8 }}><strong>{stringProp(widget, "label", "Quantity")}</strong><button type="button" aria-label="Decrease value" disabled={stepperValue <= stepperMin} onClick={() => change(stepperValue - 1)}>−</button><output aria-live="polite">{stepperValue}</output><button type="button" aria-label="Increase value" disabled={stepperValue >= stepperMax} onClick={() => change(stepperValue + 1)}>+</button></section>;
   }
 
   if (widget.type === "date-picker") {
@@ -1334,7 +1335,7 @@ export function PreviewWidget({
 
   if (widget.type === "symbol-instance") {
     const symbol = symbols?.find((entry) => entry.id === widget.symbolId)
-      ?? runtime.project.symbols.find((entry) => entry.id === widget.symbolId);
+      ;
     if (!symbol) {
       return <div className="preview-widget preview-symbol-instance preview-symbol-missing" role="group" aria-label={`Missing component: ${widget.name ?? "Symbol"}`} style={{ ...style, display: "grid", placeItems: "center", border: "1px dashed currentColor" }} {...commonHandlers}>Missing component</div>;
     }
