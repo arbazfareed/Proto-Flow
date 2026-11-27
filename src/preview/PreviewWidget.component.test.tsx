@@ -705,9 +705,9 @@ describe("PreviewWidget settings and gesture elements", () => {
   it("switches the theme preview between light and dark", () => {
     const rendered = renderElement("theme", {});
     const theme = rendered.getByRole("region", { name: "Theme" });
-    expect(theme).toHaveStyle({ backgroundColor: "rgb(255, 255, 255)" });
+    expect(theme).toHaveStyle({ backgroundColor: "#ffffff" });
     fireEvent.change(rendered.getByRole("combobox", { name: "Theme appearance" }), { target: { value: "dark" } });
-    expect(theme).toHaveStyle({ backgroundColor: "rgb(31, 41, 55)" });
+    expect(theme).toHaveStyle({ backgroundColor: "#1f2937" });
   });
 
   it("triggers the pull-to-refresh gesture rule from its Preview control", () => {
