@@ -1017,3 +1017,15 @@ describe("PreviewWidget colours", () => {
     cleanup();
   });
 });
+
+
+describe("PreviewWidget component masters", () => {
+  it("renders Component Master as a labeled master container instead of a fake type-name placeholder", () => {
+    const rendered = renderElement("component-master", { label: "Primary Button" });
+    const master = rendered.getByRole("group", { name: "Primary Button" });
+    expect(master).toHaveAttribute("data-widget-type", "component-master");
+    expect(rendered.getByText("MASTER COMPONENT")).toBeInTheDocument();
+    expect(rendered.getByText("Primary Button")).toBeInTheDocument();
+    expect(rendered.queryByText("component master")).not.toBeInTheDocument();
+  });
+});
