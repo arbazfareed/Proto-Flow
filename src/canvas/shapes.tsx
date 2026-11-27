@@ -2550,7 +2550,7 @@ function AccordionShape({ widget, fill, stroke, strokeWidth }: ShapeComponentPro
           <Group key={index}>
             {index > 0 && <Line points={[10, y, widget.width - 10, y]} stroke="#e2e8f0" strokeWidth={1} perfectDrawEnabled={false} />}
             <KonvaText x={12} y={y} width={Math.max(1, widget.width - 42)} height={rowHeight} text={item} fontSize={11} fontStyle="bold" fill="#334155" verticalAlign="middle" ellipsis perfectDrawEnabled={false} />
-            <KonvaText x={widget.width - 30} y={y} width={18} height={rowHeight} text={index === 0 ? "−" : "+"} fontSize={17} fill="#64748b" align="center" verticalAlign="middle" perfectDrawEnabled={false} />
+            <KonvaText x={widget.width - 30} y={y} width={18} height={rowHeight} text="+" fontSize={17} fill="#64748b" align="center" verticalAlign="middle" perfectDrawEnabled={false} />
           </Group>
         );
       })}
@@ -2561,14 +2561,15 @@ function AccordionShape({ widget, fill, stroke, strokeWidth }: ShapeComponentPro
 function ApiRequestShape({ widget, fill, stroke, strokeWidth }: ShapeComponentProps) {
   const method = getWidgetProp(widget, "method", "GET").toUpperCase();
   const url = getWidgetProp(widget, "url", "/api/resource");
-  const status = getWidgetProp(widget, "status", "200 OK");
+  const configuredStatus = getWidgetProp(widget, "status", "");
+  const responseLabel = configuredStatus ? `Configured status · ${configuredStatus}` : "Not executed · preview only";
   return (
     <Group>
       <Rect width={widget.width} height={widget.height} fill={fill ?? "#111827"} stroke={stroke ?? "#475569"} strokeWidth={strokeWidth} cornerRadius={8} perfectDrawEnabled={false} />
       <Rect x={10} y={10} width={Math.min(54, widget.width * 0.24)} height={22} fill="#14532d" cornerRadius={4} perfectDrawEnabled={false} />
       <KonvaText x={10} y={10} width={Math.min(54, widget.width * 0.24)} height={22} text={method} fontSize={10} fontStyle="bold" fill="#bbf7d0" align="center" verticalAlign="middle" perfectDrawEnabled={false} />
       <KonvaText x={Math.min(72, widget.width * 0.3)} y={10} width={Math.max(1, widget.width - Math.min(84, widget.width * 0.36))} height={22} text={url} fontSize={11} fill="#e5e7eb" verticalAlign="middle" ellipsis perfectDrawEnabled={false} />
-      {widget.height > 48 && <KonvaText x={12} y={36} width={widget.width - 24} height={Math.max(12, widget.height - 42)} text={`Response  ·  ${status}`} fontSize={10} fill="#94a3b8" verticalAlign="middle" ellipsis perfectDrawEnabled={false} />}
+      {widget.height > 48 && <KonvaText x={12} y={36} width={widget.width - 24} height={Math.max(12, widget.height - 42)} text={`Response  ·  ${responseLabel}`} fontSize={10} fill="#94a3b8" verticalAlign="middle" ellipsis perfectDrawEnabled={false} />}
     </Group>
   );
 }
