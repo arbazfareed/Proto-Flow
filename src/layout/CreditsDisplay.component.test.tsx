@@ -10,6 +10,7 @@ function renderTopBar() {
   const noop = () => undefined;
   return renderWithProviders(
     <TopBar
+      onRenameProject={noop}
       onNew={noop}
       onOpen={noop}
       onSave={noop}
