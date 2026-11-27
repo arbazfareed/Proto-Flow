@@ -1115,12 +1115,12 @@ describe("PreviewWidget form, card, navigation, and settings behavior", () => {
 
 describe("PreviewWidget charts and media sources", () => {
   function renderConfigured(widget: Widget, runtime = new PreviewRuntime(createEmptyProject("Chart/media preview"))) {
-    const project = runtime.project;
+    const screenId = runtime.snapshot().screenId;
     return render(
       <PreviewWidget
         widget={widget}
         runtime={runtime}
-        screenId={project.screens[0].id}
+        screenId={screenId}
         snapshot={runtime.snapshot()}
         runEvent={vi.fn(() => 0)}
         onError={vi.fn()}
