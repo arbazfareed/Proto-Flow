@@ -637,6 +637,20 @@ describe("PreviewWidget form controls and data components", () => {
     expect(rendered.queryByText("New message")).not.toBeInTheDocument();
   });
 
+  it("shows the selected file name in the upload control", () => {
+    const rendered = renderElement("file-upload", { label: "Attachment" });
+    const file = new File(["hello"], "notes.txt", { type: "text/plain" });
+    fireEvent.change(rendered.getByLabelText("Attachment"), { target: { files: [file] } });
+    expect(rendered.getByText("notes.txt")).toBeInTheDocument();
+    expect(rendered.runEvent).toHaveBeenCalledWith(rendered.widget, "onChange", undefined);
+  });
+
+  it("actually removes a dismissed alert from Preview", () => {
+    const rendered = renderElement("alert", { label: "Saved", dismissible: true });
+    fireEvent.click(rendered.getByRole("button", { name: "Dismiss alert" }));
+    expect(rendered.queryByText("Saved")).not.toBeInTheDocument();
+  });
+
   it("renders configured table rows", () => {
     const rendered = renderElement("table", { columns: ["Name"], rows: [{ Name: "Ada" }] });
     expect(rendered.getByRole("table")).toBeInTheDocument();
