@@ -186,7 +186,6 @@ export function VirtualizedRepeater({
   commonHandlers: HTMLAttributes<HTMLDivElement>;
   liteMode: boolean;
   symbols?: SymbolDefinition[];
-  symbolDepth?: number;
 }) {
   const viewportRef = useRef<HTMLDivElement>(null);
   const [scrollOffset, setScrollOffset] = useState(0);
@@ -738,7 +737,7 @@ export function PreviewWidget({
 
   if (widget.type === "avatar") {
     const name = stringProp(widget, "label", stringProp(widget, "name", "User"));
-    const initials = avatarInitials({ label: name });
+    const initials = avatarInitials(widget.props);
     const imageSource = stringProp(widget, "src", stringProp(widget, "image"));
     return <div className="preview-widget preview-avatar" role="img" aria-label={name} style={{ ...style, display: "grid", placeItems: "center", borderRadius: "50%", overflow: "hidden" }} data-widget-type="avatar">{imageSource ? <img src={interpolate(imageSource)} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : <strong>{initials}</strong>}</div>;
   }
@@ -817,7 +816,7 @@ export function PreviewWidget({
   }
 
   if (widget.type === "stat" || widget.type === "metric-card") {
-    return <section className="preview-widget preview-stat" aria-label={stringProp(widget, "label", "Statistic")} style={{ ...style, display: "flex", flexDirection: "column", justifyContent: "center", gap: 5, padding: 10 }}><span>{interpolate(stringProp(widget, "label", "Revenue"))}</span><strong style={{ fontSize: 22 }}>{interpolate(stringProp(widget, "value", "—"))}</strong>{stringProp(widget, "trend") && <small>{interpolate(stringProp(widget, "trend"))}</small>}</section>;
+    return <section data-widget-type={widget.type} className="preview-widget preview-stat" aria-label={stringProp(widget, "label", "Statistic")} style={{ ...style, display: "flex", flexDirection: "column", justifyContent: "center", gap: 5, padding: 10 }}><span>{interpolate(stringProp(widget, "label", "Revenue"))}</span><strong style={{ fontSize: 22 }}>{interpolate(stringProp(widget, "value", "—"))}</strong>{stringProp(widget, "trend") && <small>{interpolate(stringProp(widget, "trend"))}</small>}</section>;
   }
 
   if (widget.type === "profile-card" || widget.type === "testimonial-card" || widget.type === "feature-card" || widget.type === "pricing-card" || widget.type === "empty-state") {
@@ -1006,13 +1005,17 @@ export function PreviewWidget({
   }
 
   if (widget.type === "navbar" || widget.type === "sidebar" || widget.type === "footer" || widget.type === "bottom-nav" || widget.type === "app-bar") {
-    const rawItems = Array.isArray(widget.props.items) ? widget.props.items : ["Home", "Explore", "Profile"];
+    const label = stringProp(widget, "label", "").trim();
+    const rawItems = widget.type === "bottom-nav" && label
+      ? label.split("|").map((entry) => entry.trim()).filter(Boolean)
+      : Array.isArray(widget.props.items) ? widget.props.items : ["Home", "Explore", "Profile"];
     const items = rawItems.map((entry, index) => typeof entry === "string" ? entry
       : entry && typeof entry === "object" && typeof (entry as Record<string, unknown>).label === "string"
         ? String((entry as Record<string, unknown>).label) : `Item ${index + 1}`);
     const vertical = widget.type === "sidebar";
     return (
-      <nav className={`preview-widget preview-${widget.type}`} aria-label={stringProp(widget, "label", widget.type)} style={{ ...style, display: "flex", flexDirection: vertical ? "column" : "row", alignItems: "center", justifyContent: "space-around", gap: 6, padding: 8 }} data-widget-type={widget.type}>
+      <nav className={`preview-widget preview-${widget.type}`} aria-label={label || widget.type} style={{ ...style, display: "flex", flexDirection: vertical ? "column" : "row", alignItems: "center", justifyContent: "space-around", gap: 6, padding: 8 }} data-widget-type={widget.type}>
+        {widget.type === "app-bar" && label ? <strong>{interpolate(label)}</strong> : null}
         {items.map((entry, index) => <button key={index} type="button" onClick={() => runEvent(widget, "onClick", item)}>{interpolate(entry)}</button>)}
       </nav>
     );

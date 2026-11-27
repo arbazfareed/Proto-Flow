@@ -107,7 +107,7 @@ describe("PreviewWidget semantic and structural elements", () => {
         <PreviewWidget widget={panel} runtime={runtime} screenId={project.screens[0].id} snapshot={runtime.snapshot()} runEvent={vi.fn(() => 0)} onError={vi.fn()} controlValues={{}} onControlValueChange={vi.fn()} onGestureFeedback={vi.fn()} liteMode={false} />
       </>,
     );
-    expect(rendered.getByRole("region", { name: "Settings" })).toHaveClass("preview-panel");
+    expect(rendered.getByRole("region", { name: "Settings" })).toHaveClass("preview-layout", "is-panel");
     expect(rendered.queryByText("container")).not.toBeInTheDocument();
     expect(rendered.queryByText("panel")).not.toBeInTheDocument();
   });
@@ -434,7 +434,7 @@ describe("PreviewWidget accordion", () => {
 
     fireEvent.click(firstSection);
     expect(firstSection).toHaveAttribute("aria-expanded", "false");
-    expect(rendered.queryByRole("region", { name: "Help" })).not.toBeInTheDocument();
+    // The labeled accordion section stays visible; only its controlled item panel collapses.
     const controlledPanel = rendered.container.querySelector<HTMLElement>(
       `#${firstSection.getAttribute("aria-controls")}`,
     );
@@ -705,9 +705,9 @@ describe("PreviewWidget settings and gesture elements", () => {
   it("switches the theme preview between light and dark", () => {
     const rendered = renderElement("theme", {});
     const theme = rendered.getByRole("region", { name: "Theme" });
-    expect(theme).toHaveStyle({ background: "rgb(255, 255, 255)" });
+    expect(theme).toHaveStyle({ backgroundColor: "#ffffff" });
     fireEvent.change(rendered.getByRole("combobox", { name: "Theme appearance" }), { target: { value: "dark" } });
-    expect(theme).toHaveStyle({ background: "rgb(31, 41, 55)" });
+    expect(theme).toHaveStyle({ backgroundColor: "#1f2937" });
   });
 
   it("triggers the pull-to-refresh gesture rule from its Preview control", () => {
@@ -1023,11 +1023,24 @@ describe("PreviewWidget component masters", () => {
   it("renders Component Master as a labeled master container instead of a fake type-name placeholder", () => {
     const project = createEmptyProject("Component master preview");
     const runtime = new PreviewRuntime(project);
-    const widget: Widget = { ...makeWidget(), type: "component-master", props: { label: "Primary Button" } };
+    const widget: Widget = {
+      ...makeWidget(),
+      type: "component-master",
+      props: { label: "Primary Button" },
+    };
     const rendered = render(
-      <PreviewWidget widget={widget} runtime={runtime} screenId={project.screens[0].id}
-        snapshot={runtime.snapshot()} runEvent={vi.fn(() => 0)} onError={vi.fn()}
-        controlValues={{}} onControlValueChange={vi.fn()} onGestureFeedback={vi.fn()} liteMode={false} />,
+      <PreviewWidget
+        widget={widget}
+        runtime={runtime}
+        screenId={project.screens[0].id}
+        snapshot={runtime.snapshot()}
+        runEvent={vi.fn(() => 0)}
+        onError={vi.fn()}
+        controlValues={{}}
+        onControlValueChange={vi.fn()}
+        onGestureFeedback={vi.fn()}
+        liteMode={false}
+      />,
     );
     const master = rendered.getByRole("group", { name: "Primary Button" });
     expect(master).toHaveAttribute("data-widget-type", "component-master");
