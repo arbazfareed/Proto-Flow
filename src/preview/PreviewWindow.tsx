@@ -812,7 +812,7 @@ export function PreviewWidget({
   }
 
   if (widget.type === "badge" || widget.type === "chip" || widget.type === "tag") {
-    return <span className={`preview-widget preview-${widget.type}`} style={{ ...style, display: "inline-flex", alignItems: "center", justifyContent: "center", padding: "4px 10px", borderRadius: 999, whiteSpace: "nowrap" }}>{interpolate(stringProp(widget, "label", text || widget.type))}</span>;
+    return <span className={`preview-widget preview-${widget.type}`} data-widget-type={widget.type} style={{ ...style, display: "inline-flex", alignItems: "center", justifyContent: "center", padding: "4px 10px", borderRadius: 999, whiteSpace: "nowrap" }}>{interpolate(stringProp(widget, "label", text || widget.type))}</span>;
   }
 
   if (widget.type === "stat" || widget.type === "metric-card") {
