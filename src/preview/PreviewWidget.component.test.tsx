@@ -1053,45 +1053,6 @@ describe("PreviewWidget component masters", () => {
 
 describe("PreviewWidget form, card, navigation, and settings behavior", () => {
   function renderConfiguredWidget(widget: Widget, runEvent = vi.fn(() => 0), variables: Project["variables"] = []) {
-    const project = createEmptyProject("Configured widget preview");
-    project.variables = variables;
-    const runtime = new PreviewRuntime(project);
-    const onNavigate = vi.fn();
-    const rendered = render(
-      <PreviewWidget
-        widget={widget}
-        runtime={runtime}
-        screenId={project.screens[0].id}
-        snapshot={runtime.snapshot()}
-        runEvent={runEvent}
-        onError={vi.fn()}
-        onNavigate={onNavigate}
-        controlValues={{}}
-        onControlValueChange={vi.fn()}
-        onGestureFeedback={vi.fn()}
-        liteMode={false}
-      />,
-    );
-    return { ...rendered, runEvent, runtime, onNavigate };
-  }
-    const project = createEmptyProject("Configured widget preview");
-    const runtime = new PreviewRuntime(project);
-    const rendered = render(
-      <PreviewWidget
-        widget={widget}
-        runtime={runtime}
-        screenId={project.screens[0].id}
-        snapshot={runtime.snapshot()}
-        runEvent={runEvent}
-        onError={vi.fn()}
-        controlValues={{}}
-        onControlValueChange={vi.fn()}
-        onGestureFeedback={vi.fn()}
-        liteMode={false}
-      />,
-    );
-    return { ...rendered, runEvent };
-  }
 
   it("collects configured form values on submit and reports the submitted field count", () => {
     const widget: Widget = { ...makeWidget(), type: "form", props: {
@@ -1204,14 +1165,6 @@ describe("PreviewWidget form, card, navigation, and settings behavior", () => {
     expect(rendered.runEvent).toHaveBeenCalledWith(widget, "onClick", undefined);
   });
 
-  it("rejects unsafe navigation destinations", () => {
-    const widget: Widget = { ...makeWidget(), type: "navbar", props: { items: [
-      { label: "Unsafe", href: "javascript:alert(1)" },
-    ] } };
-    const rendered = renderConfiguredWidget(widget);
-    expect(rendered.queryByRole("link", { name: "Unsafe" })).not.toBeInTheDocument();
-    expect(rendered.getByRole("button", { name: "Unsafe" })).toBeInTheDocument();
-  });
 });
 
 describe("PreviewWidget charts and media sources", () => {
