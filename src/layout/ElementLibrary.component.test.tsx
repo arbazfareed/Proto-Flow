@@ -105,7 +105,7 @@ describe("ElementLibrary imported code shortcuts", () => {
   });
 
   it("places Screens above search and filters standard and imported widgets together", () => {
-    const view = renderWithProviders(
+    renderWithProviders(
       <ElementLibrary
         activeTool={null}
         unlockedTools={["table", "date-picker", "video"]}
