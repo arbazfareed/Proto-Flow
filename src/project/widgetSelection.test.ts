@@ -6,7 +6,7 @@ import {
   withPanelStates,
 } from "./dynamicPanels";
 import {
-  flattenRepeaterTemplateWidgets,
+  collectRepeaterTemplateWidgets,
   mergeActiveRepeaterWidgets,
   withRepeaterTemplate,
 } from "./repeaters";
@@ -69,7 +69,7 @@ describe("removeSelectedWidgets", () => {
   it("removes a child from the active repeater template without deleting the repeater", () => {
     const child = widget("row-child");
     const repeater = withRepeaterTemplate(widget("repeater", "repeater"), [child]);
-    const visible = [...[repeater], ...flattenRepeaterTemplateWidgets(repeater, repeater.x, repeater.y)];
+    const visible = [...[repeater], ...collectRepeaterTemplateWidgets(repeater)];
     const result = removeSelectedWidgets(visible, ["row-child"]);
     const merged = mergeActiveRepeaterWidgets([repeater], result.widgets, "repeater");
     expect(merged).toHaveLength(1);
