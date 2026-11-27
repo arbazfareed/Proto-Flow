@@ -397,6 +397,14 @@ export function TopBar({
         </div>
       </div>
       <div className="topbar-actions">
+        <button
+          className="icon-button topbar-icon topbar-settings-trigger"
+          title="Settings (appearance, privacy and diagnostics)"
+          aria-label="Open settings"
+          onClick={onOpenPrivacySettings}
+        >
+          <Settings2 size={15} />
+        </button>
         <button className="icon-button topbar-icon" title="New project (Ctrl+N)" aria-label="New project" onClick={onNew}>
           <FilePlus2 size={16} />
         </button>
@@ -581,14 +589,6 @@ export function TopBar({
           onClick={onOpenBetaFeedback}
         >
           <MessageSquareText size={15} />
-        </button>
-        <button
-          className="icon-button topbar-icon"
-          title="Settings (appearance, privacy and diagnostics)"
-          aria-label="Open settings"
-          onClick={onOpenPrivacySettings}
-        >
-          <Settings2 size={15} />
         </button>
         {walletHistoryOpen && walletJwt && (
           <WalletHistoryDialog token={walletJwt} onClose={() => setWalletHistoryOpen(false)} />
