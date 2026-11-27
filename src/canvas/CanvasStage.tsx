@@ -1217,7 +1217,6 @@ export function CanvasStage({
       widget.groupId &&
       !baseScreenWidgets.some((candidate) => candidate.id === widget.groupId),
   );
-  const selectedHasUnlockedWidget = selectedWidgets.some((widget) => !widget.locked);
   const selectionBounds = getSelectionBounds(selectedWidgets);
 
   useEffect(() => {
