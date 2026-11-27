@@ -107,7 +107,7 @@ describe("PreviewWidget semantic and structural elements", () => {
         <PreviewWidget widget={panel} runtime={runtime} screenId={project.screens[0].id} snapshot={runtime.snapshot()} runEvent={vi.fn(() => 0)} onError={vi.fn()} controlValues={{}} onControlValueChange={vi.fn()} onGestureFeedback={vi.fn()} liteMode={false} />
       </>,
     );
-    expect(rendered.getByRole("group", { name: "Settings" })).toHaveClass("preview-panel");
+    expect(rendered.getByRole("region", { name: "Settings" })).toHaveClass("preview-layout", "is-panel");
     expect(rendered.queryByText("container")).not.toBeInTheDocument();
     expect(rendered.queryByText("panel")).not.toBeInTheDocument();
   });
@@ -429,12 +429,12 @@ describe("PreviewWidget accordion", () => {
     expect(firstSection).toHaveAttribute("aria-expanded", "false");
     fireEvent.click(firstSection);
     expect(firstSection).toHaveAttribute("aria-expanded", "true");
-    expect(rendered.getByRole("region")).toHaveTextContent("A prototyping tool.");
+    expect(rendered.getByText("A prototyping tool.")).toBeVisible();
     expect(runEvent).toHaveBeenCalledWith(widget, "onClick", undefined);
 
     fireEvent.click(firstSection);
     expect(firstSection).toHaveAttribute("aria-expanded", "false");
-    expect(rendered.queryByRole("region")).not.toBeInTheDocument();
+    expect(rendered.queryByText("A prototyping tool.")).not.toBeVisible();
     const controlledPanel = rendered.container.querySelector<HTMLElement>(
       `#${firstSection.getAttribute("aria-controls")}`,
     );
@@ -704,7 +704,7 @@ describe("PreviewWidget settings and gesture elements", () => {
 
   it("switches the theme preview between light and dark", () => {
     const rendered = renderElement("theme", {});
-    const theme = rendered.getByRole("region", { name: "Theme preview" });
+    const theme = rendered.getByRole("region", { name: "Theme" });
     expect(theme).toHaveStyle({ background: "rgb(255, 255, 255)" });
     fireEvent.change(rendered.getByRole("combobox", { name: "Theme appearance" }), { target: { value: "dark" } });
     expect(theme).toHaveStyle({ background: "rgb(31, 41, 55)" });
