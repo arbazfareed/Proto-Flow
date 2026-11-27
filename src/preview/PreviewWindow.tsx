@@ -1093,58 +1093,56 @@ export function PreviewWidget({
   }
 
   if (widget.type === "chart") {
-    const values = (Array.isArray(widget.props.values) ? widget.props.values : [38, 68, 50, 88, 62])
-      .slice(0, 8)
-      .map((value) => typeof value === "number" && Number.isFinite(value) ? Math.max(0, value) : 0);
-    const maxValue = Math.max(1, ...values);
+    const rawValues = Array.isArray(widget.props.values) ? widget.props.values.slice(0, 8) : [];
+    const values = rawValues.map((value) => {
+      const resolved = typeof value === "string" ? interpolate(value) : value;
+      if (typeof resolved === "number") return Number.isFinite(resolved) ? resolved : null;
+      if (typeof resolved === "string" && resolved.trim() !== "") {
+        const parsed = Number(resolved);
+        return Number.isFinite(parsed) ? parsed : null;
+      }
+      return null;
+    });
+    const labels = Array.isArray(widget.props.labels)
+      ? widget.props.labels.slice(0, values.length).map((label, index) => typeof label === "string" ? interpolate(label) : `Item ${index + 1}`)
+      : values.map((_, index) => `Item ${index + 1}`);
     const titleId = `${widget.id}-chart-title`;
     const chartType = stringProp(widget, "chartType", "bar");
-    const points = values.map((value, index) =>
-      `${12 + index * (176 / Math.max(1, values.length - 1))},${88 - value / maxValue * 70}`,
-    ).join(" ");
-    const total = values.reduce((sum, value) => sum + value, 0) || 1;
+    const validValues = values.filter((value): value is number => value !== null);
+    const maxAbs = Math.max(1, ...validValues.map(Math.abs));
+    const positiveTotal = validValues.reduce((sum, value) => sum + Math.max(0, value), 0) || 1;
+    const baseline = validValues.some((value) => value < 0) ? 52 : 88;
+    const points = values.map((value, index) => value === null ? null
+      : `${12 + index * (176 / Math.max(1, values.length - 1))},${baseline - value / maxAbs * (baseline === 52 ? 40 : 70)}`)
+      .filter((point): point is string => point !== null).join(" ");
     let pieOffset = 0;
     return (
       <figure className="preview-widget preview-chart" style={style} {...commonHandlers}>
         <figcaption id={titleId}>{text || "Chart"}</figcaption>
-        <svg viewBox="0 0 200 100" role="img" aria-labelledby={titleId}>
-          {chartType === "line"
-            ? <polyline points={points} fill="none" stroke="currentColor" strokeWidth="3" strokeLinejoin="round" strokeLinecap="round" />
-            : chartType === "pie"
-              ? values.map((value, index) => {
-                  const segment = (
-                    <circle
-                      key={index}
-                      cx="100"
-                      cy="52"
-                      r="34"
-                      fill="none"
-                      stroke={["#8b69ed", "#55b6a8", "#e39b54", "#6579d8", "#ce6b83"][index % 5]}
-                      strokeWidth="22"
-                      strokeDasharray={`${value / total * 214} 214`}
-                      strokeDashoffset={-pieOffset}
-                      transform="rotate(-90 100 52)"
-                    />
-                  );
-                  pieOffset += value / total * 214;
-                  return segment;
-                })
-              : values.map((value, index) => {
-                  const width = 18;
-                  const height = value / maxValue * 70;
-                  return (
-                    <rect
-                      key={index}
-                      x={12 + index * 23}
-                      y={88 - height}
-                      width={width}
-                      height={height}
-                      rx="3"
-                      fill={index === 0 ? "#8b69ed" : "#55b6a8"}
-                    />
-                  );
-                })}
-        </svg>
+        {validValues.length ? <>
+          <svg viewBox="0 0 200 100" role="img" aria-labelledby={titleId}>
+            {chartType === "line"
+              ? <polyline points={points} fill="none" stroke="currentColor" strokeWidth="3" strokeLinejoin="round" strokeLinecap="round" />
+              : chartType === "pie"
+                ? values.map((value, index) => {
+                    if (value === null || value <= 0) return null;
+                    const segment = <circle key={index} cx="100" cy="52" r="34" fill="none" stroke={["#8b69ed", "#55b6a8", "#e39b54", "#6579d8", "#ce6b83"][index % 5]} strokeWidth="22" strokeDasharray={`${value / positiveTotal * 214} 214`} strokeDashoffset={-pieOffset} transform="rotate(-90 100 52)" />;
+                    pieOffset += value / positiveTotal * 214;
+                    return segment;
+                  })
+                : <>
+                    {baseline === 52 && <line x1="8" x2="192" y1="52" y2="52" stroke="currentColor" opacity=".45" />}
+                    {values.map((value, index) => {
+                      if (value === null) return null;
+                      const barHeight = Math.abs(value) / maxAbs * (baseline === 52 ? 40 : 70);
+                      return <rect key={index} x={12 + index * 23} y={value >= 0 ? baseline - barHeight : baseline} width="18" height={barHeight} rx="3" fill={index === 0 ? "#8b69ed" : "#55b6a8"} />;
+                    })}
+                  </>}
+          </svg>
+          <ul aria-label="Chart data" style={{ display: "flex", flexWrap: "wrap", gap: 8, listStyle: "none", padding: 0, margin: 0, fontSize: 11 }}>
+            {values.map((value, index) => <li key={index}>{labels[index]}: {value === null ? "—" : value}</li>)}
+          </ul>
+        </> : <p role="note">No valid chart data configured</p>}
       </figure>
     );
   }
@@ -1178,8 +1176,10 @@ export function PreviewWidget({
   }
 
   if (widget.type === "video") {
-    const source = stringProp(widget, "src");
-    const poster = stringProp(widget, "poster");
+    const rawSource = stringProp(widget, "src");
+    const rawPoster = stringProp(widget, "poster");
+    const source = rawSource ? sanitizeRichTextHref(interpolate(rawSource)) : null;
+    const poster = rawPoster ? sanitizeRichTextHref(interpolate(rawPoster)) : null;
     return (
       <figure className="preview-widget preview-video" style={style} {...commonHandlers}>
         {source
@@ -1301,7 +1301,7 @@ export function PreviewWidget({
 
   if (widget.type === "image") {
     const source = stringProp(widget, "src", stringProp(widget, "url"));
-    const src = interpolate(source);
+    const src = source ? sanitizeRichTextHref(interpolate(source)) : null;
     return (
       <div className="preview-widget" style={style} {...commonHandlers}>
         {src ? <img src={src} alt={interpolate(stringProp(widget, "alt", text))} style={{ objectFit: stringProp(widget, "fit") === "cover" ? "cover" : "contain" }} /> : text || "Image"}
@@ -1551,13 +1551,14 @@ export function PreviewWidget({
     }).filter(entry => entry.src.length > 0);
     return (
       <section className="preview-widget preview-image-gallery" aria-label={stringProp(widget, "label", "Image gallery")} data-widget-type="image-gallery" style={{ ...style, display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: 4, padding: 4, overflow: "auto" }} {...commonHandlers}>
-        {images.length ? images.map((entry, index) => <img key={index} src={interpolate(entry.src)} alt={interpolate(entry.alt)} style={{ width: "100%", height: "100%", minHeight: 40, objectFit: "cover", borderRadius: 4 }} />) : <p role="note" style={{ margin: 4, fontSize: 12, opacity: 0.7 }}>No gallery images configured</p>}
+        {images.length ? images.map((entry, index) => <img key={index} src={sanitizeRichTextHref(interpolate(entry.src)) ?? undefined} alt={interpolate(entry.alt)} style={{ width: "100%", height: "100%", minHeight: 40, objectFit: "cover", borderRadius: 4 }} />) : <p role="note" style={{ margin: 4, fontSize: 12, opacity: 0.7 }}>No gallery images configured</p>}
       </section>
     );
   }
 
   if (widget.type === "audio") {
-    const source = interpolate(stringProp(widget, "src", ""));
+    const rawSource = stringProp(widget, "src", "");
+    const source = rawSource ? sanitizeRichTextHref(interpolate(rawSource)) : null;
     return (
       <section className="preview-widget preview-audio" aria-label={stringProp(widget, "label", "Audio player")} data-widget-type="audio" style={{ ...style, display: "flex", flexDirection: "column", justifyContent: "center", padding: 8, gap: 4 }} {...commonHandlers}>
         {source ? <audio controls preload="metadata" src={source} style={{ width: "100%" }} /> : <p role="note" style={{ margin: 4, fontSize: 12, opacity: 0.7 }}>Audio source not configured</p>}
