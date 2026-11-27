@@ -236,6 +236,50 @@ describe("PreviewWidget input-mode interactions", () => {
   });
 });
 
+describe("PreviewWidget accordion", () => {
+  it("expands and collapses configured sections in Preview", () => {
+    const project = createEmptyProject("Accordion preview");
+    const runtime = new PreviewRuntime(project);
+    const widget: Widget = {
+      ...makeWidget(),
+      type: "accordion",
+      props: {
+        label: "Help",
+        items: [
+          { title: "What is Proto Flow?", answer: "A prototyping tool." },
+          { title: "Can I customize it?", content: "Yes, using widget properties." },
+        ],
+      },
+    };
+    const runEvent = vi.fn(() => 0);
+    const rendered = render(
+      <PreviewWidget
+        widget={widget}
+        runtime={runtime}
+        screenId={project.screens[0].id}
+        snapshot={runtime.snapshot()}
+        runEvent={runEvent}
+        onError={vi.fn()}
+        controlValues={{}}
+        onControlValueChange={vi.fn()}
+        onGestureFeedback={vi.fn()}
+        liteMode={false}
+      />,
+    );
+
+    const firstSection = rendered.getByRole("button", { name: "What is Proto Flow?" });
+    expect(firstSection).toHaveAttribute("aria-expanded", "false");
+    fireEvent.click(firstSection);
+    expect(firstSection).toHaveAttribute("aria-expanded", "true");
+    expect(rendered.getByRole("region")).toHaveTextContent("A prototyping tool.");
+    expect(runEvent).toHaveBeenCalledWith(widget, "onClick", undefined);
+
+    fireEvent.click(firstSection);
+    expect(firstSection).toHaveAttribute("aria-expanded", "false");
+    expect(rendered.queryByRole("region")).not.toBeInTheDocument();
+  });
+});
+
 describe("PreviewWidget colours", () => {
   it("applies fill and stroke opacity like the canvas, so a 10% container stays pale", () => {
     const project = createEmptyProject("Colour preview");
