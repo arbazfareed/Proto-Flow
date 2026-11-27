@@ -4169,7 +4169,7 @@ export function CanvasStage({
           >
             Copy Style
           </button>
-          <button type="button" role="menuitem" disabled={!selectedHasUnlockedWidget} onClick={() => { void copySelection(true); setCanvasContextMenu(null); }}>
+          <button type="button" role="menuitem" disabled={!baseScreenWidgets.some((widget) => selectedIds.includes(widget.id) && !widget.locked)} onClick={() => { void copySelection(true); setCanvasContextMenu(null); }}>
             Cut
           </button>
           <button type="button" role="menuitem" onClick={() => { void pasteSelection(); setCanvasContextMenu(null); }}>

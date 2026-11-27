@@ -110,8 +110,10 @@ test("right-click Delete removes a widget from the active repeater template", as
   // Selecting the repeater automatically opens its template editing scope;
   // keep the canvas selection so the inspector remains focused on the repeater.
   await expect(page.getByRole("region", { name: "Repeater data" })).toBeVisible();
-  await expect(page.getByRole("button", { name: "Edit row template" })).toBeVisible();
-  await page.getByRole("button", { name: "Edit row template" }).click();
+  // The inspector automatically enters template-edit mode when the repeater is selected.
+  const editTemplate = page.getByRole("button", { name: "Stop editing template" });
+  await expect(editTemplate).toBeVisible();
+  await expect(editTemplate).toHaveAttribute("aria-pressed", "true");
   const point = { x: bounds.x + bounds.width / 2, y: bounds.y + bounds.height / 2 + 20 };
   await page.getByRole("button", { name: "Add Rectangle" }).click();
   await page.mouse.click(point.x, point.y);
@@ -138,8 +140,10 @@ test("right-click Delete removes a widget from the active dynamic-panel state", 
   // Selecting the panel automatically opens its active state in the inspector;
   // keep the canvas selection focused on the panel.
   await expect(page.getByRole("region", { name: "Dynamic panel states" })).toBeVisible();
-  await expect(page.getByRole("button", { name: "Edit active state" })).toBeVisible();
-  await page.getByRole("button", { name: "Edit active state" }).click();
+  // The inspector automatically enters the active-state edit mode when the panel is selected.
+  const editState = page.getByRole("button", { name: "Stop editing state" });
+  await expect(editState).toBeVisible();
+  await expect(editState).toHaveAttribute("aria-pressed", "true");
   const point = { x: bounds.x + bounds.width / 2, y: bounds.y + bounds.height / 2 + 20 };
   await page.getByRole("button", { name: "Add Rectangle" }).click();
   await page.mouse.click(point.x, point.y);
