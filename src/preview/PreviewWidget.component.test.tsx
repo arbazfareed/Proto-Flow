@@ -439,6 +439,76 @@ describe("PreviewWidget app shell and integration elements", () => {
   });
 });
 
+describe("PreviewWidget carousel and data elements", () => {
+  function renderElement(type: string, props: Record<string, unknown> = {}) {
+    const project = createEmptyProject("Data element preview");
+    const runtime = new PreviewRuntime(project);
+    const widget: Widget = { ...makeWidget(), type, props };
+    const runEvent = vi.fn(() => 0);
+    const rendered = render(
+      <PreviewWidget
+        widget={widget}
+        runtime={runtime}
+        screenId={project.screens[0].id}
+        snapshot={runtime.snapshot()}
+        runEvent={runEvent}
+        onError={vi.fn()}
+        controlValues={{}}
+        onControlValueChange={vi.fn()}
+        onGestureFeedback={vi.fn()}
+        liteMode={false}
+      />,
+    );
+    return { ...rendered, widget, runEvent };
+  }
+
+  it("moves through carousel slides and wraps at the end", () => {
+    const rendered = renderElement("carousel", {
+      items: [
+        { src: "https://example.com/one.png", alt: "First slide" },
+        { url: "https://example.com/two.png", title: "Second slide" },
+      ],
+    });
+    expect(rendered.getByAltText("First slide")).toHaveAttribute("src", "https://example.com/one.png");
+    fireEvent.click(rendered.getByRole("button", { name: "Next slide" }));
+    expect(rendered.getByAltText("Second slide")).toHaveAttribute("src", "https://example.com/two.png");
+    expect(rendered.getByText("2 / 2")).toBeInTheDocument();
+    fireEvent.click(rendered.getByRole("button", { name: "Next slide" }));
+    expect(rendered.getByAltText("First slide")).toBeInTheDocument();
+    expect(rendered.runEvent).toHaveBeenCalledWith(rendered.widget, "onChange", undefined);
+  });
+
+  it("shows an empty state for an unconfigured carousel", () => {
+    const rendered = renderElement("carousel", { items: [] });
+    expect(rendered.getByText("No carousel slides configured")).toBeInTheDocument();
+  });
+
+  it("shows API request details but never sends a request in Preview", () => {
+    const rendered = renderElement("api-request", { method: "POST", url: "https://example.test/api" });
+    expect(rendered.getByText("POST")).toBeInTheDocument();
+    expect(rendered.getByText("https://example.test/api")).toBeInTheDocument();
+    fireEvent.click(rendered.getByRole("button", { name: "Run request" }));
+    expect(rendered.getByText("Preview only · request was not sent")).toBeInTheDocument();
+    expect(rendered.runEvent).toHaveBeenCalledWith(rendered.widget, "onClick", undefined);
+  });
+
+  it("renders configured database columns and rows without connecting to a database", () => {
+    const rendered = renderElement("database", {
+      columns: ["Name", "Status"],
+      rows: [{ Name: "Alpha", Status: "Ready" }, { Name: "Beta", Status: "Draft" }],
+    });
+    expect(rendered.getByRole("table")).toBeInTheDocument();
+    expect(rendered.getByText("Alpha")).toBeInTheDocument();
+    expect(rendered.getByText("Draft")).toBeInTheDocument();
+    expect(rendered.getByText("Preview only · no live database connection")).toBeInTheDocument();
+  });
+
+  it("shows a clear empty state when no database table data is configured", () => {
+    const rendered = renderElement("database", {});
+    expect(rendered.getByText("No table data configured")).toBeInTheDocument();
+  });
+});
+
 describe("PreviewWidget media", () => {
   function renderMediaWidget(type: "image-gallery" | "audio", props: Record<string, unknown>) {
     const project = createEmptyProject("Media preview");
