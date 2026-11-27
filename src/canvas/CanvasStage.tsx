@@ -4149,6 +4149,7 @@ export function CanvasStage({
             ),
           }}
           onPointerDown={(event) => event.stopPropagation()}
+          onClick={(event) => event.stopPropagation()}
           onContextMenu={(event) => event.preventDefault()}
         >
           <button type="button" role="menuitem" disabled={selectedWidgets.length === 0} onClick={() => { void copySelection(); setCanvasContextMenu(null); }}>
@@ -4234,7 +4235,7 @@ export function CanvasStage({
           </button>
           {selectedWidgets.length === 1 && selectedWidgets[0].type === "symbol-instance" && (
             <>
-              <button
+              <button type="button"
                 role="menuitem"
                 onClick={() => {
                   detachSymbolInstance(selectedWidgets[0].id);
@@ -4249,7 +4250,7 @@ export function CanvasStage({
                   {symbols
                     .filter((symbol) => symbol.id !== selectedWidgets[0].symbolId)
                     .map((symbol) => (
-                      <button
+                      <button type="button"
                         key={symbol.id}
                         role="menuitem"
                         onClick={() => {
@@ -4272,7 +4273,7 @@ export function CanvasStage({
                       : null;
                   if (!textProperty || typeof masterWidget.props[textProperty] !== "string") return [];
                   return (
-                    <button
+                    <button type="button"
                       key={`symbol-text-${masterWidget.id}`}
                       role="menuitem"
                       onClick={() => {
