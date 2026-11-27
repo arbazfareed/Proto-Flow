@@ -333,6 +333,7 @@ export function PreviewWidget({
   const [activePaginationPage, setActivePaginationPage] = useState(1);
   const [activeTabIndex, setActiveTabIndex] = useState(0);
   const [menuOpen, setMenuOpen] = useState(false);
+  const [selectedPreviewDevice, setSelectedPreviewDevice] = useState("Desktop");
   // Icons beyond the built-in set appear once the full set has loaded.
   useFullIconSet();
   useEffect(() => () => {
@@ -646,6 +647,76 @@ export function PreviewWidget({
         <button type="button" aria-expanded={menuOpen} onClick={() => setMenuOpen(!menuOpen)}>{stringProp(widget, "triggerLabel", widget.type === "menu" ? "Menu" : "Options")} ▾</button>
         {menuOpen && <ul role="menu" style={{ margin: 0, padding: 4, listStyle: "none" }}>{items.map((entry, index) => <li key={index}><button type="button" role="menuitem" onClick={() => { setMenuOpen(false); runEvent(widget, "onClick", item); }}>{interpolate(entry)}</button></li>)}</ul>}
       </div>
+    );
+  }
+
+  if (widget.type === "cloud-sync" || widget.type === "websocket" || widget.type === "auth-state") {
+    const title = stringProp(widget, "label", widget.type === "cloud-sync" ? "Cloud Sync" : widget.type === "websocket" ? "WebSocket" : "Authentication");
+    const status = stringProp(widget, "status", widget.type === "auth-state" ? "Signed out" : "Not connected");
+    const detail = widget.type === "websocket" ? stringProp(widget, "url", "No endpoint configured")
+      : widget.type === "auth-state" ? stringProp(widget, "user", "No user session")
+      : stringProp(widget, "lastSynced", "No sync session");
+    return (
+      <section className={`preview-widget preview-integration preview-${widget.type}`} aria-label={title} style={{ ...style, display: "flex", flexDirection: "column", alignItems: "flex-start", justifyContent: "center", gap: 5, padding: 10 }} data-widget-type={widget.type}>
+        <strong>{title}</strong>
+        <span>{status}</span>
+        <small>{detail}</small>
+        <small style={{ opacity: 0.65 }}>Preview only · no live service connection</small>
+      </section>
+    );
+  }
+
+  if (widget.type === "responsive-switch") {
+    const devices = ["Desktop", "Tablet", "Mobile"];
+    return (
+      <section className="preview-widget preview-responsive-switch" aria-label={stringProp(widget, "label", "Responsive device switch")} style={{ ...style, display: "flex", flexDirection: "column", justifyContent: "center", gap: 6, padding: 8 }} data-widget-type="responsive-switch">
+        <label>
+          {stringProp(widget, "label", "Device")}
+          <select aria-label="Preview device" value={selectedPreviewDevice} onChange={(event) => setSelectedPreviewDevice(event.target.value)}>
+            {devices.map((device) => <option key={device} value={device}>{device}</option>)}
+          </select>
+        </label>
+        <small>Selected: {selectedPreviewDevice}</small>
+      </section>
+    );
+  }
+
+  if (widget.type === "navbar" || widget.type === "sidebar" || widget.type === "footer" || widget.type === "bottom-nav" || widget.type === "app-bar") {
+    const rawItems = Array.isArray(widget.props.items) ? widget.props.items : ["Home", "Explore", "Profile"];
+    const items = rawItems.map((entry, index) => typeof entry === "string" ? entry
+      : entry && typeof entry === "object" && typeof (entry as Record<string, unknown>).label === "string"
+        ? String((entry as Record<string, unknown>).label) : `Item ${index + 1}`);
+    const vertical = widget.type === "sidebar";
+    return (
+      <nav className={`preview-widget preview-${widget.type}`} aria-label={stringProp(widget, "label", widget.type)} style={{ ...style, display: "flex", flexDirection: vertical ? "column" : "row", alignItems: "center", justifyContent: "space-around", gap: 6, padding: 8 }} data-widget-type={widget.type}>
+        {items.map((entry, index) => <button key={index} type="button" onClick={() => runEvent(widget, "onClick", item)}>{interpolate(entry)}</button>)}
+      </nav>
+    );
+  }
+
+  if (widget.type === "form") {
+    const fields = Array.isArray(widget.props.fields) ? widget.props.fields : [];
+    return (
+      <form className="preview-widget preview-form" aria-label={stringProp(widget, "label", "Form")} style={{ ...style, display: "flex", flexDirection: "column", alignItems: "stretch", gap: 8, padding: 10, overflow: "auto" }} data-widget-type="form" onSubmit={(event) => { event.preventDefault(); runEvent(widget, "onChange", item); }}>
+        {fields.length ? fields.map((entry, index) => {
+          const record = entry && typeof entry === "object" ? entry as Record<string, unknown> : {};
+          const label = typeof record.label === "string" ? record.label : `Field ${index + 1}`;
+          const placeholder = typeof record.placeholder === "string" ? record.placeholder : "";
+          return <label key={index}>{label}<input aria-label={label} placeholder={placeholder} /></label>;
+        }) : <p>No form fields configured</p>}
+        <button type="submit">{stringProp(widget, "submitLabel", "Submit")}</button>
+      </form>
+    );
+  }
+
+  if (widget.type === "modal" || widget.type === "overlay" || widget.type === "drawer") {
+    const heading = stringProp(widget, "title", stringProp(widget, "label", widget.type === "modal" ? "Dialog" : widget.type === "drawer" ? "Drawer" : "Overlay"));
+    return (
+      <section className={`preview-widget preview-${widget.type}`} aria-label={heading} style={{ ...style, display: "flex", flexDirection: "column", alignItems: "stretch", justifyContent: "flex-start", gap: 8, padding: 12, boxShadow: "0 4px 16px rgba(0,0,0,.18)" }} data-widget-type={widget.type}>
+        <strong>{heading}</strong>
+        <span>{stringProp(widget, "content", "Add content to this layer in the properties panel.")}</span>
+        {widget.type !== "overlay" && <button type="button" aria-label={`Close ${heading}`} onClick={() => runEvent(widget, "onClick", item)}>Close</button>}
+      </section>
     );
   }
 
