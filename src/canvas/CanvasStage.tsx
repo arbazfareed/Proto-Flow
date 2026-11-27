@@ -4221,7 +4221,7 @@ export function CanvasStage({
             type="button"
             role="menuitem"
             aria-label="Delete selected element"
-            disabled={!selectedHasUnlockedWidget}
+            disabled={!baseScreenWidgets.some((widget) => selectedIds.includes(widget.id) && !widget.locked)}
             onClick={(event) => {
               event.preventDefault();
               event.stopPropagation();
