@@ -401,13 +401,17 @@ describe("PreviewWidget app shell and integration elements", () => {
     expect(sidebar.getByRole("button", { name: "Settings" })).toBeInTheDocument();
   });
 
-  it("renders configured form fields and handles submit without navigating", () => {
+  it("renders typed, required form fields and fires the supported submit click rule", () => {
     const rendered = renderElement("form", {
-      fields: [{ label: "Email", placeholder: "you@example.com" }],
+      fields: [{ label: "Email", name: "email", type: "email", required: true, placeholder: "you@example.com" }],
     });
-    expect(rendered.getByRole("textbox", { name: "Email" })).toHaveAttribute("placeholder", "you@example.com");
+    const email = rendered.getByRole("textbox", { name: "Email" });
+    expect(email).toHaveAttribute("placeholder", "you@example.com");
+    expect(email).toHaveAttribute("type", "email");
+    expect(email).toBeRequired();
+    fireEvent.change(email, { target: { value: "person@example.com" } });
     fireEvent.click(rendered.getByRole("button", { name: "Submit" }));
-    expect(rendered.runEvent).toHaveBeenCalledWith(rendered.widget, "onChange", undefined);
+    expect(rendered.runEvent).toHaveBeenCalledWith(rendered.widget, "onClick", undefined);
   });
 
   it("shows an honest non-connected state for cloud and websocket previews", () => {
