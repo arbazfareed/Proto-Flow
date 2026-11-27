@@ -1329,6 +1329,7 @@ function AppShell() {
   return (
     <div className="app-shell">
       <TopBar
+        onRenameProject={renameProject}
         onNew={createNewProject}
         onOpen={() => void openFile()}
         onSave={() => void save()}
