@@ -104,6 +104,30 @@ describe("ElementLibrary imported code shortcuts", () => {
     expect(screen.queryByRole("region", { name: "Detected in imported code" })).toBeNull();
   });
 
+  it("places Screens above search and filters standard and imported widgets together", () => {
+    const view = renderWithProviders(
+      <ElementLibrary
+        activeTool={null}
+        unlockedTools={["table", "date-picker", "video"]}
+        mode="sidebar"
+        onSelectTool={vi.fn()}
+        onAddScreen={vi.fn()}
+      />,
+    );
+    const library = screen.getByRole("region", { name: "Screens" }).parentElement!;
+    const screens = within(library).getByRole("region", { name: "Screens" });
+    const search = within(library).getByRole("searchbox", { name: "Search elements" });
+    expect(screens.compareDocumentPosition(search) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+
+    fireEvent.change(search, { target: { value: "date picker" } });
+    expect(screen.getByRole("button", { name: "Add Date picker" })).toBeVisible();
+    expect(screen.getByRole("region", { name: "Detected in imported code" })).toBeVisible();
+    expect(within(screen.getByRole("region", { name: "Detected in imported code" }))
+      .getByRole("button", { name: "Add Date picker" })).toBeVisible();
+    expect(screen.queryByRole("button", { name: "Add Table" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Add Video" })).toBeNull();
+  });
+
   it("search also filters the Screens, Import and Status groups (B14)", () => {
     renderWithProviders(
       <ElementLibrary activeTool={null} mode="sidebar" onSelectTool={vi.fn()} onAddScreen={vi.fn()} />,
