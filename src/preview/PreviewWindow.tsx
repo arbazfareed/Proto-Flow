@@ -168,7 +168,6 @@ export function VirtualizedRepeater({
   commonHandlers,
   liteMode,
   symbols,
-  symbolDepth = 0,
 }: {
   widget: Widget;
   rows: RepeaterRecord[];
@@ -312,6 +311,7 @@ export function PreviewWidget({
   onGestureFeedback,
   liteMode,
   symbols,
+  symbolDepth = 0,
 }: {
   widget: Widget;
   runtime: PreviewRuntime;
@@ -774,7 +774,7 @@ export function PreviewWidget({
 
   if (widget.type === "stepper") {
     const change = (next: number) => { const value = Math.max(stepperMin, Math.min(stepperMax, next)); setStepperValue(value); runEvent(widget, "onChange", item); };
-    return <section className="preview-widget preview-stepper" aria-label={stringProp(widget, "label", "Stepper")} style={{ ...style, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, padding: 8 }}><strong>{stringProp(widget, "label", "Quantity")}</strong><button type="button" aria-label="Decrease value" disabled={stepperValue <= min} onClick={() => change(stepperValue - 1)}>−</button><output aria-live="polite">{stepperValue}</output><button type="button" aria-label="Increase value" disabled={stepperValue >= max} onClick={() => change(stepperValue + 1)}>+</button></section>;
+    return <section className="preview-widget preview-stepper" aria-label={stringProp(widget, "label", "Stepper")} style={{ ...style, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, padding: 8 }}><strong>{stringProp(widget, "label", "Quantity")}</strong><button type="button" aria-label="Decrease value" disabled={stepperValue <= stepperMin} onClick={() => change(stepperValue - 1)}>−</button><output aria-live="polite">{stepperValue}</output><button type="button" aria-label="Increase value" disabled={stepperValue >= stepperMax} onClick={() => change(stepperValue + 1)}>+</button></section>;
   }
 
   if (widget.type === "date-picker") {
@@ -1308,8 +1308,7 @@ export function PreviewWidget({
   }
 
   if (widget.type === "symbol-instance") {
-    const symbol = symbols?.find((entry) => entry.id === widget.symbolId)
-      ?? runtime.project.symbols.find((entry) => entry.id === widget.symbolId);
+    const symbol = symbols?.find((entry) => entry.id === widget.symbolId);
     if (!symbol) {
       return <div className="preview-widget preview-symbol-instance preview-symbol-missing" role="group" aria-label={`Missing component: ${widget.name ?? "Symbol"}`} style={{ ...style, display: "grid", placeItems: "center", border: "1px dashed currentColor" }} {...commonHandlers}>Missing component</div>;
     }
