@@ -429,7 +429,7 @@ describe("PreviewWidget accordion", () => {
     expect(firstSection).toHaveAttribute("aria-expanded", "false");
     fireEvent.click(firstSection);
     expect(firstSection).toHaveAttribute("aria-expanded", "true");
-    expect(rendered.getByText("A prototyping tool.")).toBeVisible();
+    expect(rendered.getByRole("region", { name: "Help" })).toHaveTextContent("A prototyping tool.");
     expect(runEvent).toHaveBeenCalledWith(widget, "onClick", undefined);
 
     fireEvent.click(firstSection);
