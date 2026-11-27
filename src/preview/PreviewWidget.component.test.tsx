@@ -108,7 +108,34 @@ describe("PreviewWidget reusable symbols", () => {
       />,
     );
     expect(rendered.getByRole("group", { name: "Primary action" })).toHaveAttribute("data-symbol-id", symbolId);
-    expect(rendered.getByText("Instance override")).toBeInTheDocument();
+    expect(rendered.getByRole("button", { name: "Instance override" })).toBeInTheDocument();
+  });
+
+  it("uses the real child Preview renderer so symbol child interactions work", () => {
+    const project = createEmptyProject("Interactive symbol preview");
+    const symbolId = crypto.randomUUID();
+    const child = { ...makeWidget(), id: crypto.randomUUID(), props: { label: "Master action" } };
+    const symbol = { id: symbolId, name: "Interactive master", width: 120, height: 40, widgets: [child] };
+    const instance: Widget = { ...makeWidget(), type: "symbol-instance", width: 120, height: 40, symbolId };
+    const runtime = new PreviewRuntime(project);
+    const runEvent = vi.fn(() => 1);
+    const rendered = render(
+      <PreviewWidget
+        widget={instance}
+        runtime={runtime}
+        screenId={project.screens[0].id}
+        snapshot={runtime.snapshot()}
+        runEvent={runEvent}
+        onError={vi.fn()}
+        controlValues={{}}
+        onControlValueChange={vi.fn()}
+        onGestureFeedback={vi.fn()}
+        liteMode={false}
+        symbols={[symbol]}
+      />,
+    );
+    fireEvent.click(rendered.getByRole("button", { name: "Master action" }));
+    expect(runEvent).toHaveBeenCalledWith(child, "onClick", undefined);
   });
 
   it("shows an explicit placeholder when a symbol definition is missing", () => {
