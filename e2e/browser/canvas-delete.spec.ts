@@ -65,7 +65,7 @@ test("right-click Delete preserves locked elements in a mixed selection", async 
   await expect(visibility).toHaveCount(2);
 
   // The remaining unlocked item is still selected; deleting it must not remove the locked one.
-  await page.mouse.click(second.x, second.y, { button: "right" });
+  await page.mouse.click(first.x, first.y, { button: "right" });
   const menu = page.getByRole("menu", { name: "Element actions" });
   await expect(menu.getByRole("menuitem", { name: "Delete selected element" })).toBeEnabled();
   await menu.getByRole("menuitem", { name: "Delete selected element" }).click();
@@ -107,7 +107,7 @@ test("right-click Delete removes a widget from the active dynamic-panel state", 
   await page.getByRole("button", { name: /Add Dynamic panel/i }).click();
   await page.mouse.click(bounds.x + bounds.width / 2, bounds.y + bounds.height / 2);
   await page.getByRole("button", { name: "Edit active state" }).click();
-  const point = { x: bounds.x + bounds.width / 2, y: bounds.y + bounds.height / 2 + 90 };
+  const point = { x: bounds.x + bounds.width / 2, y: bounds.y + bounds.height / 2 + 20 };
   await page.getByRole("button", { name: "Add Rectangle" }).click();
   await page.mouse.click(point.x, point.y);
   await expect(page.getByRole("button", { name: /^Toggle visibility for/ })).toHaveCount(2);
