@@ -4,5 +4,5 @@
  */
 export const PLAIN_BOX_TYPES: ReadonlySet<string> = new Set([
   "container", "frame", "group", "section", "footer",
-  "panel", "drawer", "overlay", "sidebar", "navbar", "form",
+  "panel", "dynamic-panel", "drawer", "overlay", "sidebar", "navbar", "form",
 ]);
