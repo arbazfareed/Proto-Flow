@@ -1384,6 +1384,34 @@ export function PreviewWidget({
       : <span className="preview-widget preview-link is-unconfigured" role="link" aria-disabled="true" style={{ ...style, display: "inline-flex", textDecoration: "underline", opacity: 0.7 }} {...commonHandlers}>{text || "Link destination not configured"}</span>;
   }
 
+  if (widget.type === "component-master") {
+    const masterLabel = stringProp(widget, "label", widget.name ?? "Component master");
+    return (
+      <section
+        className="preview-widget preview-component-master"
+        role="group"
+        aria-label={masterLabel}
+        data-widget-type="component-master"
+        style={{
+          ...style,
+          boxSizing: "border-box",
+          display: "flex",
+          flexDirection: "column",
+          alignItems: "flex-start",
+          justifyContent: "flex-start",
+          gap: 4,
+          padding: 8,
+          border: style.border ?? "1px dashed rgba(127, 127, 127, 0.65)",
+          background: style.background ?? "rgba(127, 127, 127, 0.06)",
+        }}
+        {...commonHandlers}
+      >
+        <span style={{ fontSize: 9, fontWeight: 700, letterSpacing: "0.08em", opacity: 0.7 }}>MASTER COMPONENT</span>
+        <strong>{masterLabel}</strong>
+      </section>
+    );
+  }
+
   if (["container", "frame", "group", "section", "panel", "dynamic-panel"].includes(widget.type)) {
     const label = stringProp(widget, "label", "");
     const activePanelState = widget.type === "dynamic-panel"
