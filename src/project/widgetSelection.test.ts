@@ -28,6 +28,13 @@ describe("removeSelectedWidgets", () => {
     expect(result.widgets).toEqual([second]);
   });
 
+  it("leaves the widget list unchanged when no selected unlocked widget exists", () => {
+    const widgets = [widget("one"), widget("locked", "rectangle", true)];
+    const result = removeSelectedWidgets(widgets, ["missing", "locked"]);
+    expect(result.deletedIds).toEqual([]);
+    expect(result.widgets).toEqual(widgets);
+  });
+
   it("deletes multiple selected widgets in one operation", () => {
     const widgets = [widget("one"), widget("two"), widget("three")];
     const result = removeSelectedWidgets(widgets, ["one", "three"]);
