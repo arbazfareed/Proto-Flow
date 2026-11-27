@@ -1363,6 +1363,57 @@ export function PreviewWidget({
     return <button className={`preview-widget is-button is-${stringProp(widget, "variant", "primary")}`} style={style} {...commonHandlers}>{text || "Button"}</button>;
   }
 
+  if (widget.type === "heading") {
+    const level = Math.max(1, Math.min(6, Number(widget.props.level) || 2)) as 1 | 2 | 3 | 4 | 5 | 6;
+    const HeadingTag = `h${level}` as keyof JSX.IntrinsicElements;
+    return <HeadingTag className="preview-widget preview-heading" style={{ ...style, margin: 0, fontSize: typeof widget.props.fontSize === "number" ? widget.props.fontSize : style.fontSize, fontWeight: typeof widget.props.fontWeight === "number" || typeof widget.props.fontWeight === "string" ? widget.props.fontWeight : 700 }} {...commonHandlers}>{text}</HeadingTag>;
+  }
+
+  if (widget.type === "paragraph") {
+    return <p className="preview-widget preview-paragraph" style={{ ...style, margin: 0, lineHeight: typeof widget.props.lineHeight === "number" ? widget.props.lineHeight : 1.45 }} {...commonHandlers}>{text}</p>;
+  }
+
+  if (widget.type === "label") {
+    return <label className="preview-widget preview-label" style={{ ...style, display: "block" }} {...commonHandlers}>{text}</label>;
+  }
+
+  if (widget.type === "link") {
+    const href = sanitizeRichTextHref(stringProp(widget, "href", stringProp(widget, "url", "")));
+    return href
+      ? <a className="preview-widget preview-link" href={href} style={{ ...style, display: "inline-flex" }} {...commonHandlers}>{text}</a>
+      : <span className="preview-widget preview-link is-unconfigured" role="link" aria-disabled="true" style={{ ...style, display: "inline-flex", textDecoration: "underline", opacity: 0.7 }} {...commonHandlers}>{text || "Link destination not configured"}</span>;
+  }
+
+  if (["container", "frame", "group", "section", "panel", "dynamic-panel"].includes(widget.type)) {
+    const label = stringProp(widget, "label", "");
+    const activePanelState = widget.type === "dynamic-panel"
+      ? getPanelStates(widget).find((state) => state.id === snapshot.panelStates[widget.id])?.name
+      : undefined;
+    const structuralStyle: CSSProperties = {
+      ...style,
+      boxSizing: "border-box",
+      border: widget.type === "frame" || widget.type === "panel" || widget.type === "dynamic-panel"
+        ? style.border ?? "1px solid rgba(127, 127, 127, 0.45)"
+        : style.border,
+      borderRadius: widget.type === "panel" || widget.type === "dynamic-panel" ? style.borderRadius ?? 6 : style.borderRadius,
+      background: style.background ?? "transparent",
+    };
+    const Tag = widget.type === "section" ? "section" : "div";
+    return (
+      <Tag
+        className={`preview-widget preview-structural preview-${widget.type}`}
+        role={widget.type === "group" || widget.type === "panel" || widget.type === "dynamic-panel" ? "group" : undefined}
+        aria-label={label || undefined}
+        data-widget-type={widget.type}
+        data-panel-state={snapshot.panelStates[widget.id]}
+        style={structuralStyle}
+        {...commonHandlers}
+      >
+        {activePanelState ? <span className="preview-panel-state-label">{activePanelState}</span> : null}
+      </Tag>
+    );
+  }
+
   if (widget.type === "list") {
     const items = Array.isArray(widget.props.items)
       ? widget.props.items.filter((item): item is string => typeof item === "string")
