@@ -24,6 +24,7 @@ import {
   Minus,
   PanelLeftClose,
   PanelRightClose,
+  Pencil,
   Pipette,
   Plus,
   Redo2,
@@ -191,6 +192,7 @@ function updateScreenWidgetsAtBreakpoint(
 }
 
 interface TopBarProps {
+  onRenameProject: (name: string) => void;
   onNew: () => void;
   onOpen: () => void;
   onSave: () => void;
@@ -234,6 +236,7 @@ function formatRefillCountdown(nextClaimAt: string | null, now: number): string 
 }
 
 export function TopBar({
+  onRenameProject,
   onNew,
   onOpen,
   onSave,
@@ -256,6 +259,9 @@ export function TopBar({
 }: TopBarProps) {
   const projectName = useStore((state) => state.project.name);
   const isDirty = useStore((state) => state.isDirty);
+  const [isRenamingProject, setIsRenamingProject] = useState(false);
+  const [projectNameDraft, setProjectNameDraft] = useState(projectName);
+  const projectNameInputRef = useRef<HTMLInputElement>(null);
   const canUndo = useStore((state) => state.past.length > 0);
   const canRedo = useStore((state) => state.future.length > 0);
   const walletBalance = useWalletStore((state) => state.balance);
@@ -306,6 +312,16 @@ export function TopBar({
     return () => window.clearInterval(interval);
   }, [walletMenuOpen]);
 
+  const beginProjectRename = () => {
+    setProjectNameDraft(projectName);
+    setIsRenamingProject(true);
+    window.requestAnimationFrame(() => projectNameInputRef.current?.select());
+  };
+  const finishProjectRename = () => {
+    const nextName = projectNameDraft.trim().slice(0, 120);
+    if (nextName && nextName !== projectName) onRenameProject(nextName);
+    setIsRenamingProject(false);
+  };
   const claimDailyCredits = async () => {
     setClaimingDaily(true);
     const previousBalance = useWalletStore.getState().balance;
@@ -340,7 +356,38 @@ export function TopBar({
         <span className="brand-name">proto<span>flow</span></span>
         <div className="topbar-divider" />
         <div className="document-heading">
-          <span className="document-name">{projectName}</span>
+          {isRenamingProject ? (
+            <input
+              ref={projectNameInputRef}
+              className="document-name-input"
+              aria-label="Project name"
+              value={projectNameDraft}
+              maxLength={120}
+              autoFocus
+              onChange={(event) => setProjectNameDraft(event.currentTarget.value)}
+              onBlur={finishProjectRename}
+              onKeyDown={(event) => {
+                if (event.key === "Enter") {
+                  event.preventDefault();
+                  finishProjectRename();
+                } else if (event.key === "Escape") {
+                  event.preventDefault();
+                  setProjectNameDraft(projectName);
+                  setIsRenamingProject(false);
+                }
+              }}
+            />
+          ) : (
+            <button
+              type="button"
+              className="document-name document-name-button"
+              title="Rename project"
+              aria-label={`Rename project: ${projectName}`}
+              onClick={beginProjectRename}
+            >
+              <span>{projectName}</span><Pencil size={11} aria-hidden="true" />
+            </button>
+          )}
           <span className={`save-state ${isDirty ? "is-dirty" : ""}`}>
             <span className="state-dot" />
             <span className="save-state-label">
@@ -350,6 +397,14 @@ export function TopBar({
         </div>
       </div>
       <div className="topbar-actions">
+        <button
+          className="icon-button topbar-icon topbar-settings-trigger"
+          title="Settings (appearance, privacy and diagnostics)"
+          aria-label="Open settings"
+          onClick={onOpenPrivacySettings}
+        >
+          <Settings2 size={15} />
+        </button>
         <button className="icon-button topbar-icon" title="New project (Ctrl+N)" aria-label="New project" onClick={onNew}>
           <FilePlus2 size={16} />
         </button>
@@ -534,14 +589,6 @@ export function TopBar({
           onClick={onOpenBetaFeedback}
         >
           <MessageSquareText size={15} />
-        </button>
-        <button
-          className="icon-button topbar-icon"
-          title="Settings (appearance, privacy and diagnostics)"
-          aria-label="Open settings"
-          onClick={onOpenPrivacySettings}
-        >
-          <Settings2 size={15} />
         </button>
         {walletHistoryOpen && walletJwt && (
           <WalletHistoryDialog token={walletJwt} onClose={() => setWalletHistoryOpen(false)} />

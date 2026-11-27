@@ -42,7 +42,9 @@ jobs:
       - if: github.event_name == 'push'
         run: npx playwright install --with-deps chromium firefox webkit
       - if: github.event_name == 'pull_request'
-        run: npx playwright install --with-deps chromium
+        # GitHub's Ubuntu image already includes the browser runtime libraries. Install only
+        # Chromium here so Playwright does not run apt-get against external package feeds.
+        run: npx playwright install chromium
       - run: npm test -- --run src/devices/catalog.test.ts src/devices/frame.test.ts src/preview/deviceLayouts.test.ts src/preview/htmlExport.test.ts src/preview/codeExport.test.ts src/project/responsive.test.ts src/canvas/snapping.test.ts
       - run: npm run test:components -- src/devices/DevicePicker.component.test.tsx
       - run: npm run verify:devices
