@@ -1068,21 +1068,23 @@ export function PreviewWidget({
         event.preventDefault();
         const formData = new FormData(event.currentTarget);
         const submitted = Object.fromEntries(Array.from(formData.entries()).map(([key, value]) => [key, String(value)]));
-        for (const entry of fields) {
-          if (!entry || typeof entry !== "object") continue;
+        fields.forEach((entry, index) => {
+          if (!entry || typeof entry !== "object") return;
           const field = entry as Record<string, unknown>;
-          if (typeof field.variableName !== "string" || !Object.prototype.hasOwnProperty.call(submitted, String(field.name ?? ""))) continue;
-          const variableName = field.variableName;
-          const currentValue = runtime.getVariable(variableName, screenId);
-          if (currentValue === undefined) continue;
-          const rawValue = submitted[String(field.name ?? "")];
+          if (typeof field.variableName !== "string") return;
+          const fieldName = typeof field.name === "string" ? field.name : `field-${index + 1}`;
+          const isCheckbox = field.type === "checkbox";
+          if (!Object.prototype.hasOwnProperty.call(submitted, fieldName) && !isCheckbox) return;
+          const currentValue = runtime.getVariable(field.variableName, screenId);
+          if (currentValue === undefined) return;
+          const rawValue = submitted[fieldName] ?? "false";
           const typedValue = typeof currentValue === "number" ? Number(rawValue)
-            : typeof currentValue === "boolean" ? rawValue === "true" || rawValue === "on"
+            : typeof currentValue === "boolean" ? isCheckbox ? rawValue !== "false" : rawValue === "true" || rawValue === "on"
             : rawValue;
           if (typeof typedValue !== "number" || Number.isFinite(typedValue)) {
-            runtime.setVariable(variableName, typedValue, screenId);
+            runtime.setVariable(field.variableName, typedValue, screenId);
           }
-        }
+        });
         setFormSubmission(submitted);
         runEvent(widget, "onClick", item);
       }}>
