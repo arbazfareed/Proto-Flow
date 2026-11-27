@@ -168,7 +168,6 @@ export function VirtualizedRepeater({
   commonHandlers,
   liteMode,
   symbols,
-  symbolDepth = 0,
 }: {
   widget: Widget;
   rows: RepeaterRecord[];
@@ -187,7 +186,6 @@ export function VirtualizedRepeater({
   commonHandlers: HTMLAttributes<HTMLDivElement>;
   liteMode: boolean;
   symbols?: SymbolDefinition[];
-  symbolDepth?: number;
 }) {
   const viewportRef = useRef<HTMLDivElement>(null);
   const [scrollOffset, setScrollOffset] = useState(0);
@@ -312,6 +310,7 @@ export function PreviewWidget({
   onGestureFeedback,
   liteMode,
   symbols,
+  symbolDepth = 0,
 }: {
   widget: Widget;
   runtime: PreviewRuntime;
@@ -327,6 +326,7 @@ export function PreviewWidget({
   onGestureFeedback: (event: PreviewEvent, x: number, y: number) => void;
   liteMode: boolean;
   symbols?: SymbolDefinition[];
+  symbolDepth?: number;
 }) {
   const touchStart = useRef<{ x: number; y: number; distance?: number; centerX?: number; centerY?: number } | null>(null);
   const longPressTimer = useRef<number | undefined>(undefined);
@@ -750,7 +750,7 @@ export function PreviewWidget({
 
   if (widget.type === "avatar") {
     const name = stringProp(widget, "label", stringProp(widget, "name", "User"));
-    const initials = avatarInitials(name);
+    const initials = avatarInitials({ label: name });
     const imageSource = stringProp(widget, "src", stringProp(widget, "image"));
     return <div className="preview-widget preview-avatar" role="img" aria-label={name} style={{ ...style, display: "grid", placeItems: "center", borderRadius: "50%", overflow: "hidden" }} data-widget-type="avatar">{imageSource ? <img src={interpolate(imageSource)} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : <strong>{initials}</strong>}</div>;
   }
@@ -787,7 +787,7 @@ export function PreviewWidget({
 
   if (widget.type === "stepper") {
     const change = (next: number) => { const value = Math.max(stepperMin, Math.min(stepperMax, next)); setStepperValue(value); runEvent(widget, "onChange", item); };
-    return <section className="preview-widget preview-stepper" aria-label={stringProp(widget, "label", "Stepper")} style={{ ...style, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, padding: 8 }}><strong>{stringProp(widget, "label", "Quantity")}</strong><button type="button" aria-label="Decrease value" disabled={stepperValue <= min} onClick={() => change(stepperValue - 1)}>−</button><output aria-live="polite">{stepperValue}</output><button type="button" aria-label="Increase value" disabled={stepperValue >= max} onClick={() => change(stepperValue + 1)}>+</button></section>;
+    return <section className="preview-widget preview-stepper" aria-label={stringProp(widget, "label", "Stepper")} style={{ ...style, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, padding: 8 }}><strong>{stringProp(widget, "label", "Quantity")}</strong><button type="button" aria-label="Decrease value" disabled={stepperValue <= stepperMin} onClick={() => change(stepperValue - 1)}>−</button><output aria-live="polite">{stepperValue}</output><button type="button" aria-label="Increase value" disabled={stepperValue >= stepperMax} onClick={() => change(stepperValue + 1)}>+</button></section>;
   }
 
   if (widget.type === "date-picker") {
@@ -835,7 +835,7 @@ export function PreviewWidget({
   if (widget.type === "profile-card" || widget.type === "testimonial-card" || widget.type === "feature-card" || widget.type === "pricing-card" || widget.type === "empty-state") {
     const heading = stringProp(widget, "label", widget.type.replaceAll("-", " "));
     const detail = stringProp(widget, "subtitle", widget.type === "empty-state" ? "New items will appear here." : "");
-    return <article className={`preview-widget preview-${widget.type}`} style={{ ...style, display: "flex", flexDirection: "column", alignItems: "flex-start", justifyContent: "center", gap: 6, padding: 10 }} {...commonHandlers}><strong>{interpolate(heading)}</strong>{detail && <p>{interpolate(detail)}</p>}{widget.type === "profile-card" && <small>{stringProp(widget, "initials", avatarInitials(heading))}</small>}{widget.type === "testimonial-card" && <span aria-label={`Rating ${Number(widget.props.value) || 5} out of 5`}>{"★".repeat(Math.max(0, Math.min(5, Number(widget.props.value) || 5)))}</span>}{widget.type === "pricing-card" && <button type="button" onClick={(event) => { event.stopPropagation(); runEvent(widget, "onClick", item); }}>{stringProp(widget, "actionLabel", "Choose plan")}</button>}</article>;
+    return <article className={`preview-widget preview-${widget.type}`} style={{ ...style, display: "flex", flexDirection: "column", alignItems: "flex-start", justifyContent: "center", gap: 6, padding: 10 }} {...commonHandlers}><strong>{interpolate(heading)}</strong>{detail && <p>{interpolate(detail)}</p>}{widget.type === "profile-card" && <small>{stringProp(widget, "initials", avatarInitials({ label: heading }))}</small>}{widget.type === "testimonial-card" && <span aria-label={`Rating ${Number(widget.props.value) || 5} out of 5`}>{"★".repeat(Math.max(0, Math.min(5, Number(widget.props.value) || 5)))}</span>}{widget.type === "pricing-card" && <button type="button" onClick={(event) => { event.stopPropagation(); runEvent(widget, "onClick", item); }}>{stringProp(widget, "actionLabel", "Choose plan")}</button>}</article>;
   }
 
   if (widget.type === "table") {
@@ -1333,8 +1333,7 @@ export function PreviewWidget({
   }
 
   if (widget.type === "symbol-instance") {
-    const symbol = symbols?.find((entry) => entry.id === widget.symbolId)
-      ?? runtime.project.symbols.find((entry) => entry.id === widget.symbolId);
+    const symbol = symbols?.find((entry) => entry.id === widget.symbolId);
     if (!symbol) {
       return <div className="preview-widget preview-symbol-instance preview-symbol-missing" role="group" aria-label={`Missing component: ${widget.name ?? "Symbol"}`} style={{ ...style, display: "grid", placeItems: "center", border: "1px dashed currentColor" }} {...commonHandlers}>Missing component</div>;
     }
