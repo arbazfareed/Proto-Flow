@@ -2652,6 +2652,28 @@ function NavigationElementShape({ widget, fill, stroke, strokeWidth }: ShapeComp
             return <Group key={index}><Circle x={18} y={y} radius={4} fill="#8b69ed" perfectDrawEnabled={false} /><KonvaText x={30} y={y - 9} width={Math.max(1, widget.width - 40)} height={18} text={label} fontSize={11} fill="#334155" verticalAlign="middle" ellipsis perfectDrawEnabled={false} /></Group>;
           })}
         </Group>
+      ) : type === "settings" ? (
+        <Group>
+          <KonvaText x={10} y={5} width={widget.width - 20} height={22} text={title} fontSize={12} fontStyle="bold" fill="#334155" verticalAlign="middle" ellipsis perfectDrawEnabled={false} />
+          {(labels.length ? labels.slice(0, 3) : ["Notifications", "Privacy", "Appearance"]).map((label, index) => <Group key={index}><Line points={[10, 32 + index * 28, widget.width - 10, 32 + index * 28]} stroke="#e2e8f0" strokeWidth={1} perfectDrawEnabled={false} /><KonvaText x={12} y={34 + index * 28} width={widget.width - 24} height={22} text={label} fontSize={10} fill="#475569" verticalAlign="middle" ellipsis perfectDrawEnabled={false} /></Group>)}
+        </Group>
+      ) : type === "theme" ? (
+        <Group>
+          <KonvaText x={10} y={8} width={widget.width - 20} height={20} text={title} fontSize={12} fontStyle="bold" fill="#334155" verticalAlign="middle" ellipsis perfectDrawEnabled={false} />
+          <Rect x={10} y={34} width={widget.width - 20} height={24} fill="#1f2937" stroke="#cbd5e1" strokeWidth={1} cornerRadius={5} perfectDrawEnabled={false} />
+          <KonvaText x={10} y={34} width={widget.width - 20} height={24} text="Light  /  Dark" fontSize={10} fill="#ffffff" align="center" verticalAlign="middle" perfectDrawEnabled={false} />
+        </Group>
+      ) : type === "pull-to-refresh" ? (
+        <Group>
+          <KonvaText x={8} y={5} width={widget.width - 16} height={18} text="↓  Pull to refresh" fontSize={11} fill="#475569" align="center" verticalAlign="middle" perfectDrawEnabled={false} />
+          <Line points={[12, 28, widget.width - 12, 28]} stroke="#e2e8f0" strokeWidth={1} perfectDrawEnabled={false} />
+          <KonvaText x={8} y={31} width={widget.width - 16} height={Math.max(1, widget.height - 34)} text="Refresh gesture" fontSize={10} fill="#64748b" align="center" verticalAlign="middle" perfectDrawEnabled={false} />
+        </Group>
+      ) : type === "swipe-gesture" ? (
+        <Group>
+          <KonvaText x={8} y={4} width={widget.width - 16} height={18} text="Swipe gestures" fontSize={11} fontStyle="bold" fill="#334155" align="center" verticalAlign="middle" perfectDrawEnabled={false} />
+          <KonvaText x={8} y={24} width={widget.width - 16} height={Math.max(1, widget.height - 28)} text="←   →   ↑   ↓" fontSize={18} fill="#64748b" align="center" verticalAlign="middle" perfectDrawEnabled={false} />
+        </Group>
       ) : type === "form" ? (
         <Group>
           <KonvaText x={10} y={5} width={widget.width - 20} height={22} text={title} fontSize={12} fontStyle="bold" fill="#334155" verticalAlign="middle" ellipsis perfectDrawEnabled={false} />
@@ -2769,7 +2791,7 @@ function GenericElementShape({
   if (widget.type === "flex-row" || widget.type === "flex-column") {
     return <LayoutShape widget={widget} fill={fill} stroke={stroke} strokeWidth={strokeWidth} />;
   }
-  if (["carousel", "pagination", "breadcrumb", "timeline", "fab", "tabs", "tabs-container", "menu", "dropdown-menu", "navbar", "sidebar", "footer", "bottom-nav", "app-bar", "form", "modal", "overlay", "drawer", "cloud-sync", "websocket", "auth-state", "responsive-switch"].includes(widget.type)) return <NavigationElementShape widget={widget} fill={fill} stroke={stroke} strokeWidth={strokeWidth} />;
+  if (["carousel", "pagination", "breadcrumb", "timeline", "fab", "tabs", "tabs-container", "menu", "dropdown-menu", "navbar", "sidebar", "footer", "bottom-nav", "app-bar", "form", "modal", "overlay", "drawer", "cloud-sync", "websocket", "auth-state", "responsive-switch", "settings", "theme", "pull-to-refresh", "swipe-gesture"].includes(widget.type)) return <NavigationElementShape widget={widget} fill={fill} stroke={stroke} strokeWidth={strokeWidth} />;
   if (widget.type === "repeater") return <RepeaterShape widget={widget} fill={fill} stroke={stroke} strokeWidth={strokeWidth} />;
   if (widget.type === "accordion") return <AccordionShape widget={widget} fill={fill} stroke={stroke} strokeWidth={strokeWidth} />;
   if (widget.type === "api-request") return <ApiRequestShape widget={widget} fill={fill} stroke={stroke} strokeWidth={strokeWidth} />;
