@@ -4138,8 +4138,14 @@ export function CanvasStage({
           className="tree-context-menu canvas-context-menu"
           role="menu"
           style={{
-            left: Math.min(canvasContextMenu.x, window.innerWidth - 210),
-            top: Math.min(canvasContextMenu.y, window.innerHeight - 300),
+            left: Math.max(8, Math.min(canvasContextMenu.x, window.innerWidth - 200)),
+            top: Math.max(
+              8,
+              Math.min(
+                canvasContextMenu.y,
+                window.innerHeight - 8 - Math.min(420, window.innerHeight - 16),
+              ),
+            ),
           }}
           onPointerDown={(event) => event.stopPropagation()}
           onContextMenu={(event) => event.preventDefault()}
