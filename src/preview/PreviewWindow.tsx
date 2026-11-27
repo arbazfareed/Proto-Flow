@@ -644,7 +644,7 @@ export function PreviewWidget({
     return (
       <div className="preview-widget preview-menu" style={{ ...style, display: "flex", flexDirection: "column", alignItems: "stretch", gap: 4, padding: 6, overflow: "auto" }} data-widget-type={widget.type}>
         <button type="button" aria-expanded={menuOpen} onClick={() => setMenuOpen(!menuOpen)}>{stringProp(widget, "triggerLabel", widget.type === "menu" ? "Menu" : "Options")} ▾</button>
-        {menuOpen && <ul role="menu" style={{ margin: 0, padding: 4, listStyle: "none" }}>{items.map((entry, index) => <li key={index}><button type="button" role="menuitem" onClick={() => { setMenuOpen(false); runEvent(widget, "onSelect", item); }}>{interpolate(entry)}</button></li>)}</ul>}
+        {menuOpen && <ul role="menu" style={{ margin: 0, padding: 4, listStyle: "none" }}>{items.map((entry, index) => <li key={index}><button type="button" role="menuitem" onClick={() => { setMenuOpen(false); runEvent(widget, "onClick", item); }}>{interpolate(entry)}</button></li>)}</ul>}
       </div>
     );
   }
