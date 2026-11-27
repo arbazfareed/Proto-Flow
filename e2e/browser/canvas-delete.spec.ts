@@ -6,8 +6,10 @@ async function addRectangle(page: import("playwright/test").Page, xOffset = 0): 
   const bounds = await surface.boundingBox();
   if (!bounds) throw new Error("Canvas surface is not visible.");
   const point = { x: bounds.x + bounds.width / 2 + xOffset, y: bounds.y + bounds.height / 2 };
+  await page.keyboard.press("Escape");
   await page.getByRole("button", { name: "Add Rectangle" }).click();
   await page.mouse.click(point.x, point.y);
+  await expect(page.getByText("1 selected")).toBeVisible();
   return point;
 }
 
@@ -65,7 +67,7 @@ test("right-click Delete preserves locked elements in a mixed selection", async 
   await expect(visibility).toHaveCount(2);
 
   // The remaining unlocked item is still selected; deleting it must not remove the locked one.
-  await page.mouse.click(first.x, first.y, { button: "right" });
+  await page.mouse.click(second.x, second.y, { button: "right" });
   const menu = page.getByRole("menu", { name: "Element actions" });
   await expect(menu.getByRole("menuitem", { name: "Delete selected element" })).toBeEnabled();
   await menu.getByRole("menuitem", { name: "Delete selected element" }).click();
@@ -83,8 +85,11 @@ test("right-click Delete removes a widget from the active repeater template", as
   const surface = page.locator(".canvas-stage-surface");
   const bounds = await surface.boundingBox();
   if (!bounds) throw new Error("Canvas surface is not visible.");
+  await page.keyboard.press("Escape");
   await page.getByRole("button", { name: "Add Repeater" }).click();
   await page.mouse.click(bounds.x + bounds.width / 2, bounds.y + bounds.height / 2);
+  await expect(page.getByText("1 selected")).toBeVisible();
+  await expect(page.getByRole("button", { name: "Edit row template" })).toBeVisible();
   await page.getByRole("button", { name: "Edit row template" }).click();
   const point = { x: bounds.x + bounds.width / 2, y: bounds.y + bounds.height / 2 + 20 };
   await page.getByRole("button", { name: "Add Rectangle" }).click();
@@ -104,8 +109,11 @@ test("right-click Delete removes a widget from the active dynamic-panel state", 
   const surface = page.locator(".canvas-stage-surface");
   const bounds = await surface.boundingBox();
   if (!bounds) throw new Error("Canvas surface is not visible.");
+  await page.keyboard.press("Escape");
   await page.getByRole("button", { name: /Add Dynamic panel/i }).click();
   await page.mouse.click(bounds.x + bounds.width / 2, bounds.y + bounds.height / 2);
+  await expect(page.getByText("1 selected")).toBeVisible();
+  await expect(page.getByRole("button", { name: "Edit active state" })).toBeVisible();
   await page.getByRole("button", { name: "Edit active state" }).click();
   const point = { x: bounds.x + bounds.width / 2, y: bounds.y + bounds.height / 2 + 20 };
   await page.getByRole("button", { name: "Add Rectangle" }).click();
