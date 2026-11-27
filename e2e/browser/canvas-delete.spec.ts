@@ -41,7 +41,7 @@ test("right-click Delete removes all selected elements together", async ({ page 
   await page.setViewportSize({ width: 1440, height: 900 });
   await startWorkspace(page, "Blank project");
   const first = await addRectangle(page, -250);
-  await addRectangle(page, 50);
+  const second = await addRectangle(page, 50);
   const visibility = page.getByRole("button", { name: /^Toggle visibility for/ });
   await expect(visibility).toHaveCount(2);
 
@@ -77,11 +77,11 @@ test("right-click Delete preserves locked elements in a mixed selection", async 
   await rectangleLayers.nth(1).click({ modifiers: ["Shift"] });
   await expect(page.getByText("2 selected")).toBeVisible();
 
-  // The layer tree is ordered front-to-back, so the last lock control belongs to
-  // the first rectangle. Leave the second rectangle unlocked for the context-menu action.
-  await lock.last().click();
-  await expect(lock.last()).toHaveAttribute("aria-pressed", "true");
-  await expect(lock.first()).toHaveAttribute("aria-pressed", "false");
+  // Layer rows follow the canvas stacking order; lock the first rectangle and
+  // leave the second rectangle available for the Delete action.
+  await lock.first().click();
+  await expect(lock.first()).toHaveAttribute("aria-pressed", "true");
+  await expect(lock.last()).toHaveAttribute("aria-pressed", "false");
   // Locking deliberately removes the locked item from the current selection.
   await expect(page.getByText("1 selected")).toBeVisible();
 
@@ -107,9 +107,9 @@ test("right-click Delete removes a widget from the active repeater template", as
   await page.getByRole("button", { name: "Add Repeater" }).click();
   await page.mouse.click(bounds.x + bounds.width / 2, bounds.y + bounds.height / 2);
   await expect(page.getByText("1 selected")).toBeVisible();
-  // Select the repeater from its layer row to make the inspector target deterministic.
-  await page.getByRole("button", { name: /Screen child Repeater/ }).click();
-  await page.getByRole("tab", { name: "Design", exact: true }).click();
+  // Selecting the repeater automatically opens its template editing scope;
+  // keep the canvas selection so the inspector remains focused on the repeater.
+  await expect(page.getByRole("region", { name: "Repeater data" })).toBeVisible();
   await expect(page.getByRole("button", { name: "Edit row template" })).toBeVisible();
   await page.getByRole("button", { name: "Edit row template" }).click();
   const point = { x: bounds.x + bounds.width / 2, y: bounds.y + bounds.height / 2 + 20 };
@@ -135,9 +135,9 @@ test("right-click Delete removes a widget from the active dynamic-panel state", 
   await page.getByRole("button", { name: /Add Dynamic panel/i }).click();
   await page.mouse.click(bounds.x + bounds.width / 2, bounds.y + bounds.height / 2);
   await expect(page.getByText("1 selected")).toBeVisible();
-  // Select the panel from its layer row to make the inspector target deterministic.
-  await page.getByRole("button", { name: /Screen child Dynamic panel/i }).click();
-  await page.getByRole("tab", { name: "Design", exact: true }).click();
+  // Selecting the panel automatically opens its active state in the inspector;
+  // keep the canvas selection focused on the panel.
+  await expect(page.getByRole("region", { name: "Dynamic panel states" })).toBeVisible();
   await expect(page.getByRole("button", { name: "Edit active state" })).toBeVisible();
   await page.getByRole("button", { name: "Edit active state" }).click();
   const point = { x: bounds.x + bounds.width / 2, y: bounds.y + bounds.height / 2 + 20 };
