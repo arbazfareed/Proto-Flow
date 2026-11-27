@@ -2630,7 +2630,13 @@ function NavigationElementShape({ widget, fill, stroke, strokeWidth }: ShapeComp
   return (
     <Group>
       <Rect width={widget.width} height={widget.height} fill={panelFill} stroke={panelStroke} strokeWidth={strokeWidth} cornerRadius={7} perfectDrawEnabled={false} />
-      {type === "pagination" ? (
+      {type === "carousel" ? (
+        <Group>
+          <Rect x={8} y={8} width={Math.max(1, widget.width - 16)} height={Math.max(1, widget.height - 42)} fill="#f1f5f9" stroke="#d7d7e0" strokeWidth={1} cornerRadius={5} perfectDrawEnabled={false} />
+          <KonvaText x={14} y={12} width={widget.width - 28} height={Math.max(1, widget.height - 50)} text={labels[0] ?? "Carousel slide"} fontSize={12} fill="#475569" align="center" verticalAlign="middle" ellipsis perfectDrawEnabled={false} />
+          <KonvaText x={8} y={widget.height - 28} width={widget.width - 16} height={18} text={`‹     1 / ${Math.max(1, rawItems.length)}     ›`} fontSize={11} fill="#475569" align="center" verticalAlign="middle" perfectDrawEnabled={false} />
+        </Group>
+      ) : type === "pagination" ? (
         (labels.length ? labels : ["1", "2", "3"]).map((label, index) => {
           const count = labels.length || 3;
           const cellWidth = Math.max(1, (widget.width - 16) / count);
@@ -2763,7 +2769,7 @@ function GenericElementShape({
   if (widget.type === "flex-row" || widget.type === "flex-column") {
     return <LayoutShape widget={widget} fill={fill} stroke={stroke} strokeWidth={strokeWidth} />;
   }
-  if (["pagination", "breadcrumb", "timeline", "fab", "tabs", "tabs-container", "menu", "dropdown-menu", "navbar", "sidebar", "footer", "bottom-nav", "app-bar", "form", "modal", "overlay", "drawer", "cloud-sync", "websocket", "auth-state", "responsive-switch"].includes(widget.type)) return <NavigationElementShape widget={widget} fill={fill} stroke={stroke} strokeWidth={strokeWidth} />;
+  if (["carousel", "pagination", "breadcrumb", "timeline", "fab", "tabs", "tabs-container", "menu", "dropdown-menu", "navbar", "sidebar", "footer", "bottom-nav", "app-bar", "form", "modal", "overlay", "drawer", "cloud-sync", "websocket", "auth-state", "responsive-switch"].includes(widget.type)) return <NavigationElementShape widget={widget} fill={fill} stroke={stroke} strokeWidth={strokeWidth} />;
   if (widget.type === "repeater") return <RepeaterShape widget={widget} fill={fill} stroke={stroke} strokeWidth={strokeWidth} />;
   if (widget.type === "accordion") return <AccordionShape widget={widget} fill={fill} stroke={stroke} strokeWidth={strokeWidth} />;
   if (widget.type === "api-request") return <ApiRequestShape widget={widget} fill={fill} stroke={stroke} strokeWidth={strokeWidth} />;
