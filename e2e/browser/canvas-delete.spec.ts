@@ -76,3 +76,45 @@ test("right-click Delete preserves locked elements in a mixed selection", async 
   await expect(page.getByText("0 selected")).toBeVisible();
   void first;
 });
+
+test("right-click Delete removes a widget from the active repeater template", async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await startWorkspace(page, "Blank project");
+  const surface = page.locator(".canvas-stage-surface");
+  const bounds = await surface.boundingBox();
+  if (!bounds) throw new Error("Canvas surface is not visible.");
+  await page.getByRole("button", { name: "Add Repeater" }).click();
+  await page.mouse.click(bounds.x + bounds.width / 2, bounds.y + bounds.height / 2);
+  await page.getByRole("button", { name: "Edit row template" }).click();
+  const point = { x: bounds.x + bounds.width / 2, y: bounds.y + bounds.height / 2 + 90 };
+  await page.getByRole("button", { name: "Add Rectangle" }).click();
+  await page.mouse.click(point.x, point.y);
+  await expect(page.getByRole("button", { name: /^Toggle visibility for/ })).toHaveCount(2);
+
+  await page.mouse.click(point.x, point.y, { button: "right" });
+  const menu = page.getByRole("menu", { name: "Element actions" });
+  await menu.getByRole("menuitem", { name: "Delete selected element" }).click();
+  await expect(page.getByRole("button", { name: /^Toggle visibility for/ })).toHaveCount(1);
+  await expect(page.getByText("0 selected")).toBeVisible();
+});
+
+test("right-click Delete removes a widget from the active dynamic-panel state", async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await startWorkspace(page, "Blank project");
+  const surface = page.locator(".canvas-stage-surface");
+  const bounds = await surface.boundingBox();
+  if (!bounds) throw new Error("Canvas surface is not visible.");
+  await page.getByRole("button", { name: "Add Dynamic Panel" }).click();
+  await page.mouse.click(bounds.x + bounds.width / 2, bounds.y + bounds.height / 2);
+  await page.getByRole("button", { name: "Edit active state" }).click();
+  const point = { x: bounds.x + bounds.width / 2, y: bounds.y + bounds.height / 2 + 90 };
+  await page.getByRole("button", { name: "Add Rectangle" }).click();
+  await page.mouse.click(point.x, point.y);
+  await expect(page.getByRole("button", { name: /^Toggle visibility for/ })).toHaveCount(2);
+
+  await page.mouse.click(point.x, point.y, { button: "right" });
+  const menu = page.getByRole("menu", { name: "Element actions" });
+  await menu.getByRole("menuitem", { name: "Delete selected element" }).click();
+  await expect(page.getByRole("button", { name: /^Toggle visibility for/ })).toHaveCount(1);
+  await expect(page.getByText("0 selected")).toBeVisible();
+});
