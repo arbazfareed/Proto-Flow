@@ -1053,6 +1053,27 @@ describe("PreviewWidget component masters", () => {
 
 describe("PreviewWidget form, card, navigation, and settings behavior", () => {
   function renderConfiguredWidget(widget: Widget, runEvent = vi.fn(() => 0), variables: Project["variables"] = []) {
+    const project = createEmptyProject("Configured widget preview");
+    project.variables = variables;
+    const runtime = new PreviewRuntime(project);
+    const onNavigate = vi.fn();
+    const rendered = render(
+      <PreviewWidget
+        widget={widget}
+        runtime={runtime}
+        screenId={project.screens[0].id}
+        snapshot={runtime.snapshot()}
+        runEvent={runEvent}
+        onError={vi.fn()}
+        onNavigate={onNavigate}
+        controlValues={{}}
+        onControlValueChange={vi.fn()}
+        onGestureFeedback={vi.fn()}
+        liteMode={false}
+      />,
+    );
+    return { ...rendered, runEvent, runtime, onNavigate };
+  }
 
   it("collects configured form values on submit and reports the submitted field count", () => {
     const widget: Widget = { ...makeWidget(), type: "form", props: {
