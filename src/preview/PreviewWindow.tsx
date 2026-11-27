@@ -309,6 +309,7 @@ export function PreviewWidget({
   onControlValueChange,
   onGestureFeedback,
   liteMode,
+  symbols,
 }: {
   widget: Widget;
   runtime: PreviewRuntime;
@@ -323,6 +324,7 @@ export function PreviewWidget({
   onControlValueChange: (key: string, value: string | boolean) => void;
   onGestureFeedback: (event: PreviewEvent, x: number, y: number) => void;
   liteMode: boolean;
+  symbols?: SymbolDefinition[];
 }) {
   const touchStart = useRef<{ x: number; y: number; distance?: number; centerX?: number; centerY?: number } | null>(null);
   const longPressTimer = useRef<number | undefined>(undefined);
@@ -1295,7 +1297,8 @@ export function PreviewWidget({
   }
 
   if (widget.type === "symbol-instance") {
-    const symbol = (runtime.currentScreen as Project["screens"][number]).widgets && runtime.project.symbols.find((entry) => entry.id === widget.symbolId);
+    const symbol = symbols?.find((entry) => entry.id === widget.symbolId)
+      ?? runtime.project.symbols.find((entry) => entry.id === widget.symbolId);
     if (!symbol) {
       return <div className="preview-widget preview-symbol-instance preview-symbol-missing" role="group" aria-label={`Missing component: ${widget.name ?? "Symbol"}`} style={{ ...style, display: "grid", placeItems: "center", border: "1px dashed currentColor" }} {...commonHandlers}>Missing component</div>;
     }
