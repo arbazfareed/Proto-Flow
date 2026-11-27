@@ -1026,6 +1026,7 @@ export function PreviewWidget({
   }
 
   if (widget.type === "alert") {
+    if (dismissed) return null;
     const variant = stringProp(widget, "variant", "info");
     return (
       <aside className={`preview-widget preview-alert is-${variant}`} role={variant === "error" ? "alert" : "status"} style={style} {...commonHandlers}>
