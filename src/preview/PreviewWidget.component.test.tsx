@@ -434,7 +434,7 @@ describe("PreviewWidget accordion", () => {
 
     fireEvent.click(firstSection);
     expect(firstSection).toHaveAttribute("aria-expanded", "false");
-    expect(rendered.queryByRole("region", { name: "Help" })).not.toBeInTheDocument();
+    expect(rendered.queryByText("A prototyping tool.")).not.toBeVisible();
     const controlledPanel = rendered.container.querySelector<HTMLElement>(
       `#${firstSection.getAttribute("aria-controls")}`,
     );
