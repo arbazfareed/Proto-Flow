@@ -285,6 +285,89 @@ describe("PreviewWidget accordion", () => {
   });
 });
 
+describe("PreviewWidget navigation and timeline elements", () => {
+  function renderElement(type: string, props: Record<string, unknown> = {}) {
+    const project = createEmptyProject("Element preview");
+    const runtime = new PreviewRuntime(project);
+    const widget: Widget = { ...makeWidget(), type, props };
+    const runEvent = vi.fn(() => 0);
+    const rendered = render(
+      <PreviewWidget
+        widget={widget}
+        runtime={runtime}
+        screenId={project.screens[0].id}
+        snapshot={runtime.snapshot()}
+        runEvent={runEvent}
+        onError={vi.fn()}
+        controlValues={{}}
+        onControlValueChange={vi.fn()}
+        onGestureFeedback={vi.fn()}
+        liteMode={false}
+      />,
+    );
+    return { ...rendered, widget, runEvent };
+  }
+
+  it("changes pagination page and disables navigation at the ends", () => {
+    const rendered = renderElement("pagination", { pageCount: 3 });
+    expect(rendered.getByRole("button", { name: "Previous page" })).toBeDisabled();
+    fireEvent.click(rendered.getByRole("button", { name: "Page 2" }));
+    expect(rendered.getByRole("button", { name: "Page 2" })).toHaveAttribute("aria-current", "page");
+    expect(rendered.getByRole("button", { name: "Previous page" })).toBeEnabled();
+    fireEvent.click(rendered.getByRole("button", { name: "Next page" }));
+    expect(rendered.getByRole("button", { name: "Page 3" })).toHaveAttribute("aria-current", "page");
+    expect(rendered.getByRole("button", { name: "Next page" })).toBeDisabled();
+    expect(rendered.runEvent).toHaveBeenCalledWith(rendered.widget, "onChange", undefined);
+  });
+
+  it("renders breadcrumb items and marks the current location", () => {
+    const rendered = renderElement("breadcrumb", { items: ["Home", "Projects", "Current"] });
+    expect(rendered.getByRole("navigation", { name: "Breadcrumb" })).toBeInTheDocument();
+    expect(rendered.getByText("Current")).toHaveAttribute("aria-current", "page");
+    expect(rendered.getByRole("button", { name: "Projects" })).toBeInTheDocument();
+  });
+
+  it("renders timeline entries and their descriptions", () => {
+    const rendered = renderElement("timeline", {
+      items: [
+        { title: "Created", description: "Project started" },
+        { title: "Reviewed", date: "Today" },
+      ],
+    });
+    expect(rendered.getByRole("list", { name: "Timeline" })).toBeInTheDocument();
+    expect(rendered.getByText("Created")).toBeInTheDocument();
+    expect(rendered.getByText("Project started")).toBeInTheDocument();
+    expect(rendered.getByText("Today")).toBeInTheDocument();
+  });
+
+  it("renders the floating action button as a real button", () => {
+    const rendered = renderElement("fab", { label: "Create item", iconText: "+" });
+    fireEvent.click(rendered.getByRole("button", { name: "Create item" }));
+    expect(rendered.runEvent).toHaveBeenCalledWith(rendered.widget, "onClick", undefined);
+  });
+
+  it("switches tabs and displays the selected content", () => {
+    const rendered = renderElement("tabs", {
+      items: [
+        { label: "Overview", content: "Overview details" },
+        { label: "Activity", content: "Recent activity" },
+      ],
+    });
+    fireEvent.click(rendered.getByRole("tab", { name: "Activity" }));
+    expect(rendered.getByRole("tab", { name: "Activity" })).toHaveAttribute("aria-selected", "true");
+    expect(rendered.getByRole("tabpanel")).toHaveTextContent("Recent activity");
+    expect(rendered.runEvent).toHaveBeenCalledWith(rendered.widget, "onChange", undefined);
+  });
+
+  it("opens a menu and runs the click rule for a selected item", () => {
+    const rendered = renderElement("dropdown-menu", { items: ["Edit", "Delete"] });
+    fireEvent.click(rendered.getByRole("button", { name: "Options ▾" }));
+    fireEvent.click(rendered.getByRole("menuitem", { name: "Edit" }));
+    expect(rendered.getByRole("button", { name: "Options ▾" })).toHaveAttribute("aria-expanded", "false");
+    expect(rendered.runEvent).toHaveBeenCalledWith(rendered.widget, "onClick", undefined);
+  });
+});
+
 describe("PreviewWidget media", () => {
   function renderMediaWidget(type: "image-gallery" | "audio", props: Record<string, unknown>) {
     const project = createEmptyProject("Media preview");
