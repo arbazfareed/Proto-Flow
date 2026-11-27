@@ -168,6 +168,7 @@ export function VirtualizedRepeater({
   commonHandlers,
   liteMode,
   symbols,
+  symbolDepth = 0,
 }: {
   widget: Widget;
   rows: RepeaterRecord[];
@@ -186,6 +187,7 @@ export function VirtualizedRepeater({
   commonHandlers: HTMLAttributes<HTMLDivElement>;
   liteMode: boolean;
   symbols?: SymbolDefinition[];
+  symbolDepth?: number;
 }) {
   const viewportRef = useRef<HTMLDivElement>(null);
   const [scrollOffset, setScrollOffset] = useState(0);
@@ -1311,14 +1313,17 @@ export function PreviewWidget({
     if (!symbol) {
       return <div className="preview-widget preview-symbol-instance preview-symbol-missing" role="group" aria-label={`Missing component: ${widget.name ?? "Symbol"}`} style={{ ...style, display: "grid", placeItems: "center", border: "1px dashed currentColor" }} {...commonHandlers}>Missing component</div>;
     }
+    if (symbolDepth >= 8) {
+      return <div className="preview-widget preview-symbol-instance preview-symbol-depth-limit" role="note" style={style}>Nested component depth limit reached</div>;
+    }
     const scaleX = widget.width / Math.max(1, symbol.width);
     const scaleY = widget.height / Math.max(1, symbol.height);
+    const overrideRoot = widget.props.symbolOverrides && typeof widget.props.symbolOverrides === "object" && !Array.isArray(widget.props.symbolOverrides)
+      ? widget.props.symbolOverrides as Record<string, unknown> : {};
     return (
       <div className="preview-widget preview-symbol-instance" role="group" aria-label={symbol.name} style={{ ...style, overflow: "hidden" }} {...commonHandlers} data-symbol-id={symbol.id}>
         <div style={{ position: "absolute", left: 0, top: 0, width: symbol.width, height: symbol.height, transform: `scale(${scaleX}, ${scaleY})`, transformOrigin: "top left" }}>
           {symbol.widgets.filter((child) => child.visible).sort((a, b) => a.zIndex - b.zIndex).map((sourceChild) => {
-            const overrideRoot = widget.props.symbolOverrides && typeof widget.props.symbolOverrides === "object" && !Array.isArray(widget.props.symbolOverrides)
-              ? widget.props.symbolOverrides as Record<string, unknown> : {};
             const override = overrideRoot[sourceChild.id] && typeof overrideRoot[sourceChild.id] === "object" && !Array.isArray(overrideRoot[sourceChild.id])
               ? overrideRoot[sourceChild.id] as Record<string, unknown> : {};
             const overrideProps = override.props && typeof override.props === "object" && !Array.isArray(override.props)
@@ -1330,40 +1335,24 @@ export function PreviewWidget({
               props: { ...sourceChild.props, ...overrideProps },
               style: { ...sourceChild.style, ...overrideStyle } as Widget["style"],
             };
-            const childStyle: CSSProperties = {
-              position: "absolute",
-              left: child.x,
-              top: child.y,
-              width: child.width,
-              height: child.height,
-              opacity: child.opacity,
-              transform: child.rotation ? `rotate(${child.rotation}deg)` : undefined,
-              transformOrigin: "center",
-              boxSizing: "border-box",
-              color: "inherit",
-              background: typeof child.style.fill === "string" ? child.style.fill : "transparent",
-              border: typeof child.style.stroke === "string" ? `1px solid ${child.style.stroke}` : undefined,
-              borderRadius: child.type === "ellipse" ? "50%" : typeof child.style.cornerRadius === "number" ? child.style.cornerRadius : undefined,
-              overflow: "hidden",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              fontSize: 12,
-              textAlign: "center",
-              whiteSpace: "pre-wrap",
-            };
-            const label = typeof child.props.text === "string" ? child.props.text
-              : typeof child.props.label === "string" ? child.props.label
-              : typeof child.name === "string" ? child.name : child.type.replaceAll("-", " ");
-            if (child.type === "image" && typeof child.props.src === "string") {
-              return <img key={child.id} src={child.props.src} alt={typeof child.props.alt === "string" ? child.props.alt : ""} style={{ ...childStyle, objectFit: "cover" }} />;
-            }
-            if (child.type === "input" || child.type === "textarea") {
-              return child.type === "textarea"
-                ? <textarea key={child.id} aria-label={label} placeholder={typeof child.props.placeholder === "string" ? child.props.placeholder : ""} style={childStyle} readOnly />
-                : <input key={child.id} aria-label={label} placeholder={typeof child.props.placeholder === "string" ? child.props.placeholder : label} style={childStyle} readOnly />;
-            }
-            return <div key={child.id} style={childStyle} data-symbol-child-type={child.type}>{label}</div>;
+            return (
+              <PreviewWidget
+                key={child.id}
+                widget={child}
+                runtime={runtime}
+                screenId={screenId}
+                snapshot={snapshot}
+                runEvent={runEvent}
+                onError={onError}
+                item={item}
+                controlValues={controlValues}
+                onControlValueChange={onControlValueChange}
+                onGestureFeedback={onGestureFeedback}
+                liteMode={liteMode}
+                symbols={symbols}
+                symbolDepth={symbolDepth + 1}
+              />
+            );
           })}
         </div>
       </div>
