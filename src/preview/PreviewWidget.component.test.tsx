@@ -1049,3 +1049,93 @@ describe("PreviewWidget component masters", () => {
     expect(rendered.queryByText("component master")).not.toBeInTheDocument();
   });
 });
+
+
+describe("PreviewWidget form, card, navigation, and settings behavior", () => {
+  function renderConfiguredWidget(widget: Widget, runEvent = vi.fn(() => 0)) {
+    const project = createEmptyProject("Configured widget preview");
+    const runtime = new PreviewRuntime(project);
+    const rendered = render(
+      <PreviewWidget
+        widget={widget}
+        runtime={runtime}
+        screenId={project.screens[0].id}
+        snapshot={runtime.snapshot()}
+        runEvent={runEvent}
+        onError={vi.fn()}
+        controlValues={{}}
+        onControlValueChange={vi.fn()}
+        onGestureFeedback={vi.fn()}
+        liteMode={false}
+      />,
+    );
+    return { ...rendered, runEvent };
+  }
+
+  it("collects configured form values on submit and reports the submitted field count", () => {
+    const widget: Widget = { ...makeWidget(), type: "form", props: {
+      label: "Contact form",
+      fields: [
+        { name: "email", label: "Email", type: "email", required: true },
+        { name: "message", label: "Message", type: "text" },
+      ],
+    } };
+    const rendered = renderConfiguredWidget(widget);
+    fireEvent.change(rendered.getByRole("textbox", { name: "Email" }), { target: { value: "person@example.com" } });
+    fireEvent.change(rendered.getByRole("textbox", { name: "Message" }), { target: { value: "Hello" } });
+    fireEvent.submit(rendered.getByRole("form", { name: "Contact form" }));
+    expect(rendered.getByRole("status")).toHaveTextContent("Submitted 2 field(s)");
+    expect(rendered.runEvent).toHaveBeenCalledWith(widget, "onClick", undefined);
+  });
+
+  it("makes the card action button keyboard accessible and interactive", () => {
+    const widget: Widget = { ...makeWidget(), type: "card", props: { title: "Plan", actionLabel: "Choose plan" } };
+    const rendered = renderConfiguredWidget(widget);
+    const action = rendered.getByRole("button", { name: "Choose plan" });
+    expect(action).not.toHaveAttribute("tabindex", "-1");
+    fireEvent.click(action);
+    expect(rendered.runEvent).toHaveBeenCalledWith(widget, "onClick", undefined);
+  });
+
+  it("renders editable setting controls and updates their local values", () => {
+    const widget: Widget = { ...makeWidget(), type: "settings", props: { items: [
+      { name: "notifications", label: "Notifications", description: "Receive updates", type: "toggle", value: false },
+      { name: "displayName", label: "Display name", type: "text", value: "Guest" },
+    ] } };
+    const rendered = renderConfiguredWidget(widget);
+    const toggle = rendered.getByRole("checkbox", { name: /Notifications/ });
+    fireEvent.click(toggle);
+    expect(toggle).toBeChecked();
+    const displayName = rendered.getByRole("textbox", { name: /Display name/ });
+    fireEvent.change(displayName, { target: { value: "Alex" } });
+    expect(displayName).toHaveValue("Alex");
+  });
+
+  it("uses configured navigation destinations and marks the selected local item", () => {
+    const widget: Widget = { ...makeWidget(), type: "navbar", props: { items: [
+      { label: "Home", href: "https://example.com/home" },
+      { label: "Profile" },
+    ] } };
+    const rendered = renderConfiguredWidget(widget);
+    expect(rendered.getByRole("link", { name: "Home" })).toHaveAttribute("href", "https://example.com/home");
+    fireEvent.click(rendered.getByRole("button", { name: "Profile" }));
+    expect(rendered.getByRole("button", { name: "Profile" })).toHaveAttribute("aria-current", "page");
+  });
+
+  it("renders edited bottom navigation labels from its label field", () => {
+    const widget: Widget = { ...makeWidget(), type: "bottom-nav", props: { label: "Chats | Calls | Settings", selected: 0 } };
+    const rendered = renderConfiguredWidget(widget);
+    expect(rendered.getByRole("button", { name: "Chats" })).toBeInTheDocument();
+    expect(rendered.getByRole("button", { name: "Calls" })).toBeInTheDocument();
+    expect(rendered.getByRole("button", { name: "Settings" })).toBeInTheDocument();
+  });
+
+  it("rejects unsafe navigation destinations", () => {
+    const widget: Widget = { ...makeWidget(), type: "navbar", props: { items: [
+      { label: "Unsafe", href: "javascript:alert(1)" },
+    ] } };
+    const rendered = renderConfiguredWidget(widget);
+    expect(rendered.queryByRole("link", { name: "Unsafe" })).not.toBeInTheDocument();
+    expect(rendered.getByRole("button", { name: "Unsafe" })).toBeInTheDocument();
+  });
+});
