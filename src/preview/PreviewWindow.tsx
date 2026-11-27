@@ -328,6 +328,7 @@ export function PreviewWidget({
   onGestureFeedback: (event: PreviewEvent, x: number, y: number) => void;
   liteMode: boolean;
   symbols?: SymbolDefinition[];
+  symbolDepth?: number;
 }) {
   const touchStart = useRef<{ x: number; y: number; distance?: number; centerX?: number; centerY?: number } | null>(null);
   const longPressTimer = useRef<number | undefined>(undefined);
