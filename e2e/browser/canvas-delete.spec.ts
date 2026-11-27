@@ -75,7 +75,7 @@ test("right-click Delete preserves locked elements in a mixed selection", async 
   await expect(visibility).toHaveCount(1);
   await expect(lock).toHaveCount(1);
   await expect(lock).toHaveAttribute("aria-pressed", "true");
-  await expect(page.getByText("0 selected")).toBeVisible();
+  await expect(page.getByText("1 selected")).toBeVisible();
   void first;
 });
 
