@@ -1108,6 +1108,14 @@ describe("PreviewWidget form, card, navigation, and settings behavior", () => {
     expect(rendered.getByRole("button", { name: "Profile" })).toHaveAttribute("aria-current", "page");
   });
 
+  it("renders edited bottom navigation labels from its label field", () => {
+    const widget: Widget = { ...makeWidget(), type: "bottom-nav", props: { label: "Chats | Calls | Settings", selected: 0 } };
+    const rendered = renderConfiguredWidget(widget);
+    expect(rendered.getByRole("button", { name: "Chats" })).toBeInTheDocument();
+    expect(rendered.getByRole("button", { name: "Calls" })).toBeInTheDocument();
+    expect(rendered.getByRole("button", { name: "Settings" })).toBeInTheDocument();
+  });
+
   it("rejects unsafe navigation destinations", () => {
     const widget: Widget = { ...makeWidget(), type: "navbar", props: { items: [
       { label: "Unsafe", href: "javascript:alert(1)" },
