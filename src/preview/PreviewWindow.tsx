@@ -694,6 +694,24 @@ export function PreviewWidget({
     );
   }
 
+  const handleChange = (event: ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
+    const value = event.currentTarget.value;
+    onControlValueChange(controlKey, value);
+    const variableName = stringProp(widget, "variableName", stringProp(widget, "variable"));
+    if (variableName) {
+      const definition = runtime.snapshot().variables.find((entry) => entry.variable.name === variableName)?.variable;
+      if (definition) {
+        try {
+          runtime.updateBoundVariable(widget, definition.type === "number" ? Number(value) : value);
+        } catch (error) {
+          console.error("Could not update the preview variable from the input.", error);
+          onError(error);
+        }
+      }
+    }
+    runEvent(widget, "onChange", item);
+  };
+
   if (widget.type === "select") {
     const options = Array.isArray(widget.props.options) ? widget.props.options.filter((option): option is string => typeof option === "string") : [];
     return <label className="preview-widget-label" style={{ ...style, display: "flex", flexDirection: "column", gap: 4, overflow: "visible" }}><span>{stringProp(widget, "label", "Select")}</span><select aria-label={stringProp(widget, "label", "Select")} value={inputValue} onChange={handleChange}><option value="">{stringProp(widget, "placeholder", "Choose an option")}</option>{options.map((option) => <option key={option} value={option}>{interpolate(option)}</option>)}</select></label>;
@@ -1112,23 +1130,7 @@ export function PreviewWidget({
       />
     );
   }
-  const handleChange = (event: ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
-    const value = event.currentTarget.value;
-    onControlValueChange(controlKey, value);
-    const variableName = stringProp(widget, "variableName", stringProp(widget, "variable"));
-    if (variableName) {
-      const definition = runtime.snapshot().variables.find((entry) => entry.variable.name === variableName)?.variable;
-      if (definition) {
-        try {
-          runtime.updateBoundVariable(widget, definition.type === "number" ? Number(value) : value);
-        } catch (error) {
-          console.error("Could not update the preview variable from the input.", error);
-          onError(error);
-        }
-      }
-    }
-    runEvent(widget, "onChange", item);
-  };
+
 
   if (widget.type === "input" || widget.type === "search" || widget.type === "textarea") {
     const tag = widget.type;
