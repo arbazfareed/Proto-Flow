@@ -1490,6 +1490,7 @@ export function PreviewWidget({
         onGestureFeedback={onGestureFeedback}
         commonHandlers={commonHandlers}
         liteMode={liteMode}
+        symbols={symbols}
       />
     );
   }
