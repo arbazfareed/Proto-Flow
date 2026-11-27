@@ -22,7 +22,7 @@ function makeWidget(): Widget {
   };
 }
 
-function renderWidget(mode: "touch" | "mouse" | "both" = "both") {
+function renderWidget(mode: "touch" | "mouse" | "both" = "both", symbols: import("../project/schema").SymbolDefinition[] = []) {
   const project = createEmptyProject("Input mode preview");
   project.screens[0].inputMode = mode;
   const runtime = new PreviewRuntime(project);
@@ -41,6 +41,7 @@ function renderWidget(mode: "touch" | "mouse" | "both" = "both") {
       onControlValueChange={vi.fn()}
       onGestureFeedback={onGestureFeedback}
       liteMode={false}
+      symbols={symbols}
     />,
   );
   return { button: rendered.getByRole("button", { name: "Interact" }), runEvent, onGestureFeedback };
@@ -59,6 +60,83 @@ function touchEvent(
   });
   fireEvent(element, event);
 }
+
+describe("PreviewWidget reusable symbols", () => {
+  it("renders a symbol instance using its master component contents", () => {
+    const project = createEmptyProject("Symbol preview");
+    const symbolId = crypto.randomUUID();
+    const symbol = {
+      id: symbolId,
+      name: "Primary action",
+      width: 160,
+      height: 48,
+      widgets: [{
+        ...makeWidget(),
+        id: crypto.randomUUID(),
+        type: "button",
+        x: 0,
+        y: 0,
+        width: 160,
+        height: 48,
+        props: { label: "Master action" },
+      }],
+    };
+    const instance: Widget = {
+      ...makeWidget(),
+      type: "symbol-instance",
+      width: 160,
+      height: 48,
+      name: "Primary action",
+      symbolId,
+      props: { label: "Primary action" },
+    };
+    const runtime = new PreviewRuntime(project);
+    const rendered = render(
+      <PreviewWidget
+        widget={instance}
+        runtime={runtime}
+        screenId={project.screens[0].id}
+        snapshot={runtime.snapshot()}
+        runEvent={vi.fn(() => 0)}
+        onError={vi.fn()}
+        controlValues={{}}
+        onControlValueChange={vi.fn()}
+        onGestureFeedback={vi.fn()}
+        liteMode={false}
+        symbols={[symbol]}
+      />,
+    );
+    expect(rendered.getByRole("group", { name: "Primary action" })).toHaveAttribute("data-symbol-id", symbolId);
+    expect(rendered.getByText("Master action")).toBeInTheDocument();
+  });
+
+  it("shows an explicit placeholder when a symbol definition is missing", () => {
+    const project = createEmptyProject("Missing symbol preview");
+    const instance: Widget = {
+      ...makeWidget(),
+      type: "symbol-instance",
+      symbolId: crypto.randomUUID(),
+      name: "Deleted component",
+    };
+    const runtime = new PreviewRuntime(project);
+    const rendered = render(
+      <PreviewWidget
+        widget={instance}
+        runtime={runtime}
+        screenId={project.screens[0].id}
+        snapshot={runtime.snapshot()}
+        runEvent={vi.fn(() => 0)}
+        onError={vi.fn()}
+        controlValues={{}}
+        onControlValueChange={vi.fn()}
+        onGestureFeedback={vi.fn()}
+        liteMode={false}
+        symbols={[]}
+      />,
+    );
+    expect(rendered.getByRole("group", { name: "Missing component: Deleted component" })).toHaveTextContent("Missing component");
+  });
+});
 
 describe("PreviewWidget input-mode interactions", () => {
   it("treats mouse clicks as taps in touch mode and blocks other mouse triggers (B82)", () => {
