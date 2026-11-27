@@ -1111,3 +1111,69 @@ describe("PreviewWidget form, card, navigation, and settings behavior", () => {
     expect(rendered.getByRole("button", { name: "Unsafe" })).toBeInTheDocument();
   });
 });
+
+
+describe("PreviewWidget charts and media sources", () => {
+  function renderConfigured(widget: Widget, runtime = new PreviewRuntime(createEmptyProject("Chart/media preview"))) {
+    const project = runtime.project;
+    return render(
+      <PreviewWidget
+        widget={widget}
+        runtime={runtime}
+        screenId={project.screens[0].id}
+        snapshot={runtime.snapshot()}
+        runEvent={vi.fn(() => 0)}
+        onError={vi.fn()}
+        controlValues={{}}
+        onControlValueChange={vi.fn()}
+        onGestureFeedback={vi.fn()}
+        liteMode={false}
+      />,
+    );
+  }
+
+  it("resolves chart values from runtime variables and displays configured labels", () => {
+    const project = createEmptyProject("Bound chart");
+    project.variables.push({ id: crypto.randomUUID(), name: "revenue", type: "number", initial: 42, scope: "project" });
+    const runtime = new PreviewRuntime(project);
+    const widget: Widget = { ...makeWidget(), type: "chart", props: {
+      title: "Revenue",
+      values: ["[[revenue]]", -12],
+      labels: ["Current", "Previous"],
+      chartType: "bar",
+    } };
+    const rendered = renderConfigured(widget, runtime);
+    expect(rendered.getByText("Current: 42")).toBeInTheDocument();
+    expect(rendered.getByText("Previous: -12")).toBeInTheDocument();
+    expect(rendered.getByRole("img")).toBeInTheDocument();
+  });
+
+  it("does not invent sample chart data when no values are configured", () => {
+    const widget: Widget = { ...makeWidget(), type: "chart", props: { title: "Empty chart" } };
+    const rendered = renderConfigured(widget);
+    expect(rendered.getByText("No valid chart data configured")).toBeInTheDocument();
+    expect(rendered.queryByRole("img")).not.toBeInTheDocument();
+  });
+
+  it("rejects unsafe image source protocols", () => {
+    const widget: Widget = { ...makeWidget(), type: "image", props: { src: "javascript:alert(1)", alt: "Unsafe image" } };
+    const rendered = renderConfigured(widget);
+    expect(rendered.queryByRole("img", { name: "Unsafe image" })).not.toBeInTheDocument();
+  });
+
+  it("rejects unsafe audio and video source protocols", () => {
+    const audio: Widget = { ...makeWidget(), type: "audio", props: { src: "javascript:alert(1)" } };
+    const video: Widget = { ...makeWidget(), id: crypto.randomUUID(), type: "video", props: { src: "javascript:alert(1)" } };
+    const project = createEmptyProject("Unsafe media");
+    const runtime = new PreviewRuntime(project);
+    const rendered = render(
+      <>
+        <PreviewWidget widget={audio} runtime={runtime} screenId={project.screens[0].id} snapshot={runtime.snapshot()} runEvent={vi.fn(() => 0)} onError={vi.fn()} controlValues={{}} onControlValueChange={vi.fn()} onGestureFeedback={vi.fn()} liteMode={false} />
+        <PreviewWidget widget={video} runtime={runtime} screenId={project.screens[0].id} snapshot={runtime.snapshot()} runEvent={vi.fn(() => 0)} onError={vi.fn()} controlValues={{}} onControlValueChange={vi.fn()} onGestureFeedback={vi.fn()} liteMode={false} />
+      </>,
+    );
+    expect(rendered.container.querySelector("audio")).not.toBeInTheDocument();
+    expect(rendered.container.querySelector("video")).not.toBeInTheDocument();
+    expect(rendered.getByText("Audio source not configured")).toBeInTheDocument();
+  });
+});
