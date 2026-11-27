@@ -329,6 +329,7 @@ export function PreviewWidget({
   const multiTouchFired = useRef(false);
   const lastTap = useRef(0);
   const [dismissed, setDismissed] = useState(false);
+  const [expandedAccordionItem, setExpandedAccordionItem] = useState<number | null>(null);
   // Icons beyond the built-in set appear once the full set has loaded.
   useFullIconSet();
   useEffect(() => () => {
@@ -850,6 +851,64 @@ export function PreviewWidget({
       <ul className="preview-widget preview-list" style={style} {...commonHandlers}>
         {items.map((item, index) => <li key={`${index}-${item}`}>{interpolate(item, screenId, undefined, widget)}</li>)}
       </ul>
+    );
+  }
+
+  if (widget.type === "accordion") {
+    const rawItems = Array.isArray(widget.props.items) ? widget.props.items : [];
+    const items = rawItems.map((entry, index) => {
+      if (typeof entry === "string") return { title: entry, body: "" };
+      if (typeof entry === "object" && entry !== null) {
+        const record = entry as Record<string, unknown>;
+        const title = typeof record.title === "string" ? record.title
+          : typeof record.label === "string" ? record.label
+          : typeof record.question === "string" ? record.question
+          : `Item ${index + 1}`;
+        const body = typeof record.content === "string" ? record.content
+          : typeof record.description === "string" ? record.description
+          : typeof record.answer === "string" ? record.answer
+          : "";
+        return { title, body };
+      }
+      return { title: `Item ${index + 1}`, body: "" };
+    });
+    return (
+      <section
+        className="preview-widget preview-accordion"
+        aria-label={stringProp(widget, "label", "Accordion")}
+        style={{ ...style, display: "flex", flexDirection: "column", alignItems: "stretch", justifyContent: "flex-start", overflow: "auto", padding: 8, gap: 4 }}
+        data-widget-type="accordion"
+      >
+        {items.length === 0 ? (
+          <p role="note" style={{ margin: 4, fontSize: 12, opacity: 0.7 }}>No accordion items configured</p>
+        ) : items.map((entry, index) => {
+          const expanded = expandedAccordionItem === index;
+          const panelId = `preview-accordion-${widget.id}-${index}`;
+          return (
+            <div key={`${index}-${entry.title}`} style={{ border: "1px solid rgba(127, 127, 127, 0.3)", borderRadius: 6, overflow: "hidden" }}>
+              <button
+                type="button"
+                aria-expanded={expanded}
+                aria-controls={panelId}
+                onClick={(event) => {
+                  event.stopPropagation();
+                  setExpandedAccordionItem(expanded ? null : index);
+                  runEvent(widget, "onClick", item);
+                }}
+                style={{ width: "100%", minHeight: 32, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, padding: "6px 10px", border: 0, background: "transparent", color: "inherit", textAlign: "left", cursor: "pointer", font: "inherit" }}
+              >
+                <span>{interpolate(entry.title)}</span>
+                <span aria-hidden="true">{expanded ? "−" : "+"}</span>
+              </button>
+              {expanded && (
+                <div id={panelId} role="region" style={{ padding: "6px 10px", fontSize: 12 }}>
+                  {entry.body ? interpolate(entry.body) : <span style={{ opacity: 0.65 }}>No content configured</span>}
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </section>
     );
   }
 
