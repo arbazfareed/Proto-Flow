@@ -4137,6 +4137,7 @@ export function CanvasStage({
         <div
           className="tree-context-menu canvas-context-menu"
           role="menu"
+          aria-label="Element actions"
           style={{
             left: Math.max(8, Math.min(canvasContextMenu.x, window.innerWidth - 200)),
             top: Math.max(
@@ -4150,66 +4151,81 @@ export function CanvasStage({
           onPointerDown={(event) => event.stopPropagation()}
           onContextMenu={(event) => event.preventDefault()}
         >
-          <button role="menuitem" disabled={selectedWidgets.length === 0} onClick={() => { void copySelection(); setCanvasContextMenu(null); }}>
+          <button type="button" role="menuitem" disabled={selectedWidgets.length === 0} onClick={() => { void copySelection(); setCanvasContextMenu(null); }}>
             Copy
           </button>
           <button
+            type="button"
             role="menuitem"
             disabled={selectedWidgets.length !== 1}
             onClick={() => { copyStyleSelection(); setCanvasContextMenu(null); }}
           >
             Copy Style
           </button>
-          <button role="menuitem" disabled={!selectedHasUnlockedWidget} onClick={() => { void copySelection(true); setCanvasContextMenu(null); }}>
+          <button type="button" role="menuitem" disabled={!selectedHasUnlockedWidget} onClick={() => { void copySelection(true); setCanvasContextMenu(null); }}>
             Cut
           </button>
-          <button role="menuitem" onClick={() => { void pasteSelection(); setCanvasContextMenu(null); }}>
+          <button type="button" role="menuitem" onClick={() => { void pasteSelection(); setCanvasContextMenu(null); }}>
             Paste
           </button>
           <button
+            type="button"
             role="menuitem"
             disabled={!getCopiedWidgetStyle() || selectedWidgets.length === 0}
             onClick={() => { pasteStyleSelection(); setCanvasContextMenu(null); }}
           >
             Paste Style
           </button>
-          <button role="menuitem" disabled={selectedWidgets.length === 0} onClick={() => { duplicateSelection(); setCanvasContextMenu(null); }}>
+          <button type="button" role="menuitem" disabled={selectedWidgets.length === 0} onClick={() => { duplicateSelection(); setCanvasContextMenu(null); }}>
             Duplicate
           </button>
-          <button role="menuitem" disabled={selectedWidgets.length === 0} onClick={() => { changeSelectionZOrder("forward"); setCanvasContextMenu(null); }}>
+          <button type="button" role="menuitem" disabled={selectedWidgets.length === 0} onClick={() => { changeSelectionZOrder("forward"); setCanvasContextMenu(null); }}>
             Bring Forward
           </button>
-          <button role="menuitem" disabled={selectedWidgets.length === 0} onClick={() => { changeSelectionZOrder("front"); setCanvasContextMenu(null); }}>
+          <button type="button" role="menuitem" disabled={selectedWidgets.length === 0} onClick={() => { changeSelectionZOrder("front"); setCanvasContextMenu(null); }}>
             Bring to Front
           </button>
-          <button role="menuitem" disabled={selectedWidgets.length === 0} onClick={() => { changeSelectionZOrder("backward"); setCanvasContextMenu(null); }}>
+          <button type="button" role="menuitem" disabled={selectedWidgets.length === 0} onClick={() => { changeSelectionZOrder("backward"); setCanvasContextMenu(null); }}>
             Send Backward
           </button>
-          <button role="menuitem" disabled={selectedWidgets.length === 0} onClick={() => { changeSelectionZOrder("back"); setCanvasContextMenu(null); }}>
+          <button type="button" role="menuitem" disabled={selectedWidgets.length === 0} onClick={() => { changeSelectionZOrder("back"); setCanvasContextMenu(null); }}>
             Send to Back
           </button>
           <button
+            type="button"
             role="menuitem"
             disabled={selectedIds.length < 2}
             onClick={() => { groupSelection(); setCanvasContextMenu(null); }}
           >
             Group
           </button>
-          <button role="menuitem" disabled={!selectedHasSemanticGroup} onClick={() => { groupSelection(true); setCanvasContextMenu(null); }}>
+          <button type="button" role="menuitem" disabled={!selectedHasSemanticGroup} onClick={() => { groupSelection(true); setCanvasContextMenu(null); }}>
             Ungroup
           </button>
-          <button role="menuitem" disabled={selectedWidgets.length === 0} onClick={() => { toggleSelectionLock(); setCanvasContextMenu(null); }}>
+          <button type="button" role="menuitem" disabled={selectedWidgets.length === 0} onClick={() => { toggleSelectionLock(); setCanvasContextMenu(null); }}>
             {selectedWidgets.length > 0 && selectedWidgets.every((widget) => widget.locked)
               ? "Unlock"
               : "Lock"}
           </button>
-          <button role="menuitem" disabled={selectedWidgets.length === 0} onClick={() => { hideSelection(); setCanvasContextMenu(null); }}>
+          <button type="button" role="menuitem" disabled={selectedWidgets.length === 0} onClick={() => { hideSelection(); setCanvasContextMenu(null); }}>
             Hide
           </button>
-          <button role="menuitem" disabled={!selectedHasUnlockedWidget} onClick={() => { deleteSelection(); setCanvasContextMenu(null); }}>
+          <button
+            type="button"
+            role="menuitem"
+            aria-label="Delete selected element"
+            disabled={!selectedHasUnlockedWidget}
+            onClick={(event) => {
+              event.preventDefault();
+              event.stopPropagation();
+              deleteSelection();
+              setCanvasContextMenu(null);
+            }}
+          >
             Delete
           </button>
           <button
+            type="button"
             role="menuitem"
             disabled={selectedWidgets.length === 0 || selectedWidgets.some((widget) => widget.type === "symbol-instance")}
             onClick={requestCreateSymbolFromSelection}
