@@ -1452,17 +1452,6 @@ function SpacerShape({ widget, stroke }: ShapeComponentProps) {
         dash={[4, 3]}
         perfectDrawEnabled={false}
       />
-      <KonvaText
-        width={widget.width}
-        height={widget.height}
-        text="SPACER"
-        fontFamily="Arial"
-        fontSize={Math.min(10, Math.max(7, widget.height * 0.35))}
-        fill="#aaa7b1"
-        align="center"
-        verticalAlign="middle"
-        perfectDrawEnabled={false}
-      />
     </Group>
   );
 }
@@ -2509,6 +2498,107 @@ function DataElementShape({ widget, fill, stroke, strokeWidth }: ShapeComponentP
   );
 }
 
+function RepeaterShape({ widget, fill, stroke, strokeWidth }: ShapeComponentProps) {
+  const rawItems = widget.props.items;
+  const items = Array.isArray(rawItems)
+    ? rawItems.slice(0, 3).map((item, index) => {
+        if (typeof item === "string") return item;
+        if (item && typeof item === "object") {
+          const record = item as Record<string, unknown>;
+          return typeof record.label === "string" ? record.label
+            : typeof record.title === "string" ? record.title
+            : `Item ${index + 1}`;
+        }
+        return `Item ${index + 1}`;
+      })
+    : ["First item", "Second item", "Third item"];
+  const rowGap = 6;
+  const headerHeight = Math.min(26, Math.max(20, widget.height * 0.2));
+  const rowHeight = Math.max(18, (widget.height - headerHeight - 16 - rowGap * 2) / 3);
+  return (
+    <Group>
+      <Rect width={widget.width} height={widget.height} fill={fill ?? "#ffffff"} stroke={stroke ?? "#94a3b8"} strokeWidth={strokeWidth} cornerRadius={8} perfectDrawEnabled={false} />
+      <KonvaText x={12} y={5} width={widget.width - 24} height={headerHeight} text={getWidgetProp(widget, "label", "Repeating items")} fontSize={12} fontStyle="bold" fill="#334155" verticalAlign="middle" ellipsis perfectDrawEnabled={false} />
+      {items.map((item, index) => {
+        const y = headerHeight + 8 + index * (rowHeight + rowGap);
+        return (
+          <Group key={index}>
+            <Rect x={8} y={y} width={widget.width - 16} height={rowHeight} fill="#f1f5f9" stroke="#e2e8f0" strokeWidth={1} cornerRadius={5} perfectDrawEnabled={false} />
+            <Circle x={20} y={y + rowHeight / 2} radius={4} fill="#8b69ed" perfectDrawEnabled={false} />
+            <KonvaText x={30} y={y} width={Math.max(1, widget.width - 44)} height={rowHeight} text={item} fontSize={11} fill="#334155" verticalAlign="middle" ellipsis perfectDrawEnabled={false} />
+          </Group>
+        );
+      })}
+    </Group>
+  );
+}
+
+function AccordionShape({ widget, fill, stroke, strokeWidth }: ShapeComponentProps) {
+  const rawItems = widget.props.items;
+  const items = Array.isArray(rawItems)
+    ? rawItems.slice(0, 3).map((item, index) => typeof item === "string" ? item
+      : item && typeof item === "object" && typeof (item as Record<string, unknown>).title === "string"
+        ? String((item as Record<string, unknown>).title) : `Section ${index + 1}`)
+    : ["What is included?", "How does it work?", "Can I customize it?"];
+  const rowHeight = Math.max(22, (widget.height - 16) / 3);
+  return (
+    <Group>
+      <Rect width={widget.width} height={widget.height} fill={fill ?? "#ffffff"} stroke={stroke ?? "#94a3b8"} strokeWidth={strokeWidth} cornerRadius={8} perfectDrawEnabled={false} />
+      {items.map((item, index) => {
+        const y = 8 + index * rowHeight;
+        return (
+          <Group key={index}>
+            {index > 0 && <Line points={[10, y, widget.width - 10, y]} stroke="#e2e8f0" strokeWidth={1} perfectDrawEnabled={false} />}
+            <KonvaText x={12} y={y} width={Math.max(1, widget.width - 42)} height={rowHeight} text={item} fontSize={11} fontStyle="bold" fill="#334155" verticalAlign="middle" ellipsis perfectDrawEnabled={false} />
+            <KonvaText x={widget.width - 30} y={y} width={18} height={rowHeight} text={index === 0 ? "−" : "+"} fontSize={17} fill="#64748b" align="center" verticalAlign="middle" perfectDrawEnabled={false} />
+          </Group>
+        );
+      })}
+    </Group>
+  );
+}
+
+function ApiRequestShape({ widget, fill, stroke, strokeWidth }: ShapeComponentProps) {
+  const method = getWidgetProp(widget, "method", "GET").toUpperCase();
+  const url = getWidgetProp(widget, "url", "/api/resource");
+  const status = getWidgetProp(widget, "status", "200 OK");
+  return (
+    <Group>
+      <Rect width={widget.width} height={widget.height} fill={fill ?? "#111827"} stroke={stroke ?? "#475569"} strokeWidth={strokeWidth} cornerRadius={8} perfectDrawEnabled={false} />
+      <Rect x={10} y={10} width={Math.min(54, widget.width * 0.24)} height={22} fill="#14532d" cornerRadius={4} perfectDrawEnabled={false} />
+      <KonvaText x={10} y={10} width={Math.min(54, widget.width * 0.24)} height={22} text={method} fontSize={10} fontStyle="bold" fill="#bbf7d0" align="center" verticalAlign="middle" perfectDrawEnabled={false} />
+      <KonvaText x={Math.min(72, widget.width * 0.3)} y={10} width={Math.max(1, widget.width - Math.min(84, widget.width * 0.36))} height={22} text={url} fontSize={11} fill="#e5e7eb" verticalAlign="middle" ellipsis perfectDrawEnabled={false} />
+      {widget.height > 48 && <KonvaText x={12} y={36} width={widget.width - 24} height={Math.max(12, widget.height - 42)} text={`Response  ·  ${status}`} fontSize={10} fill="#94a3b8" verticalAlign="middle" ellipsis perfectDrawEnabled={false} />}
+    </Group>
+  );
+}
+
+function DatabaseShape({ widget, fill, stroke, strokeWidth }: ShapeComponentProps) {
+  const tableName = getWidgetProp(widget, "tableName", "users");
+  const columns = Array.isArray(widget.props.columns)
+    ? widget.props.columns.slice(0, 3).map((column) => typeof column === "string" ? column : "field")
+    : ["id", "name", "email"];
+  const headerHeight = Math.min(26, Math.max(20, widget.height * 0.22));
+  const rowHeight = Math.max(14, (widget.height - headerHeight - 12) / 3);
+  return (
+    <Group>
+      <Rect width={widget.width} height={widget.height} fill={fill ?? "#ffffff"} stroke={stroke ?? "#64748b"} strokeWidth={strokeWidth} cornerRadius={7} perfectDrawEnabled={false} />
+      <Rect width={widget.width} height={headerHeight} fill="#e2e8f0" cornerRadius={[7, 7, 0, 0]} perfectDrawEnabled={false} />
+      <CanvasIcon name="Database" color="#475569" strokeWidth={1.8} x={8} y={4} width={16} height={16} />
+      <KonvaText x={29} y={2} width={Math.max(1, widget.width - 38)} height={headerHeight - 4} text={tableName} fontSize={11} fontStyle="bold" fill="#334155" verticalAlign="middle" ellipsis perfectDrawEnabled={false} />
+      {columns.map((column, index) => {
+        const y = headerHeight + index * rowHeight;
+        return (
+          <Group key={index}>
+            {index > 0 && <Line points={[8, y, widget.width - 8, y]} stroke="#e2e8f0" strokeWidth={1} perfectDrawEnabled={false} />}
+            <KonvaText x={12} y={y} width={widget.width - 24} height={rowHeight} text={column} fontSize={10} fill="#475569" verticalAlign="middle" ellipsis perfectDrawEnabled={false} />
+          </Group>
+        );
+      })}
+    </Group>
+  );
+}
+
 function GenericElementShape({
   widget,
   fill,
@@ -2594,6 +2684,10 @@ function GenericElementShape({
   if (widget.type === "flex-row" || widget.type === "flex-column") {
     return <LayoutShape widget={widget} fill={fill} stroke={stroke} strokeWidth={strokeWidth} />;
   }
+  if (widget.type === "repeater") return <RepeaterShape widget={widget} fill={fill} stroke={stroke} strokeWidth={strokeWidth} />;
+  if (widget.type === "accordion") return <AccordionShape widget={widget} fill={fill} stroke={stroke} strokeWidth={strokeWidth} />;
+  if (widget.type === "api-request") return <ApiRequestShape widget={widget} fill={fill} stroke={stroke} strokeWidth={strokeWidth} />;
+  if (widget.type === "database") return <DatabaseShape widget={widget} fill={fill} stroke={stroke} strokeWidth={strokeWidth} />;
   if (widget.type === "spacer") {
     return <SpacerShape widget={widget} fill={fill} stroke={stroke} strokeWidth={strokeWidth} />;
   }
