@@ -693,6 +693,28 @@ describe("PreviewWidget form controls and data components", () => {
     expect(rendered.getByRole("table")).toBeInTheDocument();
     expect(rendered.getByText("Ada")).toBeInTheDocument();
   });
+
+  it("renders Grid items as a responsive CSS grid rather than a data table", () => {
+    const rendered = renderElement("grid", { label: "Team", columns: 2, items: ["Ada", "Grace", "Katherine"] });
+    const grid = rendered.getByRole("list", { name: "Team" });
+    expect(grid).toHaveStyle({ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))" });
+    expect(rendered.getAllByRole("listitem")).toHaveLength(3);
+    expect(rendered.queryByRole("table")).not.toBeInTheDocument();
+    expect(rendered.getByText("Katherine")).toBeInTheDocument();
+  });
+
+  it("renders a navigable month calendar and places configured events on their dates", () => {
+    const rendered = renderElement("calendar", {
+      month: "2026-11",
+      events: [{ date: "2026-11-27", title: "Release review" }],
+    });
+    expect(rendered.getByText("November 2026")).toBeInTheDocument();
+    expect(rendered.getByRole("gridcell", { name: "2026-11-27: Release review" })).toBeInTheDocument();
+    fireEvent.click(rendered.getByRole("button", { name: "Next month" }));
+    expect(rendered.getByText("December 2026")).toBeInTheDocument();
+    fireEvent.click(rendered.getByRole("button", { name: "Previous month" }));
+    expect(rendered.getByText("November 2026")).toBeInTheDocument();
+  });
 });
 
 describe("PreviewWidget media", () => {
