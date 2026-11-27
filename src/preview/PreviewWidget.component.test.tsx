@@ -692,6 +692,14 @@ describe("PreviewWidget form controls and data components", () => {
     expect(rendered.getByText("2")).toBeInTheDocument();
   });
 
+  it("honors a zero minimum and zero initial stepper value", () => {
+    const rendered = renderElement("stepper", { label: "Quantity", value: 0, min: 0, max: 2 });
+    expect(rendered.getByText("0")).toBeInTheDocument();
+    expect(rendered.getByRole("button", { name: "Decrease value" })).toBeDisabled();
+    fireEvent.click(rendered.getByRole("button", { name: "Increase value" }));
+    expect(rendered.getByText("1")).toBeInTheDocument();
+  });
+
   it("renders a native date input", () => {
     const rendered = renderElement("date-picker", { label: "Start date" });
     expect(rendered.getByLabelText("Start date")).toHaveAttribute("type", "date");
@@ -704,6 +712,12 @@ describe("PreviewWidget form controls and data components", () => {
     const rating = renderElement("rating", {});
     fireEvent.click(rating.getByRole("button", { name: "Rate 4 of 5" }));
     expect(rating.getByRole("button", { name: "Rate 4 of 5" })).toHaveAttribute("aria-pressed", "true");
+  });
+
+  it("respects configured rating maximum and initial value", () => {
+    const rating = renderElement("rating", { max: 8, value: 7 });
+    expect(rating.getByRole("button", { name: "Rate 7 of 8" })).toHaveAttribute("aria-pressed", "true");
+    expect(rating.getByText("7/8")).toBeInTheDocument();
   });
 
   it("opens and closes popover content", () => {
