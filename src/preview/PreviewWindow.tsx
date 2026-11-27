@@ -737,14 +737,14 @@ export function PreviewWidget({
 
   if (widget.type === "avatar") {
     const name = stringProp(widget, "label", stringProp(widget, "name", "User"));
-    const initials = avatarInitials(name);
+    const initials = avatarInitials({ label: name });
     const imageSource = stringProp(widget, "src", stringProp(widget, "image"));
     return <div className="preview-widget preview-avatar" role="img" aria-label={name} style={{ ...style, display: "grid", placeItems: "center", borderRadius: "50%", overflow: "hidden" }} data-widget-type="avatar">{imageSource ? <img src={interpolate(imageSource)} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : <strong>{initials}</strong>}</div>;
   }
 
   if (widget.type === "avatar-group") {
     const rawPeople = Array.isArray(widget.props.items) ? widget.props.items : stringProp(widget, "label", "AM | JR | SK").split("|").map((name) => name.trim());
-    return <div className="preview-widget preview-avatar-group" role="group" aria-label={stringProp(widget, "label", "Avatar group")} style={{ ...style, display: "flex", alignItems: "center", padding: 4, overflow: "visible" }}>{rawPeople.slice(0, 6).map((person, index) => { const name = typeof person === "string" ? person : person && typeof person === "object" && typeof (person as Record<string, unknown>).name === "string" ? String((person as Record<string, unknown>).name) : `User ${index + 1}`; return <span key={index} role="img" aria-label={name} style={{ width: 32, height: 32, borderRadius: "50%", display: "grid", placeItems: "center", marginLeft: index ? -7 : 0, border: "2px solid white", background: "#e9e2ff", color: "#49377b", fontSize: 10 }}>{avatarInitials(name)}</span>; })}</div>;
+    return <div className="preview-widget preview-avatar-group" role="group" aria-label={stringProp(widget, "label", "Avatar group")} style={{ ...style, display: "flex", alignItems: "center", padding: 4, overflow: "visible" }}>{rawPeople.slice(0, 6).map((person, index) => { const name = typeof person === "string" ? person : person && typeof person === "object" && typeof (person as Record<string, unknown>).name === "string" ? String((person as Record<string, unknown>).name) : `User ${index + 1}`; return <span key={index} role="img" aria-label={name} style={{ width: 32, height: 32, borderRadius: "50%", display: "grid", placeItems: "center", marginLeft: index ? -7 : 0, border: "2px solid white", background: "#e9e2ff", color: "#49377b", fontSize: 10 }}>{avatarInitials({ label: name })}</span>; })}</div>;
   }
 
   if (widget.type === "segmented-control") {
@@ -822,7 +822,7 @@ export function PreviewWidget({
   if (widget.type === "profile-card" || widget.type === "testimonial-card" || widget.type === "feature-card" || widget.type === "pricing-card" || widget.type === "empty-state") {
     const heading = stringProp(widget, "label", widget.type.replaceAll("-", " "));
     const detail = stringProp(widget, "subtitle", widget.type === "empty-state" ? "New items will appear here." : "");
-    return <article className={`preview-widget preview-${widget.type}`} style={{ ...style, display: "flex", flexDirection: "column", alignItems: "flex-start", justifyContent: "center", gap: 6, padding: 10 }} {...commonHandlers}><strong>{interpolate(heading)}</strong>{detail && <p>{interpolate(detail)}</p>}{widget.type === "profile-card" && <small>{stringProp(widget, "initials", avatarInitials(heading))}</small>}{widget.type === "testimonial-card" && <span aria-label={`Rating ${Number(widget.props.value) || 5} out of 5`}>{"★".repeat(Math.max(0, Math.min(5, Number(widget.props.value) || 5)))}</span>}{widget.type === "pricing-card" && <button type="button" onClick={(event) => { event.stopPropagation(); runEvent(widget, "onClick", item); }}>{stringProp(widget, "actionLabel", "Choose plan")}</button>}</article>;
+    return <article className={`preview-widget preview-${widget.type}`} style={{ ...style, display: "flex", flexDirection: "column", alignItems: "flex-start", justifyContent: "center", gap: 6, padding: 10 }} {...commonHandlers}><strong>{interpolate(heading)}</strong>{detail && <p>{interpolate(detail)}</p>}{widget.type === "profile-card" && <small>{stringProp(widget, "initials", avatarInitials({ label: heading }))}</small>}{widget.type === "testimonial-card" && <span aria-label={`Rating ${Number(widget.props.value) || 5} out of 5`}>{"★".repeat(Math.max(0, Math.min(5, Number(widget.props.value) || 5)))}</span>}{widget.type === "pricing-card" && <button type="button" onClick={(event) => { event.stopPropagation(); runEvent(widget, "onClick", item); }}>{stringProp(widget, "actionLabel", "Choose plan")}</button>}</article>;
   }
 
   if (widget.type === "table") {
