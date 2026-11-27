@@ -2,10 +2,11 @@ import { describe, expect, it } from "vitest";
 import type { Widget } from "./schema";
 import {
   flattenActivePanelWidgets,
+  flattenRepeaterTemplateWidgets,
   mergeActivePanelWidgets,
   withPanelStates,
 } from "./dynamicPanels";
-import { flattenRepeaterTemplateWidgets, mergeActiveRepeaterWidgets, withRepeaterTemplate } from "./repeaters";
+import { mergeActiveRepeaterWidgets, withRepeaterTemplate } from "./repeaters";
 import { removeSelectedWidgets } from "./widgetSelection";
 
 function widget(id: string, type = "rectangle", locked = false): Widget {
