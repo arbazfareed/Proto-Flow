@@ -161,6 +161,7 @@ export function VirtualizedRepeater({
   snapshot,
   runEvent,
   onError,
+  onNavigate,
   inputMode,
   controlValues,
   onControlValueChange,
@@ -179,6 +180,7 @@ export function VirtualizedRepeater({
   snapshot: PreviewRuntimeSnapshot;
   runEvent: (widget: Widget, event: PreviewEvent, item?: RepeaterRecord) => number;
   onError: (error: unknown) => void;
+  onNavigate: (screenId: string) => void;
   inputMode: Project["screens"][number]["inputMode"];
   controlValues: Record<string, string | boolean>;
   onControlValueChange: (key: string, value: string | boolean) => void;
@@ -278,6 +280,7 @@ export function VirtualizedRepeater({
                       snapshot={snapshot}
                       runEvent={runEvent}
                       onError={onError}
+                      onNavigate={onNavigate}
                       item={record}
                       controlValues={controlValues}
                       onControlValueChange={onControlValueChange}
@@ -302,6 +305,7 @@ export function PreviewWidget({
   snapshot,
   runEvent,
   onError,
+  onNavigate = () => {},
   transitionStyle,
   item,
   layoutPosition,
@@ -318,6 +322,7 @@ export function PreviewWidget({
   snapshot: PreviewRuntimeSnapshot;
   runEvent: (widget: Widget, event: PreviewEvent, item?: RepeaterRecord) => number;
   onError: (error: unknown) => void;
+  onNavigate?: (screenId: string) => void;
   transitionStyle?: CSSProperties;
   item?: RepeaterRecord;
   layoutPosition?: WidgetPosition;
@@ -677,14 +682,31 @@ export function PreviewWidget({
           const label = typeof entry === "string" ? entry : typeof record.label === "string" ? record.label : `Setting ${index + 1}`;
           const description = typeof record.description === "string" ? record.description : "";
           const key = typeof record.name === "string" ? record.name : `setting-${index}`;
-          const value = settingsValues[key] ?? (typeof record.value === "boolean" ? record.value : typeof record.value === "string" ? record.value : record.type === "toggle" ? false : "");
+          const variableName = typeof record.variableName === "string" ? record.variableName : "";
+          const boundValue = variableName ? runtime.getVariable(variableName, screenId) : undefined;
+          const initialValue = typeof boundValue === "boolean" || typeof boundValue === "number" || typeof boundValue === "string"
+            ? boundValue
+            : typeof record.value === "boolean" || typeof record.value === "string" ? record.value : record.type === "toggle" ? false : "";
+          const value = settingsValues[key] ?? initialValue;
+          const updateSetting = (nextValue: boolean | string) => {
+            setSettingsValues((current) => ({ ...current, [key]: nextValue }));
+            if (variableName && boundValue !== undefined) {
+              const typedValue = typeof boundValue === "number" ? Number(nextValue)
+                : typeof boundValue === "boolean" ? Boolean(nextValue)
+                : String(nextValue);
+              if (typeof typedValue !== "number" || Number.isFinite(typedValue)) {
+                runtime.setVariable(variableName, typedValue, screenId);
+              }
+            }
+            runEvent(widget, "onChange", item);
+          };
           return <div key={key} className="preview-setting">
             <label>
               <strong>{interpolate(label)}</strong>
               {description && <small>{interpolate(description)}</small>}
-              {record.type === "toggle" || typeof record.value === "boolean"
-                ? <input aria-label={label} type="checkbox" checked={Boolean(value)} onChange={(event) => setSettingsValues((current) => ({ ...current, [key]: event.target.checked }))} />
-                : <input aria-label={label} type={record.type === "number" ? "number" : "text"} value={String(value)} onChange={(event) => setSettingsValues((current) => ({ ...current, [key]: event.target.value }))} />}
+              {record.type === "toggle" || typeof initialValue === "boolean"
+                ? <input aria-label={label} type="checkbox" checked={Boolean(value)} onChange={(event) => updateSetting(event.target.checked)} />
+                : <input aria-label={label} type={record.type === "number" || typeof initialValue === "number" ? "number" : "text"} value={String(value)} onChange={(event) => updateSetting(event.target.value)} />}
             </label>
           </div>;
         }) : <p>No settings configured</p>}
@@ -751,7 +773,7 @@ export function PreviewWidget({
 
   if (widget.type === "avatar") {
     const name = stringProp(widget, "label", stringProp(widget, "name", "User"));
-    const initials = avatarInitials({ label: name });
+    const initials = avatarInitials({ initials: widget.props.initials, label: name });
     const imageSource = stringProp(widget, "src", stringProp(widget, "image"));
     return <div className="preview-widget preview-avatar" role="img" aria-label={name} style={{ ...style, display: "grid", placeItems: "center", borderRadius: "50%", overflow: "hidden" }} data-widget-type="avatar">{imageSource ? <img src={interpolate(imageSource)} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : <strong>{initials}</strong>}</div>;
   }
@@ -1019,19 +1041,32 @@ export function PreviewWidget({
   }
 
   if (widget.type === "navbar" || widget.type === "sidebar" || widget.type === "footer" || widget.type === "bottom-nav" || widget.type === "app-bar") {
-    const rawItems = Array.isArray(widget.props.items) ? widget.props.items : ["Home", "Explore", "Profile"];
+    const bottomNavItems = widget.type === "bottom-nav"
+      ? stringProp(widget, "label").split("|").map((entry) => entry.trim()).filter(Boolean)
+      : [];
+    const rawItems = bottomNavItems.length > 0
+      ? bottomNavItems
+      : Array.isArray(widget.props.items) ? widget.props.items : ["Home", "Explore", "Profile"];
     const items = rawItems.map((entry, index) => {
       const record = entry && typeof entry === "object" ? entry as Record<string, unknown> : {};
       const label = typeof entry === "string" ? entry : typeof record.label === "string" ? record.label : `Item ${index + 1}`;
       const href = typeof record.href === "string" ? sanitizeRichTextHref(record.href) : null;
-      return { label, href };
+      const screenId = typeof record.screenId === "string" ? record.screenId
+        : typeof record.targetScreenId === "string" ? record.targetScreenId : null;
+      return { label, href, screenId };
     });
     const vertical = widget.type === "sidebar";
+    const title = widget.type === "app-bar" ? stringProp(widget, "label", "") : "";
     return (
       <nav className={`preview-widget preview-${widget.type}`} aria-label={stringProp(widget, "label", widget.type)} style={{ ...style, display: "flex", flexDirection: vertical ? "column" : "row", alignItems: "center", justifyContent: "space-around", gap: 6, padding: 8 }} data-widget-type={widget.type}>
+        {title && <strong>{interpolate(title)}</strong>}
         {items.map((entry, index) => entry.href
           ? <a key={index} href={entry.href} onClick={() => { setActiveNavigationItem(index); runEvent(widget, "onClick", item); }}>{interpolate(entry.label)}</a>
-          : <button key={index} type="button" aria-current={activeNavigationItem === index ? "page" : undefined} onClick={() => { setActiveNavigationItem(index); runEvent(widget, "onClick", item); }}>{interpolate(entry.label)}</button>)}
+          : <button key={index} type="button" aria-current={activeNavigationItem === index ? "page" : undefined} onClick={() => {
+            setActiveNavigationItem(index);
+            runEvent(widget, "onClick", item);
+            if (entry.screenId) onNavigate(entry.screenId);
+          }}>{interpolate(entry.label)}</button>)}
       </nav>
     );
   }
@@ -1043,6 +1078,23 @@ export function PreviewWidget({
         event.preventDefault();
         const formData = new FormData(event.currentTarget);
         const submitted = Object.fromEntries(Array.from(formData.entries()).map(([key, value]) => [key, String(value)]));
+        fields.forEach((entry, index) => {
+          if (!entry || typeof entry !== "object") return;
+          const field = entry as Record<string, unknown>;
+          if (typeof field.variableName !== "string") return;
+          const fieldName = typeof field.name === "string" ? field.name : `field-${index + 1}`;
+          const isCheckbox = field.type === "checkbox";
+          if (!Object.prototype.hasOwnProperty.call(submitted, fieldName) && !isCheckbox) return;
+          const currentValue = runtime.getVariable(field.variableName, screenId);
+          if (currentValue === undefined) return;
+          const rawValue = submitted[fieldName] ?? "false";
+          const typedValue = typeof currentValue === "number" ? Number(rawValue)
+            : typeof currentValue === "boolean" ? isCheckbox ? rawValue !== "false" : rawValue === "true" || rawValue === "on"
+            : rawValue;
+          if (typeof typedValue !== "number" || Number.isFinite(typedValue)) {
+            runtime.setVariable(field.variableName, typedValue, screenId);
+          }
+        });
         setFormSubmission(submitted);
         runEvent(widget, "onClick", item);
       }}>
@@ -1050,13 +1102,16 @@ export function PreviewWidget({
           const record = entry && typeof entry === "object" ? entry as Record<string, unknown> : {};
           const label = typeof record.label === "string" ? record.label : `Field ${index + 1}`;
           const placeholder = typeof record.placeholder === "string" ? record.placeholder : "";
-          const allowedTypes = ["text", "email", "number", "date", "tel", "url", "password"] as const;
+          const allowedTypes = ["text", "email", "number", "date", "tel", "url", "password", "checkbox"] as const;
           const requestedType = typeof record.type === "string" ? record.type : "text";
           const fieldType = allowedTypes.includes(requestedType as typeof allowedTypes[number]) ? requestedType : "text";
           return <label key={index}>{label}<input aria-label={label} name={typeof record.name === "string" ? record.name : `field-${index + 1}`} type={fieldType} placeholder={placeholder} required={record.required === true} /></label>;
         }) : <p>No form fields configured</p>}
         <button type="submit">{stringProp(widget, "submitLabel", "Submit")}</button>
-        {formSubmission && <output aria-live="polite">Submitted {Object.keys(formSubmission).length} field(s)</output>}
+        {formSubmission && <output aria-live="polite">
+          <strong>Submitted {Object.keys(formSubmission).length} field(s)</strong>
+          <ul>{Object.entries(formSubmission).map(([name, value]) => <li key={name}><span>{name}:</span> {value || "—"}</li>)}</ul>
+        </output>}
       </form>
     );
   }
@@ -1369,6 +1424,7 @@ export function PreviewWidget({
                 snapshot={snapshot}
                 runEvent={runEvent}
                 onError={onError}
+                onNavigate={onNavigate}
                 item={item}
                 controlValues={controlValues}
                 onControlValueChange={onControlValueChange}
@@ -1587,6 +1643,7 @@ export function PreviewWidget({
         snapshot={snapshot}
         runEvent={runEvent}
         onError={onError}
+        onNavigate={onNavigate}
         inputMode={inputMode}
         controlValues={controlValues}
         onControlValueChange={onControlValueChange}
@@ -2025,6 +2082,7 @@ export function PreviewWindow() {
                 snapshot={runtimeSnapshot}
                 runEvent={runEvent}
                 onError={(error) => setToast(error instanceof Error ? error.message : "Preview control failed.")}
+                onNavigate={changeScreen}
                 transitionStyle={transitionStyle}
                 layoutPosition={layoutPositions.get(widget.id)}
                 controlValues={controlValues}

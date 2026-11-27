@@ -1,6 +1,6 @@
 import { cleanup, fireEvent, render } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
-import { createEmptyProject, type Widget } from "../project/schema";
+import { createEmptyProject, type Project, type Widget } from "../project/schema";
 import { PreviewWidget } from "./PreviewWindow";
 import { PreviewRuntime } from "./runtime";
 
@@ -434,6 +434,7 @@ describe("PreviewWidget accordion", () => {
 
     fireEvent.click(firstSection);
     expect(firstSection).toHaveAttribute("aria-expanded", "false");
+    // The labeled accordion section stays visible; only its controlled item panel collapses.
     expect(rendered.queryByText("A prototyping tool.")).not.toBeVisible();
     const controlledPanel = rendered.container.querySelector<HTMLElement>(
       `#${firstSection.getAttribute("aria-controls")}`,
@@ -1023,11 +1024,24 @@ describe("PreviewWidget component masters", () => {
   it("renders Component Master as a labeled master container instead of a fake type-name placeholder", () => {
     const project = createEmptyProject("Component master preview");
     const runtime = new PreviewRuntime(project);
-    const widget: Widget = { ...makeWidget(), type: "component-master", props: { label: "Primary Button" } };
+    const widget: Widget = {
+      ...makeWidget(),
+      type: "component-master",
+      props: { label: "Primary Button" },
+    };
     const rendered = render(
-      <PreviewWidget widget={widget} runtime={runtime} screenId={project.screens[0].id}
-        snapshot={runtime.snapshot()} runEvent={vi.fn(() => 0)} onError={vi.fn()}
-        controlValues={{}} onControlValueChange={vi.fn()} onGestureFeedback={vi.fn()} liteMode={false} />,
+      <PreviewWidget
+        widget={widget}
+        runtime={runtime}
+        screenId={project.screens[0].id}
+        snapshot={runtime.snapshot()}
+        runEvent={vi.fn(() => 0)}
+        onError={vi.fn()}
+        controlValues={{}}
+        onControlValueChange={vi.fn()}
+        onGestureFeedback={vi.fn()}
+        liteMode={false}
+      />,
     );
     const master = rendered.getByRole("group", { name: "Primary Button" });
     expect(master).toHaveAttribute("data-widget-type", "component-master");
@@ -1039,9 +1053,11 @@ describe("PreviewWidget component masters", () => {
 
 
 describe("PreviewWidget form, card, navigation, and settings behavior", () => {
-  function renderConfiguredWidget(widget: Widget, runEvent = vi.fn(() => 0)) {
+  function renderConfiguredWidget(widget: Widget, runEvent = vi.fn(() => 0), variables: Project["variables"] = []) {
     const project = createEmptyProject("Configured widget preview");
+    project.variables = variables;
     const runtime = new PreviewRuntime(project);
+    const onNavigate = vi.fn();
     const rendered = render(
       <PreviewWidget
         widget={widget}
@@ -1050,13 +1066,14 @@ describe("PreviewWidget form, card, navigation, and settings behavior", () => {
         snapshot={runtime.snapshot()}
         runEvent={runEvent}
         onError={vi.fn()}
+        onNavigate={onNavigate}
         controlValues={{}}
         onControlValueChange={vi.fn()}
         onGestureFeedback={vi.fn()}
         liteMode={false}
       />,
     );
-    return { ...rendered, runEvent };
+    return { ...rendered, runEvent, runtime, onNavigate };
   }
 
   it("collects configured form values on submit and reports the submitted field count", () => {
@@ -1073,6 +1090,25 @@ describe("PreviewWidget form, card, navigation, and settings behavior", () => {
     fireEvent.submit(rendered.getByRole("form", { name: "Contact form" }));
     expect(rendered.getByRole("status")).toHaveTextContent("Submitted 2 field(s)");
     expect(rendered.runEvent).toHaveBeenCalledWith(widget, "onClick", undefined);
+  });
+
+  it("writes submitted form values into configured runtime variables", () => {
+    const widget: Widget = { ...makeWidget(), type: "form", props: {
+      label: "Profile form",
+      fields: [{ name: "displayName", label: "Display name", type: "text", variableName: "displayName" }],
+    } };
+    const rendered = renderConfiguredWidget(widget, vi.fn(() => 0), [{
+      id: "00000000-0000-4000-8000-000000000001",
+      name: "displayName",
+      scope: "project",
+      type: "string",
+      initial: "Guest",
+    }]);
+    fireEvent.change(rendered.getByRole("textbox", { name: "Display name" }), { target: { value: "Ada" } });
+    fireEvent.submit(rendered.getByRole("form", { name: "Profile form" }));
+    expect(rendered.runtime.getVariable("displayName")).toBe("Ada");
+    expect(rendered.getByRole("status")).toHaveTextContent("displayName:");
+    expect(rendered.getByRole("status")).toHaveTextContent("Ada");
   });
 
   it("makes the card action button keyboard accessible and interactive", () => {
@@ -1098,6 +1134,22 @@ describe("PreviewWidget form, card, navigation, and settings behavior", () => {
     expect(displayName).toHaveValue("Alex");
   });
 
+  it("keeps Settings controls bound to runtime variables and fires change interactions", () => {
+    const widget: Widget = { ...makeWidget(), type: "settings", props: { items: [
+      { name: "notifications", label: "Notifications", type: "toggle", variableName: "notifications" },
+    ] } };
+    const rendered = renderConfiguredWidget(widget, vi.fn(() => 0), [{
+      id: "00000000-0000-4000-8000-000000000002",
+      name: "notifications",
+      scope: "project",
+      type: "boolean",
+      initial: false,
+    }]);
+    fireEvent.click(rendered.getByRole("checkbox", { name: "Notifications" }));
+    expect(rendered.runtime.getVariable("notifications")).toBe(true);
+    expect(rendered.runEvent).toHaveBeenCalledWith(widget, "onChange", undefined);
+  });
+
   it("uses configured navigation destinations and marks the selected local item", () => {
     const widget: Widget = { ...makeWidget(), type: "navbar", props: { items: [
       { label: "Home", href: "https://example.com/home" },
@@ -1109,6 +1161,14 @@ describe("PreviewWidget form, card, navigation, and settings behavior", () => {
     expect(rendered.getByRole("button", { name: "Profile" })).toHaveAttribute("aria-current", "page");
   });
 
+  it("renders edited bottom navigation labels from its label field", () => {
+    const widget: Widget = { ...makeWidget(), type: "bottom-nav", props: { label: "Chats | Calls | Settings", selected: 0 } };
+    const rendered = renderConfiguredWidget(widget);
+    expect(rendered.getByRole("button", { name: "Chats" })).toBeInTheDocument();
+    expect(rendered.getByRole("button", { name: "Calls" })).toBeInTheDocument();
+    expect(rendered.getByRole("button", { name: "Settings" })).toBeInTheDocument();
+  });
+
   it("rejects unsafe navigation destinations", () => {
     const widget: Widget = { ...makeWidget(), type: "navbar", props: { items: [
       { label: "Unsafe", href: "javascript:alert(1)" },
@@ -1117,8 +1177,17 @@ describe("PreviewWidget form, card, navigation, and settings behavior", () => {
     expect(rendered.queryByRole("link", { name: "Unsafe" })).not.toBeInTheDocument();
     expect(rendered.getByRole("button", { name: "Unsafe" })).toBeInTheDocument();
   });
-});
+  it("navigates to the screen configured on an individual navigation item", () => {
+    const widget: Widget = { ...makeWidget(), type: "navbar", props: { items: [
+      { label: "Dashboard", screenId: "screen-dashboard" },
+    ] } };
+    const rendered = renderConfiguredWidget(widget);
+    fireEvent.click(rendered.getByRole("button", { name: "Dashboard" }));
+    expect(rendered.onNavigate).toHaveBeenCalledWith("screen-dashboard");
+    expect(rendered.runEvent).toHaveBeenCalledWith(widget, "onClick", undefined);
+  });
 
+});
 
 describe("PreviewWidget charts and media sources", () => {
   function renderConfigured(widget: Widget, runtime = new PreviewRuntime(createEmptyProject("Chart/media preview"))) {
