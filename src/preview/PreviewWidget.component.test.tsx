@@ -434,6 +434,7 @@ describe("PreviewWidget accordion", () => {
 
     fireEvent.click(firstSection);
     expect(firstSection).toHaveAttribute("aria-expanded", "false");
+    // The labeled accordion section stays visible; only its controlled item panel collapses.
     const controlledPanel = rendered.container.querySelector<HTMLElement>(
       `#${firstSection.getAttribute("aria-controls")}`,
     );
