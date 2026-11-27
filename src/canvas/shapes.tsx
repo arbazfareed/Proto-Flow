@@ -2387,16 +2387,62 @@ function DataElementShape({ widget, fill, stroke, strokeWidth }: ShapeComponentP
             </Group>
           ))}
         </Group>
+      ) : widget.type === "grid" ? (
+        <Group>
+          {(() => {
+            const rawItems = Array.isArray(widget.props.items) ? widget.props.items : [];
+            const columns = Math.max(1, Math.min(4, Math.floor(Number(widget.props.columns) || 2)));
+            const rows = Math.max(1, Math.ceil(Math.max(4, rawItems.length) / columns));
+            const gap = 5;
+            const cellWidth = Math.max(1, (widget.width - 20 - gap * (columns - 1)) / columns);
+            const cellHeight = Math.max(1, (widget.height - 38 - gap * (rows - 1)) / rows);
+            return Array.from({ length: Math.min(12, columns * rows) }, (_, index) => {
+              const entry = rawItems[index];
+              const label = typeof entry === "string" ? entry
+                : entry && typeof entry === "object" && !Array.isArray(entry)
+                  ? String((entry as Record<string, unknown>).label ?? (entry as Record<string, unknown>).title ?? `Item ${index + 1}`)
+                  : `Item ${index + 1}`;
+              return (
+                <Group key={index}>
+                  <Rect
+                    x={10 + (index % columns) * (cellWidth + gap)}
+                    y={31 + Math.floor(index / columns) * (cellHeight + gap)}
+                    width={cellWidth}
+                    height={cellHeight}
+                    fill="#343744"
+                    stroke="#555968"
+                    strokeWidth={1}
+                    cornerRadius={4}
+                    perfectDrawEnabled={false}
+                  />
+                  <KonvaText
+                    x={12 + (index % columns) * (cellWidth + gap)}
+                    y={31 + Math.floor(index / columns) * (cellHeight + gap)}
+                    width={Math.max(1, cellWidth - 4)}
+                    height={cellHeight}
+                    text={label}
+                    fontSize={Math.min(10, Math.max(7, cellHeight * 0.28))}
+                    fill="#e5e7eb"
+                    align="center"
+                    verticalAlign="middle"
+                    ellipsis
+                    perfectDrawEnabled={false}
+                  />
+                </Group>
+              );
+            });
+          })()}
+        </Group>
       ) : widget.type === "calendar" ? (
         <Group>
-          {Array.from({ length: 14 }, (_, index) => (
+          {Array.from({ length: 35 }, (_, index) => (
             <Rect
               key={index}
               x={12 + (index % 7) * Math.max(13, (widget.width - 28) / 7)}
-              y={31 + Math.floor(index / 7) * Math.max(14, (widget.height - 40) / 3)}
+              y={31 + Math.floor(index / 7) * Math.max(9, (widget.height - 40) / 5)}
               width={Math.max(7, Math.min(12, (widget.width - 34) / 8))}
-              height={Math.max(7, Math.min(12, (widget.height - 42) / 4))}
-              fill={index === 10 ? stroke ?? "#8b69ed" : "#454853"}
+              height={Math.max(7, Math.min(9, (widget.height - 42) / 6))}
+              fill={index === 18 ? stroke ?? "#8b69ed" : "#454853"}
               cornerRadius={2}
               perfectDrawEnabled={false}
             />
