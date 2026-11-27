@@ -84,6 +84,7 @@ import {
   isWidgetContainer,
   syncWidgetGroupIdsToContainment,
 } from "../project/layers";
+import { getDeletableWidgetIds } from "../project/widgetSelection";
 import {
   copyWidgetStyle,
   copyWidgetsToClipboard,
@@ -151,7 +152,6 @@ import {
   type ImportedImage,
 } from "./images";
 import { getVariableCompletions } from "../project/variables";
-import { getDeletableWidgetIds } from "../project/widgetSelection";
 
 interface CanvasSize {
   width: number;

@@ -6,10 +6,11 @@ import { MeteredActionProvider } from "../wallet/meteredActions";
 import { ReactCodeExportDialog } from "./ReactCodeExportDialog";
 import { TopBar } from "./ShellComponents";
 
-function renderTopBar() {
+function renderTopBar(onOpenPrivacySettings = () => undefined) {
   const noop = () => undefined;
   return renderWithProviders(
     <TopBar
+      onRenameProject={noop}
       onNew={noop}
       onOpen={noop}
       onSave={noop}
@@ -24,7 +25,7 @@ function renderTopBar() {
       onExportReactCode={noop}
       onExportHtml={noop}
       onOpenWallet={noop}
-      onOpenPrivacySettings={noop}
+      onOpenPrivacySettings={onOpenPrivacySettings}
       onOpenBetaFeedback={noop}
       onNotify={vi.fn()}
       onStartDragging={noop}
@@ -32,6 +33,19 @@ function renderTopBar() {
     />,
   );
 }
+
+describe("Settings remains reachable from the top bar", () => {
+  it("places the Settings icon before crowded toolbar actions and opens the dialog", () => {
+    const onOpenSettings = vi.fn();
+    renderTopBar(onOpenSettings);
+    const settingsButton = screen.getByRole("button", { name: "Open settings" });
+    const actions = settingsButton.parentElement;
+    expect(actions?.classList.contains("topbar-actions")).toBe(true);
+    expect(actions?.firstElementChild).toBe(settingsButton);
+    fireEvent.click(settingsButton);
+    expect(onOpenSettings).toHaveBeenCalledOnce();
+  });
+});
 
 describe("credits are not shown as 0 when the balance is unknown (B15)", () => {
   beforeEach(() => {

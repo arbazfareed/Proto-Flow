@@ -43,6 +43,7 @@ describe("VirtualizedRepeater", () => {
       snapshot: { ...runtime.snapshot(), visibility: { [template.id]: true } },
       runEvent: () => 0,
       onError: () => undefined,
+      onNavigate: () => undefined,
       inputMode: screen.inputMode,
       controlValues: {},
       onControlValueChange: () => undefined,
