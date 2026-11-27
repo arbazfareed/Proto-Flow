@@ -2608,6 +2608,58 @@ function DatabaseShape({ widget, fill, stroke, strokeWidth }: ShapeComponentProp
   );
 }
 
+function NavigationElementShape({ widget, fill, stroke, strokeWidth }: ShapeComponentProps) {
+  const type = widget.type;
+  const rawItems = Array.isArray(widget.props.items) ? widget.props.items : [];
+  const labels = rawItems.slice(0, 4).map((entry, index) => typeof entry === "string" ? entry
+    : entry && typeof entry === "object" && typeof (entry as Record<string, unknown>).label === "string"
+      ? String((entry as Record<string, unknown>).label)
+      : entry && typeof entry === "object" && typeof (entry as Record<string, unknown>).title === "string"
+        ? String((entry as Record<string, unknown>).title) : `Item ${index + 1}`);
+  const title = getWidgetProp(widget, "label", getShapeDefinition(type)?.label ?? type);
+  const panelFill = fill ?? "#ffffff";
+  const panelStroke = stroke ?? "#d7d7e0";
+  if (type === "fab") {
+    return (
+      <Group>
+        <Circle x={widget.width / 2} y={widget.height / 2} radius={Math.max(1, Math.min(widget.width, widget.height) / 2 - 2)} fill={panelFill} stroke={panelStroke} strokeWidth={strokeWidth} perfectDrawEnabled={false} />
+        <KonvaText width={widget.width} height={widget.height} text={getWidgetProp(widget, "iconText", "+")} fontSize={Math.min(26, widget.height * 0.55)} fontStyle="bold" fill="#ffffff" align="center" verticalAlign="middle" perfectDrawEnabled={false} />
+      </Group>
+    );
+  }
+  return (
+    <Group>
+      <Rect width={widget.width} height={widget.height} fill={panelFill} stroke={panelStroke} strokeWidth={strokeWidth} cornerRadius={7} perfectDrawEnabled={false} />
+      {type === "pagination" ? (
+        (labels.length ? labels : ["1", "2", "3"]).map((label, index) => {
+          const count = labels.length || 3;
+          const cellWidth = Math.max(1, (widget.width - 16) / count);
+          return <Group key={index}><Rect x={8 + index * cellWidth} y={Math.max(4, (widget.height - 28) / 2)} width={cellWidth - 3} height={Math.min(28, widget.height - 8)} fill={index === 0 ? "#ede9fe" : "#f8fafc"} stroke="#d7d7e0" strokeWidth={1} cornerRadius={4} perfectDrawEnabled={false} /><KonvaText x={8 + index * cellWidth} y={Math.max(4, (widget.height - 28) / 2)} width={cellWidth - 3} height={Math.min(28, widget.height - 8)} text={label} fontSize={11} fill="#334155" align="center" verticalAlign="middle" perfectDrawEnabled={false} /></Group>;
+        })
+      ) : type === "breadcrumb" ? (
+        <KonvaText x={8} y={4} width={widget.width - 16} height={widget.height - 8} text={(labels.length ? labels : ["Home", "Section", "Current"]).join("  /  ")} fontSize={11} fill="#475569" verticalAlign="middle" ellipsis perfectDrawEnabled={false} />
+      ) : type === "timeline" ? (
+        <Group>
+          <Line points={[18, 12, 18, widget.height - 12]} stroke="#a78bfa" strokeWidth={2} perfectDrawEnabled={false} />
+          {(labels.length ? labels : ["Created", "In progress", "Completed"]).map((label, index) => {
+            const y = 12 + index * Math.max(20, (widget.height - 24) / 3);
+            return <Group key={index}><Circle x={18} y={y} radius={4} fill="#8b69ed" perfectDrawEnabled={false} /><KonvaText x={30} y={y - 9} width={Math.max(1, widget.width - 40)} height={18} text={label} fontSize={11} fill="#334155" verticalAlign="middle" ellipsis perfectDrawEnabled={false} /></Group>;
+          })}
+        </Group>
+      ) : (
+        <Group>
+          <KonvaText x={10} y={5} width={widget.width - 20} height={22} text={title} fontSize={12} fontStyle="bold" fill="#334155" verticalAlign="middle" ellipsis perfectDrawEnabled={false} />
+          <Line points={[8, 30, widget.width - 8, 30]} stroke="#e2e8f0" strokeWidth={1} perfectDrawEnabled={false} />
+          {(labels.length ? labels : ["Overview", "Activity", "Settings"]).map((label, index) => {
+            const cellWidth = Math.max(1, (widget.width - 16) / Math.max(1, labels.length || 3));
+            return <KonvaText key={index} x={8 + index * cellWidth} y={34} width={cellWidth} height={Math.max(1, widget.height - 38)} text={label} fontSize={10} fill="#475569" align="center" verticalAlign="middle" ellipsis perfectDrawEnabled={false} />;
+          })}
+        </Group>
+      )}
+    </Group>
+  );
+}
+
 function GenericElementShape({
   widget,
   fill,
@@ -2693,6 +2745,7 @@ function GenericElementShape({
   if (widget.type === "flex-row" || widget.type === "flex-column") {
     return <LayoutShape widget={widget} fill={fill} stroke={stroke} strokeWidth={strokeWidth} />;
   }
+  if (["pagination", "breadcrumb", "timeline", "fab", "tabs", "tabs-container", "menu", "dropdown-menu"].includes(widget.type)) return <NavigationElementShape widget={widget} fill={fill} stroke={stroke} strokeWidth={strokeWidth} />;
   if (widget.type === "repeater") return <RepeaterShape widget={widget} fill={fill} stroke={stroke} strokeWidth={strokeWidth} />;
   if (widget.type === "accordion") return <AccordionShape widget={widget} fill={fill} stroke={stroke} strokeWidth={strokeWidth} />;
   if (widget.type === "api-request") return <ApiRequestShape widget={widget} fill={fill} stroke={stroke} strokeWidth={strokeWidth} />;
