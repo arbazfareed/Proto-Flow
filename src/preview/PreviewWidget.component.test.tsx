@@ -563,6 +563,87 @@ describe("PreviewWidget settings and gesture elements", () => {
   });
 });
 
+describe("PreviewWidget form controls and data components", () => {
+  function renderElement(type: string, props: Record<string, unknown> = {}) {
+    const project = createEmptyProject("Control preview");
+    const runtime = new PreviewRuntime(project);
+    const widget: Widget = { ...makeWidget(), type, props };
+    const runEvent = vi.fn(() => 0);
+    const rendered = render(
+      <PreviewWidget
+        widget={widget}
+        runtime={runtime}
+        screenId={project.screens[0].id}
+        snapshot={runtime.snapshot()}
+        runEvent={runEvent}
+        onError={vi.fn()}
+        controlValues={{}}
+        onControlValueChange={vi.fn()}
+        onGestureFeedback={vi.fn()}
+        liteMode={false}
+      />,
+    );
+    return { ...rendered, widget, runEvent };
+  }
+
+  it("updates select values and fires change rules", () => {
+    const rendered = renderElement("select", { label: "Country", options: ["Pakistan", "Japan"] });
+    fireEvent.change(rendered.getByRole("combobox", { name: "Country" }), { target: { value: "Japan" } });
+    expect(rendered.runEvent).toHaveBeenCalledWith(rendered.widget, "onChange", undefined);
+  });
+
+  it("renders a bounded slider and updates it", () => {
+    const rendered = renderElement("slider", { label: "Volume", min: 0, max: 10, value: 4 });
+    const slider = rendered.getByRole("slider", { name: "Volume" });
+    expect(slider).toHaveAttribute("max", "10");
+    fireEvent.change(slider, { target: { value: "8" } });
+    expect(rendered.runEvent).toHaveBeenCalledWith(rendered.widget, "onChange", undefined);
+  });
+
+  it("increments and decrements the stepper within its limits", () => {
+    const rendered = renderElement("stepper", { label: "Quantity", value: 2, min: 1, max: 3 });
+    fireEvent.click(rendered.getByRole("button", { name: "Increase value" }));
+    expect(rendered.getByText("3")).toBeInTheDocument();
+    expect(rendered.getByRole("button", { name: "Increase value" })).toBeDisabled();
+    fireEvent.click(rendered.getByRole("button", { name: "Decrease value" }));
+    expect(rendered.getByText("2")).toBeInTheDocument();
+  });
+
+  it("renders a native date input", () => {
+    const rendered = renderElement("date-picker", { label: "Start date" });
+    expect(rendered.getByLabelText("Start date")).toHaveAttribute("type", "date");
+  });
+
+  it("renders progress and rating controls", () => {
+    const progress = renderElement("progress-bar", { value: 60 });
+    expect(progress.getByRole("progressbar", { name: "Progress" })).toHaveAttribute("value", "60");
+    progress.unmount();
+    const rating = renderElement("rating", {});
+    fireEvent.click(rating.getByRole("button", { name: "Rate 4 of 5" }));
+    expect(rating.getByRole("button", { name: "Rate 4 of 5" })).toHaveAttribute("aria-pressed", "true");
+  });
+
+  it("opens and closes popover content", () => {
+    const rendered = renderElement("popover", { triggerLabel: "More info", content: "Additional details" });
+    fireEvent.click(rendered.getByRole("button", { name: "More info" }));
+    expect(rendered.getByText("Additional details")).toBeInTheDocument();
+    fireEvent.click(rendered.getByRole("button", { name: "More info" }));
+    expect(rendered.queryByText("Additional details")).not.toBeInTheDocument();
+  });
+
+  it("dismisses a notification", () => {
+    const rendered = renderElement("notification", { label: "New message" });
+    fireEvent.click(rendered.getByRole("button", { name: "Dismiss notification" }));
+    expect(rendered.queryByText("New message")).not.toBeInTheDocument();
+  });
+
+  it("renders configured table rows", () => {
+    const rendered = renderElement("table", { columns: ["Name"], rows: [{ Name: "Ada" }] });
+    expect(rendered.getByRole("table")).toBeInTheDocument();
+    expect(rendered.getByText("Ada")).toBeInTheDocument();
+  });
+});
+
 describe("PreviewWidget media", () => {
   function renderMediaWidget(type: "image-gallery" | "audio", props: Record<string, unknown>) {
     const project = createEmptyProject("Media preview");
