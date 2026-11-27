@@ -65,6 +65,7 @@ describe("PreviewWidget reusable symbols", () => {
   it("renders a symbol instance using its master component contents", () => {
     const project = createEmptyProject("Symbol preview");
     const symbolId = crypto.randomUUID();
+    const childId = crypto.randomUUID();
     const symbol = {
       id: symbolId,
       name: "Primary action",
@@ -72,7 +73,7 @@ describe("PreviewWidget reusable symbols", () => {
       height: 48,
       widgets: [{
         ...makeWidget(),
-        id: crypto.randomUUID(),
+        id: childId,
         type: "button",
         x: 0,
         y: 0,
@@ -88,7 +89,7 @@ describe("PreviewWidget reusable symbols", () => {
       height: 48,
       name: "Primary action",
       symbolId,
-      props: { label: "Primary action" },
+      props: { label: "Primary action", symbolOverrides: { [childId]: { props: { label: "Instance override" } } } },
     };
     const runtime = new PreviewRuntime(project);
     const rendered = render(
@@ -107,7 +108,7 @@ describe("PreviewWidget reusable symbols", () => {
       />,
     );
     expect(rendered.getByRole("group", { name: "Primary action" })).toHaveAttribute("data-symbol-id", symbolId);
-    expect(rendered.getByText("Master action")).toBeInTheDocument();
+    expect(rendered.getByText("Instance override")).toBeInTheDocument();
   });
 
   it("shows an explicit placeholder when a symbol definition is missing", () => {
