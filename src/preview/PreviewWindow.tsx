@@ -336,6 +336,9 @@ export function PreviewWidget({
   const [selectedPreviewDevice, setSelectedPreviewDevice] = useState("Desktop");
   const [activeCarouselIndex, setActiveCarouselIndex] = useState(0);
   const [requestPreviewAttempted, setRequestPreviewAttempted] = useState(false);
+  const [previewThemeMode, setPreviewThemeMode] = useState<"light" | "dark">("light");
+  const [refreshPreviewTriggered, setRefreshPreviewTriggered] = useState(false);
+  const [lastSimulatedSwipe, setLastSimulatedSwipe] = useState("");
   // Icons beyond the built-in set appear once the full set has loaded.
   useFullIconSet();
   useEffect(() => () => {
@@ -628,6 +631,60 @@ export function PreviewWidget({
           {rows.map((row, index) => <tr key={index}>{visibleColumns.map((column) => <td key={column}>{String(row[column] ?? "")}</td>)}</tr>)}
         </tbody></table> : <p>No table data configured</p>}
         <small>Preview only · no live database connection</small>
+      </section>
+    );
+  }
+
+  if (widget.type === "settings") {
+    const entries = Array.isArray(widget.props.items) ? widget.props.items : [];
+    return (
+      <section className="preview-widget preview-settings" aria-label={stringProp(widget, "label", "Settings")} style={{ ...style, display: "flex", flexDirection: "column", alignItems: "stretch", gap: 8, padding: 10, overflow: "auto" }} data-widget-type="settings">
+        <strong>{stringProp(widget, "title", "Settings")}</strong>
+        {entries.length ? entries.map((entry, index) => {
+          const record = entry && typeof entry === "object" ? entry as Record<string, unknown> : {};
+          const label = typeof entry === "string" ? entry : typeof record.label === "string" ? record.label : `Setting ${index + 1}`;
+          const description = typeof record.description === "string" ? record.description : "";
+          return <div key={index}><strong>{interpolate(label)}</strong>{description && <small>{interpolate(description)}</small>}</div>;
+        }) : <p>No settings configured</p>}
+      </section>
+    );
+  }
+
+  if (widget.type === "theme") {
+    return (
+      <section className="preview-widget preview-theme" aria-label={stringProp(widget, "label", "Theme")} style={{ ...style, display: "flex", flexDirection: "column", alignItems: "stretch", justifyContent: "center", gap: 8, padding: 10, background: previewThemeMode === "dark" ? "#1f2937" : "#ffffff", color: previewThemeMode === "dark" ? "#f9fafb" : "#1f2937" }} data-widget-type="theme">
+        <strong>{stringProp(widget, "label", "Theme preview")}</strong>
+        <label>Appearance
+          <select aria-label="Theme appearance" value={previewThemeMode} onChange={(event) => setPreviewThemeMode(event.target.value as "light" | "dark")}>
+            <option value="light">Light</option>
+            <option value="dark">Dark</option>
+          </select>
+        </label>
+        <span>Sample content</span>
+      </section>
+    );
+  }
+
+  if (widget.type === "pull-to-refresh") {
+    return (
+      <section className="preview-widget preview-pull-to-refresh" aria-label={stringProp(widget, "label", "Pull to refresh")} style={{ ...style, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 8, padding: 10 }} data-widget-type="pull-to-refresh" {...commonHandlers}>
+        <span>{refreshPreviewTriggered ? "Refresh interaction triggered" : "Pull down or use the button to refresh"}</span>
+        <button type="button" onClick={() => { setRefreshPreviewTriggered(true); runEvent(widget, "onSwipeDown", item); }}>Refresh preview</button>
+      </section>
+    );
+  }
+
+  if (widget.type === "swipe-gesture") {
+    const gestures = [
+      ["Left", "onSwipeLeft"], ["Right", "onSwipeRight"],
+      ["Up", "onSwipeUp"], ["Down", "onSwipeDown"],
+    ] as const;
+    return (
+      <section className="preview-widget preview-swipe-gesture" aria-label={stringProp(widget, "label", "Swipe gesture")} style={{ ...style, display: "flex", flexDirection: "column", alignItems: "stretch", justifyContent: "center", gap: 6, padding: 8 }} data-widget-type="swipe-gesture" {...commonHandlers}>
+        <span>{lastSimulatedSwipe ? `Last gesture: swipe ${lastSimulatedSwipe}` : "Swipe here or choose a direction"}</span>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: 4 }}>
+          {gestures.map(([label, event]) => <button key={event} type="button" onClick={() => { setLastSimulatedSwipe(label.toLowerCase()); runEvent(widget, event, item); }}>Swipe {label}</button>)}
+        </div>
       </section>
     );
   }
