@@ -120,7 +120,7 @@ describe("ElementLibrary imported code shortcuts", () => {
     expect(screens.compareDocumentPosition(search) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
 
     fireEvent.change(search, { target: { value: "date picker" } });
-    expect(screen.getByRole("button", { name: "Add Date picker" })).toBeVisible();
+    expect(screen.getAllByRole("button", { name: "Add Date picker" })).toHaveLength(2);
     expect(screen.getByRole("region", { name: "Detected in imported code" })).toBeVisible();
     expect(within(screen.getByRole("region", { name: "Detected in imported code" }))
       .getByRole("button", { name: "Add Date picker" })).toBeVisible();
