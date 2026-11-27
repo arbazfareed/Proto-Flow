@@ -277,6 +277,11 @@ describe("PreviewWidget accordion", () => {
     fireEvent.click(firstSection);
     expect(firstSection).toHaveAttribute("aria-expanded", "false");
     expect(rendered.queryByRole("region")).not.toBeInTheDocument();
+    const controlledPanel = rendered.container.querySelector<HTMLElement>(
+      `#${firstSection.getAttribute("aria-controls")}`,
+    );
+    expect(controlledPanel).toBeInTheDocument();
+    expect(controlledPanel).toHaveAttribute("hidden");
   });
 });
 
