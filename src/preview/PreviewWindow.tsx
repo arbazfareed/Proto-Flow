@@ -167,6 +167,7 @@ export function VirtualizedRepeater({
   onGestureFeedback,
   commonHandlers,
   liteMode,
+  symbols,
 }: {
   widget: Widget;
   rows: RepeaterRecord[];
@@ -184,6 +185,7 @@ export function VirtualizedRepeater({
   onGestureFeedback: (event: PreviewEvent, x: number, y: number) => void;
   commonHandlers: HTMLAttributes<HTMLDivElement>;
   liteMode: boolean;
+  symbols: SymbolDefinition[];
 }) {
   const viewportRef = useRef<HTMLDivElement>(null);
   const [scrollOffset, setScrollOffset] = useState(0);
@@ -281,6 +283,7 @@ export function VirtualizedRepeater({
                       onControlValueChange={onControlValueChange}
                       onGestureFeedback={onGestureFeedback}
                       liteMode={liteMode}
+                      symbols={symbols}
                     />
                   ))}
               </div>
@@ -1917,6 +1920,7 @@ export function PreviewWindow() {
                   touchFeedbackTimer.current = window.setTimeout(() => setTouchFeedback(null), 700);
                 }}
                 liteMode={liteMode}
+                symbols={project.symbols}
               />
             );
           })}
