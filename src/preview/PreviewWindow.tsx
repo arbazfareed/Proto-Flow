@@ -334,6 +334,8 @@ export function PreviewWidget({
   const [activeTabIndex, setActiveTabIndex] = useState(0);
   const [menuOpen, setMenuOpen] = useState(false);
   const [selectedPreviewDevice, setSelectedPreviewDevice] = useState("Desktop");
+  const [activeCarouselIndex, setActiveCarouselIndex] = useState(0);
+  const [requestPreviewAttempted, setRequestPreviewAttempted] = useState(false);
   // Icons beyond the built-in set appear once the full set has loaded.
   useFullIconSet();
   useEffect(() => () => {
@@ -566,6 +568,69 @@ export function PreviewWidget({
   };
 
   if (dismissed) return null;
+
+  if (widget.type === "carousel") {
+    const rawItems = Array.isArray(widget.props.items) ? widget.props.items
+      : Array.isArray(widget.props.images) ? widget.props.images : [];
+    const slides = rawItems.map((entry, index) => {
+      const record = entry && typeof entry === "object" ? entry as Record<string, unknown> : {};
+      const source = typeof entry === "string" ? entry
+        : typeof record.src === "string" ? record.src
+        : typeof record.url === "string" ? record.url
+        : typeof record.image === "string" ? record.image : "";
+      const label = typeof record.title === "string" ? record.title
+        : typeof record.alt === "string" ? record.alt : `Slide ${index + 1}`;
+      return { source, label };
+    });
+    const currentIndex = slides.length ? Math.min(activeCarouselIndex, slides.length - 1) : 0;
+    const currentSlide = slides[currentIndex];
+    const move = (next: number) => {
+      if (!slides.length) return;
+      const nextIndex = (next + slides.length) % slides.length;
+      setActiveCarouselIndex(nextIndex);
+      runEvent(widget, "onChange", item);
+    };
+    return (
+      <section className="preview-widget preview-carousel" aria-label={stringProp(widget, "label", "Carousel")} style={{ ...style, display: "flex", flexDirection: "column", alignItems: "stretch", justifyContent: "center", gap: 6, padding: 8 }} data-widget-type="carousel">
+        {currentSlide?.source
+          ? <img src={currentSlide.source} alt={currentSlide.label} style={{ width: "100%", height: "calc(100% - 34px)", objectFit: "contain", minHeight: 0 }} />
+          : <div role="img" aria-label={currentSlide?.label ?? "No carousel slides"} style={{ flex: 1, display: "grid", placeItems: "center", background: "rgba(127,127,127,.08)" }}>{currentSlide?.label ?? "No carousel slides configured"}</div>}
+        {slides.length > 0 && <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
+          <button type="button" aria-label="Previous slide" onClick={() => move(currentIndex - 1)}>‹</button>
+          <span aria-live="polite">{currentIndex + 1} / {slides.length}</span>
+          <button type="button" aria-label="Next slide" onClick={() => move(currentIndex + 1)}>›</button>
+        </div>}
+      </section>
+    );
+  }
+
+  if (widget.type === "api-request") {
+    const method = stringProp(widget, "method", "GET").toUpperCase();
+    const endpoint = stringProp(widget, "url", stringProp(widget, "endpoint", "No endpoint configured"));
+    return (
+      <section className="preview-widget preview-api-request" aria-label={stringProp(widget, "label", "API Request")} style={{ ...style, display: "flex", flexDirection: "column", alignItems: "stretch", justifyContent: "center", gap: 6, padding: 10 }} data-widget-type="api-request">
+        <strong>{stringProp(widget, "label", "API Request")}</strong>
+        <div style={{ display: "flex", gap: 6, alignItems: "center" }}><code>{method}</code><span>{endpoint}</span></div>
+        <button type="button" onClick={() => { setRequestPreviewAttempted(true); runEvent(widget, "onClick", item); }}>Run request</button>
+        <small role="status">{requestPreviewAttempted ? "Preview only · request was not sent" : "Not executed · preview only"}</small>
+      </section>
+    );
+  }
+
+  if (widget.type === "database") {
+    const columns = Array.isArray(widget.props.columns) ? widget.props.columns.filter((column): column is string => typeof column === "string") : [];
+    const rows = Array.isArray(widget.props.rows) ? widget.props.rows.filter((row) => row && typeof row === "object" && !Array.isArray(row)) as Record<string, unknown>[] : [];
+    const visibleColumns = columns.length ? columns : rows.length ? Object.keys(rows[0]) : [];
+    return (
+      <section className="preview-widget preview-database" aria-label={stringProp(widget, "label", "Database")} style={{ ...style, display: "flex", flexDirection: "column", alignItems: "stretch", gap: 6, padding: 8, overflow: "auto" }} data-widget-type="database">
+        <strong>{stringProp(widget, "label", "Database")}</strong>
+        {visibleColumns.length ? <table><thead><tr>{visibleColumns.map((column) => <th key={column}>{column}</th>)}</tr></thead><tbody>
+          {rows.map((row, index) => <tr key={index}>{visibleColumns.map((column) => <td key={column}>{String(row[column] ?? "")}</td>)}</tr>)}
+        </tbody></table> : <p>No table data configured</p>}
+        <small>Preview only · no live database connection</small>
+      </section>
+    );
+  }
 
   if (widget.type === "pagination") {
     const pageCount = Math.max(1, Math.min(99, Number(widget.props.pageCount ?? widget.props.pages ?? 5) || 5));
