@@ -1004,12 +1004,15 @@ export function PreviewWidget({
   if (widget.type === "form") {
     const fields = Array.isArray(widget.props.fields) ? widget.props.fields : [];
     return (
-      <form className="preview-widget preview-form" aria-label={stringProp(widget, "label", "Form")} style={{ ...style, display: "flex", flexDirection: "column", alignItems: "stretch", gap: 8, padding: 10, overflow: "auto" }} data-widget-type="form" onSubmit={(event) => { event.preventDefault(); runEvent(widget, "onChange", item); }}>
+      <form className="preview-widget preview-form" aria-label={stringProp(widget, "label", "Form")} style={{ ...style, display: "flex", flexDirection: "column", alignItems: "stretch", gap: 8, padding: 10, overflow: "auto" }} data-widget-type="form" onSubmit={(event) => { event.preventDefault(); runEvent(widget, "onClick", item); }}>
         {fields.length ? fields.map((entry, index) => {
           const record = entry && typeof entry === "object" ? entry as Record<string, unknown> : {};
           const label = typeof record.label === "string" ? record.label : `Field ${index + 1}`;
           const placeholder = typeof record.placeholder === "string" ? record.placeholder : "";
-          return <label key={index}>{label}<input aria-label={label} placeholder={placeholder} /></label>;
+          const allowedTypes = ["text", "email", "number", "date", "tel", "url", "password"] as const;
+          const requestedType = typeof record.type === "string" ? record.type : "text";
+          const fieldType = allowedTypes.includes(requestedType as typeof allowedTypes[number]) ? requestedType : "text";
+          return <label key={index}>{label}<input aria-label={label} name={typeof record.name === "string" ? record.name : `field-${index + 1}`} type={fieldType} placeholder={placeholder} required={record.required === true} /></label>;
         }) : <p>No form fields configured</p>}
         <button type="submit">{stringProp(widget, "submitLabel", "Submit")}</button>
       </form>
