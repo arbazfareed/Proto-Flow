@@ -370,6 +370,7 @@
 .element-library-search input { width:100%; min-width:0; border:0; outline:0; color:#dedde5; background:transparent; font:inherit; font-size:10px; }
 .element-library-search input::placeholder { color:#73737e; }
 .element-library-search button { display:grid; width:18px; height:18px; flex:0 0 18px; place-items:center; padding:0; border:0; border-radius:4px; color:#9c9ca5; background:transparent; cursor:pointer; }
+.element-library-sidebar .element-library-search { margin-top:8px; margin-bottom:8px; }
 .element-library-sidebar .element-library-section { padding:8px 2px 9px; }
 .element-library-sidebar .element-library-section h3 { display:flex; align-items:center; justify-content:space-between; margin-bottom:5px; padding:0 5px; }
 .element-library-section h3>span { min-width:16px; padding:1px 4px; border-radius:8px; color:#85838e; background:#26262c; font-size:8px; text-align:center; }
