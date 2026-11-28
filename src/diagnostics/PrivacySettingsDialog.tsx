@@ -257,7 +257,14 @@ export function PrivacySettingsDialog({
                 <strong><Sparkles size={14} /> Onboarding tour</strong>
                 <small>Replay the guided introduction to the workspace and editor.</small>
               </div>
-              <button type="button" className="button button-secondary" onClick={onShowOnboarding}>Show again</button>
+              <button
+                type="button"
+                className="button button-secondary"
+                aria-label="Show onboarding again"
+                onClick={onShowOnboarding}
+              >
+                Show again
+              </button>
             </div>
 
             <h3 className="settings-section-title">Keyboard shortcuts</h3>

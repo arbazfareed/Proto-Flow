@@ -24,7 +24,7 @@ describe("Settings dialog navigation and accessibility", () => {
     expect(screen.getByRole("dialog", { name: "Settings" })).toBeVisible();
     expect(screen.getByRole("button", { name: /General/ })).toHaveAttribute("aria-current", "page");
     expect(screen.getByRole("combobox", { name: "Workspace appearance" })).toHaveValue("system");
-    expect(screen.getByRole("button", { name: "Show again" })).toBeVisible();
+    expect(screen.getByRole("button", { name: "Show onboarding again" })).toBeVisible();
     expect(screen.getByLabelText("Keyboard shortcuts")).toBeVisible();
   });
 
@@ -58,7 +58,7 @@ describe("Settings dialog navigation and accessibility", () => {
   it("runs the existing onboarding action", async () => {
     const user = userEvent.setup();
     const { onShowOnboarding } = renderDialog();
-    await user.click(screen.getByRole("button", { name: "Show again" }));
+    await user.click(screen.getByRole("button", { name: "Show onboarding again" }));
     expect(onShowOnboarding).toHaveBeenCalledOnce();
   });
 
