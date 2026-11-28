@@ -5,7 +5,7 @@ test("project title rename supports first name, replace, cancel, blur, and empty
   await startWorkspace(page, "Blank project");
 
   await page.getByRole("button", { name: "Rename project: Untitled project" }).click();
-  const input = page.getByRole("textbox", { name: "Project name" });
+  const input = page.locator(".document-heading").getByRole("textbox", { name: "Project name" });
   await expect(input).toBeFocused();
   await expect(input).toHaveValue("");
   await expect(input).toHaveAttribute("placeholder", "Untitled project");
@@ -49,7 +49,7 @@ test("project title rename enforces the 120-character limit", async ({ page }) =
   await startWorkspace(page, "Blank project");
   await page.getByRole("button", { name: "Rename project: Untitled project" }).click();
 
-  const input = page.getByRole("textbox", { name: "Project name" });
+  const input = page.locator(".document-heading").getByRole("textbox", { name: "Project name" });
   await expect(input).toHaveAttribute("maxlength", "120");
   await input.pressSequentially("x".repeat(130));
   await expect.poll(() => input.evaluate((element) => (element as HTMLInputElement).value.length))
