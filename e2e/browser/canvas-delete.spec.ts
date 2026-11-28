@@ -27,8 +27,9 @@ test("right-click Delete removes a normal canvas element", async ({ page }) => {
   await expect(visibility).toHaveCount(1);
   await expect(page.getByText("1 selected")).toBeVisible();
 
-  await page.mouse.click(point.x + 60, point.y + 40, { button: "right" });
+  await page.mouse.click(point.x + 20, point.y + 20, { button: "right" });
   const menu = page.getByRole("menu", { name: "Element actions" });
+  await expect(page.getByText("1 selected")).toBeVisible();
   await expect(menu.getByRole("menuitem", { name: "Delete selected element" })).toBeEnabled();
   await menu.getByRole("menuitem", { name: "Delete selected element" }).click();
 
@@ -53,8 +54,9 @@ test("right-click Delete removes all selected elements together", async ({ page 
 
   // Right-click the second (most recently created) selected widget so the canvas
   // context-menu handler retains the multi-selection instead of selecting a new target.
-  await page.mouse.click(second.x + 60, second.y + 40, { button: "right" });
+  await page.mouse.click(second.x + 20, second.y + 20, { button: "right" });
   const menu = page.getByRole("menu", { name: "Element actions" });
+  await expect(page.getByText("2 selected")).toBeVisible();
   await expect(menu.getByRole("menuitem", { name: "Delete selected element" })).toBeEnabled();
   await menu.getByRole("menuitem", { name: "Delete selected element" }).click();
 
@@ -85,8 +87,9 @@ test("right-click Delete preserves locked elements in a mixed selection", async 
   // Locking deliberately removes the locked item from the current selection.
   await expect(page.getByText("1 selected")).toBeVisible();
 
-  await page.mouse.click(second.x + 60, second.y + 40, { button: "right" });
+  await page.mouse.click(second.x + 20, second.y + 20, { button: "right" });
   const menu = page.getByRole("menu", { name: "Element actions" });
+  await expect(page.getByText("1 selected")).toBeVisible();
   await expect(menu.getByRole("menuitem", { name: "Delete selected element" })).toBeEnabled();
   await menu.getByRole("menuitem", { name: "Delete selected element" }).click();
 
@@ -119,8 +122,9 @@ test("right-click Delete removes a widget from the active repeater template", as
   await page.mouse.click(point.x, point.y);
   await expect(page.getByRole("button", { name: /^Toggle visibility for/ })).toHaveCount(2);
 
-  await page.mouse.click(point.x + 60, point.y + 40, { button: "right" });
+  await page.mouse.click(point.x + 20, point.y + 20, { button: "right" });
   const menu = page.getByRole("menu", { name: "Element actions" });
+  await expect(page.getByText("1 selected")).toBeVisible();
   await menu.getByRole("menuitem", { name: "Delete selected element" }).click();
   await expect(page.getByRole("button", { name: /^Toggle visibility for/ })).toHaveCount(1);
   await expect(page.getByText("0 selected")).toBeVisible();
@@ -149,8 +153,9 @@ test("right-click Delete removes a widget from the active dynamic-panel state", 
   await page.mouse.click(point.x, point.y);
   await expect(page.getByRole("button", { name: /^Toggle visibility for/ })).toHaveCount(2);
 
-  await page.mouse.click(point.x + 60, point.y + 40, { button: "right" });
+  await page.mouse.click(point.x + 20, point.y + 20, { button: "right" });
   const menu = page.getByRole("menu", { name: "Element actions" });
+  await expect(page.getByText("1 selected")).toBeVisible();
   await menu.getByRole("menuitem", { name: "Delete selected element" }).click();
   await expect(page.getByRole("button", { name: /^Toggle visibility for/ })).toHaveCount(1);
   await expect(page.getByText("0 selected")).toBeVisible();

@@ -3363,6 +3363,7 @@ export function CanvasStage({
                     useStore.getState().setCanvasHoveredWidget(hovered ? widget.id : null)
                   }
                   onSelect={(event) => {
+                    if (event.evt instanceof MouseEvent && event.evt.button !== 0) return;
                     if (widget.locked) return;
                     const selected = useStore.getState().selectedIds;
                     if (event.evt.shiftKey) {
