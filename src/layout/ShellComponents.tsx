@@ -32,7 +32,7 @@ import {
   RefreshCw,
   Search,
   Sparkles,
-  Settings2,
+  Settings,
   Square,
   StickyNote,
   Undo2,
@@ -404,11 +404,11 @@ export function TopBar({
       <div className="topbar-actions">
         <button
           className="icon-button topbar-icon topbar-settings-trigger"
-          title="Settings (appearance, privacy and diagnostics)"
+          title="Settings"
           aria-label="Open settings"
           onClick={onOpenPrivacySettings}
         >
-          <Settings2 size={15} />
+          <Settings size={17} strokeWidth={2.1} />
         </button>
         <button className="icon-button topbar-icon" title="New project (Ctrl+N)" aria-label="New project" onClick={onNew}>
           <FilePlus2 size={16} />
