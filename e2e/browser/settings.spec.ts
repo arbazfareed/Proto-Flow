@@ -1,4 +1,4 @@
-import { expect, test } from "@playwright/test";
+import { expect, test } from "playwright/test";
 import { startWorkspace } from "./workspace";
 
 test.describe("Top-bar Settings", () => {
@@ -11,6 +11,7 @@ test.describe("Top-bar Settings", () => {
     const settingsButton = page.getByRole("button", { name: "Open settings" });
     await expect(settingsButton).toBeVisible();
     await expect(settingsButton).toHaveAttribute("title", "Settings");
+    await expect(settingsButton.locator("svg.lucide-settings")).toBeVisible();
     await settingsButton.click();
 
     const dialog = page.getByRole("dialog", { name: "Settings" });
