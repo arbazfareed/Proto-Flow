@@ -1,6 +1,12 @@
 import { expect, test } from "playwright/test";
 import { startWorkspace } from "./workspace";
 
+// A new Rectangle is 100 x 100 and its top-left corner is where it was clicked into place. The canvas starts
+// zoomed out (about 58% on a 1440 x 900 window), so on screen it is only about 58 px wide. Right-click just
+// inside that corner: the old "+60, +40" fell 2 px outside it, so the menu opened for empty canvas (Delete
+// disabled) or for a larger element behind the Rectangle (a dynamic panel was deleted instead).
+const INSIDE = 10;
+
 async function addRectangle(page: import("playwright/test").Page, xOffset = 0): Promise<{x:number;y:number}> {
   const surface = page.locator(".canvas-stage-surface");
   const bounds = await surface.boundingBox();
@@ -27,7 +33,7 @@ test("right-click Delete removes a normal canvas element", async ({ page }) => {
   await expect(visibility).toHaveCount(1);
   await expect(page.getByText("1 selected")).toBeVisible();
 
-  await page.mouse.click(point.x + 60, point.y + 40, { button: "right" });
+  await page.mouse.click(point.x + INSIDE, point.y + INSIDE, { button: "right" });
   const menu = page.getByRole("menu", { name: "Element actions" });
   await expect(menu.getByRole("menuitem", { name: "Delete selected element" })).toBeEnabled();
   await menu.getByRole("menuitem", { name: "Delete selected element" }).click();
@@ -53,7 +59,7 @@ test("right-click Delete removes all selected elements together", async ({ page 
 
   // Right-click the second (most recently created) selected widget so the canvas
   // context-menu handler retains the multi-selection instead of selecting a new target.
-  await page.mouse.click(second.x + 60, second.y + 40, { button: "right" });
+  await page.mouse.click(second.x + INSIDE, second.y + INSIDE, { button: "right" });
   const menu = page.getByRole("menu", { name: "Element actions" });
   await expect(menu.getByRole("menuitem", { name: "Delete selected element" })).toBeEnabled();
   await menu.getByRole("menuitem", { name: "Delete selected element" }).click();
@@ -85,7 +91,7 @@ test("right-click Delete preserves locked elements in a mixed selection", async 
   // Locking deliberately removes the locked item from the current selection.
   await expect(page.getByText("1 selected")).toBeVisible();
 
-  await page.mouse.click(second.x + 60, second.y + 40, { button: "right" });
+  await page.mouse.click(second.x + INSIDE, second.y + INSIDE, { button: "right" });
   const menu = page.getByRole("menu", { name: "Element actions" });
   await expect(menu.getByRole("menuitem", { name: "Delete selected element" })).toBeEnabled();
   await menu.getByRole("menuitem", { name: "Delete selected element" }).click();
@@ -119,7 +125,7 @@ test("right-click Delete removes a widget from the active repeater template", as
   await page.mouse.click(point.x, point.y);
   await expect(page.getByRole("button", { name: /^Toggle visibility for/ })).toHaveCount(2);
 
-  await page.mouse.click(point.x + 60, point.y + 40, { button: "right" });
+  await page.mouse.click(point.x + INSIDE, point.y + INSIDE, { button: "right" });
   const menu = page.getByRole("menu", { name: "Element actions" });
   await menu.getByRole("menuitem", { name: "Delete selected element" }).click();
   await expect(page.getByRole("button", { name: /^Toggle visibility for/ })).toHaveCount(1);
@@ -149,7 +155,7 @@ test("right-click Delete removes a widget from the active dynamic-panel state", 
   await page.mouse.click(point.x, point.y);
   await expect(page.getByRole("button", { name: /^Toggle visibility for/ })).toHaveCount(2);
 
-  await page.mouse.click(point.x + 60, point.y + 40, { button: "right" });
+  await page.mouse.click(point.x + INSIDE, point.y + INSIDE, { button: "right" });
   const menu = page.getByRole("menu", { name: "Element actions" });
   await menu.getByRole("menuitem", { name: "Delete selected element" }).click();
   await expect(page.getByRole("button", { name: /^Toggle visibility for/ })).toHaveCount(1);
