@@ -313,9 +313,10 @@ export function TopBar({
   }, [walletMenuOpen]);
 
   const beginProjectRename = () => {
-    setProjectNameDraft(projectName);
+    // Treat the default title as a hint so the first typed character replaces it.
+    // Existing names are selected after focus so users can replace them in one step.
+    setProjectNameDraft(projectName === "Untitled project" ? "" : projectName);
     setIsRenamingProject(true);
-    window.requestAnimationFrame(() => projectNameInputRef.current?.select());
   };
   const finishProjectRename = () => {
     const nextName = projectNameDraft.trim().slice(0, 120);
@@ -362,8 +363,12 @@ export function TopBar({
               className="document-name-input"
               aria-label="Project name"
               value={projectNameDraft}
+              placeholder={projectName === "Untitled project" ? "Untitled project" : "Project name"}
               maxLength={120}
               autoFocus
+              onFocus={(event) => {
+                if (projectNameDraft) event.currentTarget.select();
+              }}
               onChange={(event) => setProjectNameDraft(event.currentTarget.value)}
               onBlur={finishProjectRename}
               onKeyDown={(event) => {
