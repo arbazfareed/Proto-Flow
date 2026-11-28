@@ -71,9 +71,11 @@ describe("Windows desktop first launch", () => {
       deviceTourCompleted: true,
     });
 
-    await $('[aria-label="Open settings"]').click();
+    const settingsButton = await $('[aria-label="Open settings"]');
+    await expect(settingsButton).toBeDisplayed();
+    await settingsButton.click();
     const settings = await $('[aria-labelledby="privacy-settings-title"]');
-    await settings.$('//button[normalize-space(.)="Show onboarding again"]').click();
+    await settings.$('[aria-label="Show onboarding again"]').click();
     const restartedWelcome = await $('[aria-labelledby="onboarding-title"]');
     await restartedWelcome.waitForDisplayed();
     await browser.keys(["Tab"]);
